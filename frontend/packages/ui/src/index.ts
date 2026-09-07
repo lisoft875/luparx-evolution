@@ -32,7 +32,7 @@ export type { CardProps, CardTone, CardStackProps } from './components/Card';
 export { StatCard } from './components/StatCard';
 export type { StatCardProps } from './components/StatCard';
 export { ListRow } from './components/ListRow';
-export type { ListRowProps } from './components/ListRow';
+export type { ListRowProps, ListRowIconTone, ListRowIconShape } from './components/ListRow';
 export { AmountText } from './components/AmountText';
 export type { AmountTextProps, AmountSign } from './components/AmountText';
 export { Chip, ChipGroup } from './components/Chip';
@@ -40,7 +40,7 @@ export type { ChipProps, ChipGroupProps, ChipGroupOption } from './components/Ch
 export { StepList } from './components/StepList';
 export type { StepListProps, Step, StepState } from './components/StepList';
 export { EmptyState } from './components/EmptyState';
-export type { EmptyStateProps } from './components/EmptyState';
+export type { EmptyStateProps, EmptyStateTone } from './components/EmptyState';
 export { Badge } from './components/Badge';
 export type { BadgeProps, BadgeTone } from './components/Badge';
 export { AppBar } from './components/AppBar';
@@ -53,6 +53,10 @@ export { Brand, Logo } from './components/Brand';
 export type { BrandProps, LogoProps } from './components/Brand';
 export { PlatformBanner } from './components/PlatformBanner';
 export type { PlatformBannerProps } from './components/PlatformBanner';
+export { HeroCard } from './components/HeroCard';
+export type { HeroCardProps } from './components/HeroCard';
+export { SectionHeader } from './components/SectionHeader';
+export type { SectionHeaderProps } from './components/SectionHeader';
 export type { IconProps } from './icons';
 export {
   IconHome,
@@ -75,4 +79,14 @@ export {
   IconCatalog,
   IconSystem,
   IconLogout,
+  IconPin,
+  IconUser,
+  IconMail,
+  IconPhone,
+  IconIdCard,
+  IconShield,
+  IconGlobe,
+  IconPlus,
+  IconCreditCard,
+  IconList,
 } from './icons';

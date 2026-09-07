@@ -2,14 +2,15 @@
   "name": "@luparx/inspector",
   "private": true,
   "version": "0.1.0",
-  "description": "LupaRX inspector portal — approval-gated self-registration, mandatory MFA, patrol home stub (React + Vite + Capacitor).",
+  "description": "LupaRX inspector portal \u2014 approval-gated self-registration, mandatory MFA, patrol home stub (React + Vite + Capacitor).",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -p tsconfig.json --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "cap:sync": "cap sync"
+    "cap:sync": "cap sync",
+    "preview:demo": "vite build --config vite.preview.config.ts"
   },
   "dependencies": {
     "@capacitor/core": "6.2.2",

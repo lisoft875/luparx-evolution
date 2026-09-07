@@ -9,7 +9,8 @@ export {
   detectBrowserLocale,
 } from './locale';
 export type { SupportedLocale } from './locale';
-export { formatDate, formatDateTime, formatNumber, formatCurrencyMinor, pluralCategory } from './formatters';
+export { formatDate, formatDateTime, formatTime, formatNumber, formatCurrencyMinor, pluralCategory } from './formatters';
+export { currencyDisplayFractionDigits, applyNumberSymbolOverrides, localeHourCycle } from './presentation';
 export { minorUnitExponent, minorToMajor, majorToMinor } from './currency';
 export { I18nProvider, useI18n, useTranslation } from './context';
 export type { I18nContextValue, TranslationParams } from './context';

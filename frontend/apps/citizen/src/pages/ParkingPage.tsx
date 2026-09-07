@@ -1,51 +1,63 @@
 import * as React from 'react';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useTranslation } from '@luparx/i18n';
-import { AmountText, Button, Card, ChipGroup, Input, ListRow, Select, StepList, type Step } from '@luparx/ui';
+import { useTranslation, formatCurrencyMinor, type TranslationKey } from '@luparx/i18n';
+import {
+  Button,
+  Card,
+  ChipGroup,
+  IconCar,
+  IconChevronRight,
+  IconPin,
+  Input,
+  ListRow,
+  Select,
+  StepList,
+  type Step,
+} from '@luparx/ui';
 import { CitizenShell } from '../components/CitizenShell';
-import { MOCK_VEHICLES, startMockSession } from '../mocks/parkingDomain';
-
-// TODO(domain): zones/rates are hand-seeded here until `/api/v1/admin/zones` and `/api/v1/admin/rates`
-// ship and citizen reads them through a public zones endpoint (CONTRACT.md §4 "Dominio parquímetros").
-const MOCK_ZONES = [
-  { id: 'zone-centro', name: 'Zona Centro' },
-  { id: 'zone-escazu', name: 'Zona Escazú centro' },
-];
+import { MOCK_CURRENCY_CODE, MOCK_VEHICLES, MOCK_ZONES, primaryVehicle, startMockSession } from '../mocks/parkingDomain';
 
 type DurationOption = '30m' | '1h' | '2h' | 'other';
 const DURATION_MINUTES: Record<Exclude<DurationOption, 'other'>, number> = { '30m': 30, '1h': 60, '2h': 120 };
-const RATE_MINOR_PER_MINUTE = 40000 / 30; // ₡400 per 30 minutes (CONTRACT.md §5 amount_minor, CRC 2 decimals)
+// TODO(domain): fixed price tiers stand in for `/api/v1/admin/rates` (CONTRACT.md §4 "Dominio parquímetros").
+const AMOUNT_MINOR_BY_DURATION: Record<Exclude<DurationOption, 'other'>, number> = {
+  '30m': 27500,
+  '1h': 55000,
+  '2h': 110000,
+};
+const RATE_MINOR_PER_MINUTE = AMOUNT_MINOR_BY_DURATION['1h'] / 60;
 
 export function ParkingPage(): React.JSX.Element {
-  const { t, locale } = useTranslation();
+  const { t, tPlural, locale } = useTranslation();
   const navigate = useNavigate();
 
-  const [zoneId, setZoneId] = useState('');
-  const [spaceCode, setSpaceCode] = useState('');
-  const [vehicleId, setVehicleId] = useState('');
-  const [duration, setDuration] = useState<DurationOption>('30m');
+  // Non-null: MOCK_ZONES/MOCK_VEHICLES are non-empty compile-time constants.
+  const [zoneId, setZoneId] = useState(MOCK_ZONES[0]!.id);
+  const [vehicleId, setVehicleId] = useState(primaryVehicle().id);
+  const [duration, setDuration] = useState<DurationOption>('1h');
   const [customMinutes, setCustomMinutes] = useState(45);
 
+  const zone = MOCK_ZONES.find((z) => z.id === zoneId) ?? MOCK_ZONES[0]!;
+  const vehicle = MOCK_VEHICLES.find((v) => v.id === vehicleId) ?? primaryVehicle();
   const durationMinutes = duration === 'other' ? customMinutes : DURATION_MINUTES[duration];
-  const amountMinor = Math.round(durationMinutes * RATE_MINOR_PER_MINUTE);
-  const zone = MOCK_ZONES.find((z) => z.id === zoneId);
-  const vehicle = MOCK_VEHICLES.find((v) => v.id === vehicleId);
+  const amountMinor =
+    duration === 'other' ? Math.round(customMinutes * RATE_MINOR_PER_MINUTE) : AMOUNT_MINOR_BY_DURATION[duration];
+  const durationLabel =
+    duration === 'other'
+      ? tPlural('citizen.parking.step4.customDuration', customMinutes)
+      : t(`citizen.parking.step3.duration.${duration}` as TranslationKey);
 
-  const step1Done = Boolean(zoneId && spaceCode);
-  const step2Done = Boolean(vehicleId);
-  const step3Done = duration !== 'other' || customMinutes > 0;
-  const canSubmit = step1Done && step2Done && step3Done;
-
-  const activeIndex = !step1Done ? 0 : !step2Done ? 1 : !step3Done ? 2 : 3;
-  const stateFor = (index: number): Step['state'] => (index < activeIndex ? 'done' : index === activeIndex ? 'active' : 'pending');
+  function cycleVehicle(): void {
+    const index = MOCK_VEHICLES.findIndex((v) => v.id === vehicleId);
+    setVehicleId(MOCK_VEHICLES[(index + 1) % MOCK_VEHICLES.length]!.id);
+  }
 
   function handleSubmit(): void {
-    if (!canSubmit || !zone || !vehicle) return;
     startMockSession({
       vehiclePlate: vehicle.plate,
       zoneName: zone.name,
-      spaceCode,
+      spaceCode: zone.spaceCode,
       durationMinutes,
       amountMinor,
     });
@@ -56,45 +68,49 @@ export function ParkingPage(): React.JSX.Element {
     () => [
       {
         title: t('citizen.parking.step1.title'),
-        state: stateFor(0),
+        state: 'active',
         content: (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--lx-space-2)' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--lx-space-3)' }}>
+            <p className="lx-text-meta" style={{ margin: '-4px 0 0 0' }}>
+              {t('citizen.parking.step1.description')}
+            </p>
             <Select
+              icon={<IconPin size={18} />}
               aria-label={t('citizen.parking.step1.zoneLabel')}
               value={zoneId}
               onChange={(e) => setZoneId(e.target.value)}
-              placeholder={t('citizen.parking.step1.zoneLabel')}
               options={MOCK_ZONES.map((z) => ({ value: z.id, label: z.name }))}
             />
-            <Input
-              aria-label={t('citizen.parking.step1.spaceLabel')}
-              placeholder={t('citizen.parking.step1.spaceLabel')}
-              value={spaceCode}
-              onChange={(e) => setSpaceCode(e.target.value)}
-            />
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--lx-space-2)', color: 'var(--lx-text-muted)' }}>
+                <IconPin size={16} />
+                {zone.spaceCode}
+              </span>
+              <button type="button" className="lx-link-button" onClick={() => undefined}>
+                {t('citizen.parking.step1.viewMapCta')}
+              </button>
+            </div>
           </div>
         ),
       },
       {
         title: t('citizen.parking.step2.title'),
-        state: stateFor(1),
+        state: 'active',
         content: (
           <Card nested>
-            {MOCK_VEHICLES.map((v) => (
-              <ListRow
-                key={v.id}
-                title={v.plate}
-                meta={v.label}
-                onClick={() => setVehicleId(v.id)}
-                value={vehicleId === v.id ? t('common.yes') : undefined}
-              />
-            ))}
+            <ListRow
+              icon={<IconCar size={18} />}
+              title={vehicle.plate}
+              meta={`${vehicle.brand} ${vehicle.model} · ${vehicle.year}`}
+              value={<IconChevronRight size={16} />}
+              onClick={cycleVehicle}
+            />
           </Card>
         ),
       },
       {
         title: t('citizen.parking.step3.title'),
-        state: stateFor(2),
+        state: 'active',
         content: (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--lx-space-2)' }}>
             <ChipGroup
@@ -123,26 +139,28 @@ export function ParkingPage(): React.JSX.Element {
       },
       {
         title: t('citizen.parking.step4.title'),
-        state: stateFor(3),
+        state: 'active',
         content: (
           <Card nested>
+            <ListRow title={t('citizen.parking.step4.zoneLabel')} value={`${zone.name} (${zone.spaceCode})`} />
+            <ListRow title={t('citizen.parking.step4.vehicleLabel')} value={vehicle.plate} />
+            <ListRow title={t('citizen.parking.step4.durationLabel')} value={durationLabel} />
             <ListRow
-              title={t('citizen.parking.step4.totalLabel')}
-              meta={t('citizen.parking.step4.payWith')}
-              value={<AmountText amountMinor={-amountMinor} currencyCode="CRC" locale={locale} />}
+              title={t('citizen.parking.step4.amountLabel')}
+              value={formatCurrencyMinor(amountMinor, MOCK_CURRENCY_CODE, locale)}
             />
           </Card>
         ),
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [zoneId, spaceCode, vehicleId, duration, customMinutes, amountMinor],
+    [zoneId, vehicleId, duration, customMinutes, amountMinor, durationLabel, zone, vehicle, locale],
   );
 
   return (
-    <CitizenShell title={t('citizen.parking.title')} onBack={() => navigate('/')}>
+    <CitizenShell title={t('citizen.parking.title')} subtitle={t('citizen.parking.subtitle')} onBack={() => navigate('/')}>
       <StepList steps={steps} />
-      <Button type="button" fullWidth disabled={!canSubmit} onClick={handleSubmit}>
+      <Button type="button" variant="primary" fullWidth onClick={handleSubmit}>
         {t('citizen.parking.submit')}
       </Button>
     </CitizenShell>

@@ -2,14 +2,15 @@
   "name": "@luparx/citizen",
   "private": true,
   "version": "0.1.0",
-  "description": "LupaRX citizen portal — public self-registration, parking-meter home stub (React + Vite + Capacitor).",
+  "description": "LupaRX citizen portal \u2014 public self-registration, parking-meter home stub (React + Vite + Capacitor).",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -p tsconfig.json --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "cap:sync": "cap sync"
+    "cap:sync": "cap sync",
+    "preview:demo": "vite build --config vite.preview.config.ts"
   },
   "dependencies": {
     "@capacitor/core": "6.2.2",

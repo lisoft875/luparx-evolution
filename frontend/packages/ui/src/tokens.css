@@ -84,6 +84,7 @@
   --lx-text-timer-size: 34px;
   --lx-text-timer-weight: 700;
   --lx-text-timer-tracking: 0.02em;
+  --lx-text-appbar-title-size: 22px;
 
   /* ---- Control sizing (density-aware, see [data-density="outdoor"]) ---- */
   --lx-control-height: 44px;
@@ -232,6 +233,8 @@ body {
   min-height: var(--lx-control-height);
   font-size: var(--lx-text-body-size);
   font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
   cursor: pointer;
   transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, transform 0.05s ease;
 }
@@ -270,6 +273,17 @@ body {
 .lx-btn--full {
   width: 100%;
 }
+.lx-btn--solid {
+  background: var(--lx-gradient-primary);
+  color: var(--lx-primary-contrast);
+  box-shadow: none;
+}
+.lx-btn--outline {
+  background: var(--lx-primary-soft);
+  border-color: var(--lx-primary);
+  color: var(--lx-primary);
+  box-shadow: none;
+}
 
 .lx-input,
 .lx-select {
@@ -294,6 +308,23 @@ body {
 .lx-input--invalid,
 .lx-select--invalid {
   border-color: var(--lx-danger);
+}
+.lx-select--with-icon {
+  padding-left: calc(var(--lx-icon-box-size) + var(--lx-space-2));
+}
+.lx-select-wrap {
+  position: relative;
+  display: block;
+}
+.lx-select-wrap__icon {
+  position: absolute;
+  left: var(--lx-space-3);
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  color: var(--lx-primary);
+  pointer-events: none;
 }
 
 .lx-field {
@@ -516,6 +547,7 @@ body {
   border-radius: var(--lx-radius-lg);
   box-shadow: var(--lx-shadow-card);
   padding: var(--lx-card-padding);
+  min-width: 0;
 }
 .lx-card--nested {
   background: var(--lx-surface-2);
@@ -552,6 +584,19 @@ body {
 .lx-stat-card__hint {
   font-size: var(--lx-text-meta-size);
   color: var(--lx-text-subtle);
+}
+.lx-stat-card__action {
+  margin-top: var(--lx-space-1);
+}
+.lx-stat-card__action .lx-btn {
+  width: 100%;
+}
+
+/* A StatCard sharing a two-up row (e.g. citizen home "Saldo"/"Vehículo principal")
+   needs a smaller value size than a full-width one so a long formatted currency
+   or plate string never overflows its ~half-screen column. */
+.lx-stat-card--compact .lx-stat-card__value {
+  font-size: 1.375rem;
 }
 
 .lx-list-row {
@@ -598,22 +643,36 @@ button.lx-list-row {
 .lx-list-row__title {
   font-size: var(--lx-text-body-size);
   font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: break-word;
 }
 .lx-list-row__meta {
   font-size: var(--lx-text-meta-size);
   color: var(--lx-text-muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: break-word;
 }
 .lx-list-row__value {
   flex-shrink: 0;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   text-align: right;
+}
+.lx-list-row__icon--success {
+  background: var(--lx-success-soft);
+  color: var(--lx-success);
+}
+.lx-list-row__icon--warning {
+  background: var(--lx-warning-soft);
+  color: var(--lx-warning);
+}
+.lx-list-row__icon--danger {
+  background: var(--lx-danger-soft);
+  color: var(--lx-danger);
+}
+.lx-list-row__icon--circle {
+  border-radius: 50%;
+}
+.lx-list-row__meta-line {
+  display: block;
 }
 
 /* ---- AmountText (DESIGN_SYSTEM §2/§3 — semantic sign, never color-only) -- */
@@ -666,6 +725,28 @@ button.lx-list-row {
   background: var(--lx-primary-soft);
   border-color: var(--lx-primary);
   color: var(--lx-primary);
+}
+
+/* ---- ChipGroup "segmented" variant (fixed-width tabs, e.g. Multas Pendientes/Historial) - */
+
+.lx-chip-group--segmented {
+  display: flex;
+  overflow: visible;
+  background: var(--lx-surface-2);
+  border-radius: var(--lx-radius-pill);
+  padding: 4px;
+  gap: 0;
+}
+.lx-chip-group--segmented .lx-chip {
+  flex: 1;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--lx-text-muted);
+}
+.lx-chip-group--segmented .lx-chip[aria-pressed='true'] {
+  background: var(--lx-gradient-primary);
+  color: var(--lx-primary-contrast);
 }
 
 /* ---- Badge (status pill) -------------------------------------------------- */
@@ -765,6 +846,10 @@ button.lx-list-row {
   color: var(--lx-primary);
   font-size: 28px;
 }
+.lx-empty-state__icon--success {
+  background: var(--lx-success-soft);
+  color: var(--lx-success);
+}
 .lx-empty-state__title {
   font-size: var(--lx-text-card-title-size);
   font-weight: 700;
@@ -803,7 +888,7 @@ button.lx-list-row {
   min-width: 0;
 }
 .lx-app-bar__title {
-  font-size: var(--lx-text-card-title-size);
+  font-size: var(--lx-text-appbar-title-size);
   font-weight: 700;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -949,4 +1034,95 @@ button.lx-list-row {
 .lx-brand__tagline {
   font-size: var(--lx-text-meta-size);
   color: var(--lx-text-muted);
+}
+
+/* ---- HeroCard (single primary CTA per screen, DESIGN_SYSTEM §2/§4.5) ----- */
+
+.lx-hero-card {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--lx-space-4);
+  width: 100%;
+  border: none;
+  border-radius: var(--lx-radius-lg);
+  background: var(--lx-gradient-primary);
+  box-shadow: var(--lx-glow-primary);
+  padding: var(--lx-space-5);
+  color: var(--lx-primary-contrast);
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+}
+.lx-hero-card:focus-visible {
+  outline: 2px solid var(--lx-primary-contrast);
+  outline-offset: 2px;
+}
+.lx-hero-card__icon {
+  flex-shrink: 0;
+  width: 56px;
+  height: 56px;
+  border-radius: var(--lx-radius-md);
+  border: 1.5px solid rgba(255, 255, 255, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.lx-hero-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.lx-hero-card__title {
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+.lx-hero-card__subtitle {
+  font-size: var(--lx-text-body-size);
+  color: rgba(255, 255, 255, 0.85);
+}
+
+/* ---- SectionHeader (title + "Ver todos" link, DESIGN_SYSTEM §3) --------- */
+
+.lx-section-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--lx-space-3);
+  margin-bottom: var(--lx-space-2);
+}
+.lx-section-header__title {
+  font-size: var(--lx-text-card-title-size);
+  font-weight: 700;
+  margin: 0;
+}
+
+/* ---- Shared link-style action button (SectionHeader, "Ver mapa", etc.) -- */
+
+.lx-link-button {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--lx-primary);
+  font-size: var(--lx-text-meta-size);
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+  font-family: inherit;
+  flex-shrink: 0;
+}
+.lx-link-button:focus-visible {
+  outline: 2px solid var(--lx-focus-ring);
+  outline-offset: 2px;
+}
+
+/* ---- Small status dot (e.g. active-session indicator) ------------------- */
+
+.lx-status-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--lx-success);
+  flex-shrink: 0;
 }

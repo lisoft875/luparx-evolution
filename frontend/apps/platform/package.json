@@ -2,13 +2,14 @@
   "name": "@luparx/platform",
   "private": true,
   "version": "0.1.0",
-  "description": "LupaRX platform back-office — the product operator's console: municipalities, global user registry, global audit log, catalogs and reports (React + Vite web app, no self-registration, MFA-only).",
+  "description": "LupaRX platform back-office \u2014 the product operator's console: municipalities, global user registry, global audit log, catalogs and reports (React + Vite web app, no self-registration, MFA-only).",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -p tsconfig.json --noEmit && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "preview:demo": "vite build --config vite.preview.config.ts"
   },
   "dependencies": {
     "@luparx/api-client": "*",

@@ -1,8 +1,14 @@
 import * as React from 'react';
 
-export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
+export type ButtonVariant = 'primary' | 'solid' | 'secondary' | 'outline' | 'ghost' | 'danger';
 
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+  /**
+   * `primary` (gradient + glow) is reserved for the single primary CTA of a
+   * screen (DESIGN_SYSTEM.md §2 rule 5 — "Estacionar ahora", "Iniciar
+   * estacionamiento"). `solid` is the same gradient fill without the glow,
+   * for every other filled-blue action ("Recargar", "Agregar").
+   */
   variant?: ButtonVariant;
   loading?: boolean;
   fullWidth?: boolean;

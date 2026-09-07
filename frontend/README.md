@@ -138,3 +138,18 @@ Marked at the exact call sites (`grep -rn "TODO(extension)"`, `grep -rn "TODO(do
   purpose — CONTRACT.md §4 leaves `/api/v1/platform/system/**` "preparado,
   no cerrado"; billing/plans/usage-limit controls arrive as new resources
   later, not as changes to what's already wired.
+
+## Vista previa compartible (sin desplegar nada)
+
+```bash
+npm run demo:citizen   # también demo:admin, demo:inspector, demo:platform
+```
+
+Genera `apps/<app>/dist-preview/index.html`: un único archivo con todo el CSS y el JS incrustados,
+corriendo contra el transporte simulado (`VITE_USE_MOCKS=true`) y con enrutamiento por hash
+(`VITE_ROUTER=hash`, porque un archivo estático no tiene servidor que reescriba rutas profundas).
+Sirve para enseñar la app por chat o subirla a cualquier hosting estático. No reemplaza a
+`npm run build`, que es el build de producción.
+
+Usuarios de prueba del transporte simulado en `packages/api-client/src/mocks/data.ts`
+(contraseña `Password123!`, código MFA `123456`).

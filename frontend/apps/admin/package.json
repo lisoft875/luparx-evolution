@@ -2,13 +2,14 @@
   "name": "@luparx/admin",
   "private": true,
   "version": "0.1.0",
-  "description": "LupaRX municipal administration portal — user management, membership approval, audit log and registered-users reporting (React + Vite web app).",
+  "description": "LupaRX municipal administration portal \u2014 user management, membership approval, audit log and registered-users reporting (React + Vite web app).",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -p tsconfig.json --noEmit && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "preview:demo": "vite build --config vite.preview.config.ts"
   },
   "dependencies": {
     "@luparx/api-client": "*",

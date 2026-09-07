@@ -11,14 +11,18 @@ export interface SelectProps extends Omit<React.SelectHTMLAttributes<HTMLSelectE
   options: SelectOption[];
   /** Rendered as a disabled, non-selectable first option when the field has no default value. */
   placeholder?: string;
+  /** Leading icon inside the field (e.g. a pin for a zone picker — DESIGN_SYSTEM.md §3 "Flujo de estacionamiento"). */
+  icon?: React.ReactNode;
 }
 
 export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(function Select(
-  { invalid, options, placeholder, className, value, ...rest },
+  { invalid, options, placeholder, icon, className, value, ...rest },
   ref,
 ) {
-  const classes = ['lx-select', invalid ? 'lx-select--invalid' : '', className].filter(Boolean).join(' ');
-  return (
+  const classes = ['lx-select', icon ? 'lx-select--with-icon' : '', invalid ? 'lx-select--invalid' : '', className]
+    .filter(Boolean)
+    .join(' ');
+  const select = (
     <select ref={ref} className={classes} aria-invalid={invalid || undefined} value={value} {...rest}>
       {placeholder ? (
         <option value="" disabled hidden={value !== '' && value !== undefined}>
@@ -31,5 +35,14 @@ export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(function 
         </option>
       ))}
     </select>
+  );
+  if (!icon) return select;
+  return (
+    <span className="lx-select-wrap">
+      <span className="lx-select-wrap__icon" aria-hidden="true">
+        {icon}
+      </span>
+      {select}
+    </span>
   );
 });

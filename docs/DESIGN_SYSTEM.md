@@ -107,6 +107,20 @@ Sin sombras duras; la jerarquía la da el color de superficie.
 6. **Marca**: el logo se usa como SVG monocromo + degradado del token; no se recolorea el monograma
    ni se estira. Assets fuente en `docs/brand/`.
 
+### Política de presentación numérica (`packages/i18n/src/presentation.ts`)
+
+El diseño pide `₡48.800` y `20:27`. ICU para `es-CR` produce `₡48 800,00` y `8:27 p. m.`, así que la
+diferencia se resuelve con **configuración declarada**, nunca formateando a mano:
+
+- `CURRENCY_DISPLAY`: dígitos decimales por moneda (CRC → 0; por defecto, el exponente ISO 4217).
+  Sólo afecta la **presentación**; el almacenamiento sigue en unidades menores enteras.
+- `LOCALE_NUMBER_SYMBOLS`: separadores de miles y decimal por locale (`es-CR` → `.` y `,`), aplicados
+  sobre `Intl.NumberFormat(...).formatToParts()` reemplazando únicamente las partes `group` y `decimal`.
+  El orden del símbolo de moneda y el resto del formato los sigue decidiendo ICU.
+- `LOCALE_HOUR_CYCLE`: `es-CR` → `h23`.
+
+Estas tablas son defaults de plataforma y están preparadas para sobreescribirse por tenant.
+
 ## 5. Aplicación por app
 
 | App | Tema | Densidad | Notas |

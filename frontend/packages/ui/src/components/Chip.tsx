@@ -29,6 +29,8 @@ export interface ChipGroupProps<T extends string = string> {
   options: ChipGroupOption<T>[];
   value: T;
   onChange: (value: T) => void;
+  /** `pill` (default): scrolling row of independent pills (filters). `segmented`: fixed-width tabs sharing one track (DESIGN_SYSTEM.md §3, e.g. Multas "Pendientes / Historial"). */
+  variant?: 'pill' | 'segmented';
   'aria-label': string;
   className?: string;
 }
@@ -38,15 +40,15 @@ export function ChipGroup<T extends string = string>({
   options,
   value,
   onChange,
+  variant = 'pill',
   className,
   ...aria
 }: ChipGroupProps<T>): React.JSX.Element {
+  const classes = ['lx-chip-group', variant === 'segmented' ? 'lx-chip-group--segmented' : '', className]
+    .filter(Boolean)
+    .join(' ');
   return (
-    <div
-      className={['lx-chip-group', className].filter(Boolean).join(' ')}
-      role="group"
-      aria-label={aria['aria-label']}
-    >
+    <div className={classes} role="group" aria-label={aria['aria-label']}>
       {options.map((option) => (
         <Chip
           key={option.value}

@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, HashRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { I18nProvider } from '@luparx/i18n';
 import { AuthProvider, RequireAuth } from '@luparx/auth';
@@ -30,12 +30,19 @@ const queryClient = new QueryClient({
  * back-office by another PLATFORM_ADMIN) and no `/select-tenant` route
  * (platform-scope roles aren't tenant memberships — see mocks/data.ts).
  */
+/**
+ * Static single-file preview builds (opened from file:// or a static host) have no server
+ * to rewrite deep links, so they opt into hash routing with VITE_ROUTER=hash.
+ * The shipped apps keep clean paths.
+ */
+const Router = import.meta.env.VITE_ROUTER === 'hash' ? HashRouter : BrowserRouter;
+
 export function App(): React.JSX.Element {
   return (
     <I18nProvider>
       <QueryClientProvider client={queryClient}>
         <AuthProvider portal={PORTAL} apiBaseUrl={API_BASE_URL} fetchImpl={USE_MOCKS ? mockFetch : undefined}>
-          <BrowserRouter>
+          <Router>
             <Routes>
               <Route path="/login" element={<LoginPage />} />
               <Route path="/mfa" element={<MfaPage />} />
@@ -131,7 +138,7 @@ export function App(): React.JSX.Element {
               />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
-          </BrowserRouter>
+          </Router>
         </AuthProvider>
       </QueryClientProvider>
     </I18nProvider>

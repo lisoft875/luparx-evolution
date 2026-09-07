@@ -45,12 +45,14 @@ export const IconPark = iconFactory(
   </>,
 );
 
+/** Front-facing car — DESIGN_SYSTEM.md §3, used for the vehicle nav tab, parking/movement rows and the active-session card. */
 export const IconCar = iconFactory(
   <>
-    <path d="M4 16V11l2-5h12l2 5v5" />
-    <path d="M2 16h20" />
-    <circle cx="7" cy="17.5" r="1.5" />
-    <circle cx="17" cy="17.5" r="1.5" />
+    <path d="M4 15.2v-2.4a1.6 1.6 0 0 1 .18-.73l1.7-3.2A2 2 0 0 1 7.64 7.8h8.72a2 2 0 0 1 1.76 1.07l1.7 3.2c.12.22.18.47.18.73v2.4" />
+    <path d="M4 15.2h16" />
+    <path d="M6.4 12.1h11.2" />
+    <circle cx="8" cy="15.6" r="1.5" />
+    <circle cx="16" cy="15.6" r="1.5" />
   </>,
 );
 
@@ -164,5 +166,70 @@ export const IconLogout = iconFactory(
   <>
     <path d="M10 7V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-6a2 2 0 0 1-2-2v-2" />
     <path d="M3 12h11M11 8l4 4-4 4" />
+  </>,
+);
+
+export const IconPin = iconFactory(
+  <>
+    <path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21Z" />
+    <circle cx="12" cy="9.5" r="2.25" />
+  </>,
+);
+
+export const IconUser = iconFactory(
+  <>
+    <circle cx="12" cy="8" r="3.5" />
+    <path d="M5 20a7 7 0 0 1 14 0" />
+  </>,
+);
+
+export const IconMail = iconFactory(
+  <>
+    <rect x="3" y="5" width="18" height="14" rx="2" />
+    <path d="m4 7 8 6 8-6" />
+  </>,
+);
+
+export const IconPhone = iconFactory(
+  <path d="M6.5 3.5h3l1.5 4-2 1.5a11 11 0 0 0 5 5l1.5-2 4 1.5v3a1.5 1.5 0 0 1-1.6 1.5A16.5 16.5 0 0 1 5 5.1 1.5 1.5 0 0 1 6.5 3.5Z" />,
+);
+
+export const IconIdCard = iconFactory(
+  <>
+    <rect x="3" y="5" width="18" height="14" rx="2" />
+    <circle cx="8.5" cy="11" r="2" />
+    <path d="M6 16a2.5 2.5 0 0 1 5 0M13.5 9.5h5M13.5 13h5" />
+  </>,
+);
+
+export const IconShield = iconFactory(
+  <>
+    <path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3Z" />
+    <path d="M13 8.5h-2.2L9.5 12H12l-1 3.5 4-5h-2.4l.5-2Z" />
+  </>,
+);
+
+export const IconGlobe = iconFactory(
+  <>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M3 12h18M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18Z" />
+  </>,
+);
+
+export const IconPlus = iconFactory(<path d="M12 5v14M5 12h14" />);
+
+export const IconCreditCard = iconFactory(
+  <>
+    <rect x="3" y="5" width="18" height="14" rx="2" />
+    <path d="M3 10h18M7 15h4" />
+  </>,
+);
+
+export const IconList = iconFactory(
+  <>
+    <path d="M8 6h13M8 12h13M8 18h13" />
+    <circle cx="3.5" cy="6" r="1" fill="currentColor" stroke="none" />
+    <circle cx="3.5" cy="12" r="1" fill="currentColor" stroke="none" />
+    <circle cx="3.5" cy="18" r="1" fill="currentColor" stroke="none" />
   </>,
 );
