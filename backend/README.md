@@ -51,10 +51,10 @@ Flyway runs at startup and creates the schema plus the catalogue seed. Hibernate
 `ddl-auto: none` on purpose: `citext` and `jsonb` columns are beyond what the dialect would infer,
 and the schema belongs to the migrations.
 
-- API: `http://localhost:8080`
-- OpenAPI: `http://localhost:8080/v3/api-docs` — Swagger UI at `/swagger-ui.html`
-- JWKS: `http://localhost:8080/.well-known/jwks.json`
-- Mail (dev): Mailpit at `http://localhost:8025`
+- API: `http://localhost:8090`
+- OpenAPI: `http://localhost:8090/v3/api-docs` — Swagger UI at `/swagger-ui.html`
+- JWKS: `http://localhost:8090/.well-known/jwks.json`
+- Mail (dev): Mailpit at `http://localhost:8035`
 
 ## Environment variables
 

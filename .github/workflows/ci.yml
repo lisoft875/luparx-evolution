@@ -25,7 +25,7 @@ jobs:
           POSTGRES_USER: luparx
           POSTGRES_PASSWORD: luparx_ci_only
         ports:
-          - 5432:5432
+          - 5442:5432
         options: >-
           --health-cmd "pg_isready -U luparx -d luparx_test"
           --health-interval 5s
@@ -45,7 +45,7 @@ jobs:
 
       - name: mvn -B verify
         env:
-          SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/luparx_test
+          SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5442/luparx_test
           SPRING_DATASOURCE_USERNAME: luparx
           SPRING_DATASOURCE_PASSWORD: luparx_ci_only
         run: mvn -B verify

@@ -1,5 +1,8 @@
 # LupaRX — Infraestructura local
 
+> **Puertos:** este proyecto usa el puerto por defecto de cada servicio **+ 10** (API `8090`, Postgres `5442`, Vite `5183`–`5186`). Ver [`docs/PORTS.md`](../docs/PORTS.md).
+
+
 Este directorio levanta las dependencias de infraestructura para desarrollar LupaRX localmente:
 PostgreSQL 16, un servidor SMTP de pruebas (Mailpit) y, opcionalmente, Adminer.
 
@@ -38,12 +41,12 @@ docker compose --env-file infra/.env -f infra/docker-compose.yml up -d
 
 Esto levanta:
 
-- **PostgreSQL 16** en `localhost:${POSTGRES_PORT:-5432}` (base `luparx`, ver credenciales en
+- **PostgreSQL 16** en `localhost:${POSTGRES_PORT:-5442}` (base `luparx`, ver credenciales en
   `infra/.env`), con volumen persistente `luparx_postgres_data` y healthcheck (`pg_isready`).
 - **Mailpit** (SMTP de pruebas): el backend envía correos de verificación/reseteo a
-  `localhost:${MAILPIT_SMTP_PORT:-1025}`; leerlos en la UI web `http://localhost:${MAILPIT_UI_PORT:-8025}`.
+  `localhost:${MAILPIT_SMTP_PORT:-1035}`; leerlos en la UI web `http://localhost:${MAILPIT_UI_PORT:-8035}`.
 - **Adminer** (opcional, cliente web de base de datos): `docker compose --profile tools -f infra/docker-compose.yml up -d adminer`,
-  disponible en `http://localhost:${ADMINER_PORT:-8081}` (servidor: `postgres`).
+  disponible en `http://localhost:${ADMINER_PORT:-8091}` (servidor: `postgres`).
 
 Verificar estado:
 
@@ -66,9 +69,9 @@ El backend expone `/api/v1/**`, OpenAPI y `/actuator/health`.
 ```bash
 cd frontend
 npm ci
-npm run dev:citizen    # http://localhost:5173
-npm run dev:admin      # http://localhost:5174
-npm run dev:inspector  # http://localhost:5175
+npm run dev:citizen    # http://localhost:5183
+npm run dev:admin      # http://localhost:5184
+npm run dev:inspector  # http://localhost:5185
 ```
 
 Cada app corre en su propio puerto y con su propio storage de tokens (ver `docs/SECURITY.md` §8);

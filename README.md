@@ -1,5 +1,8 @@
 # LupaRX
 
+> **Puertos:** este proyecto usa el puerto por defecto de cada servicio **+ 10** (API `8090`, Postgres `5442`, Vite `5183`–`5186`). Ver [`docs/PORTS.md`](docs/PORTS.md).
+
+
 Plataforma municipal multi-tenant de **fiscalización vial / parquímetros**, diseñada desde el
 inicio para expansión internacional (multi-país, multi-moneda, multi-idioma). Tres portales con
 login separado — ciudadano, administración municipal y fiscalización — sobre una identidad global
@@ -75,9 +78,9 @@ cd backend && mvn -pl app -am spring-boot:run
 
 # Frontend
 cd frontend && npm ci
-npm run dev:citizen    # http://localhost:5173
-npm run dev:admin      # http://localhost:5174
-npm run dev:inspector  # http://localhost:5175
+npm run dev:citizen    # http://localhost:5183
+npm run dev:admin      # http://localhost:5184
+npm run dev:inspector  # http://localhost:5185
 ```
 
 ## Los tres portales

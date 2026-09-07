@@ -9,7 +9,7 @@ spring:
   application:
     name: luparx-backend
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/luparx}
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5442/luparx}
     username: ${SPRING_DATASOURCE_USERNAME:luparx}
     password: ${SPRING_DATASOURCE_PASSWORD:luparx_dev_only}
     hikari:
@@ -35,7 +35,7 @@ spring:
     baseline-on-migrate: false
   mail:
     host: ${SMTP_HOST:localhost}
-    port: ${SMTP_PORT:1025}
+    port: ${SMTP_PORT:1035}
     username: ${SMTP_USERNAME:}
     password: ${SMTP_PASSWORD:}
     properties:
@@ -54,7 +54,7 @@ spring:
       enabled: false
 
 server:
-  port: ${SERVER_PORT:8080}
+  port: ${SERVER_PORT:8090}
   error:
     # Error bodies are produced by GlobalExceptionHandler as RFC 9457; the servlet default is off.
     whitelabel:
@@ -131,12 +131,12 @@ luparx:
     login-lockout: ${LOGIN_LOCKOUT:15m}
     cors-allowed-origins:
       # One origin list per portal — never a shared wildcard (docs/SECURITY.md §7).
-      citizen: ${CORS_ALLOWED_ORIGIN_CITIZEN:http://localhost:5173}
-      admin: ${CORS_ALLOWED_ORIGIN_ADMIN:http://localhost:5174}
-      inspector: ${CORS_ALLOWED_ORIGIN_INSPECTOR:http://localhost:5175}
-      platform: ${CORS_ALLOWED_ORIGIN_PLATFORM:http://localhost:5176}
+      citizen: ${CORS_ALLOWED_ORIGIN_CITIZEN:http://localhost:5183}
+      admin: ${CORS_ALLOWED_ORIGIN_ADMIN:http://localhost:5184}
+      inspector: ${CORS_ALLOWED_ORIGIN_INSPECTOR:http://localhost:5185}
+      platform: ${CORS_ALLOWED_ORIGIN_PLATFORM:http://localhost:5186}
   federation:
-    redirect-base-url: ${OAUTH_REDIRECT_BASE_URL:http://localhost:8080}
+    redirect-base-url: ${OAUTH_REDIRECT_BASE_URL:http://localhost:8090}
     providers:
       google:
         client-id: ${OAUTH_GOOGLE_CLIENT_ID:}
@@ -162,7 +162,7 @@ luparx:
   mail:
     from-address: ${SMTP_FROM_ADDRESS:no-reply@luparx.local}
     base-urls:
-      citizen: ${APP_BASE_URL_CITIZEN:http://localhost:5173}
-      admin: ${APP_BASE_URL_ADMIN:http://localhost:5174}
-      inspector: ${APP_BASE_URL_INSPECTOR:http://localhost:5175}
-      platform: ${APP_BASE_URL_PLATFORM:http://localhost:5176}
+      citizen: ${APP_BASE_URL_CITIZEN:http://localhost:5183}
+      admin: ${APP_BASE_URL_ADMIN:http://localhost:5184}
+      inspector: ${APP_BASE_URL_INSPECTOR:http://localhost:5185}
+      platform: ${APP_BASE_URL_PLATFORM:http://localhost:5186}
