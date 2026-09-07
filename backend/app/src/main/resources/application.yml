@@ -1,0 +1,168 @@
+# LupaRX backend — base configuration.
+#
+# Every secret is read from an environment variable with no usable default: the application must fail
+# to start rather than run with a placeholder key (docs/SECURITY.md §5). Values under
+# `platform.defaults` are DEFAULTS, not assumptions: they only fill in what a request or a tenant did
+# not specify, and a deployment in another country changes this file, never the code (CONTRACT.md §7).
+
+spring:
+  application:
+    name: luparx-backend
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/luparx}
+    username: ${SPRING_DATASOURCE_USERNAME:luparx}
+    password: ${SPRING_DATASOURCE_PASSWORD:luparx_dev_only}
+    hikari:
+      maximum-pool-size: ${DB_POOL_MAX:15}
+      minimum-idle: 2
+      pool-name: luparx-pool
+  jpa:
+    # The schema is owned by Flyway. Hibernate never creates or validates it: `citext` and `jsonb`
+    # columns are intentionally beyond what the dialect would infer (docs/ARCHITECTURE.md §7).
+    hibernate:
+      ddl-auto: none
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+          batch_size: 50
+        order_inserts: true
+        order_updates: true
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: false
+  mail:
+    host: ${SMTP_HOST:localhost}
+    port: ${SMTP_PORT:1025}
+    username: ${SMTP_USERNAME:}
+    password: ${SMTP_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: ${SMTP_AUTH:false}
+          starttls:
+            enable: ${SMTP_STARTTLS_ENABLED:false}
+  jackson:
+    default-property-inclusion: non_null
+  messages:
+    basename: messages
+    encoding: UTF-8
+  threads:
+    virtual:
+      enabled: false
+
+server:
+  port: ${SERVER_PORT:8080}
+  error:
+    # Error bodies are produced by GlobalExceptionHandler as RFC 9457; the servlet default is off.
+    whitelabel:
+      enabled: false
+  forward-headers-strategy: framework
+  servlet:
+    encoding:
+      charset: UTF-8
+      force: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+  health:
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    disable-swagger-default-url: true
+
+logging:
+  # traceId / tenantId / userId are put in the MDC by RequestCorrelationFilter and
+  # TenantContextFilter, so every line of a request can be correlated (docs/ARCHITECTURE.md §6).
+  pattern:
+    console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %-5level [trace=%X{traceId:--} tenant=%X{tenantId:--} user=%X{userId:--} portal=%X{portal:--}] %logger{36} - %msg%n"
+  level:
+    root: INFO
+    cr.luparx: INFO
+
+platform:
+  defaults:
+    # Configured defaults of THIS deployment. Not a statement about the only market served.
+    country-code: ${PLATFORM_DEFAULT_COUNTRY_CODE:CR}
+    currency-code: ${PLATFORM_DEFAULT_CURRENCY_CODE:CRC}
+    locale: ${PLATFORM_DEFAULT_LOCALE:es-CR}
+    time-zone: ${PLATFORM_DEFAULT_TIME_ZONE:America/Costa_Rica}
+    dial-code: ${PLATFORM_DEFAULT_DIAL_CODE:+506}
+    minimum-age: ${PLATFORM_DEFAULT_MINIMUM_AGE:18}
+    terms-version: ${PLATFORM_TERMS_VERSION:v1}
+
+luparx:
+  jwt:
+    issuer: ${JWT_ISSUER:https://api.luparx.local}
+    key-id: ${JWT_KEY_ID:dev-key-1}
+    private-key-path: ${JWT_PRIVATE_KEY_PATH:./infra/secrets/jwt-private-dev.pem}
+    public-key-path: ${JWT_PUBLIC_KEY_PATH:./infra/secrets/jwt-public-dev.pem}
+    # Retired keys stay published while their tokens expire: "<kid>:<path>" per entry.
+    previous-public-key-paths: ${JWT_PREVIOUS_PUBLIC_KEYS:}
+    access-token-ttl: ${JWT_ACCESS_TOKEN_TTL:15m}
+    refresh-token-ttl: ${JWT_REFRESH_TOKEN_TTL:30d}
+    mfa-challenge-ttl: ${JWT_MFA_CHALLENGE_TTL:5m}
+    oauth-state-ttl: ${JWT_OAUTH_STATE_TTL:10m}
+  security:
+    ip-hash-pepper: ${IP_HASH_PEPPER:}
+    mfa-encryption-key: ${MFA_TOTP_ENCRYPTION_KEY:}
+    mfa-issuer-name: ${MFA_ISSUER_NAME:LupaRX}
+    password-min-length: ${PASSWORD_MIN_LENGTH:10}
+    login-window: ${LOGIN_ATTEMPT_WINDOW:15m}
+    login-max-per-email: ${LOGIN_MAX_FAILURES_PER_EMAIL:5}
+    login-max-per-ip: ${LOGIN_MAX_FAILURES_PER_IP:50}
+    login-lockout: ${LOGIN_LOCKOUT:15m}
+    cors-allowed-origins:
+      # One origin list per portal — never a shared wildcard (docs/SECURITY.md §7).
+      citizen: ${CORS_ALLOWED_ORIGIN_CITIZEN:http://localhost:5173}
+      admin: ${CORS_ALLOWED_ORIGIN_ADMIN:http://localhost:5174}
+      inspector: ${CORS_ALLOWED_ORIGIN_INSPECTOR:http://localhost:5175}
+      platform: ${CORS_ALLOWED_ORIGIN_PLATFORM:http://localhost:5176}
+  federation:
+    redirect-base-url: ${OAUTH_REDIRECT_BASE_URL:http://localhost:8080}
+    providers:
+      google:
+        client-id: ${OAUTH_GOOGLE_CLIENT_ID:}
+        client-secret: ${OAUTH_GOOGLE_CLIENT_SECRET:}
+        authorization-uri: https://accounts.google.com/o/oauth2/v2/auth
+        token-uri: https://oauth2.googleapis.com/token
+        user-info-uri: https://openidconnect.googleapis.com/v1/userinfo
+        scopes: openid email profile
+      microsoft:
+        client-id: ${OAUTH_MICROSOFT_CLIENT_ID:}
+        client-secret: ${OAUTH_MICROSOFT_CLIENT_SECRET:}
+        authorization-uri: https://login.microsoftonline.com/${OAUTH_MICROSOFT_TENANT_ID:common}/oauth2/v2.0/authorize
+        token-uri: https://login.microsoftonline.com/${OAUTH_MICROSOFT_TENANT_ID:common}/oauth2/v2.0/token
+        user-info-uri: https://graph.microsoft.com/oidc/userinfo
+        scopes: openid email profile
+      facebook:
+        client-id: ${OAUTH_FACEBOOK_CLIENT_ID:}
+        client-secret: ${OAUTH_FACEBOOK_CLIENT_SECRET:}
+        authorization-uri: https://www.facebook.com/v19.0/dialog/oauth
+        token-uri: https://graph.facebook.com/v19.0/oauth/access_token
+        user-info-uri: https://graph.facebook.com/me?fields=id,name,email
+        scopes: email public_profile
+  mail:
+    from-address: ${SMTP_FROM_ADDRESS:no-reply@luparx.local}
+    base-urls:
+      citizen: ${APP_BASE_URL_CITIZEN:http://localhost:5173}
+      admin: ${APP_BASE_URL_ADMIN:http://localhost:5174}
+      inspector: ${APP_BASE_URL_INSPECTOR:http://localhost:5175}
+      platform: ${APP_BASE_URL_PLATFORM:http://localhost:5176}

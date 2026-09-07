@@ -1,0 +1,96 @@
+import * as React from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { useTranslation } from '@luparx/i18n';
+import { AppBar, Brand, BottomTabBar, IconBell, IconCar, IconHome, IconMore, IconPark, IconWallet } from '@luparx/ui';
+import type { BottomTab } from '@luparx/ui';
+
+export interface CitizenShellProps {
+  children: React.ReactNode;
+  /** Detail-screen title/subtitle, shown only alongside a back arrow (DESIGN_SYSTEM.md §3 "App bar"). */
+  title?: React.ReactNode;
+  subtitle?: React.ReactNode;
+  onBack?: () => void;
+}
+
+/**
+ * Shared chrome for every citizen screen: brand app bar (home) or back+title
+ * (detail), a fixed 5-destination bottom bar, and the screen content in
+ * between (DESIGN_SYSTEM.md §3).
+ */
+export function CitizenShell({ children, title, subtitle, onBack }: CitizenShellProps): React.JSX.Element {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const tabs: BottomTab[] = [
+    {
+      key: 'home',
+      label: t('nav.home'),
+      icon: <IconHome />,
+      onSelect: () => navigate('/'),
+      current: location.pathname === '/',
+    },
+    {
+      key: 'park',
+      label: t('nav.park'),
+      icon: <IconPark />,
+      onSelect: () => navigate('/park'),
+      current: location.pathname.startsWith('/park'),
+    },
+    {
+      key: 'vehicles',
+      label: t('nav.vehicles'),
+      icon: <IconCar />,
+      onSelect: () => navigate('/vehicles'),
+      current: location.pathname === '/vehicles',
+    },
+    {
+      key: 'wallet',
+      label: t('nav.wallet'),
+      icon: <IconWallet />,
+      onSelect: () => navigate('/wallet'),
+      current: location.pathname === '/wallet' || location.pathname === '/movements',
+    },
+    {
+      key: 'more',
+      label: t('nav.more'),
+      icon: <IconMore />,
+      onSelect: () => navigate('/profile'),
+      current: location.pathname === '/profile' || location.pathname === '/fines',
+    },
+  ];
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: 'var(--lx-bg)' }}>
+      <AppBar
+        start={onBack ? undefined : <Brand name={t('app.name')} />}
+        onBack={onBack}
+        backLabel={t('common.back')}
+        title={onBack ? title : undefined}
+        subtitle={onBack ? subtitle : undefined}
+        actions={
+          onBack
+            ? []
+            : [{ icon: <IconBell />, label: t('common.notifications'), onClick: () => undefined, badgeCount: 2 }]
+        }
+      />
+      <main
+        style={{
+          flex: 1,
+          padding: 'var(--lx-space-4)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 'var(--lx-space-4)',
+          maxWidth: 560,
+          width: '100%',
+          margin: '0 auto',
+        }}
+      >
+        {children}
+      </main>
+      <div style={{ position: 'sticky', bottom: 0 }}>
+        <BottomTabBar tabs={tabs} />
+      </div>
+    </div>
+  );
+}

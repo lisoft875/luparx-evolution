@@ -1,0 +1,63 @@
+# --- Java / Maven (backend/) -----------------------------------------------
+target/
+*.class
+*.jar
+!.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+.mvn/wrapper/maven-wrapper.properties.bak
+hs_err_pid*.log
+replay_pid*.log
+
+# --- Node / npm workspaces (frontend/) --------------------------------------
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.npm/
+.pnp/
+.pnp.js
+coverage/
+
+# --- Vite ---------------------------------------------------------------
+dist/
+dist-ssr/
+*.local
+.vite/
+
+# --- Capacitor (ios/android build output) -----------------------------------
+frontend/apps/*/ios/App/Pods/
+frontend/apps/*/ios/App/build/
+frontend/apps/*/ios/DerivedData/
+frontend/apps/*/android/.gradle/
+frontend/apps/*/android/app/build/
+frontend/apps/*/android/build/
+frontend/apps/*/android/local.properties
+frontend/apps/*/android/captures/
+frontend/apps/*/ios/App/App/public/
+*.ipa
+*.apk
+*.aab
+
+# --- Entornos / secretos -----------------------------------------------------
+.env
+.env.*
+!.env.example
+!infra/.env.example
+infra/.env
+infra/secrets/
+
+# --- IDEs ---------------------------------------------------------------
+.idea/
+*.iml
+.vscode/
+!.vscode/extensions.json
+.DS_Store
+Thumbs.db
+
+# --- Logs / temporales -------------------------------------------------------
+*.log
+logs/
+tmp/
+*.tmp

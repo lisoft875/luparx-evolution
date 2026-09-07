@@ -1,0 +1,218 @@
+package cr.luparx.tenancy.service;
+
+import cr.luparx.core.domain.Portal;
+import cr.luparx.core.domain.Role;
+import cr.luparx.core.error.ConflictException;
+import cr.luparx.core.error.ErrorCode;
+import cr.luparx.core.error.ForbiddenException;
+import cr.luparx.core.error.NotFoundException;
+import cr.luparx.core.error.ValidationException;
+import cr.luparx.core.id.TenantId;
+import cr.luparx.core.id.UserId;
+import cr.luparx.core.id.Uuid7;
+import cr.luparx.core.page.PageRequest;
+import cr.luparx.core.page.PageResponse;
+import cr.luparx.tenancy.entity.Tenant;
+import cr.luparx.tenancy.entity.TenantMembership;
+import cr.luparx.tenancy.model.MembershipStatus;
+import cr.luparx.tenancy.model.SelfRegistrationPolicy;
+import cr.luparx.tenancy.repository.TenantMembershipRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Sort;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.Clock;
+import java.time.Instant;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
+/**
+ * Membership lifecycle: request, approve, reject, revoke and role changes (CONTRACT.md §1 and §4).
+ *
+ * <p>The self-registration rule lives here, not in a controller: a citizen membership becomes ACTIVE
+ * immediately, while admin and inspector requests land in PENDING_APPROVAL unless the tenant's
+ * {@code self_registration_policy} says otherwise. The platform portal never accepts a
+ * self-registration at all.</p>
+ */
+@Service
+public class MembershipService {
+
+    private final TenantMembershipRepository membershipRepository;
+    private final TenantService tenantService;
+    private final Clock clock;
+
+    public MembershipService(TenantMembershipRepository membershipRepository, TenantService tenantService,
+                             Clock clock) {
+        this.membershipRepository = membershipRepository;
+        this.tenantService = tenantService;
+        this.clock = clock;
+    }
+
+    /**
+     * Creates the membership that accompanies a self-registration.
+     *
+     * @throws ForbiddenException when the portal or the tenant policy forbids self-registration
+     * @throws ConflictException  when the user already has a membership for this tenant and portal
+     */
+    @Transactional
+    public TenantMembership requestSelfRegistration(UserId userId, TenantId tenantId, Portal portal) {
+        if (!portal.selfRegistrationAllowed()) {
+            throw ForbiddenException.of(ErrorCode.SELF_REGISTRATION_DISABLED, "error.registration.portal.disabled");
+        }
+        Tenant tenant = tenantService.requireActive(tenantId);
+        SelfRegistrationPolicy policy = tenant.getSelfRegistrationPolicy();
+        if (policy == SelfRegistrationPolicy.INVITE_ONLY) {
+            throw ForbiddenException.of(ErrorCode.SELF_REGISTRATION_DISABLED, "error.registration.tenant.inviteOnly");
+        }
+
+        membershipRepository.findByTenantIdAndUserIdAndPortal(tenantId.value(), userId.value(), portal)
+                .ifPresent(existing -> {
+                    throw ConflictException.of(ErrorCode.MEMBERSHIP_ALREADY_EXISTS, "error.membership.exists");
+                });
+
+        MembershipStatus status = resolveInitialStatus(portal, policy);
+        Role role = Role.defaultSelfRegistrationRole(portal);
+        Instant now = clock.instant();
+        TenantMembership membership = new TenantMembership(Uuid7.generate(), tenantId.value(), userId.value(),
+                portal, role, status, now);
+        if (status == MembershipStatus.ACTIVE) {
+            membership.approve(null, now);
+        }
+        return membershipRepository.save(membership);
+    }
+
+    /**
+     * CONTRACT.md §1: citizens are active immediately; admin/inspector requests wait for approval
+     * unless the tenant explicitly opted into OPEN.
+     */
+    private MembershipStatus resolveInitialStatus(Portal portal, SelfRegistrationPolicy policy) {
+        if (portal == Portal.CITIZEN) {
+            return MembershipStatus.ACTIVE;
+        }
+        return policy == SelfRegistrationPolicy.OPEN ? MembershipStatus.ACTIVE : MembershipStatus.PENDING_APPROVAL;
+    }
+
+    /** Administrative creation of a membership (invitation / manual grant). */
+    @Transactional
+    public TenantMembership create(UserId userId, TenantId tenantId, Portal portal, Role role,
+                                   MembershipStatus status) {
+        requireRoleMatchesPortal(role, portal);
+        if (portal == Portal.PLATFORM) {
+            // Platform memberships are not bound to a municipality (CONTRACT.md §0).
+            Optional<TenantMembership> existing = membershipRepository.findByUserId(userId.value()).stream()
+                    .filter(candidate -> candidate.getPortal() == Portal.PLATFORM)
+                    .findFirst();
+            if (existing.isPresent()) {
+                throw ConflictException.of(ErrorCode.MEMBERSHIP_ALREADY_EXISTS, "error.membership.exists");
+            }
+            Instant now = clock.instant();
+            TenantMembership membership = new TenantMembership(Uuid7.generate(), null, userId.value(), portal, role,
+                    status, now);
+            if (status == MembershipStatus.ACTIVE) {
+                membership.approve(null, now);
+            }
+            return membershipRepository.save(membership);
+        }
+
+        tenantService.requireActive(tenantId);
+        membershipRepository.findByTenantIdAndUserIdAndPortal(tenantId.value(), userId.value(), portal)
+                .ifPresent(existing -> {
+                    throw ConflictException.of(ErrorCode.MEMBERSHIP_ALREADY_EXISTS, "error.membership.exists");
+                });
+        Instant now = clock.instant();
+        TenantMembership membership = new TenantMembership(Uuid7.generate(), tenantId.value(), userId.value(), portal,
+                role, status, now);
+        if (status == MembershipStatus.ACTIVE) {
+            membership.approve(null, now);
+        }
+        return membershipRepository.save(membership);
+    }
+
+    /**
+     * Loads a membership and proves it belongs to the tenant the caller is acting in. Platform
+     * operators pass {@code null} as the scope, and their access is audited by the caller
+     * (SECURITY.md §3).
+     */
+    @Transactional(readOnly = true)
+    public TenantMembership requireInScope(UUID membershipId, TenantId scope) {
+        TenantMembership membership = membershipRepository.findById(membershipId)
+                .orElseThrow(() -> NotFoundException.of(ErrorCode.MEMBERSHIP_NOT_FOUND, "error.membership.notFound"));
+        if (scope != null && !scope.value().equals(membership.getTenantId())) {
+            // Not "403 wrong tenant": revealing that the id exists elsewhere is itself a cross-tenant
+            // leak, so an out-of-scope membership is indistinguishable from a missing one.
+            throw NotFoundException.of(ErrorCode.MEMBERSHIP_NOT_FOUND, "error.membership.notFound");
+        }
+        return membership;
+    }
+
+    @Transactional
+    public TenantMembership approve(UUID membershipId, TenantId scope, UserId approver) {
+        TenantMembership membership = requireInScope(membershipId, scope);
+        if (membership.getStatus() == MembershipStatus.ACTIVE) {
+            return membership;
+        }
+        if (membership.getStatus() == MembershipStatus.REJECTED
+                || membership.getStatus() == MembershipStatus.REVOKED) {
+            // Re-admitting someone previously rejected/revoked is an explicit new grant, not an approval.
+            throw ConflictException.of(ErrorCode.MEMBERSHIP_INVALID_TRANSITION, "error.membership.transition");
+        }
+        membership.approve(approver == null ? null : approver.value(), clock.instant());
+        return membership;
+    }
+
+    @Transactional
+    public TenantMembership reject(UUID membershipId, TenantId scope, UserId approver, String reason) {
+        TenantMembership membership = requireInScope(membershipId, scope);
+        if (membership.getStatus() != MembershipStatus.PENDING_APPROVAL) {
+            throw ConflictException.of(ErrorCode.MEMBERSHIP_INVALID_TRANSITION, "error.membership.transition");
+        }
+        membership.reject(approver == null ? null : approver.value(), clock.instant(), reason);
+        return membership;
+    }
+
+    @Transactional
+    public TenantMembership revoke(UUID membershipId, TenantId scope, String reason) {
+        TenantMembership membership = requireInScope(membershipId, scope);
+        membership.revoke(clock.instant(), reason);
+        return membership;
+    }
+
+    @Transactional
+    public TenantMembership update(UUID membershipId, TenantId scope, Role role, MembershipStatus status) {
+        TenantMembership membership = requireInScope(membershipId, scope);
+        if (role != null) {
+            requireRoleMatchesPortal(role, membership.getPortal());
+            membership.changeRole(role);
+        }
+        if (status != null) {
+            membership.changeStatus(status, clock.instant());
+        }
+        return membership;
+    }
+
+    @Transactional(readOnly = true)
+    public PageResponse<TenantMembership> listByTenant(TenantId tenantId, MembershipStatus status,
+                                                       PageRequest request) {
+        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(
+                request.page(), request.size(), Sort.by(Sort.Order.desc("requestedAt")));
+        Page<TenantMembership> page = status == null
+                ? membershipRepository.findByTenantId(tenantId.value(), pageable)
+                : membershipRepository.findByTenantIdAndStatus(tenantId.value(), status, pageable);
+        return PageResponse.of(page.getContent(), request.page(), request.size(), page.getTotalElements());
+    }
+
+    @Transactional(readOnly = true)
+    public List<TenantMembership> listByUser(UserId userId) {
+        return membershipRepository.findByUserId(userId.value());
+    }
+
+    /** A role always belongs to exactly one portal; mixing them would break portal isolation. */
+    private void requireRoleMatchesPortal(Role role, Portal portal) {
+        if (role == null || portal == null || role.portal() != portal) {
+            throw new ValidationException("role", ErrorCode.ROLE_NOT_ALLOWED_FOR_PORTAL,
+                    "error.membership.role.portalMismatch");
+        }
+    }
+}

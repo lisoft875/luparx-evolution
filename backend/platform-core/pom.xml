@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>cr.luparx</groupId>
+    <artifactId>luparx-backend</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+  </parent>
+
+  <artifactId>luparx-platform-core</artifactId>
+  <name>luparx-platform-core</name>
+  <description>Shared kernel: ids, money, errors, paging, tenant context, audit/outbox ports.</description>
+
+  <!--
+    Deliberately framework-free: platform-core has no Spring, no JPA and no HTTP dependency so that
+    it can be consumed by every bounded context (and by a future extracted service) without dragging
+    infrastructure along. Persistence adapters for the audit/outbox ports live in the `app` module.
+  -->
+</project>

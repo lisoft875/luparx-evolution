@@ -1,0 +1,10 @@
+{
+  "name": "@luparx/config",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Shared TypeScript and lint configuration for LupaRX frontend workspaces.",
+  "files": [
+    "tsconfig.package.json",
+    "tsconfig.app.json"
+  ]
+}

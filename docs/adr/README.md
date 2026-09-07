@@ -1,0 +1,24 @@
+# Architecture Decision Records — LupaRX
+
+Índice de decisiones arquitectónicas significativas. Cada ADR sigue el formato: contexto,
+alternativas consideradas, decisión, consecuencias/trade-offs, impacto de migración, estrategia
+de rollback, estado y fecha.
+
+| # | Título | Estado |
+|---|---|---|
+| [0001](0001-modular-monolith.md) | Monolito modular con fronteras explícitas (vs microservicios) | Aceptado |
+| [0002](0002-multitenancy-shared-schema.md) | Multi-tenancy: base y esquema compartidos con `tenant_id` + defensa en profundidad | Aceptado |
+| [0003](0003-global-identity-tenant-memberships.md) | Identidad global única con membresías por municipalidad | Aceptado |
+| [0004](0004-separate-portals-jwt-audiences.md) | Portales separados con audiencias JWT distintas | Aceptado |
+| [0005](0005-auth-argon2-jwt-rs256-refresh-rotation.md) | Autenticación: Argon2id + JWT RS256 con rotación + refresh opaco con detección de reuso | Aceptado |
+| [0006](0006-identity-federation.md) | Federación de identidad (Google, Microsoft Entra ID, Facebook) | Aceptado |
+| [0007](0007-mfa-totp.md) | MFA TOTP (RFC 6238) con códigos de recuperación | Aceptado |
+| [0008](0008-internationalization-catalogs.md) | Internacionalización: ISO 3166/4217, BCP 47, IANA, catálogo de divisiones administrativas | Aceptado |
+| [0009](0009-money-minor-units.md) | Dinero en unidades menores enteras + código de moneda | Aceptado |
+| [0010](0010-flyway-expand-contract.md) | Migraciones versionadas con Flyway y patrón expand-and-contract | Aceptado |
+| [0011](0011-api-errors-versioning.md) | Errores de API con RFC 9457, versionado `/api/v1` y política de cambios incompatibles | Aceptado |
+| [0012](0012-idempotency-transactional-outbox.md) | Idempotencia y outbox transaccional para pagos, webhooks y eventos | Aceptado |
+| [0013](0013-audit-trail.md) | Auditoría y trazabilidad de accesos | Aceptado |
+
+Todas las decisiones datan del scaffold inicial (2026-09-07) y se revisan cuando cambian los
+supuestos que las motivaron (volumen, número de tenants, regulación por país, etc.).

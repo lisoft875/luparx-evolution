@@ -1,0 +1,64 @@
+version: "3.9"
+
+# Entorno de desarrollo local para LupaRX.
+# Ninguna contraseña aquí es real: todos los valores por defecto son sólo para desarrollo local
+# y deben sobrescribirse vía infra/.env (copiado desde infra/.env.example) en cualquier entorno
+# compartido. Nunca usar estos defaults en producción.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: luparx-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-luparx}
+      POSTGRES_USER: ${POSTGRES_USER:-luparx}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-luparx_dev_only}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - luparx_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-luparx} -d ${POSTGRES_DB:-luparx}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - luparx
+
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: luparx-mailpit
+    restart: unless-stopped
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: "1"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "1"
+    ports:
+      - "${MAILPIT_SMTP_PORT:-1025}:1025" # SMTP para el backend (verificación de email, reset password)
+      - "${MAILPIT_UI_PORT:-8025}:8025"   # UI web para leer correos capturados en desarrollo
+    networks:
+      - luparx
+
+  adminer:
+    image: adminer:latest
+    container_name: luparx-adminer
+    restart: unless-stopped
+    profiles:
+      - tools # opcional: docker compose --profile tools up
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+    ports:
+      - "${ADMINER_PORT:-8081}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - luparx
+
+networks:
+  luparx:
+    name: luparx-net
+
+volumes:
+  luparx_postgres_data:
+    name: luparx_postgres_data

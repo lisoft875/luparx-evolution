@@ -1,0 +1,149 @@
+package cr.luparx.app.web.dto;
+
+import cr.luparx.app.web.dto.AuthDtos.AddressDto;
+import cr.luparx.app.web.dto.AuthDtos.IdentityDocumentDto;
+import cr.luparx.app.web.dto.AuthDtos.PhoneDto;
+import cr.luparx.core.domain.Portal;
+import cr.luparx.core.domain.Role;
+import cr.luparx.identity.model.UserStatus;
+import cr.luparx.tenancy.model.MembershipStatus;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
+
+import java.time.Instant;
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+/**
+ * Wire shapes of {@code /api/v1/admin/**} (CONTRACT.md §4).
+ *
+ * <p>Data minimisation is part of the contract here: {@link AdminUserListItem} carries no identity
+ * document and no birth date, because a list view does not need them. The full record is only
+ * available on {@code GET /admin/users/{id}} to a caller holding {@code USER_READ}
+ * (SECURITY.md §11).</p>
+ */
+public final class AdminDtos {
+
+    private AdminDtos() {
+    }
+
+    public record AdminUserListItem(
+            UUID id,
+            String email,
+            String fullName,
+            UserStatus status,
+            Instant createdAt,
+            List<SessionDtos.MembershipSummaryResponse> memberships) {
+    }
+
+    public record AdminUserDetail(
+            UUID id,
+            String email,
+            String fullName,
+            UserStatus status,
+            Instant createdAt,
+            List<SessionDtos.MembershipSummaryResponse> memberships,
+            String givenName,
+            String familyName,
+            String secondFamilyName,
+            LocalDate birthDate,
+            String nationalityCode,
+            PhoneDto phone,
+            IdentityDocumentDto identityDocument,
+            AddressDto address,
+            boolean mfaRequired,
+            boolean mfaEnabled,
+            String blockedReason) {
+    }
+
+    /** {@code POST /admin/users}: manual creation / invitation of a member of this tenant. */
+    public record CreateUserRequest(
+            @NotBlank @Email @Size(max = 320) String email,
+            @NotBlank @Size(max = 100) String givenName,
+            @NotBlank @Size(max = 100) String familyName,
+            @Size(max = 100) String secondFamilyName,
+            @NotNull @Valid IdentityDocumentDto identityDocument,
+            @NotNull @Valid AddressDto address,
+            @NotNull @Valid PhoneDto phone,
+            @NotBlank @Size(min = 2, max = 2) String nationalityCode,
+            @NotNull LocalDate birthDate,
+            @Size(max = 35) String locale,
+            @Size(max = 64) String timeZone,
+            @NotNull Portal portal,
+            @NotNull Role role) {
+    }
+
+    public record UpdateUserRequest(
+            @NotBlank @Size(max = 100) String givenName,
+            @NotBlank @Size(max = 100) String familyName,
+            @Size(max = 100) String secondFamilyName,
+            @Valid AddressDto address,
+            @Valid PhoneDto phone,
+            @Size(min = 2, max = 2) String nationalityCode,
+            @Size(max = 35) String locale,
+            @Size(max = 64) String timeZone) {
+    }
+
+    public record BlockUserRequest(@NotBlank @Size(max = 500) String reason) {
+    }
+
+    public record RequireMfaRequest(@NotNull Boolean required) {
+    }
+
+    public record CreateMembershipRequest(
+            @NotNull UUID userId,
+            UUID tenantId,
+            @NotNull Portal portal,
+            @NotNull Role role) {
+    }
+
+    public record UpdateMembershipRequest(Role role, MembershipStatus status) {
+    }
+
+    public record RejectMembershipRequest(@NotBlank @Size(max = 500) String reason) {
+    }
+
+    public record MembershipResponse(
+            UUID id,
+            UUID tenantId,
+            UUID userId,
+            Portal portal,
+            Role role,
+            MembershipStatus status,
+            Instant requestedAt,
+            Instant approvedAt,
+            UUID approvedBy,
+            String statusReason) {
+    }
+
+    public record AuditEventResponse(
+            UUID id,
+            UUID tenantId,
+            UUID actorUserId,
+            Portal actorPortal,
+            String action,
+            String resourceType,
+            String resourceId,
+            Instant occurredAt,
+            Map<String, Object> metadata) {
+    }
+
+    public record RegisteredUsersRow(String group, long count) {
+    }
+
+    public record RegisteredUsersReportResponse(String groupBy, List<RegisteredUsersRow> rows) {
+    }
+
+    public record CreateExportRequest(
+            @NotBlank @Size(max = 64) String type,
+            Map<String, Object> filters) {
+    }
+
+    public record CreateExportResponse(String exportId) {
+    }
+}

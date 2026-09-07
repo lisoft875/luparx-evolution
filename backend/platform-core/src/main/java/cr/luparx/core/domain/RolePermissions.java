@@ -1,0 +1,90 @@
+package cr.luparx.core.domain;
+
+import java.util.Collection;
+import java.util.Collections;
+import java.util.EnumMap;
+import java.util.EnumSet;
+import java.util.Map;
+import java.util.Set;
+
+/**
+ * Role -> permission table (CONTRACT.md §1: "El rol mapea a permisos en RolePermissions
+ * (configuración, no {@code if (role == ADMIN)})"). This mirrors the client-side table in
+ * {@code frontend/packages/auth/src/permissions.ts}; the server table is the authoritative one and
+ * is enforced independently of anything the client believes.
+ *
+ * <p>Inspector permissions are intentionally empty in v0.1: the patrol/zone capabilities arrive with
+ * module-parking and are added here, not by branching on the role name at a call site.</p>
+ */
+public final class RolePermissions {
+
+    private static final Map<Role, Set<Permission>> TABLE = buildTable();
+
+    private RolePermissions() {
+    }
+
+    private static Map<Role, Set<Permission>> buildTable() {
+        EnumMap<Role, Set<Permission>> table = new EnumMap<>(Role.class);
+        table.put(Role.PLATFORM_ADMIN, EnumSet.allOf(Permission.class));
+        table.put(Role.PLATFORM_SUPPORT, EnumSet.of(
+                Permission.USER_READ,
+                Permission.AUDIT_READ,
+                Permission.EXPORT_RUN));
+        table.put(Role.TENANT_ADMIN, EnumSet.of(
+                Permission.USER_READ,
+                Permission.USER_WRITE,
+                Permission.USER_BLOCK,
+                Permission.MEMBERSHIP_APPROVE,
+                Permission.ROLE_ASSIGN,
+                Permission.ZONE_ASSIGN,
+                Permission.AUDIT_READ,
+                Permission.EXPORT_RUN,
+                Permission.TENANT_MANAGE));
+        table.put(Role.TENANT_FINANCE, EnumSet.of(
+                Permission.USER_READ,
+                Permission.AUDIT_READ,
+                Permission.EXPORT_RUN));
+        table.put(Role.TENANT_SUPPORT, EnumSet.of(
+                Permission.USER_READ,
+                Permission.AUDIT_READ));
+        table.put(Role.INSPECTOR, EnumSet.noneOf(Permission.class));
+        table.put(Role.INSPECTOR_LEAD, EnumSet.noneOf(Permission.class));
+        table.put(Role.CITIZEN, EnumSet.noneOf(Permission.class));
+
+        EnumMap<Role, Set<Permission>> immutable = new EnumMap<>(Role.class);
+        for (Map.Entry<Role, Set<Permission>> entry : table.entrySet()) {
+            immutable.put(entry.getKey(), Collections.unmodifiableSet(EnumSet.copyOf(entry.getValue())));
+        }
+        return Collections.unmodifiableMap(immutable);
+    }
+
+    /** Permissions granted by a single role. Never null; empty for roles with no capability yet. */
+    public static Set<Permission> of(Role role) {
+        Set<Permission> permissions = TABLE.get(role);
+        return permissions == null ? Collections.emptySet() : permissions;
+    }
+
+    /** Union of the permissions granted by every role in the collection. */
+    public static Set<Permission> of(Collection<Role> roles) {
+        EnumSet<Permission> union = EnumSet.noneOf(Permission.class);
+        if (roles != null) {
+            for (Role role : roles) {
+                union.addAll(of(role));
+            }
+        }
+        return Collections.unmodifiableSet(union);
+    }
+
+    public static boolean grants(Role role, Permission permission) {
+        return of(role).contains(permission);
+    }
+
+    public static boolean grants(Collection<Role> roles, Permission permission) {
+        return of(roles).contains(permission);
+    }
+
+    /** Full table, exposed read-only for the platform back-office and for documentation. */
+    public static Map<Role, Set<Permission>> table() {
+        return TABLE;
+    }
+}
