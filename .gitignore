@@ -63,3 +63,6 @@ Thumbs.db
 logs/
 tmp/
 *.tmp
+
+# Secretos de desarrollo generados por scripts/dev-setup.sh
+infra/secrets/

@@ -1,5 +1,7 @@
 # LupaRX
 
+> **Levantar en local:** `./scripts/dev-setup.sh` y luego lo que imprime — detalle en [`docs/RUNBOOK.md`](docs/RUNBOOK.md).
+>
 > **Puertos:** este proyecto usa el puerto por defecto de cada servicio **+ 10** (API `8090`, Postgres `5442`, Vite `5183`–`5186`). Ver [`docs/PORTS.md`](docs/PORTS.md).
 
 
