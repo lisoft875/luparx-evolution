@@ -3,6 +3,7 @@ package cr.luparx.app.security;
 import cr.luparx.core.domain.Portal;
 import cr.luparx.core.error.ErrorCode;
 import cr.luparx.core.error.ForbiddenException;
+import cr.luparx.identity.service.MfaPolicy;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -19,7 +20,12 @@ import java.io.IOException;
 import java.util.List;
 
 /**
- * Enforces mandatory MFA on the admin, inspector and platform portals (CONTRACT.md §3).
+ * Enforces mandatory MFA on the portals a deployment configures as requiring it (CONTRACT.md §3).
+ *
+ * <p>Which portals those are is not written here: the filter asks {@link MfaPolicy}, built from
+ * {@code luparx.security.mfa-enforced-portals}. The default is {@code admin,inspector,platform};
+ * only a developer laptop is expected to run with an empty list, and the application warns about it
+ * on every start.</p>
  *
  * <p>A token whose {@code mfa} claim is false reaches only the enrolment endpoints — reading one's
  * own profile, starting a TOTP setup, activating it and logging out. Everything else is refused with
@@ -36,9 +42,12 @@ public class MfaEnforcementFilter extends OncePerRequestFilter {
             "/me/mfa/activate");
 
     private final HandlerExceptionResolver handlerExceptionResolver;
+    private final MfaPolicy mfaPolicy;
 
-    public MfaEnforcementFilter(@Qualifier("handlerExceptionResolver") HandlerExceptionResolver resolver) {
+    public MfaEnforcementFilter(@Qualifier("handlerExceptionResolver") HandlerExceptionResolver resolver,
+                                MfaPolicy mfaPolicy) {
         this.handlerExceptionResolver = resolver;
+        this.mfaPolicy = mfaPolicy;
     }
 
     @Override
@@ -51,7 +60,7 @@ public class MfaEnforcementFilter extends OncePerRequestFilter {
         }
         Jwt jwt = jwtAuthentication.getToken();
         Portal portal = Portal.fromSlug(jwt.getClaimAsString("portal")).orElse(null);
-        if (portal == null || !portal.mfaMandatory()) {
+        if (portal == null || !mfaPolicy.isEnforcedFor(portal)) {
             chain.doFilter(request, response);
             return;
         }

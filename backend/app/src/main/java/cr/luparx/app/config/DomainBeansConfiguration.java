@@ -1,9 +1,11 @@
 package cr.luparx.app.config;
 
+import cr.luparx.core.domain.Portal;
 import cr.luparx.identity.port.JwtKeySource;
 import cr.luparx.identity.repository.UserMfaRecoveryCodeRepository;
 import cr.luparx.identity.repository.UserMfaTotpRepository;
 import cr.luparx.identity.repository.UserRepository;
+import cr.luparx.identity.service.MfaPolicy;
 import cr.luparx.identity.service.MfaService;
 import cr.luparx.identity.service.PasswordProperties;
 import cr.luparx.identity.service.PasswordService;
@@ -13,10 +15,15 @@ import cr.luparx.identity.service.SecretCipher;
 import cr.luparx.identity.service.TokenProperties;
 import cr.luparx.identity.service.TokenService;
 import cr.luparx.identity.service.TotpService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 import java.time.Clock;
+import java.util.EnumSet;
+import java.util.List;
+import java.util.Set;
 
 /**
  * Wires the framework-free domain services of the modules that intentionally do not carry Spring
@@ -27,6 +34,8 @@ import java.time.Clock;
  */
 @Configuration
 public class DomainBeansConfiguration {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(DomainBeansConfiguration.class);
 
     /**
      * A single UTC clock, injected everywhere instead of calling {@code Instant.now()} — timestamps
@@ -75,6 +84,40 @@ public class DomainBeansConfiguration {
                 defaults.timeZone(),
                 defaults.countryCode(),
                 defaults.termsVersion());
+    }
+
+    /**
+     * Resolves {@code luparx.security.mfa-enforced-portals} into the policy the login flow, the
+     * portal filter chains and the "disable my TOTP" endpoint all share.
+     *
+     * <p>An unknown slug is ignored with a warning rather than failing the start: a typo in one
+     * entry must not take the whole deployment down, and the remaining portals stay protected. An
+     * empty list means MFA is enforced nowhere, which is legitimate on a laptop and a serious
+     * finding anywhere else, so it is stated loudly on every start.</p>
+     */
+    @Bean
+    public MfaPolicy mfaPolicy(SecurityProperties securityProperties) {
+        List<String> configured = securityProperties.mfaEnforcedPortals();
+        Set<Portal> enforced = EnumSet.noneOf(Portal.class);
+        if (configured != null) {
+            for (String slug : configured) {
+                if (slug == null || slug.isBlank()) {
+                    continue;
+                }
+                Portal.fromSlug(slug.trim()).ifPresentOrElse(
+                        enforced::add,
+                        () -> LOGGER.warn("luparx.security.mfa-enforced-portals contains an unknown portal"
+                                + " '{}'; it is ignored.", slug));
+            }
+        }
+        if (enforced.isEmpty()) {
+            LOGGER.warn("MFA ENFORCEMENT IS DISABLED on every portal (luparx.security.mfa-enforced-portals is"
+                    + " empty). This is acceptable only on a developer laptop; every shared environment must"
+                    + " set it back to admin,inspector,platform.");
+        } else {
+            LOGGER.info("MFA enforced on portals: {}", enforced);
+        }
+        return new MfaPolicy(enforced);
     }
 
     @Bean

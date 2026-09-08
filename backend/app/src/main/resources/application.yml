@@ -126,6 +126,11 @@ luparx:
     ip-hash-pepper: ${IP_HASH_PEPPER:}
     mfa-encryption-key: ${MFA_TOTP_ENCRYPTION_KEY:}
     mfa-issuer-name: ${MFA_ISSUER_NAME:LupaRX}
+    # Portals that require a second factor (CONTRACT.md §3). A list, not a constant in the code: a
+    # deployment decides it. Removing a portal from this list weakens the account protection of that
+    # portal for everyone, so the only environment allowed to shorten it is a developer laptop
+    # (see application-dev.yml). An empty list is announced with a WARN on every start.
+    mfa-enforced-portals: ${MFA_ENFORCED_PORTALS:admin,inspector,platform}
     password-min-length: ${PASSWORD_MIN_LENGTH:10}
     login-window: ${LOGIN_ATTEMPT_WINDOW:15m}
     login-max-per-email: ${LOGIN_MAX_FAILURES_PER_EMAIL:5}

@@ -5,6 +5,7 @@ import cr.luparx.app.web.dto.AuthDtos.IdentityDocumentDto;
 import cr.luparx.app.web.dto.AuthDtos.PhoneDto;
 import cr.luparx.core.domain.Portal;
 import cr.luparx.core.domain.Role;
+import cr.luparx.core.email.EmailAddress;
 import cr.luparx.identity.model.UserStatus;
 import cr.luparx.tenancy.model.MembershipStatus;
 import jakarta.validation.Valid;
@@ -76,6 +77,14 @@ public final class AdminDtos {
             @Size(max = 64) String timeZone,
             @NotNull Portal portal,
             @NotNull Role role) {
+
+        /**
+         * Administrative creation goes through the same canonical form as self-registration, so a
+         * back-office typo cannot produce a second account for an address that already exists.
+         */
+        public CreateUserRequest {
+            email = EmailAddress.normalize(email);
+        }
     }
 
     public record UpdateUserRequest(

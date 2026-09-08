@@ -1,6 +1,7 @@
 package cr.luparx.identity.service;
 
 import cr.luparx.core.domain.Portal;
+import cr.luparx.core.email.EmailAddress;
 import cr.luparx.core.error.ErrorCode;
 import cr.luparx.core.error.UnauthorizedException;
 import cr.luparx.core.id.UserId;
@@ -13,7 +14,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
-import java.util.Locale;
 import java.util.Optional;
 
 /**
@@ -42,6 +42,7 @@ public class AuthenticationService {
     private final PasswordService passwordService;
     private final MfaService mfaService;
     private final LoginRateLimiter rateLimiter;
+    private final MfaPolicy mfaPolicy;
     private final Clock clock;
 
     public AuthenticationService(UserRepository userRepository,
@@ -49,21 +50,25 @@ public class AuthenticationService {
                                  PasswordService passwordService,
                                  MfaService mfaService,
                                  LoginRateLimiter rateLimiter,
+                                 MfaPolicy mfaPolicy,
                                  Clock clock) {
         this.userRepository = userRepository;
         this.credentialsRepository = credentialsRepository;
         this.passwordService = passwordService;
         this.mfaService = mfaService;
         this.rateLimiter = rateLimiter;
+        this.mfaPolicy = mfaPolicy;
         this.clock = clock;
         this.dummyHash = passwordService.hash(Hashing.randomToken());
     }
 
     @Transactional
     public PasswordAuthentication authenticate(String email, String password, Portal portal, String ip) {
-        rateLimiter.checkAllowed(email, portal, ip);
+        // Normalised before the limiter so the counter, the lookup and the audit trail all agree on
+        // one spelling of the address (a copied "  User@Example.com " is the same account).
+        String normalizedEmail = EmailAddress.normalizeOrEmpty(email);
+        rateLimiter.checkAllowed(normalizedEmail, portal, ip);
 
-        String normalizedEmail = email == null ? "" : email.trim().toLowerCase(Locale.ROOT);
         Optional<User> maybeUser = userRepository.findByEmail(normalizedEmail);
         Optional<UserCredentials> credentials = maybeUser
                 .flatMap(user -> credentialsRepository.findById(user.getId()));
@@ -94,7 +99,9 @@ public class AuthenticationService {
         rateLimiter.record(normalizedEmail, portal, ip, true);
 
         boolean totpActive = mfaService.isActive(UserId.of(user.getId()));
-        boolean mfaMandatory = portal.mfaMandatory() || user.isMfaRequired();
+        // The portal side of the decision is configuration (luparx.security.mfa-enforced-portals);
+        // the per-user override is data. Neither is a constant in this class.
+        boolean mfaMandatory = mfaPolicy.isEnforcedFor(portal) || user.isMfaRequired();
         return new PasswordAuthentication(user, totpActive, mfaMandatory && !totpActive);
     }
 

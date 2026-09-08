@@ -6,6 +6,7 @@ import cr.luparx.app.web.dto.PlatformDtos;
 import cr.luparx.core.audit.AuditAction;
 import cr.luparx.core.domain.Portal;
 import cr.luparx.core.domain.Role;
+import cr.luparx.core.email.EmailAddress;
 import cr.luparx.core.error.ErrorCode;
 import cr.luparx.core.error.NotFoundException;
 import cr.luparx.core.error.NotImplementedException;
@@ -41,7 +42,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
@@ -190,7 +190,7 @@ public class PlatformTenantController {
                     "error.membership.role.portalMismatch");
         }
 
-        User user = userRepository.findByEmail(request.email().trim().toLowerCase(Locale.ROOT))
+        User user = userRepository.findByEmail(EmailAddress.normalize(request.email()))
                 .orElseThrow(() -> new NotImplementedException("error.notImplemented.tenantAdminInvitation"));
 
         TenantMembership membership = membershipService.create(UserId.of(user.getId()), TenantId.of(id),

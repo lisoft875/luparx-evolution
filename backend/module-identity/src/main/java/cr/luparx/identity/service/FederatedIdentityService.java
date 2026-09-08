@@ -1,5 +1,6 @@
 package cr.luparx.identity.service;
 
+import cr.luparx.core.email.EmailAddress;
 import cr.luparx.core.error.ConflictException;
 import cr.luparx.core.error.ErrorCode;
 import cr.luparx.core.error.ForbiddenException;
@@ -21,7 +22,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Locale;
 import java.util.Optional;
 
 /**
@@ -86,7 +86,7 @@ public class FederatedIdentityService {
                     "error.federation.emailNotVerified");
         }
 
-        String email = identity.email().trim().toLowerCase(Locale.ROOT);
+        String email = EmailAddress.normalize(identity.email());
         Optional<User> byEmail = userRepository.findByEmail(email);
         if (byEmail.isEmpty()) {
             throw NotFoundException.of(ErrorCode.FEDERATION_REGISTRATION_REQUIRED,
@@ -145,7 +145,7 @@ public class FederatedIdentityService {
                 user.getId(),
                 identity.provider(),
                 identity.subject(),
-                identity.email() == null ? null : identity.email().trim().toLowerCase(Locale.ROOT),
+                EmailAddress.normalize(identity.email()),
                 now));
         if (!user.isEmailVerified()) {
             // The provider vouched for the address, which is exactly what our own verification proves.

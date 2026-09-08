@@ -1,6 +1,7 @@
 package cr.luparx.app.web.dto;
 
 import cr.luparx.core.domain.Role;
+import cr.luparx.core.email.EmailAddress;
 import cr.luparx.tenancy.model.SelfRegistrationPolicy;
 import cr.luparx.tenancy.model.TenantStatus;
 import jakarta.validation.constraints.Email;
@@ -71,6 +72,11 @@ public final class PlatformDtos {
     public record CreateTenantAdminRequest(
             @NotBlank @Email @Size(max = 320) String email,
             Role role) {
+
+        /** The address is looked up against {@code users.email}; it must be in canonical form. */
+        public CreateTenantAdminRequest {
+            email = EmailAddress.normalize(email);
+        }
     }
 
     public record CreateTenantAdminResponse(

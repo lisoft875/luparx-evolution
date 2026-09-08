@@ -16,6 +16,7 @@ import cr.luparx.core.tenant.TenantContextHolder;
 import cr.luparx.geo.model.AddressInput;
 import cr.luparx.identity.entity.User;
 import cr.luparx.identity.service.IssuedTokens;
+import cr.luparx.identity.service.MfaPolicy;
 import cr.luparx.identity.service.MfaService;
 import cr.luparx.identity.service.MfaSetup;
 import cr.luparx.identity.service.UserDirectoryService;
@@ -56,6 +57,7 @@ public class MeController {
     private final AccessResolver accessResolver;
     private final TenantRepository tenantRepository;
     private final MfaService mfaService;
+    private final MfaPolicy mfaPolicy;
     private final SessionService sessionService;
     private final AuditRecorder auditRecorder;
     private final ResponseMapper mapper;
@@ -64,6 +66,7 @@ public class MeController {
                         AccessResolver accessResolver,
                         TenantRepository tenantRepository,
                         MfaService mfaService,
+                        MfaPolicy mfaPolicy,
                         SessionService sessionService,
                         AuditRecorder auditRecorder,
                         ResponseMapper mapper) {
@@ -71,6 +74,7 @@ public class MeController {
         this.accessResolver = accessResolver;
         this.tenantRepository = tenantRepository;
         this.mfaService = mfaService;
+        this.mfaPolicy = mfaPolicy;
         this.sessionService = sessionService;
         this.auditRecorder = auditRecorder;
         this.mapper = mapper;
@@ -170,8 +174,8 @@ public class MeController {
     public ResponseEntity<Void> disableMfa(@PathVariable String portal,
                                            @Valid @RequestBody SessionDtos.MfaCodeRequest request) {
         TenantContext context = requireContext(portal);
-        if (context.portal().mfaMandatory()) {
-            // Turning off a mandatory second factor is not a user decision.
+        if (mfaPolicy.isEnforcedFor(context.portal())) {
+            // Turning off a second factor the deployment mandates is not a user decision.
             throw ForbiddenException.of(ErrorCode.MFA_REQUIRED, "error.mfa.required");
         }
         mfaService.disable(context.userId(), request.code());

@@ -5,6 +5,7 @@ import cr.luparx.app.config.JwtProperties;
 import cr.luparx.app.config.SecurityProperties;
 import cr.luparx.core.domain.Portal;
 import cr.luparx.identity.port.JwtKeySource;
+import cr.luparx.identity.service.MfaPolicy;
 import cr.luparx.identity.repository.UserRepository;
 import cr.luparx.tenancy.service.AccessResolver;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -78,8 +79,9 @@ public class SecurityConfig {
 
     @Bean
     public MfaEnforcementFilter mfaEnforcementFilter(
-            @Qualifier("handlerExceptionResolver") HandlerExceptionResolver resolver) {
-        return new MfaEnforcementFilter(resolver);
+            @Qualifier("handlerExceptionResolver") HandlerExceptionResolver resolver,
+            MfaPolicy mfaPolicy) {
+        return new MfaEnforcementFilter(resolver, mfaPolicy);
     }
 
     /*

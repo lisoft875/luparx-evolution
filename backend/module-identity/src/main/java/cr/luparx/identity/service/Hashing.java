@@ -1,12 +1,13 @@
 package cr.luparx.identity.service;
 
+import cr.luparx.core.email.EmailAddress;
+
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.util.Base64;
 import java.util.HexFormat;
-import java.util.Locale;
 
 /**
  * Hashing helpers for values that must be looked up but never stored in the clear: opaque tokens,
@@ -36,9 +37,10 @@ public final class Hashing {
         }
     }
 
-    /** Pseudonymises an email for {@code auth_attempts}: lower-cased, then hashed. */
+    /** Pseudonymises an email for {@code auth_attempts}: canonicalised, then hashed. */
     public static String emailHash(String email) {
-        return email == null ? null : sha256Hex(email.trim().toLowerCase(Locale.ROOT));
+        String normalized = EmailAddress.normalize(email);
+        return normalized == null ? null : sha256Hex(normalized);
     }
 
     /**

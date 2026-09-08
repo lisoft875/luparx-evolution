@@ -56,6 +56,51 @@ and the schema belongs to the migrations.
 - JWKS: `http://localhost:8090/.well-known/jwks.json`
 - Mail (dev): Mailpit at `http://localhost:8035`
 
+## Development seed data (`dev` profile only)
+
+A fresh database has no users, so a login can only answer `INVALID_CREDENTIALS`. Under the `dev`
+profile `DevDataSeeder` creates a demo municipality (slug `demo-municipality`, whose country,
+currency, locale and time zone come from `platform.defaults.*` — nothing is hardcoded) and one
+account per portal, each with an **active** membership and a verified email:
+
+| Portal | Email | Password | Role |
+|---|---|---|---|
+| citizen | `citizen@luparx.test` | `Password123!` | `CITIZEN` |
+| admin | `admin@luparx.test` | `Password123!` | `TENANT_ADMIN` |
+| inspector | `inspector@luparx.test` | `Password123!` | `INSPECTOR` |
+| platform | `platform@luparx.test` | `Password123!` | `PLATFORM_ADMIN` (no tenant) |
+
+> These credentials are public, weak and printed at `WARN` on every start. They exist to make a
+> laptop usable and **must never exist in any environment somebody else can reach**. The bean is
+> annotated `@Profile("dev")`, so it does not exist at all under any other profile.
+
+The seeder is idempotent: it looks the tenant up by slug, the users by email and the memberships by
+tenant + user + portal, and does nothing when they are already there. It runs through the real
+`UserRegistrationService`, `EmailVerificationService` and `MembershipService` — the password is
+hashed by the real `PasswordService`, never written as a literal — so what it produces is exactly
+what a real registration produces. An account it cannot create (a catalogue that does not offer a
+passport for the configured default country, or a country with no administrative divisions seeded)
+is logged and skipped; the seeder never prevents startup.
+
+To turn it off:
+
+```bash
+mvn -pl app spring-boot:run -Dspring-boot.run.profiles=dev \
+    -Dspring-boot.run.arguments=--luparx.dev.seed-demo-data=false
+# or: export LUPARX_DEV_SEED_DEMO_DATA=false
+```
+
+### MFA in development
+
+MFA is mandatory on the admin, inspector and platform portals, which means a seeded account cannot
+reach those portals until it enrols a TOTP. Which portals enforce it is configuration, not a
+constant: `luparx.security.mfa-enforced-portals` (default `admin,inspector,platform`, overridable
+with `MFA_ENFORCED_PORTALS`). `application-dev.yml` sets it to **empty** so the seeded accounts can
+log in straight away, and the application logs a `WARN` on every start while it is empty.
+
+Leaving that list empty anywhere but a laptop means a stolen back-office password is enough to take
+over an account — set it back to `admin,inspector,platform` in every shared environment.
+
 ## Environment variables
 
 Secrets have **no usable default**: the application fails to start rather than run with a
@@ -74,6 +119,8 @@ placeholder key (`docs/SECURITY.md` §5).
 | `CORS_ALLOWED_ORIGIN_{CITIZEN,ADMIN,INSPECTOR,PLATFORM}` | yes in prod | One origin list per portal — never a shared wildcard |
 | `APP_BASE_URL_*` | yes | Front-end base URLs used to build the links inside emails |
 | `PLATFORM_DEFAULT_*` | no | Deployment defaults (country, currency, locale, time zone, dial code, minimum age) |
+| `MFA_ENFORCED_PORTALS` | no | Portals requiring a second factor; default `admin,inspector,platform`. Empty disables MFA enforcement everywhere — laptops only |
+| `LUPARX_DEV_SEED_DEMO_DATA` | no | `false` disables the `dev`-profile demo seed; the seeder does not exist outside that profile |
 
 ### Rotating the JWT signing key
 
@@ -98,9 +145,12 @@ placeholder key (`docs/SECURITY.md` §5).
 - **Tenant isolation**: every tenant-owned query takes the tenant from `TenantContext`; a user with
   no membership in the active tenant is reported *not found*, not *forbidden*, because confirming an
   id exists elsewhere is itself a leak.
-- **MFA** is mandatory on admin, inspector and platform. A token with `mfa=false` on those portals
-  reaches only the enrolment endpoints, which is how a new administrator enrols without ever holding
-  a usable session that skipped the second factor.
+- **MFA** is mandatory on the portals listed in `luparx.security.mfa-enforced-portals` (default
+  `admin,inspector,platform`). A token with `mfa=false` on one of those portals reaches only the
+  enrolment endpoints, which is how a new administrator enrols without ever holding a usable session
+  that skipped the second factor. The same list is read by the login flow and by the endpoint that
+  disables one's own TOTP, so the three cannot drift apart; the `dev` profile empties it and says so
+  at `WARN`.
 - **Rate limiting** lives in `auth_attempts` in PostgreSQL, so the limit holds across replicas.
 - **Idempotency**: `Idempotency-Key` is required on the sensitive `POST` routes listed in
   `IdempotencyFilter`; concurrent retries are resolved by a unique index, not by in-process state.

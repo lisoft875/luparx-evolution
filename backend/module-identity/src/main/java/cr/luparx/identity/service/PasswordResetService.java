@@ -1,5 +1,6 @@
 package cr.luparx.identity.service;
 
+import cr.luparx.core.email.EmailAddress;
 import cr.luparx.core.error.ErrorCode;
 import cr.luparx.core.error.NotFoundException;
 import cr.luparx.core.error.UnauthorizedException;
@@ -18,7 +19,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Locale;
 import java.util.Optional;
 
 /**
@@ -63,10 +63,11 @@ public class PasswordResetService {
      */
     @Transactional
     public Optional<Issued> requestReset(String email) {
-        if (email == null || email.isBlank()) {
+        String normalizedEmail = EmailAddress.normalize(email);
+        if (normalizedEmail == null) {
             return Optional.empty();
         }
-        return userRepository.findByEmail(email.trim().toLowerCase(Locale.ROOT))
+        return userRepository.findByEmail(normalizedEmail)
                 .map(user -> new Issued(user, issueToken(UserId.of(user.getId()))));
     }
 

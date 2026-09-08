@@ -55,6 +55,29 @@ public class PhoneNumberService {
         }
     }
 
+    /**
+     * A number that is valid for the region, taken from libphonenumber's own metadata.
+     *
+     * <p>Used by tooling that has to produce a well-formed contact detail without a real person
+     * behind it — development fixtures and documentation examples. It exists here rather than as a
+     * constant in the caller precisely so that no dial code or national format is ever written into
+     * code (CONTRACT.md §7): the answer changes with the country, and comes from the metadata.</p>
+     *
+     * @return the national significant number, or null when the region is unknown to the library
+     */
+    public String exampleNationalNumber(String countryCode) {
+        String region = CountryCodes.normalize(countryCode);
+        if (!CountryCodes.isValid(region)) {
+            return null;
+        }
+        Phonenumber.PhoneNumber example =
+                phoneNumberUtil.getExampleNumberForType(region, PhoneNumberUtil.PhoneNumberType.MOBILE);
+        if (example == null) {
+            example = phoneNumberUtil.getExampleNumber(region);
+        }
+        return example == null ? null : phoneNumberUtil.getNationalSignificantNumber(example);
+    }
+
     /** The E.164 calling code of a region, including the leading '+', or null when unknown. */
     public String dialCodeFor(String countryCode) {
         String region = CountryCodes.normalize(countryCode);

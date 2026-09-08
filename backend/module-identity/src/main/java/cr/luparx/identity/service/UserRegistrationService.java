@@ -1,5 +1,6 @@
 package cr.luparx.identity.service;
 
+import cr.luparx.core.email.EmailAddress;
 import cr.luparx.core.error.ConflictException;
 import cr.luparx.core.error.ErrorCode;
 import cr.luparx.core.error.ForbiddenException;
@@ -29,7 +30,6 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.Period;
 import java.time.ZoneOffset;
-import java.util.Locale;
 import java.util.regex.Pattern;
 
 /**
@@ -103,8 +103,10 @@ public class UserRegistrationService {
             errors.add("secondFamilyName", ErrorCode.VALIDATION_FAILED, "error.user.secondFamilyName.tooLong");
         }
 
-        // 6. email (validated early: the uniqueness check is the most common failure)
-        String email = command.email() == null ? null : command.email().trim().toLowerCase(Locale.ROOT);
+        // 6. email (validated early: the uniqueness check is the most common failure).
+        // Normalised here as well as at the DTO boundary: a caller reaching this service directly
+        // must not be able to create a second account that differs only by case or by a stray space.
+        String email = EmailAddress.normalize(command.email());
         if (email == null || !EMAIL_PATTERN.matcher(email).matches() || email.length() > 320) {
             errors.add("email", ErrorCode.VALIDATION_FAILED, "error.user.email.invalid");
         }

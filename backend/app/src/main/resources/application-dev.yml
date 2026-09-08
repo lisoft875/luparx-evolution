@@ -25,3 +25,15 @@ luparx:
     # deployment that is not a developer laptop.
     mfa-encryption-key: ${MFA_TOTP_ENCRYPTION_KEY:bHVwYXJ4LWRldi1vbmx5LXRvdHAta2V5LTMyYnl0ZXM=}
     ip-hash-pepper: ${IP_HASH_PEPPER:luparx-dev-only-ip-pepper}
+    # RISK, ACCEPTED FOR LOCAL DEVELOPMENT ONLY. Empty means no portal enforces MFA, so a freshly
+    # seeded admin, inspector or platform account can reach its portal without first enrolling a TOTP
+    # in an authenticator app. On any shared environment this MUST stay at the base value
+    # "admin,inspector,platform": with it empty, a stolen password is enough to take over a
+    # back-office account. The application logs a WARN on every start while this list is empty.
+    mfa-enforced-portals: ${MFA_ENFORCED_PORTALS:}
+  dev:
+    # Creates a demo municipality and one account per portal on start (DevDataSeeder), so a fresh
+    # database is usable without hand-crafting a user. Idempotent: it does nothing when the rows are
+    # already there. The bean only exists under this profile; set to false to keep the database
+    # untouched.
+    seed-demo-data: ${LUPARX_DEV_SEED_DEMO_DATA:true}

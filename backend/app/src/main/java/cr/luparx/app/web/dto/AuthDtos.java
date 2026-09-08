@@ -1,5 +1,6 @@
 package cr.luparx.app.web.dto;
 
+import cr.luparx.core.email.EmailAddress;
 import cr.luparx.geo.model.IdentityDocumentTypeCode;
 import cr.luparx.identity.model.UserStatus;
 import jakarta.validation.Valid;
@@ -62,6 +63,16 @@ public final class AuthDtos {
             @Size(max = 64) String timeZone,
             @Size(max = 32) String acceptedTermsVersion,
             UUID tenantId) {
+
+        /**
+         * The address is canonicalised before any validation runs: a leading space from autofill or
+         * a capitalised spelling is the same mailbox, and refusing it (or storing a second variant of
+         * it) would be a defect, not a security measure. Normalising in the record itself means every
+         * caller of this DTO gets it, without repeating the rule in each controller.
+         */
+        public RegisterRequest {
+            email = EmailAddress.normalize(email);
+        }
     }
 
     public record RegisterResponse(
@@ -74,6 +85,16 @@ public final class AuthDtos {
     public record LoginRequest(
             @NotBlank @Size(max = 320) String email,
             @NotBlank @Size(max = 200) String password) {
+
+        /**
+         * The address is canonicalised before any validation runs: a leading space from autofill or
+         * a capitalised spelling is the same mailbox, and refusing it (or storing a second variant of
+         * it) would be a defect, not a security measure. Normalising in the record itself means every
+         * caller of this DTO gets it, without repeating the rule in each controller.
+         */
+        public LoginRequest {
+            email = EmailAddress.normalize(email);
+        }
     }
 
     /**
@@ -108,6 +129,11 @@ public final class AuthDtos {
     }
 
     public record ForgotPasswordRequest(@NotBlank @Size(max = 320) String email) {
+
+        /** Same canonicalisation as login: the address a person types here must find their account. */
+        public ForgotPasswordRequest {
+            email = EmailAddress.normalize(email);
+        }
     }
 
     public record ResetPasswordRequest(
