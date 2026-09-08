@@ -118,12 +118,81 @@ repairs *development fixtures*: a real deployment's memberships are somebody's d
 rewritten on start. The equivalent for a real environment is not a silent repair but an explicit
 answer, which is what `NO_ACTIVE_MEMBERSHIP` is for (see below).
 
+### The five municipalities
+
+One municipality cannot exercise a multi-tenant platform: with a single tenant, a price list that
+leaks across municipalities, a bay code assumed to be four digits and a timetable assumed to be the
+launch one all look correct. So the fixture operates **five**, and each exists to make one
+configuration real. San José is unchanged — it keeps the platform defaults, and every credential a
+developer already had memorised keeps working.
+
+| Municipality | Slug | Zones | Hourly tariff | Bay codes | Charging hours | Policy | What it exercises |
+|---|---|---|---|---|---|---|---|
+| San José | `san-jose` | 8 | 500–800 | `0001`–`5000` | Mon–Sat 07:00–18:00 | platform defaults | The baseline |
+| Escazú | `escazu` | 3 | 600–900 | `E-0001`–`E-1200` | **24 hours** | defaults | `charges_all_day`, and a **prefixed alphanumeric** code format (`^E-[A-Z0-9]{4}$` — `E-A12B` is valid too) |
+| Montes de Oca | `montes-de-oca` | 4 | 550–800 | `0001`–`1500` | **Mon–Fri 08:00–17:00** | defaults | Short hours, and **Saturday and Sunday not charged** |
+| La Unión | `la-union` | 3 | 400–500 | `0001`–`0900` | Mon–Sat 07:00–19:00 | defaults | **Dated holidays**: 15 September and 25 December loaded as exceptions |
+| Cartago | `cartago` | 4 | 450–650 | `0001`–`1400` | Mon–Sat 07:00–18:00 | **extensions off, no credit**, 4 h cap | The two flows a client must degrade gracefully without |
+
+Their zones are anchored to **real districts** with their official codes: `V13_0` seeds the cantons
+Montes de Oca (115) and La Unión (303), Escazú's third district and Cartago's ten remaining ones.
+Names follow the official register, so `Carmen` rather than "El Carmen" and `Aguacaliente` rather
+than "Agua Caliente".
+
+**Bays.** The launch municipality gets `luparx.dev.parking-spaces` (default 5000) of its own; the
+other four share `luparx.dev.parking-spaces-total` (default 5000) *between them*, dealt by weight —
+Escazú 1200, Montes de Oca 1500, La Unión 900, Cartago 1400. Five municipalities with five thousand
+bays each would be a load test, not a fixture. Codes restart from the first one **inside each
+municipality**, because they are unique per tenant, and every code is generated from that
+municipality's own stored format, so a seeded bay is always one it would accept.
+
+### Citizens, staff and their money
+
+| Account | Municipalities | Opening top-up | Balance after the seeded history |
+|---|---|---|---|
+| `ana.morales@luparx.test` | San José, Escazú, Montes de Oca | 150 000 / 100 000 / 50 000 | 147 000 / 97 500 / 48 100 |
+| `bruno.castro@luparx.test` | Cartago | 20 000 | 17 350 |
+| `carla.jimenez@luparx.test` | La Unión | 2 000 | 700 |
+
+Amounts are in the municipality's own currency (CRC with the default configuration). **The wallet is
+per municipality** (CONTRACT.md v0.2, rule 6): Ana's three balances are three separate accounts and
+spending in one leaves the others untouched — which is the point of seeding her with three.
+
+**Ana belongs to three municipalities on purpose.** It is the only way to reach two states a
+single-tenant account never sees: switching the active municipality
+(`POST /citizen/session/tenant`) and the `TENANT_CONTEXT_REQUIRED` answer her session gets *before*
+she picks one. Bruno and Carla belong to one each, so their sessions resolve a municipality
+automatically. Carla's balance is deliberately small: she is the account that runs into
+`INSUFFICIENT_BALANCE` without anyone having to spend anything first.
+
+Every municipality also gets its own staff, with predictable addresses — `admin.escazu@luparx.test`,
+`inspector.escazu@luparx.test`, and the same for the other three. They are scoped to their own
+municipality rather than to all of them, because that is how a municipality works and because an
+administrator who could see every one would make a cross-tenant leak invisible in development. The
+original `admin@luparx.test` and `inspector@luparx.test` still exist, in San José.
+
+**History, not empty rows.** Each citizen gets vehicles, two closed stays and — in their first
+municipality — one still running, a wallet whose movements add up to its balance, and minutes already
+to their favour where the municipality credits them. The plate `SJP123` is registered by **two
+different people**, which is legitimate and expected (uniqueness is `(user_id, plate_normalized)`,
+never the plate alone) and is exactly the ambiguity an inspector lookup still has to resolve.
+
+The history is written with SQL rather than through `ParkingSessionService`, and that is deliberate:
+the service charges against the clock of the moment it runs, so a stay that ended last Tuesday is not
+something it can be asked for, and a municipality whose charging hours are closed right now would
+refuse to open one at all. The wallet arithmetic is therefore carried explicitly — the top-up is
+dated before the stays it funded and every `balance_after_minor` is the running total — because a
+statement that does not add up would be worse than no statement.
+
 ### Parking fixture (zones, tariffs and bays)
 
-Once the municipality exists, `DevParkingSeeder` gives it the parking it operates: **8 zones** across
-six districts of the canton of San José, each linked to its real district in
-`administrative_divisions` (seeded by `V9_1`/`V9_2`), one open-ended **hourly tariff** per zone priced
-in the municipality's own currency, and **5000 numbered bays**.
+Once a municipality exists, `DevParkingSeeder` gives it the parking it operates: its zones, each
+linked to its real district in `administrative_divisions` (seeded by `V9_1`/`V9_2`/`V13_0`), one
+open-ended **hourly tariff** per zone priced in the municipality's own currency, its policy, its
+charging timetable, its bay code format, and its numbered bays. The same code runs for all five; a
+municipality whose variant is null keeps the platform defaults, which is what San José does.
+
+San José, unchanged, is the worked example:
 
 | Zone code | Name | District | Bays (default 5000) |
 |---|---|---|---|
@@ -141,7 +210,10 @@ leading zeros intact** (`0001`), never a number, and it is unique per municipali
 globally. Codes are dealt to the zones in contiguous blocks proportional to a declared share, with
 the boundaries computed from the cumulative share (`start = total × cumulative ÷ totalShare`) — that
 partitions the range exactly, so there is no remainder to hand out, no gap and no bay in two zones.
-Changing the count re-derives every boundary; the table above is the default of 5000.
+Changing the count re-derives every boundary; the table above is San José's default of 5000. The
+same arithmetic deals the shared pool between the other four municipalities, and each of them numbers
+its own bays from the first code — they are unique per tenant, so Escazú's `E-0001` and Cartago's
+`0001` coexist exactly as two real municipalities would.
 
 The insert is batched (`JdbcTemplate.batchUpdate`, 1000 rows per statement) inside a single
 transaction and takes well under a second; the log line says how many rows it created and in how
@@ -381,7 +453,8 @@ placeholder key (`docs/SECURITY.md` §5).
 | `MFA_TOTP_ENCRYPTION_KEY` | yes | Base64 32-byte AES-GCM key protecting TOTP secrets at rest |
 | `IP_HASH_PEPPER` | yes | Mixed into IP hashes so they cannot be reversed with a rainbow table |
 | `LUPARX_DEV_SEED_DEMO_DATA` | no (`dev` only) | `false` keeps the database untouched on start |
-| `LUPARX_DEV_PARKING_SPACES` | no (`dev` only) | Bays the fixture creates, default `5000`, maximum `9999` — a five-digit code would not match the four-digit bay format |
+| `LUPARX_DEV_PARKING_SPACES` | no (`dev` only) | Bays for the launch municipality, default `5000`, maximum `9999` — a five-digit code would not match its four-digit bay format |
+| `LUPARX_DEV_PARKING_SPACES_TOTAL` | no (`dev` only) | Bays shared out among the other four municipalities, default `5000` (Escazú 1200, Montes de Oca 1500, La Unión 900, Cartago 1400) |
 | `PARKING_SESSION_INCREMENTS` | no | Durations offered when starting, comma-separated minutes, default `30,60,120` |
 | `PARKING_SESSION_MIN_MINUTES` / `PARKING_SESSION_MAX_MINUTES` | no | Session bounds, default `30` / `480` |
 | `PARKING_EXTENSION_ENABLED` | no | Whether a session may be extended, default `true` |

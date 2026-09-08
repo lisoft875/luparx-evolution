@@ -28,13 +28,20 @@ luparx:
     mfa-encryption-key: ${MFA_TOTP_ENCRYPTION_KEY:bHVwYXJ4LWRldi1vbmx5LXRvdHAta2V5LTMyYnl0ZXM=}
     ip-hash-pepper: ${IP_HASH_PEPPER:luparx-dev-only-ip-pepper}
   dev:
-    # Creates the launch municipality (San José), one account per portal, and its parking zones,
-    # tariffs and numbered bays on start (DevDataSeeder + DevParkingSeeder), so a fresh database is
-    # usable without hand-crafting anything. Idempotent: it does nothing when the rows are already
-    # there. The beans only exist under this profile; set to false to keep the database untouched.
+    # Creates five municipalities (San José, Escazú, Montes de Oca, La Unión and Cartago), their
+    # accounts, and the parking each of them operates — zones, tariffs, policy, charging timetable,
+    # bay code format and numbered bays — plus three citizens with wallets, vehicles and a history of
+    # sessions (DevDataSeeder + DevParkingSeeder + DevActivitySeeder). Idempotent: it does nothing
+    # when the rows are already there. The beans only exist under this profile; set to false to keep
+    # the database untouched.
     seed-demo-data: ${LUPARX_DEV_SEED_DEMO_DATA:true}
-    # How many bays the fixture creates, codes "0001".."NNNN", dealt to the zones in contiguous
-    # blocks. Configuration rather than a constant in Java so a developer can seed 50 while debugging
-    # a screen and the full set when exercising pagination. Values above 10000 are clamped, with a
-    # WARN; the column itself is text and accepts any code a real municipality paints.
+    # How many bays the LAUNCH municipality (San José) creates, codes "0001".."NNNN", dealt to its
+    # zones in contiguous blocks. Configuration rather than a constant in Java so a developer can seed
+    # 50 while debugging a screen and the full set when exercising pagination. Values above 9999 are
+    # clamped, with a WARN; the column itself is text and accepts any code a real municipality paints.
     parking-spaces: ${LUPARX_DEV_PARKING_SPACES:5000}
+    # Bays shared out among the OTHER four municipalities, dealt by weight rather than given to each:
+    # five municipalities with five thousand bays apiece would be a load test, not a fixture. With the
+    # default the split is Escazú 1200, Montes de Oca 1500, La Unión 900, Cartago 1400. Escazú numbers
+    # its bays "E-0001".. because its code format is its own, which is the point of having it.
+    parking-spaces-total: ${LUPARX_DEV_PARKING_SPACES_TOTAL:5000}

@@ -1,7 +1,12 @@
 package cr.luparx.app.config;
 
+import cr.luparx.app.config.DevMunicipalities.DevMunicipality;
+import cr.luparx.app.config.DevMunicipalities.FormatVariant;
+import cr.luparx.app.config.DevMunicipalities.HolidaySeed;
+import cr.luparx.app.config.DevMunicipalities.PolicyVariant;
+import cr.luparx.app.config.DevMunicipalities.ScheduleVariant;
+import cr.luparx.app.config.DevMunicipalities.ZoneSeed;
 import cr.luparx.core.id.TenantId;
-import cr.luparx.core.id.UserId;
 import cr.luparx.core.id.Uuid7;
 import cr.luparx.core.money.Money;
 import cr.luparx.geo.entity.AdministrativeDivision;
@@ -11,16 +16,17 @@ import cr.luparx.parking.entity.ParkingRate;
 import cr.luparx.parking.entity.ParkingScheduleSlot;
 import cr.luparx.parking.entity.ParkingSpaceFormat;
 import cr.luparx.parking.entity.ParkingZone;
+import cr.luparx.parking.model.ChargingBand;
 import cr.luparx.parking.model.ParkingSpaceStatus;
+import cr.luparx.parking.model.SpaceCodeFormat;
 import cr.luparx.parking.repository.ParkingRateRepository;
 import cr.luparx.parking.repository.ParkingSpaceRepository;
 import cr.luparx.parking.repository.ParkingZoneRepository;
 import cr.luparx.parking.service.ParkingPolicyService;
 import cr.luparx.parking.service.ParkingScheduleService;
 import cr.luparx.parking.service.ParkingSpaceFormatService;
-import cr.luparx.parking.service.WalletService;
-import cr.luparx.tenancy.service.TenantLocaleService;
 import cr.luparx.tenancy.entity.Tenant;
+import cr.luparx.tenancy.service.TenantLocaleService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -32,6 +38,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.time.Clock;
+import java.time.DayOfWeek;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -46,25 +53,33 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * Fills the launch municipality with the parking it actually operates: its policy, its zones, one
- * tariff per zone, the numbered bays a citizen types a code from, and a funded wallet for the
- * development citizen. Development only, and only alongside
- * {@link DevDataSeeder}, which owns the tenant and the accounts and calls this class once the
- * municipality exists.
+ * Gives a municipality the parking it operates: its policy, its charging timetable, its bay code
+ * format, its zones, one tariff per zone, and the numbered bays a citizen types a code from.
+ * Development only, and only alongside {@link DevDataSeeder}, which owns the tenants and the
+ * accounts and calls this class once each municipality exists.
  *
- * <p><b>The zones below are seed data, not an assumption of the code.</b> They name real districts
- * and real sectors of the canton of San José because a fixture that lies about the world teaches a
- * developer the wrong thing; nothing in the platform reads them, and a deployment elsewhere seeds a
- * different list without a line of domain logic changing. Country, currency, locale and time zone
- * still come from {@code platform.defaults.*} through the tenant — the amounts below are declared in
- * major units and converted with {@link Money#ofMajor}, so the fixture is priced in whatever currency
- * the municipality was configured with rather than in a hardcoded one.</p>
+ * <p><b>The municipalities are seed data, not an assumption of the code.</b> They name real cantons,
+ * real districts and real sectors because a fixture that lies about the world teaches a developer the
+ * wrong thing; nothing in the platform reads {@link DevMunicipalities}, and a deployment elsewhere
+ * seeds a different list without a line of domain logic changing. Country, currency, locale and time
+ * zone still come from {@code platform.defaults.*} through the tenant — the amounts are declared in
+ * major units and converted with {@link Money#ofMajor}, so every fixture is priced in whatever
+ * currency its municipality was configured with rather than in a hardcoded one.</p>
+ *
+ * <h2>Why each municipality is configured differently</h2>
+ *
+ * <p>One municipality cannot exercise a multi-tenant platform: with a single tenant, a price list
+ * that leaks across municipalities, a bay code assumed to be four digits and a timetable assumed to
+ * be the launch one all look correct. Each municipality here therefore makes one configuration real —
+ * see the table in {@link DevMunicipalities}. A municipality whose variant is null keeps the
+ * platform defaults, which is what San José does and why its behaviour is unchanged.</p>
  *
  * <h2>How the bays are distributed</h2>
  *
- * <p>Codes run {@code 0001}..{@code NNNN} across the whole municipality and are dealt to the zones in
- * <em>contiguous blocks</em>, in the declared order, proportionally to each zone's
- * {@link ZoneSeed#share()}. Block boundaries are computed from the cumulative share
+ * <p>Codes run from the first one upwards <em>inside each municipality</em> — they are unique per
+ * tenant, so every municipality numbers from the beginning, exactly as two real ones would — and are
+ * dealt to the zones in <em>contiguous blocks</em>, in the declared order, proportionally to each
+ * zone's {@link ZoneSeed#share()}. Block boundaries come from the cumulative share
  * ({@code start = total × cumulative ÷ totalShare}), which partitions the range exactly: no remainder
  * to hand out, no bay in two zones, no gap. Contiguity is not cosmetic — bays are numbered along a
  * street in the real world, so a block per zone is what the paint would say.</p>
@@ -72,8 +87,8 @@ import java.util.UUID;
  * <p>The insert is batched and runs inside one transaction, and it is idempotent by code: the codes
  * already present are read once and skipped, so an interrupted run completes on the next start
  * instead of failing on a duplicate. Only <em>missing</em> codes are created — an existing bay is
- * never moved to another zone, so changing the shares below after a seed has run has no effect until
- * the database is recreated.</p>
+ * never moved to another zone, so changing the shares after a seed has run has no effect until the
+ * database is recreated.</p>
  */
 @Component
 @Profile("dev")
@@ -82,52 +97,11 @@ public class DevParkingSeeder {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(DevParkingSeeder.class);
 
-    /**
-     * Administrative level the zone seeds point at. For Costa Rica level 3 is the district; this is
-     * part of the seed data, exactly like the codes below, and not a claim about other countries.
-     */
-    private static final int DISTRICT_LEVEL = 3;
-
-    /** Codes are zero-padded so "0001" and "0025" sort and read the way a painted sign does. */
-    private static final String CODE_FORMAT = "%04d";
-
     /** Rows per JDBC batch. Large enough to matter, small enough to keep one statement modest. */
     private static final int BATCH_SIZE = 1_000;
 
     /** Every seeded tariff is an hourly one; a real duration ladder belongs to a later prompt. */
     private static final int RATE_MINUTES = 60;
-
-    /**
-     * The parking of the canton of San José: eight zones over six of its districts, each named after
-     * the sector a driver would actually say out loud. {@code districtCode} is the official district
-     * code seeded in V9_1/V9_2; {@code share} is this zone's weight in the code range;
-     * {@code hourlyMajor} is the seeded hourly tariff in major units of the municipality's currency.
-     */
-    private static final List<ZoneSeed> ZONES = List.of(
-            new ZoneSeed("SJ-AMON", "Barrio Amón",
-                    "Barrio Amón, al norte del centro: calles estrechas y casas patrimoniales.",
-                    "10101", 10, 600L),
-            new ZoneSeed("SJ-ESCALANTE", "Barrio Escalante",
-                    "Barrio Escalante y Calle 33, zona de restaurantes con alta rotación nocturna.",
-                    "10101", 15, 800L),
-            new ZoneSeed("SJ-MERCADO", "Mercado Central",
-                    "Entorno del Mercado Central y Avenida Central, rotación alta durante el día.",
-                    "10102", 15, 700L),
-            new ZoneSeed("SJ-COLON", "Paseo Colón",
-                    "Paseo Colón y sus calles transversales, corredor de oficinas hacia La Sabana.",
-                    "10102", 15, 700L),
-            new ZoneSeed("SJ-HOSPITAL", "Hospital San Juan de Dios",
-                    "Distrito Hospital: alrededores del Hospital San Juan de Dios y el Paso de la Vaca.",
-                    "10103", 12, 600L),
-            new ZoneSeed("SJ-CATEDRAL", "Catedral – La Soledad",
-                    "Distrito Catedral: barrios La Soledad y González Lahmann.",
-                    "10104", 12, 600L),
-            new ZoneSeed("SJ-ZAPOTE", "Zapote Centro",
-                    "Zapote centro, entre la Casa Presidencial y el redondel de Zapote.",
-                    "10105", 10, 500L),
-            new ZoneSeed("SJ-SABANA", "La Sabana",
-                    "Mata Redonda: costados del Parque Metropolitano La Sabana y el Estadio Nacional.",
-                    "10108", 11, 500L));
 
     private static final String INSERT_SPACE_SQL = """
             INSERT INTO parking_spaces (id, tenant_id, zone_id, code, status, created_at, updated_at, version)
@@ -136,19 +110,10 @@ public class DevParkingSeeder {
 
     private static final String SELECT_CODES_SQL = "SELECT code FROM parking_spaces WHERE tenant_id = ?";
 
-    /**
-     * Opening balance of the development citizen, in MAJOR units of the municipality's own currency.
-     * Enough for a long afternoon of testing at the seeded tariffs and deliberately not a round
-     * million: a fixture that can never run out never exercises INSUFFICIENT_BALANCE.
-     */
-    private static final long DEMO_WALLET_MAJOR = 50_000L;
-
-    private final DevSeedProperties properties;
     private final ParkingPolicyService policyService;
     private final ParkingSpaceFormatService spaceFormatService;
     private final ParkingScheduleService scheduleService;
     private final TenantLocaleService tenantLocaleService;
-    private final WalletService walletService;
     private final ParkingZoneRepository zoneRepository;
     private final ParkingRateRepository rateRepository;
     private final ParkingSpaceRepository spaceRepository;
@@ -157,12 +122,10 @@ public class DevParkingSeeder {
     private final TransactionTemplate transactionTemplate;
     private final Clock clock;
 
-    public DevParkingSeeder(DevSeedProperties properties,
-                            ParkingPolicyService policyService,
+    public DevParkingSeeder(ParkingPolicyService policyService,
                             ParkingSpaceFormatService spaceFormatService,
                             ParkingScheduleService scheduleService,
                             TenantLocaleService tenantLocaleService,
-                            WalletService walletService,
                             ParkingZoneRepository zoneRepository,
                             ParkingRateRepository rateRepository,
                             ParkingSpaceRepository spaceRepository,
@@ -170,12 +133,10 @@ public class DevParkingSeeder {
                             JdbcTemplate jdbcTemplate,
                             PlatformTransactionManager transactionManager,
                             Clock clock) {
-        this.properties = properties;
         this.policyService = policyService;
         this.spaceFormatService = spaceFormatService;
         this.scheduleService = scheduleService;
         this.tenantLocaleService = tenantLocaleService;
-        this.walletService = walletService;
         this.zoneRepository = zoneRepository;
         this.rateRepository = rateRepository;
         this.spaceRepository = spaceRepository;
@@ -186,95 +147,134 @@ public class DevParkingSeeder {
     }
 
     /**
-     * Seeds zones, tariffs and bays for one municipality. Safe to call on every start: each step asks
-     * what is already there first.
+     * Seeds one municipality. Safe to call on every start: each step asks what is already there first.
+     *
+     * @param spaceTarget how many bays this municipality should end up with
+     * @return its zones, in declared order, for whoever needs to write history against them
      */
-    public void seed(Tenant tenant, UUID citizenUserId) {
-        ensurePolicy(tenant);
-        ensureOperationalSettings(tenant);
-        ensureWallet(tenant, citizenUserId);
-        List<ParkingZone> zones = ensureZones(tenant);
+    public List<ParkingZone> seed(Tenant tenant, DevMunicipality municipality, int spaceTarget) {
+        ensurePolicy(tenant, municipality);
+        ensureOperationalSettings(tenant, municipality);
+        List<ParkingZone> zones = ensureZones(tenant, municipality);
         if (zones.isEmpty()) {
-            LOGGER.warn("Development seed: no parking zone could be created; bays skipped.");
-            return;
+            LOGGER.warn("Development seed: no parking zone could be created for {}; bays skipped.",
+                    municipality.slug());
+            return List.of();
         }
-        ensureRates(tenant, zones);
-        ensureSpaces(tenant, zones);
+        ensureRates(tenant, municipality, zones);
+        ensureSpaces(tenant, municipality, zones, spaceTarget);
+        return zones;
     }
 
     // --- policy ----------------------------------------------------------------------------------
 
     /**
-     * Materialises the municipality's parking policy from {@code platform.defaults.parking.*}.
+     * The municipality's parking policy: the platform defaults, or the variant this one exists to
+     * exercise.
      *
-     * <p>No values are written here on purpose. The seeder asks the domain for the policy and the
-     * domain creates it from the deployment's configured defaults, so the fixture and a real
-     * municipality's first day go through exactly the same code path. Changing what San José offers
-     * in development is a change to application-dev.yml, not to this class — which is what
-     * CONTRACT.md v0.2 means by "nada de constantes en el código".</p>
+     * <p>Even the variant is written through {@link ParkingPolicyService#replace}, not by assembling a
+     * row: the coherence rules between the fields (a cap never below the session maximum, credit that
+     * requires early finish) are domain rules, and a fixture that side-stepped them could seed a
+     * municipality the admin portal would refuse to save.</p>
      */
-    private void ensurePolicy(Tenant tenant) {
-        ParkingPolicy policy = policyService.require(TenantId.of(tenant.getId()));
-        LOGGER.info("Development seed: parking policy for {} — start {} min, extension {} ({}), early finish {},"
-                        + " credit {} expiring in {} days.",
-                tenant.getSlug(), policy.getSessionIncrementsMinutes(), policy.getExtensionIncrementsMinutes(),
+    private void ensurePolicy(Tenant tenant, DevMunicipality municipality) {
+        TenantId tenantId = TenantId.of(tenant.getId());
+        ParkingPolicy policy = policyService.require(tenantId);
+        PolicyVariant variant = municipality.policy();
+        if (variant != null && policyNeedsVariant(policy, variant)) {
+            policy = policyService.replace(tenantId,
+                    variant.sessionIncrements(),
+                    variant.sessionMinMinutes(),
+                    variant.sessionMaxMinutes(),
+                    variant.extensionEnabled(),
+                    variant.extensionIncrements(),
+                    variant.extensionMaxTotalMinutes(),
+                    variant.earlyFinishEnabled(),
+                    variant.creditOnEarlyFinishEnabled(),
+                    variant.creditMinRemainingMinutes(),
+                    variant.creditExpiryDays(),
+                    variant.graceMinutes());
+        }
+        LOGGER.info("Development seed: {} parking policy — start {} min, extension {} ({}), early finish {},"
+                        + " credit {}.",
+                municipality.slug(), policy.getSessionIncrementsMinutes(), policy.getExtensionIncrementsMinutes(),
                 policy.isExtensionEnabled() ? "enabled" : "disabled",
                 policy.isEarlyFinishEnabled() ? "enabled" : "disabled",
-                policy.isCreditOnEarlyFinishEnabled() ? "enabled" : "disabled", policy.getCreditExpiryDays());
+                policy.isCreditOnEarlyFinishEnabled() ? "enabled" : "disabled");
     }
 
     /**
-     * Materialises the municipality's bay-code format and charging timetable
-     * (CONTRACT.md v0.3), so the admin portal opens on real rows instead of on nothing.
+     * Whether the stored policy is not yet the fixture's variant and should be replaced.
      *
-     * <p>No values are written here either: the seeder asks the domain, and the domain creates both
-     * from {@code platform.defaults.parking.*}. San José therefore starts on four plain digits and on
-     * Monday to Saturday, 07:00 to 18:00, with Sunday free — which is a line of YAML, not a constant
-     * in this class.</p>
+     * <p>Compared on the fields the variant is defined by rather than on all of them, so a second
+     * start rewrites nothing. A developer who edited some other field of this municipality's policy
+     * from the admin portal keeps their change, which is the point of an idempotent fixture.</p>
      */
-    private void ensureOperationalSettings(Tenant tenant) {
+    private boolean policyNeedsVariant(ParkingPolicy policy, PolicyVariant variant) {
+        return policy.isExtensionEnabled() != variant.extensionEnabled()
+                || policy.isCreditOnEarlyFinishEnabled() != variant.creditOnEarlyFinishEnabled()
+                || policy.getSessionMaxMinutes() != variant.sessionMaxMinutes();
+    }
+
+    /**
+     * The municipality's bay code format, charging timetable and offered languages.
+     *
+     * <p>All three are materialised by the domain from {@code platform.defaults.*} on first read, and
+     * only then overwritten where this municipality is meant to differ — so a fixture municipality and
+     * a real one's first day go through exactly the same code path.</p>
+     */
+    private void ensureOperationalSettings(Tenant tenant, DevMunicipality municipality) {
         TenantId tenantId = TenantId.of(tenant.getId());
+
         ParkingSpaceFormat format = spaceFormatService.require(tenantId);
+        FormatVariant formatVariant = municipality.format();
+        if (formatVariant != null && !format.getPrefix().equals(SpaceCodeFormat.normalizePrefix(
+                formatVariant.prefix()))) {
+            format = spaceFormatService.replace(tenantId, formatVariant.prefix(), formatVariant.digits(),
+                    formatVariant.allowLetters(), null, null);
+        }
+
         scheduleService.require(tenantId);
+        ScheduleVariant scheduleVariant = municipality.schedule();
         List<ParkingScheduleSlot> bands = scheduleService.slots(tenantId);
-        // The languages of the municipality are materialised too, so the login dropdown has a list
-        // to show on a fresh database (CONTRACT.md v0.3, "Idiomas por municipalidad").
+        if (scheduleVariant != null && !scheduleMatches(tenantId, scheduleVariant, bands)) {
+            List<ParkingScheduleService.BandEntry> entries = new ArrayList<>();
+            for (DayOfWeek weekday : scheduleVariant.weekdays()) {
+                entries.add(new ParkingScheduleService.BandEntry(weekday, scheduleVariant.startMinute(),
+                        scheduleVariant.endMinute()));
+            }
+            List<ParkingScheduleService.ExceptionEntry> exceptions = new ArrayList<>();
+            for (HolidaySeed holiday : scheduleVariant.holidays()) {
+                // charges = false: a public holiday suspends charging whatever the weekday bands say.
+                exceptions.add(new ParkingScheduleService.ExceptionEntry(holiday.date(), false, false,
+                        holiday.label(), List.of()));
+            }
+            scheduleService.replace(tenantId, scheduleVariant.chargesAllDay(), entries, exceptions);
+            bands = scheduleService.slots(tenantId);
+        }
+
         int locales = tenantLocaleService.list(tenantId).size();
         LOGGER.info("Development seed: {} bay codes look like {} (pattern {}), charging bands: {},"
-                        + " languages offered: {}.",
-                tenant.getSlug(), format.getExample(), format.getPattern(), bands.size(), locales);
+                        + " languages offered: {} — exercises: {}",
+                municipality.slug(), format.getExample(), format.getPattern(), bands.size(), locales,
+                municipality.exercises());
     }
 
-    // --- wallet ----------------------------------------------------------------------------------
-
-    /**
-     * Gives the development citizen a balance in this municipality, once.
-     *
-     * <p>Idempotent by balance rather than by a flag: a wallet that already holds money is left
-     * alone, so a developer who spent it on test sessions keeps their state and a restart does not
-     * quietly refill it. The amount is declared in major units and converted with
-     * {@link Money#ofMajor}, so the fixture is denominated in whatever currency the municipality was
-     * configured with.</p>
-     */
-    private void ensureWallet(Tenant tenant, UUID citizenUserId) {
-        if (citizenUserId == null) {
-            LOGGER.warn("Development seed: no citizen account available; wallet skipped.");
-            return;
+    /** True when the stored timetable already is the variant, so a re-run rewrites nothing. */
+    private boolean scheduleMatches(TenantId tenantId, ScheduleVariant variant, List<ParkingScheduleSlot> bands) {
+        if (variant.chargesAllDay()) {
+            return scheduleService.require(tenantId).isChargesAllDay();
         }
-        TenantId tenantId = TenantId.of(tenant.getId());
-        UserId userId = UserId.of(citizenUserId);
-        try {
-            if (!walletService.balance(tenantId, userId).isZero()) {
-                return;
+        if (bands.size() != variant.weekdays().size()) {
+            return false;
+        }
+        ChargingBand expected = new ChargingBand(variant.startMinute(), variant.endMinute());
+        for (ParkingScheduleSlot band : bands) {
+            if (!band.band().equals(expected) || !variant.weekdays().contains(band.weekday())) {
+                return false;
             }
-            Money opening = Money.ofMajor(BigDecimal.valueOf(DEMO_WALLET_MAJOR), tenant.getCurrencyCode());
-            walletService.topUp(tenantId, userId, opening, "dev-seed-opening-balance");
-            LOGGER.warn("Development seed: citizen wallet funded with {} in {}.", DEMO_WALLET_MAJOR,
-                    tenant.getCurrencyCode());
-        } catch (RuntimeException exception) {
-            // A currency the JDK does not know, or one whose fraction digits the amount does not fit.
-            LOGGER.warn("Development seed: citizen wallet not funded ({}).", exception.toString());
         }
+        return true;
     }
 
     // --- zones -----------------------------------------------------------------------------------
@@ -284,12 +284,12 @@ public class DevParkingSeeder {
      * code blocks are dealt in. A zone that already exists is returned untouched: a developer who
      * renamed one locally keeps their change.
      */
-    private List<ParkingZone> ensureZones(Tenant tenant) {
-        Map<String, UUID> districts = resolveDistricts(tenant.getCountryCode());
+    private List<ParkingZone> ensureZones(Tenant tenant, DevMunicipality municipality) {
+        Map<String, UUID> districts = resolveDistricts(tenant.getCountryCode(), municipality);
         Instant now = clock.instant();
-        List<ParkingZone> zones = new ArrayList<>(ZONES.size());
+        List<ParkingZone> zones = new ArrayList<>(municipality.zones().size());
         int created = 0;
-        for (ZoneSeed seed : ZONES) {
+        for (ZoneSeed seed : municipality.zones()) {
             Optional<ParkingZone> existing = zoneRepository.findByTenantIdAndCode(tenant.getId(), seed.code());
             if (existing.isPresent()) {
                 zones.add(existing.get());
@@ -306,7 +306,8 @@ public class DevParkingSeeder {
                     seed.name(), seed.description(), divisionId, true, now)));
             created++;
         }
-        LOGGER.info("Development seed: {} parking zones present ({} created).", zones.size(), created);
+        LOGGER.info("Development seed: {} — {} parking zones present ({} created).", municipality.slug(),
+                zones.size(), created);
         return zones;
     }
 
@@ -315,14 +316,14 @@ public class DevParkingSeeder {
      * so this read carries no tenant — and it is narrowed by country, level and an explicit list of
      * codes rather than scanning a table that grows to millions of rows.
      */
-    private Map<String, UUID> resolveDistricts(String countryCode) {
+    private Map<String, UUID> resolveDistricts(String countryCode, DevMunicipality municipality) {
         Set<String> codes = new HashSet<>();
-        for (ZoneSeed seed : ZONES) {
+        for (ZoneSeed seed : municipality.zones()) {
             codes.add(seed.districtCode());
         }
         Map<String, UUID> byCode = new HashMap<>();
-        List<AdministrativeDivision> divisions =
-                divisionRepository.findByCountryCodeAndLevelAndCodeIn(countryCode, DISTRICT_LEVEL, codes);
+        List<AdministrativeDivision> divisions = divisionRepository.findByCountryCodeAndLevelAndCodeIn(
+                countryCode, DevMunicipalities.DISTRICT_LEVEL, codes);
         for (AdministrativeDivision division : divisions) {
             byCode.put(division.getCode(), division.getId());
         }
@@ -335,8 +336,12 @@ public class DevParkingSeeder {
      * One open-ended hourly tariff per zone, priced in the municipality's own currency. Skipped for
      * any zone that already has one: a tariff is superseded by closing its window, never by the
      * fixture writing a second row on every start.
+     *
+     * <p>Prices differ between municipalities on purpose. A quote for the same duration in two of them
+     * coming back with two different amounts is the cheapest possible proof that pricing is resolved
+     * per tenant and not from a constant.</p>
      */
-    private void ensureRates(Tenant tenant, List<ParkingZone> zones) {
+    private void ensureRates(Tenant tenant, DevMunicipality municipality, List<ParkingZone> zones) {
         Instant now = clock.instant();
         int created = 0;
         for (int index = 0; index < zones.size(); index++) {
@@ -344,7 +349,7 @@ public class DevParkingSeeder {
             if (rateRepository.countByTenantIdAndZoneId(tenant.getId(), zone.getId()) > 0) {
                 continue;
             }
-            ZoneSeed seed = ZONES.get(index);
+            ZoneSeed seed = municipality.zones().get(index);
             try {
                 Money amount = Money.ofMajor(BigDecimal.valueOf(seed.hourlyMajor()), tenant.getCurrencyCode());
                 rateRepository.save(new ParkingRate(Uuid7.generate(), tenant.getId(), zone.getId(), amount,
@@ -357,28 +362,37 @@ public class DevParkingSeeder {
             }
         }
         if (created > 0) {
-            LOGGER.info("Development seed: {} hourly parking tariffs created in {}.", created,
+            LOGGER.info("Development seed: {} — {} hourly tariffs created in {}.", municipality.slug(), created,
                     tenant.getCurrencyCode());
         }
     }
 
     // --- spaces ----------------------------------------------------------------------------------
 
-    private void ensureSpaces(Tenant tenant, List<ParkingZone> zones) {
-        int target = resolveTargetCount();
+    private void ensureSpaces(Tenant tenant, DevMunicipality municipality, List<ParkingZone> zones,
+                              int target) {
+        if (target <= 0) {
+            return;
+        }
         long existing = spaceRepository.countByTenantId(tenant.getId());
         if (existing >= target) {
-            LOGGER.info("Development seed: {} parking spaces already present (target {}); nothing to do.",
-                    existing, target);
+            LOGGER.info("Development seed: {} — {} bays already present (target {}); nothing to do.",
+                    municipality.slug(), existing, target);
             return;
         }
 
+        // The codes are generated from the municipality's OWN stored format, not from the fixture
+        // constants, so a bay the seeder writes is always one that municipality would accept — at
+        // POST /admin/parking/spaces and at the moment a citizen types it.
+        ParkingSpaceFormat format = spaceFormatService.require(TenantId.of(tenant.getId()));
         long startedAt = System.nanoTime();
-        Integer inserted = transactionTemplate.execute(status -> insertMissingSpaces(tenant, zones, target));
+        Integer inserted = transactionTemplate.execute(
+                status -> insertMissingSpaces(tenant, municipality, zones, target, format));
         long created = inserted == null ? 0L : inserted.longValue();
         long millis = (System.nanoTime() - startedAt) / 1_000_000L;
-        LOGGER.info("Development seed: {} parking spaces created in {} ms ({} in total, codes {} to {}).",
-                created, millis, existing + created, format(1L), format(target));
+        LOGGER.info("Development seed: {} — {} bays created in {} ms ({} in total, codes {} to {}, pattern {}).",
+                municipality.slug(), created, millis, existing + created,
+                code(format, 1L), code(format, target), format.getPattern());
     }
 
     /**
@@ -386,14 +400,15 @@ public class DevParkingSeeder {
      * runs inside the caller's transaction, so an interrupted start leaves either all of this run's
      * bays or none of them — never a half-dealt block.
      */
-    private int insertMissingSpaces(Tenant tenant, List<ParkingZone> zones, int target) {
+    private int insertMissingSpaces(Tenant tenant, DevMunicipality municipality, List<ParkingZone> zones,
+                                    int target, ParkingSpaceFormat format) {
         Set<String> present =
                 new HashSet<>(jdbcTemplate.queryForList(SELECT_CODES_SQL, String.class, tenant.getId()));
         OffsetDateTime now = OffsetDateTime.ofInstant(clock.instant(), ZoneOffset.UTC);
         String available = ParkingSpaceStatus.AVAILABLE.name();
 
         int totalShare = 0;
-        for (ZoneSeed seed : ZONES) {
+        for (ZoneSeed seed : municipality.zones()) {
             totalShare += seed.share();
         }
 
@@ -403,10 +418,10 @@ public class DevParkingSeeder {
         for (int index = 0; index < zones.size(); index++) {
             UUID zoneId = zones.get(index).getId();
             long blockStart = (long) target * cumulative / totalShare + 1L;
-            cumulative += ZONES.get(index).share();
+            cumulative += municipality.zones().get(index).share();
             long blockEnd = (long) target * cumulative / totalShare;
             for (long number = blockStart; number <= blockEnd; number++) {
-                String code = format(number);
+                String code = code(format, number);
                 if (present.contains(code)) {
                     continue;
                 }
@@ -426,38 +441,14 @@ public class DevParkingSeeder {
     }
 
     /**
-     * How many bays the fixture should end up with. A missing or non-positive value falls back to the
-     * default; a value above the maximum is clamped and said so out loud, because silently ignoring
-     * what a developer configured is how a fixture becomes confusing.
-     */
-    private int resolveTargetCount() {
-        Integer configured = properties.parkingSpaces();
-        if (configured == null || configured <= 0) {
-            return DevSeedProperties.DEFAULT_PARKING_SPACES;
-        }
-        if (configured > DevSeedProperties.MAXIMUM_PARKING_SPACES) {
-            LOGGER.warn("Development seed: luparx.dev.parking-spaces={} exceeds the maximum {}; using the maximum.",
-                    configured, DevSeedProperties.MAXIMUM_PARKING_SPACES);
-            return DevSeedProperties.MAXIMUM_PARKING_SPACES;
-        }
-        return configured;
-    }
-
-    private static String format(long number) {
-        return String.format(Locale.ROOT, CODE_FORMAT, number);
-    }
-
-    /**
-     * One seeded zone.
+     * The code painted on bay {@code number}, built from the municipality's own stored format.
      *
-     * @param code         operational code, unique inside the municipality
-     * @param name         what a citizen or an inspector reads
-     * @param description  one sentence of real geography, stored as tenant content
-     * @param districtCode official district code, resolved against the administrative tree
-     * @param share        weight of this zone in the municipality-wide code range
-     * @param hourlyMajor  hourly tariff in major units of the municipality's configured currency
+     * <p>Zero-padded to the width that format declares and carrying its own prefix, so San José gets
+     * {@code 0001} and Escazú {@code E-0001}. Reading the width from the row rather than from the
+     * fixture constants is what guarantees the codes match: seeding a code the municipality itself
+     * would refuse is the one mistake this fixture must not make.</p>
      */
-    private record ZoneSeed(String code, String name, String description, String districtCode, int share,
-                            long hourlyMajor) {
+    private static String code(ParkingSpaceFormat format, long number) {
+        return format.getPrefix() + String.format(Locale.ROOT, "%0" + format.getDigits() + "d", number);
     }
 }

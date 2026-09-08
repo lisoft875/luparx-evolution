@@ -33,9 +33,13 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
 
+import cr.luparx.app.config.DevMunicipalities.DevMunicipality;
+
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -109,6 +113,10 @@ public class DevDataSeeder implements ApplicationRunner {
      */
     private static final IdentityDocumentTypeCode DOCUMENT_TYPE = IdentityDocumentTypeCode.PASSPORT;
 
+    /**
+     * The original four accounts, all of them in the launch municipality. Unchanged: a developer who
+     * has these memorised keeps them working exactly as before.
+     */
     private static final List<DemoAccount> ACCOUNTS = List.of(
             new DemoAccount("citizen@luparx.test", "Dev", "Citizen", Portal.CITIZEN, Role.CITIZEN, "DEV000001"),
             new DemoAccount("admin@luparx.test", "Dev", "Admin", Portal.ADMIN, Role.TENANT_ADMIN, "DEV000002"),
@@ -116,6 +124,45 @@ public class DevDataSeeder implements ApplicationRunner {
                     "DEV000003"),
             new DemoAccount("platform@luparx.test", "Dev", "Platform", Portal.PLATFORM, Role.PLATFORM_ADMIN,
                     "DEV000004"));
+
+    /**
+     * The three citizens the fixture exists for, each carrying a different amount of money and a
+     * different number of municipalities.
+     *
+     * <p><b>Ana belongs to three municipalities</b>, which is the only way to exercise two things that
+     * cannot be reached with a single-tenant account: switching the active municipality
+     * ({@code POST /citizen/session/tenant}) and the {@code TENANT_CONTEXT_REQUIRED} answer a session
+     * gets before one is chosen. Bruno and Carla belong to one each, so their sessions resolve a
+     * municipality automatically and the ordinary flow stays one call away.</p>
+     *
+     * <p>The wallet is <b>per municipality</b> (CONTRACT.md v0.2, rule 6): Ana's three balances are
+     * three separate accounts and spending in one leaves the others untouched. The amounts are round
+     * so that a total is readable at a glance in a ledger, and they are declared in MAJOR units of
+     * whatever currency the municipality was configured with.</p>
+     */
+    /**
+     * An ORDERED map of municipality slug to opening balance. {@code Map.of} would not do: its
+     * iteration order is deliberately unspecified, and the first entry decides which municipality the
+     * account is registered against.
+     */
+    private static Map<String, Long> balances(Object... pairs) {
+        Map<String, Long> ordered = new LinkedHashMap<>();
+        for (int index = 0; index < pairs.length; index += 2) {
+            ordered.put((String) pairs[index], (Long) pairs[index + 1]);
+        }
+        return ordered;
+    }
+
+    private static final List<DemoCitizen> CITIZENS = List.of(
+            new DemoCitizen("ana.morales@luparx.test", "Ana", "Morales", "DEV100001",
+                    balances("san-jose", 150_000L, "escazu", 100_000L, "montes-de-oca", 50_000L),
+                    "high balance, member of three municipalities"),
+            new DemoCitizen("bruno.castro@luparx.test", "Bruno", "Castro", "DEV100002",
+                    balances("cartago", 20_000L),
+                    "medium balance, one municipality"),
+            new DemoCitizen("carla.jimenez@luparx.test", "Carla", "Jiménez", "DEV100003",
+                    balances("la-union", 2_000L),
+                    "low balance, one municipality — the account that runs into INSUFFICIENT_BALANCE"));
 
     private final PlatformDefaultsProperties defaults;
     private final TenantService tenantService;
@@ -128,6 +175,8 @@ public class DevDataSeeder implements ApplicationRunner {
     private final AdministrativeDivisionRepository divisionRepository;
     private final PhoneNumberService phoneNumberService;
     private final DevParkingSeeder parkingSeeder;
+    private final DevActivitySeeder activitySeeder;
+    private final DevSeedProperties properties;
 
     public DevDataSeeder(PlatformDefaultsProperties defaults,
                          TenantService tenantService,
@@ -139,7 +188,9 @@ public class DevDataSeeder implements ApplicationRunner {
                          TenantMembershipRepository membershipRepository,
                          AdministrativeDivisionRepository divisionRepository,
                          PhoneNumberService phoneNumberService,
-                         DevParkingSeeder parkingSeeder) {
+                         DevParkingSeeder parkingSeeder,
+                         DevActivitySeeder activitySeeder,
+                         DevSeedProperties properties) {
         this.defaults = defaults;
         this.tenantService = tenantService;
         this.tenantRepository = tenantRepository;
@@ -151,6 +202,8 @@ public class DevDataSeeder implements ApplicationRunner {
         this.divisionRepository = divisionRepository;
         this.phoneNumberService = phoneNumberService;
         this.parkingSeeder = parkingSeeder;
+        this.activitySeeder = activitySeeder;
+        this.properties = properties;
     }
 
     @Override
@@ -159,25 +212,101 @@ public class DevDataSeeder implements ApplicationRunner {
         List<DemoAccount> available = new ArrayList<>();
         try {
             retireLegacyTenant();
-            Tenant tenant = ensureTenant(countryCode);
             AddressChain address = resolveAddressChain(countryCode);
             String phoneNumber = phoneNumberService.exampleNationalNumber(countryCode);
+
+            // Every municipality of the fixture, launch one first. They are created before any account
+            // so that a citizen who belongs to three of them can be given all three memberships in one
+            // pass, rather than being revisited as each municipality appears.
+            Map<String, Tenant> tenants = new LinkedHashMap<>();
+            for (DevMunicipality municipality : DevMunicipalities.all()) {
+                tenants.put(municipality.slug(), ensureTenant(municipality, countryCode));
+            }
+            Tenant launchTenant = tenants.get(DevMunicipalities.SAN_JOSE.slug());
+
             for (DemoAccount account : ACCOUNTS) {
                 try {
-                    seed(account, tenant, countryCode, address, phoneNumber);
+                    seed(account, launchTenant, countryCode, address, phoneNumber);
                     available.add(account);
                 } catch (RuntimeException exception) {
                     LOGGER.warn("Development seed: {} could not be created ({}). Continuing.",
                             account.email(), exception.toString());
                 }
             }
-            seedParking(tenant);
+            seedStaff(tenants, countryCode, address, phoneNumber);
+            Map<String, UserId> citizens = seedCitizens(tenants, countryCode, address, phoneNumber);
+            seedParking(tenants);
+            seedActivity(tenants, citizens);
         } catch (RuntimeException exception) {
             // A broken fixture must never stop the application from starting.
             LOGGER.warn("Development seed skipped: {}", exception.toString());
             return;
         }
         announce(available);
+    }
+
+    /**
+     * A municipal administrator and an inspector for every municipality, with predictable addresses:
+     * {@code admin.<slug>@luparx.test} and {@code inspector.<slug>@luparx.test}.
+     *
+     * <p>The launch municipality keeps its original {@code admin@luparx.test} and
+     * {@code inspector@luparx.test} <em>as well</em>, so nothing a developer already had memorised
+     * stops working. Staff are seeded per municipality rather than given access to all of them
+     * because that is how a municipality actually works, and because an administrator who could see
+     * every municipality would make cross-tenant leaks invisible in development.</p>
+     */
+    private void seedStaff(Map<String, Tenant> tenants, String countryCode, AddressChain address,
+                           String phoneNumber) {
+        int document = 200_001;
+        for (DevMunicipality municipality : DevMunicipalities.ADDITIONAL) {
+            Tenant tenant = tenants.get(municipality.slug());
+            for (StaffRole role : StaffRole.values()) {
+                DemoAccount account = new DemoAccount(
+                        role.emailOf(municipality),
+                        role.givenName(),
+                        municipality.displayName(),
+                        role.portal(),
+                        role.role(),
+                        "DEV" + (document++));
+                try {
+                    seed(account, tenant, countryCode, address, phoneNumber);
+                } catch (RuntimeException exception) {
+                    LOGGER.warn("Development seed: {} could not be created ({}). Continuing.",
+                            account.email(), exception.toString());
+                }
+            }
+        }
+    }
+
+    /**
+     * The three citizens, each with a membership in every municipality their wallet names.
+     *
+     * @return the user id of each seeded citizen by email, for whoever writes their history
+     */
+    private Map<String, UserId> seedCitizens(Map<String, Tenant> tenants, String countryCode,
+                                             AddressChain address, String phoneNumber) {
+        Map<String, UserId> seeded = new LinkedHashMap<>();
+        for (DemoCitizen citizen : CITIZENS) {
+            try {
+                // Registered against the first municipality on their list; the rest are granted below,
+                // exactly as a back-office would add them.
+                String firstSlug = citizen.openingBalances().keySet().iterator().next();
+                DemoAccount account = new DemoAccount(citizen.email(), citizen.givenName(),
+                        citizen.familyName(), Portal.CITIZEN, Role.CITIZEN, citizen.documentNumber());
+                UserId userId = ensureUser(account, tenants.get(firstSlug), countryCode, address, phoneNumber);
+                ensureEmailVerified(userId);
+                for (String slug : citizen.openingBalances().keySet()) {
+                    ensureMembership(account, tenants.get(slug), userId);
+                }
+                seeded.put(citizen.email(), userId);
+                LOGGER.info("Development seed: citizen {} — {} ({}).", citizen.email(), citizen.exercises(),
+                        String.join(", ", citizen.openingBalances().keySet()));
+            } catch (RuntimeException exception) {
+                LOGGER.warn("Development seed: {} could not be created ({}). Continuing.",
+                        citizen.email(), exception.toString());
+            }
+        }
+        return seeded;
     }
 
     // --- steps -----------------------------------------------------------------------------------
@@ -199,14 +328,86 @@ public class DevDataSeeder implements ApplicationRunner {
     }
 
     /**
-     * Zones, tariffs and bays. Isolated from the accounts on purpose: a parking fixture that fails is
-     * worth a warning, never the loss of the credentials a developer needs to log in at all.
+     * Zones, tariffs, policies, timetables, code formats and bays, for every municipality. Isolated
+     * from the accounts on purpose: a parking fixture that fails is worth a warning, never the loss of
+     * the credentials a developer needs to log in at all.
+     *
+     * <p>The launch municipality gets {@code luparx.dev.parking-spaces} bays of its own; the others
+     * share {@code luparx.dev.parking-spaces-total} between them, dealt by weight. Five municipalities
+     * with five thousand bays each would be a load test, not a fixture.</p>
      */
-    private void seedParking(Tenant tenant) {
+    private void seedParking(Map<String, Tenant> tenants) {
+        Map<String, Integer> targets = resolveSpaceTargets();
+        for (DevMunicipality municipality : DevMunicipalities.all()) {
+            Tenant tenant = tenants.get(municipality.slug());
+            if (tenant == null) {
+                continue;
+            }
+            try {
+                parkingSeeder.seed(tenant, municipality, targets.getOrDefault(municipality.slug(),
+                        Integer.valueOf(0)).intValue());
+            } catch (RuntimeException exception) {
+                LOGGER.warn("Development seed: parking fixture skipped for {} ({}).", municipality.slug(),
+                        exception.toString());
+            }
+        }
+    }
+
+    /**
+     * How many bays each municipality gets.
+     *
+     * <p>The launch one is unchanged and keeps its own property. The rest split a pool in proportion
+     * to their weight, with the boundaries computed from the cumulative share so the split is exact:
+     * every bay of the pool is handed out and none twice.</p>
+     */
+    private Map<String, Integer> resolveSpaceTargets() {
+        Map<String, Integer> targets = new LinkedHashMap<>();
+        targets.put(DevMunicipalities.SAN_JOSE.slug(), Integer.valueOf(resolveCount(properties.parkingSpaces(),
+                DevSeedProperties.DEFAULT_PARKING_SPACES, "luparx.dev.parking-spaces")));
+
+        int pool = resolveCount(properties.parkingSpacesTotal(), DevSeedProperties.DEFAULT_PARKING_SPACES_TOTAL,
+                "luparx.dev.parking-spaces-total");
+        int totalShare = 0;
+        for (DevMunicipality municipality : DevMunicipalities.ADDITIONAL) {
+            totalShare += municipality.spaceShare();
+        }
+        long cumulative = 0L;
+        for (DevMunicipality municipality : DevMunicipalities.ADDITIONAL) {
+            long from = (long) pool * cumulative / totalShare;
+            cumulative += municipality.spaceShare();
+            long to = (long) pool * cumulative / totalShare;
+            targets.put(municipality.slug(), Integer.valueOf((int) (to - from)));
+        }
+        LOGGER.info("Development seed: bays per municipality {}.", targets);
+        return targets;
+    }
+
+    /**
+     * A configured count, defaulted when absent and clamped when absurd. Silently ignoring what a
+     * developer configured is how a fixture becomes confusing, so the clamp is said out loud.
+     */
+    private int resolveCount(Integer configured, int fallback, String property) {
+        if (configured == null || configured.intValue() <= 0) {
+            return fallback;
+        }
+        if (configured.intValue() > DevSeedProperties.MAXIMUM_PARKING_SPACES) {
+            LOGGER.warn("Development seed: {}={} exceeds the maximum {}; using the maximum.", property,
+                    configured, DevSeedProperties.MAXIMUM_PARKING_SPACES);
+            return DevSeedProperties.MAXIMUM_PARKING_SPACES;
+        }
+        return configured.intValue();
+    }
+
+    /**
+     * Vehicles, past and running sessions, wallet movements and minute credits. Last, because it is
+     * the only step that needs everything else to exist, and isolated for the same reason as the
+     * parking fixture: history is the most expendable part of a fixture and must never cost a start.
+     */
+    private void seedActivity(Map<String, Tenant> tenants, Map<String, UserId> citizens) {
         try {
-            parkingSeeder.seed(tenant, citizenUserId());
+            activitySeeder.seed(tenants, citizens, CITIZENS);
         } catch (RuntimeException exception) {
-            LOGGER.warn("Development seed: parking fixture skipped ({}).", exception.toString());
+            LOGGER.warn("Development seed: activity fixture skipped ({}).", exception.toString());
         }
     }
 
@@ -230,13 +431,20 @@ public class DevDataSeeder implements ApplicationRunner {
         return null;
     }
 
-    private Tenant ensureTenant(String countryCode) {
-        Optional<Tenant> existing = tenantRepository.findBySlug(TENANT_SLUG);
+    /**
+     * One municipality of the fixture, created if this database does not have it yet.
+     *
+     * <p>Country, currency, locale and time zone come from {@code platform.defaults.*}, exactly as
+     * before: the fixture names municipalities, it does not decide what market the deployment serves
+     * (CONTRACT.md §7).</p>
+     */
+    private Tenant ensureTenant(DevMunicipality municipality, String countryCode) {
+        Optional<Tenant> existing = tenantRepository.findBySlug(municipality.slug());
         if (existing.isPresent()) {
             return existing.get();
         }
-        return tenantService.create(TENANT_SLUG, TENANT_LEGAL_NAME, TENANT_DISPLAY_NAME, countryCode,
-                defaults.currencyCode(), defaults.locale(), defaults.timeZone(),
+        return tenantService.create(municipality.slug(), municipality.legalName(), municipality.displayName(),
+                countryCode, defaults.currencyCode(), defaults.locale(), defaults.timeZone(),
                 SelfRegistrationPolicy.APPROVAL_REQUIRED, null);
     }
 
@@ -381,6 +589,44 @@ public class DevDataSeeder implements ApplicationRunner {
      * the first active division at each level. Nothing about a particular country is assumed: a
      * country whose tree stops at level 2 simply yields a two-level address.
      */
+    /**
+     * The two staff roles every municipality gets. An enum rather than two literal accounts so that
+     * adding a municipality cannot leave one of them behind.
+     */
+    private enum StaffRole {
+
+        ADMIN("admin", "Admin", Portal.ADMIN, Role.TENANT_ADMIN),
+        INSPECTOR("inspector", "Inspector", Portal.INSPECTOR, Role.INSPECTOR);
+
+        private final String localPart;
+        private final String givenName;
+        private final Portal portal;
+        private final Role role;
+
+        StaffRole(String localPart, String givenName, Portal portal, Role role) {
+            this.localPart = localPart;
+            this.givenName = givenName;
+            this.portal = portal;
+            this.role = role;
+        }
+
+        String emailOf(DevMunicipality municipality) {
+            return localPart + "." + municipality.slug() + "@luparx.test";
+        }
+
+        String givenName() {
+            return givenName;
+        }
+
+        Portal portal() {
+            return portal;
+        }
+
+        Role role() {
+            return role;
+        }
+    }
+
     private AddressChain resolveAddressChain(String countryCode) {
         PageRequest firstOne = PageRequest.of(0, 1);
         UUID level1Id = divisionRepository
@@ -410,13 +656,40 @@ public class DevDataSeeder implements ApplicationRunner {
         for (DemoAccount account : accounts) {
             LOGGER.warn("  portal={} email={} password={}", account.portal().slug(), account.email(), PASSWORD);
         }
-        LOGGER.warn("Municipality: {} (slug '{}')", TENANT_DISPLAY_NAME, TENANT_SLUG);
+        for (DemoCitizen citizen : CITIZENS) {
+            LOGGER.warn("  portal=citizen email={} password={} — {}", citizen.email(), PASSWORD,
+                    citizen.exercises());
+        }
+        for (DevMunicipality municipality : DevMunicipalities.ADDITIONAL) {
+            LOGGER.warn("  portal=admin/inspector email={} / {} password={}", municipality.adminEmail(),
+                    municipality.inspectorEmail(), PASSWORD);
+        }
+        LOGGER.warn("Municipalities: {}", DevMunicipalities.all().stream().map(DevMunicipality::slug).toList());
         LOGGER.warn("=================================================================================");
     }
 
     /** One seeded account: who they are, which portal they belong to and with which role. */
     private record DemoAccount(String email, String givenName, String familyName, Portal portal, Role role,
                                String documentNumber) {
+    }
+
+    /**
+     * One seeded citizen.
+     *
+     * @param openingBalances municipality slug to opening top-up, in MAJOR units of that
+     *                        municipality's currency. The iteration order is the declaration order,
+     *                        and its first entry is the municipality the account is registered
+     *                        against; the rest are granted as additional memberships.
+     * @param exercises       one sentence naming what this account is for, printed on every start
+     */
+    record DemoCitizen(String email, String givenName, String familyName, String documentNumber,
+                       Map<String, Long> openingBalances, String exercises) {
+
+        DemoCitizen {
+            // LinkedHashMap: which municipality comes first decides where the account is registered,
+            // so the order has to survive being copied.
+            openingBalances = java.util.Collections.unmodifiableMap(new LinkedHashMap<>(openingBalances));
+        }
     }
 
     /** The administrative divisions used for the seeded address; deeper levels may be null. */
