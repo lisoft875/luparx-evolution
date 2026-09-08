@@ -39,7 +39,7 @@ export IP_HASH_PEPPER="$(openssl rand -hex 16)"
 
 # 4. Build and run
 cd backend
-mvn clean verify
+mvn clean verify                                # compila e instala todos los modulos
 mvn -pl app spring-boot:run -Dspring-boot.run.profiles=dev
 ```
 

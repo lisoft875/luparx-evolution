@@ -96,6 +96,8 @@
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-maven-plugin</artifactId>
         <configuration>
+          <!-- Contrapeso del skip por defecto del POM padre: este es el unico modulo ejecutable. -->
+          <skip>false</skip>
           <mainClass>cr.luparx.app.LuparxApplication</mainClass>
         </configuration>
       </plugin>

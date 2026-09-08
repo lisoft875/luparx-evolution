@@ -125,6 +125,18 @@
             <parameters>true</parameters>
           </configuration>
         </plugin>
+        <!--
+          `mvn spring-boot:run` invocado desde la linea de comandos se ejecuta en TODOS los proyectos
+          del reactor, y los modulos de libreria no tienen clase principal. Se saltan por defecto y
+          solo el modulo `app` lo habilita, para que `mvn -pl app -am spring-boot:run` funcione.
+        -->
+        <plugin>
+          <groupId>org.springframework.boot</groupId>
+          <artifactId>spring-boot-maven-plugin</artifactId>
+          <configuration>
+            <skip>true</skip>
+          </configuration>
+        </plugin>
       </plugins>
     </pluginManagement>
   </build>

@@ -18,7 +18,9 @@ Después, en dos terminales:
 ```bash
 # API en http://localhost:8090  (Swagger UI en /swagger-ui.html)
 source infra/secrets/dev-env.sh
-cd backend && mvn -pl app -am spring-boot:run -Dspring-boot.run.profiles=dev
+cd backend
+mvn -q -DskipTests install                      # solo la primera vez, o tras cambiar un modulo
+mvn -pl app spring-boot:run -Dspring-boot.run.profiles=dev
 
 # Apps
 cd frontend
