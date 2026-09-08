@@ -218,4 +218,54 @@ class AccessResolverTest {
                 Permission.EXPORT_RUN);
         assertThat(grant.permissions()).doesNotContain(Permission.USER_WRITE);
     }
+
+    /**
+     * The regression this pins is the one that stranded real accounts: a person whose old
+     * municipality was closed and who was then given access to a new one holds TWO active
+     * memberships. Counting the dead one as a choice left the session with no municipality selected,
+     * no roles and no permissions, and every tenant-owned endpoint answering "access denied" — for an
+     * account that in truth belongs to exactly one municipality.
+     */
+    @Test
+    void ignoresMembershipsWhoseMunicipalityIsNoLongerOpen() {
+        InMemoryDirectory directory = new InMemoryDirectory();
+        directory.addTenant(tenantA, TenantStatus.ACTIVE);
+        directory.addTenant(tenantB, TenantStatus.CLOSED);
+        directory.addMembership(adminOfA, tenantA, Portal.ADMIN, Role.TENANT_ADMIN, MembershipStatus.ACTIVE);
+        directory.addMembership(adminOfA, tenantB, Portal.ADMIN, Role.TENANT_ADMIN, MembershipStatus.ACTIVE);
+        AccessResolver resolver = new AccessResolver(directory);
+
+        // Two ACTIVE memberships, but only one municipality that would admit this person.
+        assertThat(resolver.activeMemberships(adminOfA, Portal.ADMIN)).hasSize(2);
+        assertThat(resolver.usableMemberships(adminOfA, Portal.ADMIN)).hasSize(1);
+        assertThat(resolver.defaultTenant(adminOfA, Portal.ADMIN)).contains(tenantA);
+        assertThat(resolver.hasUsableMembership(adminOfA, Portal.ADMIN)).isTrue();
+    }
+
+    @Test
+    void reportsNoUsableMembershipWhenEveryMunicipalityIsClosed() {
+        InMemoryDirectory directory = new InMemoryDirectory();
+        directory.addTenant(tenantA, TenantStatus.CLOSED);
+        directory.addMembership(adminOfA, tenantA, Portal.ADMIN, Role.TENANT_ADMIN, MembershipStatus.ACTIVE);
+        AccessResolver resolver = new AccessResolver(directory);
+
+        assertThat(resolver.hasUsableMembership(adminOfA, Portal.ADMIN)).isFalse();
+        assertThat(resolver.defaultTenant(adminOfA, Portal.ADMIN)).isEmpty();
+        // Naming the municipality explicitly still fails, and with the specific code, not a bare
+        // "access denied": the municipality is real, it simply admits nobody.
+        assertThatThrownBy(() -> resolver.resolve(adminOfA, Portal.ADMIN, tenantA))
+                .isInstanceOf(ForbiddenException.class)
+                .extracting(exception -> ((ForbiddenException) exception).code())
+                .isEqualTo(ErrorCode.TENANT_NOT_ACTIVE);
+    }
+
+    @Test
+    void reportsNoUsableMembershipWhenEveryMembershipWasRevoked() {
+        InMemoryDirectory directory = directoryWithTwoTenants();
+        directory.addMembership(adminOfA, tenantA, Portal.ADMIN, Role.TENANT_ADMIN, MembershipStatus.REVOKED);
+        AccessResolver resolver = new AccessResolver(directory);
+
+        assertThat(resolver.hasUsableMembership(adminOfA, Portal.ADMIN)).isFalse();
+        assertThat(resolver.defaultTenant(adminOfA, Portal.ADMIN)).isEmpty();
+    }
 }

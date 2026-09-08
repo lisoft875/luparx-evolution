@@ -99,6 +99,25 @@ what a real registration produces. An account it cannot create (a catalogue that
 passport for the configured default country, or a country with no administrative divisions seeded)
 is logged and skipped; the seeder never prevents startup.
 
+#### Repairing accounts seeded before San José existed
+
+A database created before the San José fixture has its development accounts in
+`demo-municipality`, which the seeder closes on the next start. Closing it is not enough on its own:
+the account keeps that membership, gains one in San José, and ends up holding **two** active
+memberships on the same portal — one of them pointing at a closed municipality. A session with two
+municipalities to choose from starts with none selected, so the token carries no `tid`, no roles and
+no permissions, and every tenant-owned endpoint answers *access denied* for an account that in truth
+belongs to exactly one municipality.
+
+So `DevDataSeeder.repairMemberships` **revokes the membership that can no longer grant anything**,
+leaving every seeded account with exactly one usable membership, in the active municipality. It logs
+one `WARN` per account it repairs. Revoked and not deleted: a membership is history, and the fixture
+uses the same transition the back-office would. It is idempotent — on a database that never had the
+legacy municipality it does nothing — and it exists **only under the `dev` profile**, because it
+repairs *development fixtures*: a real deployment's memberships are somebody's decision and are never
+rewritten on start. The equivalent for a real environment is not a silent repair but an explicit
+answer, which is what `NO_ACTIVE_MEMBERSHIP` is for (see below).
+
 ### Parking fixture (zones, tariffs and bays)
 
 Once the municipality exists, `DevParkingSeeder` gives it the parking it operates: **8 zones** across
@@ -419,6 +438,27 @@ placeholder key (`docs/SECURITY.md` §5).
   cannot drift apart. Adding a slug back to the list is all it takes to require TOTP again.
 - **A session does not expire on its own** (`luparx.jwt.refresh-token-ttl: 0`). Logout, a password
   change and an administrative block are what end one; rotation and reuse detection are unchanged.
+- **An account that belongs to no open municipality is told so.** A membership survives its
+  municipality being suspended or closed — the row is history and the person may be re-admitted — but
+  it grants nothing meanwhile, so `AccessResolver` counts only the memberships that would actually
+  produce a usable session. When a session ends up with no municipality and no roles,
+  `TenantContextFilter` answers explicitly instead of letting every endpoint refuse the call at its
+  `@PreAuthorize` with a bare `ACCESS_DENIED`:
+  - **`NO_ACTIVE_MEMBERSHIP` (403)** — every membership was revoked, or the only municipality the
+    account had is suspended or closed. Nothing this session does will work and the fix is
+    administrative.
+  - **`TENANT_CONTEXT_REQUIRED` (403)** — the account belongs to several municipalities and has not
+    picked one. Nothing is broken; `POST /{portal}/session/tenant` resolves it.
+
+  The check is **not** at login: refusing the login would lock a person out of their own account for
+  an administrative act they had no part in, and `CONTRACT.md` §1 has a citizen legitimately signing
+  in before belonging to any municipality. The token is issued, and the refusal arrives on the first
+  request that genuinely needs a municipality.
+- **The endpoints of the person stay open without a municipality.** `/{portal}/me` (read and write),
+  `/me/password`, `/me/email`, `/me/memberships`, `/me/mfa*` and `/session/tenant` are exempt from the
+  check above. A name, a phone number and a password belong to the human being, not to the tenant, and
+  must stay editable whether or not any municipality currently admits them; the last two are also how
+  the caller sees what is wrong and gets out of it.
 - **Rate limiting** lives in `auth_attempts` in PostgreSQL, so the limit holds across replicas.
 - **Idempotency**: `Idempotency-Key` is required on the sensitive `POST` routes listed in
   `IdempotencyFilter`; concurrent retries are resolved by a unique index, not by in-process state.
@@ -432,7 +472,8 @@ mvn test
 `MoneyTest`, `RolePermissionsTest`, `Uuid7Test` (platform-core), `PhoneNumberServiceTest`,
 `IdentityDocumentValidatorTest` (geo), `TotpServiceTest` — verified against the RFC 6238 vectors —
 (identity), `AccessResolverTest` (tenancy), which includes the cross-tenant isolation case
-`docs/SECURITY.md` §4 requires, and `ChargingScheduleTest` (parking), which pins the v0.3 rule that
+`docs/SECURITY.md` §4 requires — including the case that stranded real accounts, an active membership
+in a closed municipality alongside a live one — and `ChargingScheduleTest` (parking), which pins the v0.3 rule that
 only the minutes inside a charging band are charged: exact boundaries, crossing midnight, a weekday
 with no band, a holiday inside a long stay, overlapping bands and the same timetable in two zones.
 

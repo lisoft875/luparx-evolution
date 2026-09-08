@@ -10,6 +10,8 @@ export const esCR = {
 
   'common.loading': 'Cargando…',
   'common.error.generic': 'Ocurrió un error. Intenta de nuevo.',
+  'common.error.NO_ACTIVE_MEMBERSHIP': 'Tu cuenta todavía no pertenece a ninguna municipalidad activa. Pedile acceso a un administrador.',
+  'common.error.TENANT_CONTEXT_REQUIRED': 'Elegí primero una municipalidad para continuar.',
   'common.error.network': 'No se pudo conectar con el servidor.',
   'common.empty': 'No hay datos para mostrar.',
   'common.retry': 'Reintentar',

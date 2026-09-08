@@ -78,6 +78,14 @@ public final class ErrorCode {
     public static final String CROSS_TENANT_ACCESS_DENIED = "CROSS_TENANT_ACCESS_DENIED";
     public static final String MEMBERSHIP_NOT_FOUND = "MEMBERSHIP_NOT_FOUND";
     public static final String MEMBERSHIP_NOT_ACTIVE = "MEMBERSHIP_NOT_ACTIVE";
+    /**
+     * The account belongs to no municipality that is currently open to it — every membership it has
+     * was revoked, or points at a municipality that has been suspended or closed. Distinct from
+     * {@link #MEMBERSHIP_NOT_ACTIVE}, which is about one municipality the caller named, and from
+     * {@link #TENANT_CONTEXT_REQUIRED}, which means the caller has municipalities and has not picked
+     * one yet.
+     */
+    public static final String NO_ACTIVE_MEMBERSHIP = "NO_ACTIVE_MEMBERSHIP";
     public static final String MEMBERSHIP_ALREADY_EXISTS = "MEMBERSHIP_ALREADY_EXISTS";
     public static final String MEMBERSHIP_INVALID_TRANSITION = "MEMBERSHIP_INVALID_TRANSITION";
     public static final String ROLE_NOT_ALLOWED_FOR_PORTAL = "ROLE_NOT_ALLOWED_FOR_PORTAL";

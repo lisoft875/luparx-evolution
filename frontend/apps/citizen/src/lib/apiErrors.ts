@@ -57,9 +57,22 @@ export function vehiclePlateError(error: unknown, t: (key: TranslationKey) => st
  * A transport failure is a different fact and gets its own sentence: there is no server answer to
  * quote, and telling someone to "try again" while they are offline is the wrong instruction.
  */
+/**
+ * Account-level refusals that every screen can hit, so they are answered the same way everywhere:
+ * an account with no usable municipality, or one that has several and has not picked one yet.
+ * Both used to arrive as a bare ACCESS_DENIED, which reads as "the app is broken" when in fact
+ * the person only needs to be admitted, or to choose.
+ */
+const MEMBERSHIP_ERROR_KEYS: Record<string, TranslationKey> = {
+  NO_ACTIVE_MEMBERSHIP: 'common.error.NO_ACTIVE_MEMBERSHIP',
+  TENANT_CONTEXT_REQUIRED: 'common.error.TENANT_CONTEXT_REQUIRED',
+};
+
 export function apiErrorMessage(error: unknown, t: Translate, known?: Record<string, TranslationKey>): string {
   if (error instanceof NetworkError) return t('common.error.network');
   if (!(error instanceof ApiError)) return t('common.error.generic');
+  const membership = MEMBERSHIP_ERROR_KEYS[error.code];
+  if (membership) return t(membership);
   const mapped = known?.[error.code];
   if (mapped) return t(mapped);
   const reference = error.traceId

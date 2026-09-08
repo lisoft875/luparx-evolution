@@ -11,6 +11,8 @@ export const enUS: Record<TranslationKey, string> = {
 
   'common.loading': 'Loading…',
   'common.error.generic': 'Something went wrong. Please try again.',
+  'common.error.NO_ACTIVE_MEMBERSHIP': 'Your account does not belong to an active municipality yet. Ask an administrator for access.',
+  'common.error.TENANT_CONTEXT_REQUIRED': 'Choose a municipality first to continue.',
   'common.error.network': 'Could not connect to the server.',
   'common.empty': 'No data to display.',
   'common.retry': 'Retry',

@@ -110,6 +110,48 @@ public class AccessResolver {
         return result;
     }
 
+    /**
+     * Memberships that would actually produce a usable session right now: active, on this portal,
+     * <b>and pointing at a municipality that still allows access</b>.
+     *
+     * <p>The last clause is what {@link #activeMemberships} deliberately does not check, and the
+     * distinction matters. A membership survives its municipality being suspended or closed — the row
+     * is history and the person may be re-admitted — but it grants nothing while the municipality is
+     * in that state. Counting such a row as "a municipality this person belongs to" is how an account
+     * ends up looking as though it had a choice to make when in fact it has none.</p>
+     */
+    public List<TenantMembership> usableMemberships(UserId userId, Portal portal) {
+        List<TenantMembership> result = new ArrayList<>();
+        for (TenantMembership membership : activeMemberships(userId, portal)) {
+            if (portal == Portal.PLATFORM) {
+                // A platform membership belongs to the operator of the product, not to a municipality.
+                if (membership.getRole().isPlatformScoped()) {
+                    result.add(membership);
+                }
+                continue;
+            }
+            if (membership.getTenantId() == null) {
+                continue;
+            }
+            directory.findTenant(TenantId.of(membership.getTenantId()))
+                    .filter(tenant -> tenant.getStatus().allowsAccess())
+                    .ifPresent(tenant -> result.add(membership));
+        }
+        return result;
+    }
+
+    /**
+     * Whether this person can reach anything at all on this portal.
+     *
+     * <p>False is the state the platform used to report as a bare {@code ACCESS_DENIED} on every
+     * endpoint: an account whose only municipality was closed, or one that never received a
+     * membership. It says nothing to the person, nothing to support and nothing to whoever is
+     * debugging, which is why the caller turns this into an explicit {@code NO_ACTIVE_MEMBERSHIP}.</p>
+     */
+    public boolean hasUsableMembership(UserId userId, Portal portal) {
+        return !usableMemberships(userId, portal).isEmpty();
+    }
+
     /** Every membership of a user, whatever its status; used by {@code GET /{portal}/me}. */
     public List<TenantMembership> allMemberships(UserId userId) {
         return directory.membershipsOf(userId);
@@ -130,11 +172,21 @@ public class AccessResolver {
         return false;
     }
 
-    /** The default tenant of a session: the only active membership, or none when there is a choice. */
+    /**
+     * The default tenant of a session: the only municipality this person can actually enter, or none
+     * when there is a genuine choice to make.
+     *
+     * <p>It counts {@link #usableMemberships} and not merely active ones, and that is not a detail.
+     * A person whose old municipality was closed and who was then given access to a new one holds two
+     * ACTIVE memberships; counting both leaves the session with no tenant, no roles and no
+     * permissions, and every tenant-owned endpoint answering "access denied" — for an account that in
+     * reality belongs to exactly one municipality and should simply have been placed in it. Only the
+     * municipalities that would actually admit the person count as a choice.</p>
+     */
     public Optional<TenantId> defaultTenant(UserId userId, Portal portal) {
-        List<TenantMembership> active = activeMemberships(userId, portal);
-        if (active.size() == 1 && active.get(0).getTenantId() != null) {
-            return Optional.of(TenantId.of(active.get(0).getTenantId()));
+        List<TenantMembership> usable = usableMemberships(userId, portal);
+        if (usable.size() == 1 && usable.get(0).getTenantId() != null) {
+            return Optional.of(TenantId.of(usable.get(0).getTenantId()));
         }
         return Optional.empty();
     }

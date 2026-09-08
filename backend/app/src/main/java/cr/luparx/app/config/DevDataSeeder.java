@@ -14,7 +14,9 @@ import cr.luparx.identity.repository.UserRepository;
 import cr.luparx.identity.service.EmailVerificationService;
 import cr.luparx.identity.service.RegistrationCommand;
 import cr.luparx.identity.service.UserRegistrationService;
+import cr.luparx.core.id.TenantId;
 import cr.luparx.tenancy.entity.Tenant;
+import cr.luparx.tenancy.entity.TenantMembership;
 import cr.luparx.tenancy.model.MembershipStatus;
 import cr.luparx.tenancy.model.SelfRegistrationPolicy;
 import cr.luparx.tenancy.model.TenantStatus;
@@ -57,6 +59,13 @@ import java.util.UUID;
  * show a developer two municipalities where the product has one. A database created after this
  * change simply never has it.</p>
  *
+ * <p>Closing it is not sufficient, and that is what {@link #repairMemberships} is for: an account
+ * seeded before San José existed keeps its membership in the closed municipality, gains one in San
+ * José, and ends up with two — which leaves its session with no municipality selected and every
+ * tenant-owned endpoint refusing the call. The repair revokes the membership that can no longer grant
+ * anything, so every seeded account ends each start with exactly one usable membership, in the active
+ * municipality. It is idempotent and does nothing on a database that never had the legacy tenant.</p>
+ *
  * <p>Nothing here is written with SQL or by assembling entities by hand: the accounts go through
  * {@link UserRegistrationService}, the address chain comes from the divisions actually seeded in the
  * migrations, the password is hashed by the real {@code PasswordService} behind the registration
@@ -83,6 +92,9 @@ public class DevDataSeeder implements ApplicationRunner {
 
     /** The placeholder municipality earlier revisions created; closed on sight, never deleted. */
     private static final String LEGACY_TENANT_SLUG = "demo-municipality";
+    /** Written on the membership the repair below retires, so the row says why it was retired. */
+    private static final String ORPHANED_MEMBERSHIP_REASON =
+            "Municipality is closed; the development account was moved to the active one.";
     private static final String LEGACY_TENANT_REASON =
             "Replaced by the San José development seed; closed so only one municipality is active.";
 
@@ -233,6 +245,61 @@ public class DevDataSeeder implements ApplicationRunner {
         UserId userId = ensureUser(account, tenant, countryCode, address, phoneNumber);
         ensureEmailVerified(userId);
         ensureMembership(account, tenant, userId);
+        repairMemberships(account, tenant, userId);
+    }
+
+    /**
+     * Leaves every seeded account with <b>exactly one</b> usable membership: an active one in the
+     * active municipality.
+     *
+     * <p><b>Why this exists.</b> Databases created before San José did have their development accounts
+     * in {@value #LEGACY_TENANT_SLUG}, and {@link #retireLegacyTenant()} closes that municipality on
+     * the next start. Adding the San José membership — which {@link #ensureMembership} does — is not
+     * enough on its own: the account is then left holding <em>two</em> ACTIVE memberships on the same
+     * portal, one of them pointing at a closed municipality. A session with two municipalities to
+     * choose from starts with none selected, so the token carries no {@code tid}, no roles and no
+     * permissions, and every tenant-owned endpoint answers "access denied" — for an account that in
+     * truth belongs to exactly one municipality. The account is not broken, it is <em>orphaned</em>,
+     * and nothing short of editing the database by hand would have unstuck it.</p>
+     *
+     * <p>So the membership that can no longer grant anything is revoked, with a reason that says why.
+     * Revoked and not deleted: a membership is history, and the fixture uses the same transition the
+     * back-office would.</p>
+     *
+     * <p>Idempotent, like everything else here: on a database that never had the legacy municipality
+     * there is nothing to revoke and this does nothing at all. It runs only under the {@code dev}
+     * profile, because it is a repair of <em>development fixtures</em> — a real deployment's
+     * memberships are somebody's decision and are never rewritten on start. The equivalent for a real
+     * environment is not a silent repair but an explicit answer, which is what
+     * {@code NO_ACTIVE_MEMBERSHIP} is for.</p>
+     */
+    private void repairMemberships(DemoAccount account, Tenant tenant, UserId userId) {
+        if (account.portal() == Portal.PLATFORM) {
+            // A platform membership is not bound to a municipality, so it cannot be orphaned by one.
+            return;
+        }
+        for (TenantMembership membership : membershipRepository.findByUserId(userId.value())) {
+            if (membership.getPortal() != account.portal()
+                    || membership.getStatus() != MembershipStatus.ACTIVE
+                    || membership.getTenantId() == null
+                    || membership.getTenantId().equals(tenant.getId())) {
+                continue;
+            }
+            boolean stillOpen = tenantRepository.findById(membership.getTenantId())
+                    .map(other -> other.getStatus().allowsAccess())
+                    .orElse(Boolean.FALSE)
+                    .booleanValue();
+            if (stillOpen) {
+                // Another municipality that is genuinely open: a legitimate second membership, and
+                // choosing between them is the person's business, not the fixture's.
+                continue;
+            }
+            membershipService.revoke(membership.getId(), TenantId.of(membership.getTenantId()),
+                    ORPHANED_MEMBERSHIP_REASON);
+            LOGGER.warn("Development seed: {} still held an active membership in a closed municipality;"
+                            + " revoked it so the account belongs only to '{}'.",
+                    account.email(), TENANT_SLUG);
+        }
     }
 
     private UserId ensureUser(DemoAccount account, Tenant tenant, String countryCode, AddressChain address,
