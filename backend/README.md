@@ -40,7 +40,9 @@ export IP_HASH_PEPPER="$(openssl rand -hex 16)"
 # 4. Build and run
 cd backend
 mvn clean verify                                # compila e instala todos los modulos
-mvn -pl app spring-boot:run -Dspring-boot.run.profiles=dev
+# -am rebuilds the modules `app` depends on inside the same reactor; without it Maven
+# resolves them from ~/.m2 and compiles against stale jars.
+mvn -pl app -am spring-boot:run -Dspring-boot.run.profiles=dev
 ```
 
 > `openssl genpkey` is required rather than `openssl genrsa`: the loader reads **PKCS#8** PEM
@@ -85,7 +87,9 @@ is logged and skipped; the seeder never prevents startup.
 To turn it off:
 
 ```bash
-mvn -pl app spring-boot:run -Dspring-boot.run.profiles=dev \
+# -am rebuilds the modules `app` depends on inside the same reactor; without it Maven
+# resolves them from ~/.m2 and compiles against stale jars.
+mvn -pl app -am spring-boot:run -Dspring-boot.run.profiles=dev \
     -Dspring-boot.run.arguments=--luparx.dev.seed-demo-data=false
 # or: export LUPARX_DEV_SEED_DEMO_DATA=false
 ```

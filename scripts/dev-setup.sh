@@ -75,8 +75,7 @@ cat <<'EOF'
   # 1) Backend (API en http://localhost:8090, Swagger en /swagger-ui.html)
   source infra/secrets/dev-env.sh
   cd backend
-  mvn -q -DskipTests install    # solo la primera vez, o tras cambiar un modulo
-  mvn -pl app spring-boot:run -Dspring-boot.run.profiles=dev
+  mvn -pl app -am spring-boot:run -Dspring-boot.run.profiles=dev
 
   # 2) Frontend (elegí la app)
   cd frontend

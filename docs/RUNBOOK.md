@@ -19,8 +19,9 @@ Después, en dos terminales:
 # API en http://localhost:8090  (Swagger UI en /swagger-ui.html)
 source infra/secrets/dev-env.sh
 cd backend
-mvn -q -DskipTests install                      # solo la primera vez, o tras cambiar un modulo
-mvn -pl app spring-boot:run -Dspring-boot.run.profiles=dev
+# -am reconstruye los modulos de los que depende `app` en el mismo reactor:
+# sin eso, `-pl app` los toma de ~/.m2 y compila contra jars viejos.
+mvn -pl app -am spring-boot:run -Dspring-boot.run.profiles=dev
 
 # Apps
 cd frontend
@@ -54,5 +55,6 @@ avanza, y es lo que usan las vistas previas publicadas.
 | `Port 5183 is already in use` | Las apps usan `strictPort`: liberá el puerto o cambialo en su `vite.config.ts`. Nunca lo cambies sólo en un lado: el backend valida el origen CORS. |
 | El backend no arranca por falta de `MFA_TOTP_ENCRYPTION_KEY` | Los secretos no tienen default por diseño. `source infra/secrets/dev-env.sh` antes de `mvn`. |
 | `InvalidKeySpecException` al firmar tokens | La llave privada quedó en PKCS#1. Convertila: `openssl pkcs8 -topk8 -nocrypt -in vieja.pem -out nueva.pem`. |
+| `cannot find symbol` de clases de otro modulo | Se compiló `-pl app` sin `-am`, contra los jars viejos de `~/.m2`. Usá siempre `-pl app -am`, o `mvn -DskipTests install` desde `backend/` antes. |
 | Flyway falla con "relation already exists" | Base sucia de un intento anterior: `cd infra && docker compose down -v && docker compose up -d`. |
 | El login federado responde `FEDERATION_NOT_CONFIGURED` | Falta el `client id` del proveedor en `infra/.env`. El callback a registrar es `http://localhost:8090/api/v1/auth/{portal}/oauth2/{provider}/callback`. |
