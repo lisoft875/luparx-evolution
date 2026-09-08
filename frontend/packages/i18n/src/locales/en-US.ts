@@ -7,6 +7,7 @@ import type { TranslationKey } from './es-CR';
  */
 export const enUS: Record<TranslationKey, string> = {
   'app.name': 'LupaRX',
+  'app.tagline': 'Smart parking',
 
   'common.loading': 'Loading…',
   'common.error.generic': 'Something went wrong. Please try again.',
@@ -27,20 +28,26 @@ export const enUS: Record<TranslationKey, string> = {
   'common.close': 'Close',
   'common.select.placeholder': 'Select an option',
   'common.optional': 'optional',
+  'common.languageSwitcher.label': 'Change language',
 
   'auth.portal.citizen.title': 'Citizen portal',
   'auth.portal.admin.title': 'Municipal administration',
   'auth.portal.inspector.title': 'Enforcement',
   'auth.portal.platform.title': 'Platform back-office',
   'auth.login.mfaMandatoryNotice': 'Access to this portal requires two-factor verification.',
+  'auth.hero.description':
+    'Manage your vehicle parking, fines and payments from a single account, at any affiliated municipality.',
 
-  'auth.login.title': 'Sign in',
+  'auth.login.title': 'Sign in to your account',
   'auth.login.emailLabel': 'Email address',
   'auth.login.passwordLabel': 'Password',
+  'auth.login.passwordToggle.show': 'Show password',
+  'auth.login.passwordToggle.hide': 'Hide password',
   'auth.login.submit': 'Sign in',
   'auth.login.forgotPassword': 'Forgot your password?',
   'auth.login.noAccount': "Don't have an account?",
-  'auth.login.registerLink': 'Sign up',
+  'auth.login.registerLink': 'Create account',
+  'auth.login.platformNoRegister': 'Accounts for this portal are created by a platform administrator.',
   'auth.login.oauth.divider': 'or continue with',
   'auth.login.oauth.google': 'Continue with Google',
   'auth.login.oauth.microsoft': 'Continue with Microsoft',

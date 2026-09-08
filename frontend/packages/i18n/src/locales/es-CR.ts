@@ -6,6 +6,7 @@
  */
 export const esCR = {
   'app.name': 'LupaRX',
+  'app.tagline': 'Estacionamiento inteligente',
 
   'common.loading': 'Cargando…',
   'common.error.generic': 'Ocurrió un error. Intenta de nuevo.',
@@ -26,21 +27,28 @@ export const esCR = {
   'common.close': 'Cerrar',
   'common.select.placeholder': 'Selecciona una opción',
   'common.optional': 'opcional',
+  'common.languageSwitcher.label': 'Cambiar idioma',
 
   'auth.portal.citizen.title': 'Portal ciudadano',
   'auth.portal.admin.title': 'Administración municipal',
   'auth.portal.inspector.title': 'Fiscalización',
   'auth.portal.platform.title': 'Back-office de plataforma',
   'auth.login.mfaMandatoryNotice': 'El acceso a este portal exige verificación en dos pasos.',
+  // Copy tomado del sitio del cliente (luparx.com/app/login) para que el portal web y la marca hablen igual.
+  'auth.hero.description':
+    'Encuentra tu zona, administra tu tiempo y mantén tus pagos en un solo lugar.',
 
-  'auth.login.title': 'Iniciar sesión',
+  'auth.login.title': 'Ingresá a tu cuenta',
   'auth.login.emailLabel': 'Correo electrónico',
   'auth.login.passwordLabel': 'Contraseña',
-  'auth.login.submit': 'Ingresar',
+  'auth.login.passwordToggle.show': 'Mostrar contraseña',
+  'auth.login.passwordToggle.hide': 'Ocultar contraseña',
+  'auth.login.submit': 'Iniciar sesión',
   'auth.login.forgotPassword': '¿Olvidaste tu contraseña?',
-  'auth.login.noAccount': '¿No tienes cuenta?',
-  'auth.login.registerLink': 'Regístrate',
-  'auth.login.oauth.divider': 'o continúa con',
+  'auth.login.noAccount': '¿No tienes una cuenta?',
+  'auth.login.registerLink': 'Crear cuenta',
+  'auth.login.platformNoRegister': 'Las cuentas de este portal las crea un administrador de plataforma.',
+  'auth.login.oauth.divider': 'o continuá con',
   'auth.login.oauth.google': 'Continuar con Google',
   'auth.login.oauth.microsoft': 'Continuar con Microsoft',
   'auth.login.oauth.facebook': 'Continuar con Facebook',

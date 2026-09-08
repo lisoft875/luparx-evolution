@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LoginForm } from '@luparx/features';
-import { Brand, CenteredLayout } from '@luparx/ui';
+import { AuthScreen } from '@luparx/ui';
 import { useTranslation } from '@luparx/i18n';
 import { API_BASE_URL, PORTAL } from '../env';
 
@@ -10,18 +10,16 @@ export function LoginPage(): React.JSX.Element {
   const { t } = useTranslation();
 
   return (
-    <CenteredLayout>
-      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 'var(--lx-space-4)' }}>
-        <Brand name={t('app.name')} tagline={t('auth.portal.platform.title')} size={36} />
-      </div>
-      <p className="lx-field__hint">{t('auth.login.mfaMandatoryNotice')}</p>
+    <AuthScreen heroTitle={t('app.tagline')} heroDescription={t('auth.hero.description')}>
       <LoginForm
         portal={PORTAL}
         apiBaseUrl={API_BASE_URL}
+        subtitle={t('auth.portal.platform.title')}
+        notice={t('auth.login.mfaMandatoryNotice')}
         onMfaRequired={() => navigate('/mfa')}
         onSuccess={() => navigate('/tenants')}
         forgotPasswordHref="/forgot-password"
       />
-    </CenteredLayout>
+    </AuthScreen>
   );
 }

@@ -26,6 +26,10 @@ export { Modal } from './components/Modal';
 export type { ModalProps } from './components/Modal';
 export { PageLayout, CenteredLayout } from './components/PageLayout';
 export type { PageLayoutProps, CenteredLayoutProps } from './components/PageLayout';
+export { AuthScreen } from './components/AuthScreen';
+export type { AuthScreenProps } from './components/AuthScreen';
+export { LanguagePill } from './components/LanguagePill';
+export type { LanguagePillProps } from './components/LanguagePill';
 export { formatNationalAsYouType, isValidPhoneInput, toE164 } from './phone';
 export { Card, CardStack } from './components/Card';
 export type { CardProps, CardTone, CardStackProps } from './components/Card';
@@ -89,4 +93,6 @@ export {
   IconPlus,
   IconCreditCard,
   IconList,
+  IconEye,
+  IconEyeOff,
 } from './icons';

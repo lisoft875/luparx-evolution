@@ -1031,6 +1031,13 @@ button.lx-list-row {
   font-weight: 800;
   letter-spacing: 0.01em;
 }
+.lx-auth-screen__hero .lx-brand__wordmark {
+  /* El sitio publico usa el wordmark en mayusculas espaciadas; el resto de la app lo usa normal. */
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
+  font-size: 1.25rem;
+  font-weight: 700;
+}
 .lx-brand__tagline {
   font-size: var(--lx-text-meta-size);
   color: var(--lx-text-muted);
@@ -1125,4 +1132,249 @@ button.lx-list-row {
   border-radius: 50%;
   background: var(--lx-success);
   flex-shrink: 0;
+}
+
+/* ---- Auth screen (login) -------------------------------------------------
+   Two columns ≥1024px (brand hero left, card right); single stacked column
+   below that. Fixed dark background regardless of theme, per the reference
+   marketing login (docs/DESIGN_SYSTEM.md — dark is the always-on identity). */
+
+.lx-auth-screen {
+  position: relative;
+  min-height: 100dvh;
+  width: 100%;
+  overflow-x: hidden;
+  background: linear-gradient(135deg, var(--lx-bg-elevated) 0%, var(--lx-bg) 65%);
+  display: flex;
+  flex-direction: column;
+  isolation: isolate;
+}
+
+.lx-auth-screen__watermark {
+  position: absolute;
+  left: 0;
+  bottom: -6%;
+  z-index: 0;
+  margin: 0;
+  font-size: clamp(96px, 22vw, 320px);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  color: var(--lx-text);
+  opacity: 0.04;
+  white-space: nowrap;
+  pointer-events: none;
+  user-select: none;
+}
+
+.lx-auth-screen__hero {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--lx-space-4);
+  padding: var(--lx-space-6) var(--lx-space-6) var(--lx-space-4);
+}
+
+.lx-auth-screen__hero-bar {
+  width: 72px;
+  height: 3px;
+  border-radius: var(--lx-radius-pill);
+  background: var(--lx-gradient-primary);
+}
+
+.lx-auth-screen__hero-title {
+  font-size: var(--lx-text-card-title-size);
+  font-weight: var(--lx-text-card-title-weight);
+  color: var(--lx-text);
+  margin: 0;
+}
+
+.lx-auth-screen__hero-description {
+  margin: 0;
+  max-width: 46ch;
+  color: var(--lx-text-muted);
+  font-size: var(--lx-text-body-size);
+}
+
+.lx-auth-screen__panel {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 0 var(--lx-space-5) var(--lx-space-6);
+}
+
+.lx-auth-screen__panel-inner {
+  width: 100%;
+  max-width: 420px;
+}
+
+@media (min-width: 1024px) {
+  .lx-auth-screen {
+    flex-direction: row;
+    align-items: stretch;
+  }
+  .lx-auth-screen__hero {
+    flex: 0 0 45%;
+    max-width: 640px;
+    justify-content: center;
+    padding: var(--lx-space-7) var(--lx-space-7);
+  }
+  .lx-auth-screen__panel {
+    flex: 1;
+    align-items: center;
+    justify-content: center;
+    padding: var(--lx-space-7) calc(var(--lx-space-7) * 2) var(--lx-space-7) var(--lx-space-5);
+  }
+}
+
+@media (max-width: 360px) {
+  .lx-auth-screen__hero-description {
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    font-size: var(--lx-text-meta-size);
+  }
+  .lx-auth-screen__hero-title {
+    font-size: var(--lx-text-body-size);
+  }
+}
+
+.lx-auth-card {
+  width: 100%;
+  padding: var(--lx-space-6);
+}
+
+@media (min-width: 1024px) {
+  .lx-auth-card {
+    padding: var(--lx-space-7);
+  }
+}
+
+.lx-auth-card__title {
+  margin: 0 0 4px 0;
+  font-size: 1.375rem;
+  font-weight: 700;
+  color: var(--lx-text);
+}
+
+.lx-auth-card__subtitle {
+  margin: 0 0 var(--lx-space-5) 0;
+  color: var(--lx-text-muted);
+  font-size: var(--lx-text-body-size);
+}
+
+.lx-auth-card__notice {
+  margin: 0 0 var(--lx-space-4) 0;
+  font-size: var(--lx-text-meta-size);
+  color: var(--lx-text-muted);
+}
+
+.lx-auth-card__divider {
+  height: 1px;
+  background: var(--lx-border);
+  margin: var(--lx-space-5) 0;
+  border: none;
+}
+
+.lx-auth-card__link-row {
+  margin: 0;
+  text-align: center;
+}
+
+.lx-auth-card__footer-line {
+  margin: 0;
+  text-align: center;
+  color: var(--lx-text-muted);
+  font-size: var(--lx-text-body-size);
+}
+
+.lx-auth-card__footer-line strong {
+  font-weight: 700;
+  color: var(--lx-text);
+}
+
+.lx-auth-card__oauth-label {
+  margin: 0 0 var(--lx-space-3) 0;
+  text-align: center;
+  color: var(--lx-text-muted);
+  font-size: var(--lx-text-meta-size);
+}
+
+.lx-auth-card__oauth-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lx-space-2);
+}
+
+.lx-password-field {
+  position: relative;
+}
+
+.lx-password-field .lx-input {
+  padding-right: calc(var(--lx-touch-target-min) + 4px);
+}
+
+.lx-password-field__toggle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: var(--lx-touch-target-min);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: var(--lx-text-muted);
+  cursor: pointer;
+}
+.lx-password-field__toggle:focus-visible {
+  outline: 2px solid var(--lx-focus-ring);
+  outline-offset: -2px;
+  border-radius: var(--lx-radius-sm);
+}
+
+/* Normal document flow on mobile (centered, below the card) — a *fixed*
+   pill would float over whatever content happens to sit at the bottom of
+   the viewport (the card can be taller than short phone screens), covering
+   the OAuth buttons. Only promoted to a true floating position once the
+   two-column desktop layout gives it guaranteed clear space bottom-left. */
+.lx-language-pill {
+  position: relative;
+  z-index: 2;
+  align-self: center;
+  margin: var(--lx-space-6) 0 0;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--lx-space-2);
+  min-height: var(--lx-touch-target-min);
+  padding: 0 var(--lx-space-4);
+  border-radius: var(--lx-radius-pill);
+  border: 1px solid var(--lx-border);
+  background: var(--lx-surface);
+  color: var(--lx-text);
+  box-shadow: var(--lx-shadow-md);
+  font-size: var(--lx-text-meta-size);
+  font-weight: 600;
+  cursor: pointer;
+}
+.lx-language-pill:focus-visible {
+  outline: 2px solid var(--lx-focus-ring);
+  outline-offset: 2px;
+}
+
+@media (min-width: 1024px) {
+  .lx-language-pill {
+    position: absolute;
+    align-self: auto;
+    bottom: var(--lx-space-6);
+    left: var(--lx-space-7);
+    margin: 0;
+  }
 }
