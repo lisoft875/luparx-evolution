@@ -47,9 +47,10 @@ fi
 if [ ! -f infra/secrets/dev-env.sh ]; then
   cat > infra/secrets/dev-env.sh <<EOF
 # Generado por scripts/dev-setup.sh — sólo para desarrollo local. No versionar.
-export SPRING_DATASOURCE_URL="jdbc:postgresql://localhost:5442/luparx"
-export SPRING_DATASOURCE_USERNAME="luparx"
-export SPRING_DATASOURCE_PASSWORD="luparx"
+# Credenciales de la base: unica fuente de verdad infra/.env (el mismo archivo que lee docker compose).
+set -a
+. "$ROOT/infra/.env"
+set +a
 export JWT_PRIVATE_KEY_PATH="$ROOT/infra/secrets/jwt-private-dev.pem"
 export JWT_PUBLIC_KEY_PATH="$ROOT/infra/secrets/jwt-public-dev.pem"
 export JWT_KEY_ID="dev-$(date +%Y%m%d)"
@@ -62,7 +63,6 @@ EOF
 else
   ok "infra/secrets/dev-env.sh ya existente"
 fi
-grep -q "luparx" infra/.env || warn "Revisá usuario/contraseña de la base en infra/.env y en infra/secrets/dev-env.sh"
 
 echo "==> Frontend"
 ( cd frontend && npm install --no-audit --no-fund )
