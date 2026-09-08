@@ -192,10 +192,30 @@ public class DevDataSeeder implements ApplicationRunner {
      */
     private void seedParking(Tenant tenant) {
         try {
-            parkingSeeder.seed(tenant);
+            parkingSeeder.seed(tenant, citizenUserId());
         } catch (RuntimeException exception) {
             LOGGER.warn("Development seed: parking fixture skipped ({}).", exception.toString());
         }
+    }
+
+    /**
+     * The development citizen, resolved by email rather than remembered from the loop above: the
+     * account may already have existed from an earlier start, in which case nothing was created for
+     * it this time and there is no id to carry.
+     *
+     * @return null when the account could not be created at all, which the parking seeder handles
+     */
+    private UUID citizenUserId() {
+        for (DemoAccount account : ACCOUNTS) {
+            if (account.portal() != Portal.CITIZEN) {
+                continue;
+            }
+            User user = userRepository.findByEmail(EmailAddress.normalize(account.email())).orElse(null);
+            if (user != null) {
+                return user.getId();
+            }
+        }
+        return null;
     }
 
     private Tenant ensureTenant(String countryCode) {

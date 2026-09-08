@@ -16,20 +16,14 @@ import {
   StatCard,
   Timer,
 } from '@luparx/ui';
+import type { ParkingPolicy, ParkingSession, Vehicle } from '@luparx/api-client';
 import { BalanceRow } from '../components/BalanceRow';
 import { CitizenShell } from '../components/CitizenShell';
+import { ExtendSessionSheet } from '../components/ExtendSessionSheet';
+import { FinishSessionConfirm } from '../components/FinishSessionConfirm';
 import { MOVEMENT_ICON } from '../lib/movementPresentation';
-import {
-  MOCK_CURRENCY_CODE,
-  MOCK_MOVEMENTS,
-  MOCK_PROFILE,
-  MOCK_TENANT_TIME_ZONE,
-  extendMockSession,
-  primaryVehicle,
-  useActiveSession,
-  useWalletBalanceMinor,
-  type MockActiveSession,
-} from '../mocks/parkingDomain';
+import { useActiveParkingSessions, useParkingPolicy, useVehicles, useWallet } from '../lib/queries';
+import { MOCK_MOVEMENTS, MOCK_PROFILE, MOCK_TENANT_TIME_ZONE } from '../mocks/parkingDomain';
 
 function useRemainingSeconds(expiresAt: string): number {
   const compute = (): number => Math.max(0, Math.round((new Date(expiresAt).getTime() - Date.now()) / 1000));
@@ -43,9 +37,19 @@ function useRemainingSeconds(expiresAt: string): number {
   return remaining;
 }
 
-function ActiveSessionCard({ session }: { session: MockActiveSession }): React.JSX.Element {
+/**
+ * Featured active-session card. When the citizen has more than one active session (CONTRACT.md
+ * v0.2 rule 1), this shows whichever expires first — same one the sticky bar leads with; the
+ * sticky bar's own "+N" list is how the rest are reached. Extend/Finish visibility is driven by
+ * the *active* tenant's policy: a session belonging to a different municipality than the one
+ * currently selected is a rare edge case this demo doesn't special-case (the server itself always
+ * validates against the session's own tenant regardless of what the UI shows).
+ */
+function ActiveSessionCard({ session, policy }: { session: ParkingSession; policy: ParkingPolicy | undefined }): React.JSX.Element {
   const { t, locale } = useTranslation();
   const remainingSeconds = useRemainingSeconds(session.expiresAt);
+  const [extendOpen, setExtendOpen] = useState(false);
+  const [finishOpen, setFinishOpen] = useState(false);
 
   return (
     <Card tone={remainingSeconds <= 600 ? 'warning' : 'success'}>
@@ -66,7 +70,7 @@ function ActiveSessionCard({ session }: { session: MockActiveSession }): React.J
           />
         </div>
         <p className="lx-text-amount-lg" style={{ margin: 0 }}>
-          {session.vehiclePlate}
+          {session.plateSnapshot}
         </p>
         <p className="lx-text-meta" style={{ margin: 0 }}>
           {t('citizen.home.activeSession.zoneAndSpace', { zone: session.zoneName, space: session.spaceCode })}
@@ -80,22 +84,41 @@ function ActiveSessionCard({ session }: { session: MockActiveSession }): React.J
             time: formatTime(session.expiresAt, locale, { timeZone: MOCK_TENANT_TIME_ZONE }),
           })}
         </p>
-        <Button type="button" variant="outline" fullWidth onClick={() => extendMockSession(30)}>
-          <IconPlus size={16} /> {t('citizen.home.activeSession.extendCta')}
-        </Button>
+        <div style={{ display: 'flex', gap: 'var(--lx-space-2)' }}>
+          {policy?.extensionEnabled ? (
+            <Button type="button" variant="outline" style={{ flex: 1 }} onClick={() => setExtendOpen(true)}>
+              <IconPlus size={16} /> {t('citizen.home.activeSession.extendCta')}
+            </Button>
+          ) : null}
+          {policy?.earlyFinishEnabled ? (
+            <Button type="button" variant="secondary" style={{ flex: 1 }} onClick={() => setFinishOpen(true)}>
+              {t('citizen.home.activeSession.finishCta')}
+            </Button>
+          ) : null}
+        </div>
       </div>
+      {policy ? <ExtendSessionSheet open={extendOpen} onClose={() => setExtendOpen(false)} session={session} policy={policy} /> : null}
+      {policy ? <FinishSessionConfirm open={finishOpen} onClose={() => setFinishOpen(false)} session={session} policy={policy} /> : null}
     </Card>
   );
+}
+
+function primaryVehicleOf(vehicles: Vehicle[] | undefined): Vehicle | undefined {
+  return vehicles?.find((v) => v.isPrimary) ?? vehicles?.[0];
 }
 
 export function HomePage(): React.JSX.Element {
   const { t, locale } = useTranslation();
   const navigate = useNavigate();
-  // TODO(domain): backed by the in-memory mock store (apps/citizen/src/mocks/parkingDomain.ts) until
-  // module-parking/module-wallet ship their citizen-facing endpoints (CONTRACT.md §4).
-  const session = useActiveSession();
-  const balanceMinor = useWalletBalanceMinor();
-  const vehicle = primaryVehicle();
+  const { data: sessions } = useActiveParkingSessions();
+  const { data: policy } = useParkingPolicy();
+  const { data: wallet } = useWallet();
+  const { data: vehicles } = useVehicles();
+
+  const session = [...(sessions ?? [])].sort(
+    (a, b) => new Date(a.expiresAt).getTime() - new Date(b.expiresAt).getTime(),
+  )[0];
+  const vehicle = primaryVehicleOf(vehicles);
   // Non-null: MOCK_MOVEMENTS is a non-empty compile-time constant.
   const recentMovement = MOCK_MOVEMENTS[0]!;
 
@@ -111,7 +134,7 @@ export function HomePage(): React.JSX.Element {
       </div>
 
       {session ? (
-        <ActiveSessionCard session={session} />
+        <ActiveSessionCard session={session} policy={policy} />
       ) : (
         <HeroCard
           icon={<IconPark size={28} />}
@@ -123,20 +146,22 @@ export function HomePage(): React.JSX.Element {
 
       {session ? (
         // Mockup screen 2: only the balance row repeats here (no vehicle card) once a session is active.
-        <BalanceRow
-          label={t('citizen.wallet.balanceLabel')}
-          balanceMinor={balanceMinor}
-          currencyCode={MOCK_CURRENCY_CODE}
-          locale={locale}
-          actionLabel={t('citizen.home.balanceCard.action')}
-          onAction={() => navigate('/wallet')}
-        />
+        wallet ? (
+          <BalanceRow
+            label={t('citizen.wallet.balanceLabel')}
+            balanceMinor={wallet.balanceMinor}
+            currencyCode={wallet.currencyCode}
+            locale={locale}
+            actionLabel={t('citizen.home.balanceCard.action')}
+            onAction={() => navigate('/wallet')}
+          />
+        ) : null
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--lx-card-gap)' }}>
           <StatCard
             className="lx-stat-card--compact"
             label={t('citizen.wallet.balanceLabel')}
-            value={formatCurrencyMinor(balanceMinor, MOCK_CURRENCY_CODE, locale)}
+            value={wallet ? formatCurrencyMinor(wallet.balanceMinor, wallet.currencyCode, locale) : t('common.loading')}
             action={
               <Button type="button" variant="solid" onClick={() => navigate('/wallet')}>
                 {t('citizen.home.balanceCard.action')}
@@ -146,8 +171,8 @@ export function HomePage(): React.JSX.Element {
           <StatCard
             className="lx-stat-card--compact"
             label={t('citizen.home.vehicleCard.label')}
-            value={vehicle.plate}
-            hint={`${vehicle.brand} ${vehicle.model} · ${vehicle.year}`}
+            value={vehicle ? vehicle.plate : t('common.loading')}
+            hint={vehicle ? [vehicle.brand, vehicle.model].filter(Boolean).join(' ') || undefined : undefined}
             action={
               <Button type="button" variant="outline" onClick={() => navigate('/vehicles')}>
                 {t('citizen.home.vehicleCard.changeCta')}

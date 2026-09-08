@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 
 export interface ModalProps {
   open: boolean;
@@ -21,7 +22,14 @@ export function Modal({ open, onClose, title, closeLabel, children }: ModalProps
 
   if (!open) return null;
 
-  return (
+  // Rendered via a portal straight onto `document.body`: a caller can (and does — the parking
+  // Extend/Finish dialogs live inside the active-session `Card`) mount this from anywhere in the
+  // tree. Without the portal, any ancestor with `backdrop-filter`/`transform`/`filter` (every
+  // "Level 1 glass" surface in this design system has one) becomes the containing block for this
+  // backdrop's `position: fixed`, trapping it inside that ancestor instead of covering the
+  // viewport — it stops centering correctly and other fixed chrome (e.g. the sticky timer bar)
+  // paints over it instead of being dimmed underneath.
+  return createPortal(
     <div className="lx-modal-backdrop" onClick={onClose}>
       <div
         className="lx-modal"
@@ -40,6 +48,7 @@ export function Modal({ open, onClose, title, closeLabel, children }: ModalProps
         </div>
         <div className="lx-modal__body">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

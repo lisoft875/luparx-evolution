@@ -1,14 +1,23 @@
 import type { PagedResponse } from '../types/http';
 import type {
+  AccessTokenClaims,
   AdminUserDetail,
   AdminUserListItem,
+  CreateVehicleRequest,
+  ExtendParkingSessionRequest,
   LoginRequest,
   MembershipSummary,
+  ParkingQuoteRequest,
+  ParkingQuoteResponse,
+  ParkingSessionStatus,
   Portal,
   RegisterRequest,
   Role,
+  StartParkingSessionRequest,
+  UpdateVehicleRequest,
 } from '../types/domain';
 import {
+  availableMockCreditMinutes,
   MOCK_ADMIN_LEVELS,
   MOCK_COUNTRIES,
   MOCK_DIVISIONS,
@@ -19,10 +28,22 @@ import {
   MOCK_SYSTEM_JOBS,
   MOCK_TENANTS,
   mockAuditEvents,
+  mockIdempotencyResponses,
+  mockParkingPolicyForTenant,
+  mockParkingSessions,
   mockTenantSettings,
+  mockTimeCredits,
   mockUsersById,
+  mockVehicles,
+  mockWallets,
+  mockZoneRate,
+  nextMockParkingSessionId,
   nextMockUserId,
+  nextMockVehicleId,
+  normalizeMockPlate,
   recordAuditEvent,
+  walletKey,
+  type MockParkingSessionRecord,
   type MockUserRecord,
 } from './data';
 import { mintMockTokenPair } from './token';
@@ -38,11 +59,29 @@ function noContent(): Response {
   return new Response(null, { status: 204 });
 }
 
-function problem(status: number, code: string, title: string, detail?: string): Response {
-  return new Response(JSON.stringify({ type: 'about:blank', title, status, code, detail }), {
+function problem(
+  status: number,
+  code: string,
+  title: string,
+  detail?: string,
+  errors?: { field: string; code: string; message: string }[],
+): Response {
+  return new Response(JSON.stringify({ type: 'about:blank', title, status, code, detail, errors }), {
     status,
     headers: { 'Content-Type': 'application/problem+json' },
   });
+}
+
+/** A completed side-effecting mock response, cached by `Idempotency-Key` so a retried request (a double tap included) replays it instead of running the operation twice. */
+function idempotentResult(idempotencyKey: string | null, opKey: string, compute: () => { data: unknown; status: number }): Response {
+  const cacheKey = idempotencyKey ? `${opKey}:${idempotencyKey}` : null;
+  if (cacheKey) {
+    const cached = mockIdempotencyResponses.get(cacheKey) as { data: unknown; status: number } | undefined;
+    if (cached) return json(cached.data, cached.status);
+  }
+  const result = compute();
+  if (cacheKey) mockIdempotencyResponses.set(cacheKey, result);
+  return json(result.data, result.status);
 }
 
 interface PendingMfa {
@@ -768,11 +807,310 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
     }
   }
 
+  // ---- Citizen: vehicles, parking domain, wallet & time credits (CONTRACT.md v0.2) -------------
+  if (segments[2] === 'citizen') {
+    const authHeader = new Headers(init?.headers).get('Authorization');
+    const claims = authHeader ? decodeMockClaims(authHeader) : null;
+    if (!claims) return problem(401, 'UNAUTHORIZED', 'Missing or invalid session');
+    const userId = claims.sub;
+    const tenantId = claims.tid;
+    const resource = segments[3];
+    const idempotencyKey = new Headers(init?.headers).get('Idempotency-Key');
+
+    // ---- Vehicles (CONTRACT.md v0.2 §"Vehículos") ----------------------------------------------
+    if (resource === 'vehicles') {
+      if (method === 'GET' && segments.length === 4) {
+        const items = mockVehicles.filter((v) => v.userId === userId);
+        return json(items.map(({ userId: _userId, ...vehicle }) => vehicle));
+      }
+      if (method === 'POST' && segments.length === 4) {
+        const payload = await readBody<CreateVehicleRequest>(init);
+        const plate = normalizeMockPlate(payload.plate ?? '');
+        if (!plate) {
+          return problem(400, 'VALIDATION_ERROR', 'Validation failed', undefined, [
+            { field: 'plate', code: 'REQUIRED', message: 'Plate is required' },
+          ]);
+        }
+        if (mockVehicles.some((v) => v.userId === userId && v.plate === plate)) {
+          return problem(409, 'PLATE_ALREADY_REGISTERED', 'Plate already registered', undefined, [
+            { field: 'plate', code: 'PLATE_ALREADY_REGISTERED', message: 'You already have a vehicle with this plate.' },
+          ]);
+        }
+        return idempotentResult(idempotencyKey, `vehicle-create:${userId}`, () => {
+          const isFirstVehicle = !mockVehicles.some((v) => v.userId === userId);
+          const record = {
+            id: nextMockVehicleId(),
+            userId,
+            plate,
+            name: payload.name,
+            brand: payload.brand,
+            model: payload.model,
+            year: payload.year,
+            isOwner: payload.isOwner,
+            isPrimary: isFirstVehicle,
+          };
+          mockVehicles.push(record);
+          const { userId: _userId, ...vehicle } = record;
+          return { data: vehicle, status: 201 };
+        });
+      }
+      if (method === 'PUT' && segments.length === 5) {
+        const record = mockVehicles.find((v) => v.id === segments[4] && v.userId === userId);
+        if (!record) return problem(404, 'VEHICLE_NOT_FOUND', 'Vehicle not found');
+        const payload = await readBody<UpdateVehicleRequest>(init);
+        const plate = normalizeMockPlate(payload.plate ?? '');
+        if (!plate) {
+          return problem(400, 'VALIDATION_ERROR', 'Validation failed', undefined, [
+            { field: 'plate', code: 'REQUIRED', message: 'Plate is required' },
+          ]);
+        }
+        if (mockVehicles.some((v) => v.userId === userId && v.plate === plate && v.id !== record.id)) {
+          return problem(409, 'PLATE_ALREADY_REGISTERED', 'Plate already registered', undefined, [
+            { field: 'plate', code: 'PLATE_ALREADY_REGISTERED', message: 'You already have a vehicle with this plate.' },
+          ]);
+        }
+        record.plate = plate;
+        record.name = payload.name;
+        record.brand = payload.brand;
+        record.model = payload.model;
+        record.year = payload.year;
+        record.isOwner = payload.isOwner;
+        const { userId: _userId, ...vehicle } = record;
+        return json(vehicle);
+      }
+      if (method === 'DELETE' && segments.length === 5) {
+        const record = mockVehicles.find((v) => v.id === segments[4] && v.userId === userId);
+        if (!record) return problem(404, 'VEHICLE_NOT_FOUND', 'Vehicle not found');
+        const hasActiveSession = mockParkingSessions.some((s) => s.vehicleId === record.id && s.status === 'ACTIVE');
+        if (hasActiveSession) {
+          return problem(409, 'VEHICLE_HAS_ACTIVE_SESSION', 'Vehicle has an active parking session');
+        }
+        const index = mockVehicles.indexOf(record);
+        mockVehicles.splice(index, 1);
+        if (record.isPrimary) {
+          const next = mockVehicles.find((v) => v.userId === userId);
+          if (next) next.isPrimary = true;
+        }
+        return noContent();
+      }
+      if (method === 'POST' && segments[5] === 'primary') {
+        const record = mockVehicles.find((v) => v.id === segments[4] && v.userId === userId);
+        if (!record) return problem(404, 'VEHICLE_NOT_FOUND', 'Vehicle not found');
+        for (const v of mockVehicles) {
+          if (v.userId === userId) v.isPrimary = v.id === record.id;
+        }
+        return noContent();
+      }
+    }
+
+    // ---- Parking domain (CONTRACT.md v0.2 §API) ------------------------------------------------
+    if (resource === 'parking') {
+      const sub = segments[4];
+
+      if (sub === 'policy' && method === 'GET') {
+        return json(mockParkingPolicyForTenant(tenantId));
+      }
+
+      if (sub === 'quote' && method === 'POST') {
+        const payload = await readBody<ParkingQuoteRequest>(init);
+        return json(computeMockQuote(payload.zoneId, payload.minutes, userId, tenantId));
+      }
+
+      if (sub === 'sessions' && segments.length === 5 && method === 'GET') {
+        // Scoped to the citizen's identity, not the active tenant: the sticky "always visible"
+        // timer (CONTRACT.md v0.2 rule 3) must surface an active session no matter which
+        // municipality the citizen is currently switched into.
+        const statusFilter = (url.searchParams.get('status') ?? 'ACTIVE') as ParkingSessionStatus | 'ALL';
+        const items = mockParkingSessions.filter(
+          (s) => s.userId === userId && (statusFilter === 'ALL' || s.status === statusFilter),
+        );
+        return json(items.map(toPublicSession));
+      }
+
+      if (sub === 'sessions' && segments.length === 5 && method === 'POST') {
+        const payload = await readBody<StartParkingSessionRequest>(init);
+        const policy = mockParkingPolicyForTenant(tenantId);
+        if (!policy.sessionIncrementsMinutes.includes(payload.minutes)) {
+          return problem(422, 'INVALID_INCREMENT', 'Invalid session duration');
+        }
+        const vehicle = mockVehicles.find((v) => v.id === payload.vehicleId && v.userId === userId);
+        if (!vehicle) return problem(404, 'VEHICLE_NOT_FOUND', 'Vehicle not found');
+        if (mockParkingSessions.some((s) => s.vehicleId === payload.vehicleId && s.status === 'ACTIVE')) {
+          return problem(409, 'SESSION_ALREADY_ACTIVE_FOR_VEHICLE', 'This vehicle already has an active session');
+        }
+        if (
+          mockParkingSessions.some(
+            (s) => s.tenantId === tenantId && s.zoneId === payload.zoneId && s.spaceCode === payload.spaceCode && s.status === 'ACTIVE',
+          )
+        ) {
+          return problem(409, 'SPACE_OCCUPIED', 'This space is already occupied');
+        }
+        const quote = computeMockQuote(payload.zoneId, payload.minutes, userId, tenantId);
+        const key = walletKey(userId, tenantId ?? '');
+        const wallet = mockWallets.get(key) ?? { balanceMinor: 0, currencyCode: quote.currencyCode };
+        if (wallet.balanceMinor < quote.payableMinor) {
+          return problem(409, 'INSUFFICIENT_BALANCE', 'Insufficient wallet balance');
+        }
+        return idempotentResult(idempotencyKey, `session-start:${userId}`, () => {
+          wallet.balanceMinor -= quote.payableMinor;
+          mockWallets.set(key, wallet);
+          if (quote.creditMinutesApplied > 0) {
+            const credit = mockTimeCredits.get(key);
+            if (credit) mockTimeCredits.set(key, { ...credit, minutes: Math.max(0, credit.minutes - quote.creditMinutesApplied) });
+          }
+          const startedAt = new Date();
+          const record: MockParkingSessionRecord = {
+            id: nextMockParkingSessionId(),
+            userId,
+            tenantId: tenantId ?? '',
+            zoneId: payload.zoneId,
+            zoneName: zoneNameForId(payload.zoneId),
+            spaceCode: payload.spaceCode,
+            vehicleId: payload.vehicleId,
+            plateSnapshot: vehicle.plate,
+            minutes: payload.minutes,
+            amountMinor: quote.amountMinor,
+            currencyCode: quote.currencyCode,
+            status: 'ACTIVE',
+            startedAt: startedAt.toISOString(),
+            expiresAt: new Date(startedAt.getTime() + payload.minutes * 60_000).toISOString(),
+          };
+          mockParkingSessions.push(record);
+          recordAuditEvent({
+            tenantId: record.tenantId,
+            actorUserId: userId,
+            actorPortal: 'citizen',
+            action: 'PARKING_SESSION_STARTED',
+            resourceType: 'parking_session',
+            resourceId: record.id,
+            metadata: { vehicleId: payload.vehicleId, zoneId: payload.zoneId, minutes: payload.minutes },
+          });
+          return { data: toPublicSession(record), status: 201 };
+        });
+      }
+
+      if (sub === 'sessions' && segments.length === 6) {
+        const record = mockParkingSessions.find((s) => s.id === segments[5] && s.userId === userId);
+        if (!record) return problem(404, 'SESSION_NOT_FOUND', 'Session not found');
+        if (method === 'GET') return json(toPublicSession(record));
+      }
+
+      if (sub === 'sessions' && segments.length === 7 && segments[6] === 'extend' && method === 'POST') {
+        const record = mockParkingSessions.find((s) => s.id === segments[5] && s.userId === userId);
+        if (!record) return problem(404, 'SESSION_NOT_FOUND', 'Session not found');
+        const payload = await readBody<ExtendParkingSessionRequest>(init);
+        const policy = mockParkingPolicyForTenant(record.tenantId);
+        if (!policy.extensionEnabled) return problem(409, 'EXTENSION_DISABLED', 'Extensions are disabled for this municipality');
+        if (!policy.extensionIncrementsMinutes.includes(payload.minutes)) {
+          return problem(422, 'INVALID_INCREMENT', 'Invalid extension duration');
+        }
+        if (record.minutes + payload.minutes > policy.extensionMaxTotalMinutes) {
+          return problem(409, 'EXTENSION_EXCEEDS_MAX', 'Extension exceeds the maximum allowed for this session');
+        }
+        // Time credit is only ever applied at session start (CONTRACT.md v0.2 rule 5 — "se
+        // consume primero en su próxima sesión"), never mid-session: an extension is charged the
+        // zone's flat rate in full, so `mockZoneRate` is used directly instead of `computeMockQuote`.
+        const rate = mockZoneRate(record.zoneId, record.tenantId);
+        const amountMinor = Math.round(rate.rateMinorPerMinute * payload.minutes);
+        const key = walletKey(userId, record.tenantId);
+        const wallet = mockWallets.get(key) ?? { balanceMinor: 0, currencyCode: rate.currencyCode };
+        if (wallet.balanceMinor < amountMinor) {
+          return problem(409, 'INSUFFICIENT_BALANCE', 'Insufficient wallet balance');
+        }
+        return idempotentResult(idempotencyKey, `session-extend:${record.id}`, () => {
+          wallet.balanceMinor -= amountMinor;
+          mockWallets.set(key, wallet);
+          record.minutes += payload.minutes;
+          record.amountMinor += amountMinor;
+          record.expiresAt = new Date(new Date(record.expiresAt).getTime() + payload.minutes * 60_000).toISOString();
+          recordAuditEvent({
+            tenantId: record.tenantId,
+            actorUserId: userId,
+            actorPortal: 'citizen',
+            action: 'PARKING_SESSION_EXTENDED',
+            resourceType: 'parking_session',
+            resourceId: record.id,
+            metadata: { minutes: payload.minutes },
+          });
+          return { data: { session: toPublicSession(record), amountMinor, currencyCode: rate.currencyCode }, status: 200 };
+        });
+      }
+
+      if (sub === 'sessions' && segments.length === 7 && segments[6] === 'finish' && method === 'POST') {
+        const record = mockParkingSessions.find((s) => s.id === segments[5] && s.userId === userId);
+        if (!record) return problem(404, 'SESSION_NOT_FOUND', 'Session not found');
+        const policy = mockParkingPolicyForTenant(record.tenantId);
+        if (!policy.earlyFinishEnabled) return problem(409, 'EARLY_FINISH_DISABLED', 'Early finish is disabled for this municipality');
+        return idempotentResult(idempotencyKey, `session-finish:${record.id}`, () => {
+          const remainingMinutes = Math.max(0, Math.round((new Date(record.expiresAt).getTime() - Date.now()) / 60_000));
+          const shouldCredit = policy.creditOnEarlyFinishEnabled && remainingMinutes >= policy.creditMinRemainingMinutes;
+          record.status = 'FINISHED';
+          record.expiresAt = new Date().toISOString();
+          let creditExpiresAt: string | null = null;
+          if (shouldCredit) {
+            const key = walletKey(userId, record.tenantId);
+            const existing = mockTimeCredits.get(key) ?? { minutes: 0, expiresAt: null };
+            creditExpiresAt =
+              policy.creditExpiryDays > 0 ? new Date(Date.now() + policy.creditExpiryDays * 24 * 60 * 60 * 1000).toISOString() : null;
+            mockTimeCredits.set(key, { minutes: existing.minutes + remainingMinutes, expiresAt: creditExpiresAt });
+          }
+          recordAuditEvent({
+            tenantId: record.tenantId,
+            actorUserId: userId,
+            actorPortal: 'citizen',
+            action: 'PARKING_SESSION_FINISHED',
+            resourceType: 'parking_session',
+            resourceId: record.id,
+            metadata: { creditedMinutes: shouldCredit ? remainingMinutes : 0 },
+          });
+          return {
+            data: { session: toPublicSession(record), creditedMinutes: shouldCredit ? remainingMinutes : 0, creditExpiresAt },
+            status: 200,
+          };
+        });
+      }
+    }
+
+    // ---- Wallet & time credits (CONTRACT.md v0.2 rules 5/6 — always scoped to the active tenant) --
+    if (resource === 'wallet' && method === 'GET' && segments.length === 4) {
+      const key = walletKey(userId, tenantId ?? '');
+      const wallet = mockWallets.get(key) ?? { balanceMinor: 0, currencyCode: 'CRC' };
+      return json(wallet);
+    }
+
+    if (resource === 'time-credits' && method === 'GET' && segments.length === 4) {
+      const key = walletKey(userId, tenantId ?? '');
+      const stored = mockTimeCredits.get(key) ?? { minutes: 0, expiresAt: null };
+      return json({ minutes: availableMockCreditMinutes(key), expiresAt: stored.expiresAt });
+    }
+  }
+
   return problem(404, 'MOCK_ROUTE_NOT_FOUND', `No mock handler for ${method} ${path}`);
 }
 
-/** Decodes the mock access token's `sub` claim without any signature check — mocks only, never used for real auth. */
-function decodeMockSubject(authorizationHeader: string): string | null {
+function zoneNameForId(zoneId: string): string {
+  const names: Record<string, string> = { 'zone-centro': 'Centro', 'zone-escazu-centro': 'Centro' };
+  return names[zoneId] ?? zoneId;
+}
+
+/** Server-side quote math (CONTRACT.md v0.2 §Invariantes — always computed here, never trusted from the client). */
+function computeMockQuote(zoneId: string, minutes: number, userId: string, tenantId: string | null): ParkingQuoteResponse {
+  const rate = mockZoneRate(zoneId, tenantId);
+  const amountMinor = Math.round(rate.rateMinorPerMinute * minutes);
+  const availableCreditMinutes = availableMockCreditMinutes(walletKey(userId, tenantId ?? ''));
+  const creditMinutesApplied = Math.min(availableCreditMinutes, minutes);
+  const creditValueMinor = Math.round(rate.rateMinorPerMinute * creditMinutesApplied);
+  const payableMinor = Math.max(0, amountMinor - creditValueMinor);
+  return { amountMinor, currencyCode: rate.currencyCode, creditMinutesApplied, payableMinor };
+}
+
+function toPublicSession(record: MockParkingSessionRecord): unknown {
+  const { userId: _userId, tenantId: _tenantId, ...session } = record;
+  return session;
+}
+
+/** Decodes the mock access token's claims without any signature check — mocks only, never used for real auth. */
+function decodeMockClaims(authorizationHeader: string): AccessTokenClaims | null {
   const token = authorizationHeader.replace(/^Bearer\s+/i, '');
   const payloadSegment = token.split('.')[1];
   if (!payloadSegment) return null;
@@ -785,9 +1123,14 @@ function decodeMockSubject(authorizationHeader: string): string | null {
         .map((c) => '%' + c.charCodeAt(0).toString(16).padStart(2, '0'))
         .join(''),
     );
-    return (JSON.parse(decoded) as { sub: string }).sub;
+    return JSON.parse(decoded) as AccessTokenClaims;
   } catch {
     return null;
   }
+}
+
+/** Decodes just the mock access token's `sub` claim without any signature check — mocks only, never used for real auth. */
+function decodeMockSubject(authorizationHeader: string): string | null {
+  return decodeMockClaims(authorizationHeader)?.sub ?? null;
 }
 

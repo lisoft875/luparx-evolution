@@ -82,4 +82,27 @@ public final class ErrorCode {
     public static final String MEMBERSHIP_INVALID_TRANSITION = "MEMBERSHIP_INVALID_TRANSITION";
     public static final String ROLE_NOT_ALLOWED_FOR_PORTAL = "ROLE_NOT_ALLOWED_FOR_PORTAL";
     public static final String TENANT_SETTING_INVALID = "TENANT_SETTING_INVALID";
+
+    // --- parking (CONTRACT.md "v0.2 — Dominio de parqueo") --------------------------------------
+    public static final String VEHICLE_NOT_FOUND = "VEHICLE_NOT_FOUND";
+    public static final String VEHICLE_PLATE_ALREADY_REGISTERED = "VEHICLE_PLATE_ALREADY_REGISTERED";
+    public static final String VEHICLE_HAS_ACTIVE_SESSION = "VEHICLE_HAS_ACTIVE_SESSION";
+    public static final String PARKING_POLICY_NOT_CONFIGURED = "PARKING_POLICY_NOT_CONFIGURED";
+    public static final String PARKING_ZONE_NOT_FOUND = "PARKING_ZONE_NOT_FOUND";
+    public static final String PARKING_SPACE_NOT_FOUND = "PARKING_SPACE_NOT_FOUND";
+    public static final String PARKING_SPACE_OUT_OF_SERVICE = "PARKING_SPACE_OUT_OF_SERVICE";
+    public static final String PARKING_RATE_NOT_FOUND = "PARKING_RATE_NOT_FOUND";
+    public static final String PARKING_SESSION_NOT_FOUND = "PARKING_SESSION_NOT_FOUND";
+    public static final String PARKING_SESSION_NOT_ACTIVE = "PARKING_SESSION_NOT_ACTIVE";
+    public static final String WALLET_CURRENCY_MISMATCH = "WALLET_CURRENCY_MISMATCH";
+
+    // The seven codes CONTRACT.md v0.2 pins by name. They are part of the wire contract: a client
+    // branches on them, so none of them is ever renamed without a contract change.
+    public static final String SESSION_ALREADY_ACTIVE_FOR_VEHICLE = "SESSION_ALREADY_ACTIVE_FOR_VEHICLE";
+    public static final String SPACE_OCCUPIED = "SPACE_OCCUPIED";
+    public static final String EXTENSION_DISABLED = "EXTENSION_DISABLED";
+    public static final String EARLY_FINISH_DISABLED = "EARLY_FINISH_DISABLED";
+    public static final String EXTENSION_EXCEEDS_MAX = "EXTENSION_EXCEEDS_MAX";
+    public static final String INSUFFICIENT_BALANCE = "INSUFFICIENT_BALANCE";
+    public static final String INVALID_INCREMENT = "INVALID_INCREMENT";
 }

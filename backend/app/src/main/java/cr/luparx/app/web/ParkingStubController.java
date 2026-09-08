@@ -17,23 +17,17 @@ import org.springframework.web.bind.annotation.RestController;
  *
  * <p>Authentication and portal isolation already apply here — these paths sit under the portal
  * security chains — so the stubs cannot be used to probe the API anonymously.</p>
+ *
+ * <p><b>Shrunk in v0.2.</b> Vehicles, parking sessions, zones and tariffs are implemented now
+ * ({@code CitizenVehicleController}, {@code CitizenParkingController}, {@code AdminParkingController})
+ * and their stubs were removed rather than left alongside the real routes: two handlers claiming the
+ * same path is an ambiguous mapping, and a {@code /**} stub next to a concrete route is a trap. What
+ * remains here is what is genuinely still unbuilt — patrols, citations and municipal finance.</p>
  */
 @RestController
 @Tag(name = "Parking (reserved)", description = "Declared but not implemented in v0.1; every route "
         + "answers 501 with code NOT_IMPLEMENTED.")
 public class ParkingStubController {
-
-    @RequestMapping("/api/v1/citizen/vehicles/**")
-    @Operation(summary = "Citizen vehicles — reserved, not implemented in v0.1")
-    public void citizenVehicles() {
-        throw new NotImplementedException("error.notImplemented.parking");
-    }
-
-    @RequestMapping("/api/v1/citizen/parking-sessions/**")
-    @Operation(summary = "Citizen parking sessions — reserved, not implemented in v0.1")
-    public void citizenParkingSessions() {
-        throw new NotImplementedException("error.notImplemented.parking");
-    }
 
     @RequestMapping("/api/v1/inspector/patrols/**")
     @Operation(summary = "Inspector patrols — reserved, not implemented in v0.1")
@@ -44,18 +38,6 @@ public class ParkingStubController {
     @RequestMapping("/api/v1/inspector/citations/**")
     @Operation(summary = "Inspector citations — reserved, not implemented in v0.1")
     public void inspectorCitations() {
-        throw new NotImplementedException("error.notImplemented.parking");
-    }
-
-    @RequestMapping("/api/v1/admin/zones/**")
-    @Operation(summary = "Municipal zones — reserved, not implemented in v0.1")
-    public void adminZones() {
-        throw new NotImplementedException("error.notImplemented.parking");
-    }
-
-    @RequestMapping("/api/v1/admin/rates/**")
-    @Operation(summary = "Municipal rates — reserved, not implemented in v0.1")
-    public void adminRates() {
         throw new NotImplementedException("error.notImplemented.parking");
     }
 

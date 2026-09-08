@@ -42,4 +42,17 @@ public final class AuditAction {
     public static final String EXPORT_REQUESTED = "EXPORT_REQUESTED";
     public static final String CATALOG_UPDATED = "CATALOG_UPDATED";
     public static final String PLATFORM_SCOPE_ACCESS = "PLATFORM_SCOPE_ACCESS";
+
+    // --- parking (CONTRACT.md v0.2: "Toda operacion queda auditada con tenant, usuario, vehiculo y
+    // espacio") ---------------------------------------------------------------------------------
+    public static final String VEHICLE_REGISTERED = "VEHICLE_REGISTERED";
+    public static final String VEHICLE_UPDATED = "VEHICLE_UPDATED";
+    public static final String VEHICLE_DELETED = "VEHICLE_DELETED";
+    public static final String VEHICLE_PRIMARY_CHANGED = "VEHICLE_PRIMARY_CHANGED";
+    public static final String PARKING_SESSION_STARTED = "PARKING_SESSION_STARTED";
+    public static final String PARKING_SESSION_EXTENDED = "PARKING_SESSION_EXTENDED";
+    public static final String PARKING_SESSION_FINISHED = "PARKING_SESSION_FINISHED";
+    public static final String PARKING_POLICY_UPDATED = "PARKING_POLICY_UPDATED";
+    public static final String PARKING_ZONE_UPDATED = "PARKING_ZONE_UPDATED";
+    public static final String PARKING_RATE_UPDATED = "PARKING_RATE_UPDATED";
 }

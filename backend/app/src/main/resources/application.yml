@@ -107,6 +107,26 @@ platform:
     dial-code: ${PLATFORM_DEFAULT_DIAL_CODE:+506}
     minimum-age: ${PLATFORM_DEFAULT_MINIMUM_AGE:18}
     terms-version: ${PLATFORM_TERMS_VERSION:v1}
+    # Parking defaults (CONTRACT.md v0.2). They fill in the policy of a municipality that has not
+    # configured one yet — and nothing more: the real values live in `parking_policies`, one row per
+    # municipality, editable from the admin portal. Nothing in the domain reads this block directly.
+    # Lists accept a comma-separated value, so a single environment variable can override one.
+    parking:
+      # Options offered when starting a session, in minutes.
+      session-increments-minutes: ${PARKING_SESSION_INCREMENTS:30,60,120}
+      session-min-minutes: ${PARKING_SESSION_MIN_MINUTES:30}
+      session-max-minutes: ${PARKING_SESSION_MAX_MINUTES:480}
+      extension-enabled: ${PARKING_EXTENSION_ENABLED:true}
+      extension-increments-minutes: ${PARKING_EXTENSION_INCREMENTS:15,30,60}
+      # Cap on session + every extension. Never below session-max-minutes.
+      extension-max-total-minutes: ${PARKING_EXTENSION_MAX_TOTAL_MINUTES:720}
+      early-finish-enabled: ${PARKING_EARLY_FINISH_ENABLED:true}
+      # Minutes left over come back as CREDIT, never as money (CONTRACT.md v0.2, rule 5).
+      credit-on-early-finish-enabled: ${PARKING_CREDIT_ON_EARLY_FINISH_ENABLED:true}
+      credit-min-remaining-minutes: ${PARKING_CREDIT_MIN_REMAINING_MINUTES:10}
+      # Days a credited minute stays usable; 0 means it never expires.
+      credit-expiry-days: ${PARKING_CREDIT_EXPIRY_DAYS:90}
+      grace-minutes: ${PARKING_GRACE_MINUTES:5}
 
 luparx:
   jwt:

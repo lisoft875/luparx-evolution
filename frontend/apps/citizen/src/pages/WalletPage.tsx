@@ -1,41 +1,58 @@
 import * as React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useTranslation, formatDateTime, type TranslationKey } from '@luparx/i18n';
-import { AmountText, Badge, Card, CardStack, IconCreditCard, IconPlus, ListRow, SectionHeader } from '@luparx/ui';
+import { useTranslation, formatDate, formatDateTime, type TranslationKey } from '@luparx/i18n';
+import { AmountText, Badge, Card, CardStack, IconClock, IconCreditCard, IconPlus, ListRow, SectionHeader } from '@luparx/ui';
 import { BalanceRow } from '../components/BalanceRow';
 import { CitizenShell } from '../components/CitizenShell';
 import { MOVEMENT_ICON, MOVEMENT_ICON_TONE } from '../lib/movementPresentation';
-import {
-  MOCK_CURRENCY_CODE,
-  MOCK_MOVEMENTS,
-  MOCK_PAYMENT_CARDS,
-  MOCK_TENANT_TIME_ZONE,
-  useWalletBalanceMinor,
-} from '../mocks/parkingDomain';
+import { useTimeCredits, useWallet } from '../lib/queries';
+import { MOCK_MOVEMENTS, MOCK_PAYMENT_CARDS, MOCK_TENANT_TIME_ZONE } from '../mocks/parkingDomain';
 
 export function WalletPage(): React.JSX.Element {
-  const { t, locale } = useTranslation();
+  const { t, tPlural, locale } = useTranslation();
   const navigate = useNavigate();
-  // TODO(domain): backed by the mock parking store until real citizen wallet/payment-method endpoints ship.
-  const balanceMinor = useWalletBalanceMinor();
+  const { data: wallet } = useWallet();
+  const { data: timeCredits } = useTimeCredits();
+  // TODO(domain): movements/payment methods stay mocked — CONTRACT.md v0.2 doesn't define those endpoints yet.
   const recentMovements = MOCK_MOVEMENTS.slice(0, 2);
 
   return (
     <CitizenShell bare>
       <h1 className="lx-text-screen-title">{t('citizen.wallet.title')}</h1>
 
-      <BalanceRow
-        label={t('citizen.wallet.balanceLabel')}
-        balanceMinor={balanceMinor}
-        currencyCode={MOCK_CURRENCY_CODE}
-        locale={locale}
-        actionLabel={
-          <>
-            <IconPlus size={16} /> {t('citizen.wallet.topUpCta')}
-          </>
-        }
-        onAction={() => undefined}
-      />
+      {wallet ? (
+        <BalanceRow
+          label={t('citizen.wallet.balanceLabel')}
+          balanceMinor={wallet.balanceMinor}
+          currencyCode={wallet.currencyCode}
+          locale={locale}
+          actionLabel={
+            <>
+              <IconPlus size={16} /> {t('citizen.wallet.topUpCta')}
+            </>
+          }
+          onAction={() => undefined}
+        />
+      ) : null}
+
+      <Card>
+        <ListRow
+          icon={<IconClock size={18} />}
+          title={t('citizen.wallet.timeCredits.title')}
+          meta={
+            timeCredits && timeCredits.minutes > 0
+              ? t('citizen.wallet.timeCredits.expiresLabel', {
+                  date: timeCredits.expiresAt ? formatDate(timeCredits.expiresAt, locale) : t('citizen.wallet.timeCredits.noExpiry'),
+                })
+              : t('citizen.wallet.timeCredits.empty')
+          }
+          value={
+            timeCredits && timeCredits.minutes > 0 ? (
+              <span style={{ color: 'var(--lx-success)' }}>{tPlural('citizen.wallet.timeCredits.value', timeCredits.minutes)}</span>
+            ) : undefined
+          }
+        />
+      </Card>
 
       <div>
         <SectionHeader

@@ -1,27 +1,20 @@
-import { useSyncExternalStore } from 'react';
-
 /**
- * TODO(domain): everything in this file stands in for real citizen-facing
- * endpoints (`/api/v1/citizen/vehicles`, `/api/v1/citizen/parking-sessions`,
- * `/api/v1/citizen/wallet`, `/api/v1/citizen/payment-methods`,
- * `/api/v1/citizen/fines`) — `module-parking` and `module-wallet` haven't
- * shipped yet (CONTRACT.md §4 "Dominio parquímetros (stub v0.1, contrato
- * reservado)"). The shapes below are deliberately close to what those
- * endpoints will return, and every screen only talks to the hooks/functions
- * at the bottom of this file, never to the mock arrays directly — so wiring
- * in real `apiClient.citizen.*` + react-query later touches only this file.
+ * TODO(domain): everything in this file stands in for citizen-facing endpoints that CONTRACT.md's
+ * "v0.2 — Dominio de parqueo" section does not yet define a contract for: fines
+ * (`/api/v1/citizen/fines`), payment methods (`/api/v1/citizen/payment-methods`) and the
+ * ledger/movements list. Vehicles, parking sessions, the wallet balance and time credits are wired
+ * to the real `@luparx/api-client` contract (see `../lib/queries.ts`) and no longer live here.
  *
  * Sample data intentionally matches the client's reference mockup
- * (docs/brand/citizen-app-reference-screens.png) 1:1: citizen "Leana
- * Vásquez", vehicle BHL019 as the primary, balance ₡48.800, one card ending
- * in 4242, and a short movement history from 3–5 September 2026.
+ * (docs/brand/citizen-app-reference-screens.png): citizen "Leana Vásquez", a card ending in 4242,
+ * and a short movement history from 3–5 September 2026.
  *
- * TODO(domain): the municipality's time zone is hardcoded to
- * America/Costa_Rica (this tenant's default) until tenant-scoped locale/tz
- * config lands (DESIGN_SYSTEM.md §"Internacionalización", CONTRACT.md §2).
+ * TODO(domain): the municipality's time zone is hardcoded to America/Costa_Rica (this tenant's
+ * default) until tenant-scoped locale/tz config is exposed on `MeResponse.activeTenant`
+ * (CONTRACT.md §4 `TenantCatalogEntry` carries no timeZone/currency today — DESIGN_SYSTEM.md
+ * §"Internacionalización").
  */
 export const MOCK_TENANT_TIME_ZONE = 'America/Costa_Rica';
-export const MOCK_CURRENCY_CODE = 'CRC';
 
 // ---- Profile -------------------------------------------------------------
 
@@ -43,39 +36,26 @@ export const MOCK_PROFILE: MockCitizenProfile = {
   addressLine: 'Condominio 221 casa 27',
 };
 
-// ---- Vehicles --------------------------------------------------------------
-
-export interface MockVehicle {
-  id: string;
-  plate: string;
-  brand: string;
-  model: string;
-  color: string;
-  year: number;
-  isPrimary: boolean;
-}
-
-export const MOCK_VEHICLES: MockVehicle[] = [
-  { id: 'veh-bhl019', plate: 'BHL019', brand: 'Toyota', model: 'Yaris', color: 'Gris', year: 2015, isPrimary: true },
-  { id: 'veh-bny963', plate: 'BNY963', brand: 'Toyota', model: 'RAV4', color: 'Blanco', year: 2018, isPrimary: false },
-  { id: 'veh-test01', plate: 'TEST01', brand: 'Toyota', model: 'Corolla', color: 'Blanco', year: 2022, isPrimary: false },
-];
-
-export function primaryVehicle(): MockVehicle {
-  // Non-null: MOCK_VEHICLES is a non-empty compile-time constant.
-  return MOCK_VEHICLES.find((v) => v.isPrimary) ?? MOCK_VEHICLES[0]!;
-}
-
-// ---- Zones (public read — CONTRACT.md §4 "Dominio parquímetros") ---------
+// ---- Zones (CONTRACT.md v0.2 keeps zone/rate catalogs an admin-only concern for now — no citizen
+// endpoint lists them, so this is purely a local stand-in for a geolocation/space-detection lookup
+// until one ships. `id` must match a rate the mock server's `mockZoneRate` recognizes.) ----------
 
 export interface MockZone {
   id: string;
   name: string;
-  /** The space currently assigned to this citizen in this zone (stands in for a geolocation/space-detection lookup). */
+  /** The space currently assigned to this citizen in this zone (stands in for geolocation/space detection). */
   spaceCode: string;
 }
 
-export const MOCK_ZONES: MockZone[] = [{ id: 'zone-centro', name: 'Centro', spaceCode: 'LUP-0001' }];
+const ZONES_BY_TENANT: Record<string, MockZone[]> = {
+  'tenant-sanjose': [{ id: 'zone-centro', name: 'Centro', spaceCode: 'LUP-0001' }],
+  'tenant-escazu': [{ id: 'zone-escazu-centro', name: 'Centro', spaceCode: 'ESC-0001' }],
+};
+const DEFAULT_ZONES: MockZone[] = ZONES_BY_TENANT['tenant-sanjose']!;
+
+export function zonesForTenant(tenantId: string | null | undefined): MockZone[] {
+  return (tenantId && ZONES_BY_TENANT[tenantId]) || DEFAULT_ZONES;
+}
 
 // ---- Fines ------------------------------------------------------------------
 
@@ -137,7 +117,7 @@ export const MOCK_MOVEMENTS: MockMovement[] = [
     zoneName: 'Centro',
     spaceCode: 'LUP-0001',
     amountMinor: -40000,
-    currencyCode: MOCK_CURRENCY_CODE,
+    currencyCode: 'CRC',
     occurredAt: '2026-09-05T20:27:00-06:00',
   },
   {
@@ -147,7 +127,7 @@ export const MOCK_MOVEMENTS: MockMovement[] = [
     zoneName: 'Centro',
     spaceCode: 'LUP-0001',
     amountMinor: -15000,
-    currencyCode: MOCK_CURRENCY_CODE,
+    currencyCode: 'CRC',
     occurredAt: '2026-09-05T20:26:00-06:00',
   },
   {
@@ -157,7 +137,7 @@ export const MOCK_MOVEMENTS: MockMovement[] = [
     zoneName: 'Centro',
     spaceCode: 'LUP-0001',
     amountMinor: -15000,
-    currencyCode: MOCK_CURRENCY_CODE,
+    currencyCode: 'CRC',
     occurredAt: '2026-09-04T14:09:00-06:00',
   },
   {
@@ -166,68 +146,7 @@ export const MOCK_MOVEMENTS: MockMovement[] = [
     titleKey: 'citizen.movements.item.topup',
     cardLast4: '4242',
     amountMinor: 1000000,
-    currencyCode: MOCK_CURRENCY_CODE,
+    currencyCode: 'CRC',
     occurredAt: '2026-09-03T10:12:00-06:00',
   },
 ];
-
-// ---- Tiny module-level store so the parking flow, wallet and home screen agree on shared state ----
-
-export interface MockActiveSession {
-  vehiclePlate: string;
-  zoneName: string;
-  spaceCode: string;
-  startedAt: string;
-  expiresAt: string;
-}
-
-let activeSession: MockActiveSession | null = null;
-let walletBalanceMinor = 4880000; // ₡48.800
-const listeners = new Set<() => void>();
-
-function emit(): void {
-  listeners.forEach((listener) => listener());
-}
-
-function subscribe(listener: () => void): () => void {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
-}
-
-export interface StartSessionInput {
-  vehiclePlate: string;
-  zoneName: string;
-  spaceCode: string;
-  durationMinutes: number;
-  amountMinor: number;
-}
-
-export function startMockSession(input: StartSessionInput): void {
-  const now = new Date();
-  activeSession = {
-    vehiclePlate: input.vehiclePlate,
-    zoneName: input.zoneName,
-    spaceCode: input.spaceCode,
-    startedAt: now.toISOString(),
-    expiresAt: new Date(now.getTime() + input.durationMinutes * 60_000).toISOString(),
-  };
-  walletBalanceMinor -= input.amountMinor;
-  emit();
-}
-
-export function extendMockSession(minutes: number): void {
-  if (!activeSession) return;
-  activeSession = {
-    ...activeSession,
-    expiresAt: new Date(new Date(activeSession.expiresAt).getTime() + minutes * 60_000).toISOString(),
-  };
-  emit();
-}
-
-export function useActiveSession(): MockActiveSession | null {
-  return useSyncExternalStore(subscribe, () => activeSession);
-}
-
-export function useWalletBalanceMinor(): number {
-  return useSyncExternalStore(subscribe, () => walletBalanceMinor);
-}

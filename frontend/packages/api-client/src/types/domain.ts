@@ -518,3 +518,130 @@ export interface SystemJob {
   status: 'IDLE' | 'RUNNING' | 'FAILED';
   lastRunAt?: string;
 }
+
+// ---- Citizen: vehicles (CONTRACT.md "v0.2 — Dominio de parqueo", §"Vehículos") -----------------
+// Uniqueness is `(user_id, plate normalized)` — plates repeat across users, never within one
+// user's own list (CONTRACT.md v0.2 rule 2). Only `plate` is required.
+
+export interface Vehicle {
+  id: string;
+  /** Normalized: uppercase, no spaces or dashes (CONTRACT.md v0.2 §"Vehículos"). */
+  plate: string;
+  name?: string;
+  brand?: string;
+  model?: string;
+  year?: number;
+  isOwner: boolean;
+  isPrimary: boolean;
+}
+
+export interface CreateVehicleRequest {
+  /** Sent normalized (uppercase, no spaces/dashes); the server is expected to enforce the same normalization. */
+  plate: string;
+  name?: string;
+  brand?: string;
+  model?: string;
+  year?: number;
+  isOwner: boolean;
+}
+
+export type UpdateVehicleRequest = CreateVehicleRequest;
+
+// ---- Citizen: parking domain (CONTRACT.md "v0.2 — Dominio de parqueo") -------------------------
+
+/** One row per tenant (`parking_policies`, CONTRACT.md v0.2). Every option a citizen screen offers comes from here — never a fixed constant in code. */
+export interface ParkingPolicy {
+  sessionIncrementsMinutes: number[];
+  sessionMinMinutes: number;
+  sessionMaxMinutes: number;
+  extensionEnabled: boolean;
+  extensionIncrementsMinutes: number[];
+  extensionMaxTotalMinutes: number;
+  earlyFinishEnabled: boolean;
+  creditOnEarlyFinishEnabled: boolean;
+  creditMinRemainingMinutes: number;
+  creditExpiryDays: number;
+  graceMinutes: number;
+}
+
+export interface ParkingQuoteRequest {
+  zoneId: string;
+  minutes: number;
+}
+
+/**
+ * CONTRACT.md v0.2 specifies the wire shape as `{amount, creditMinutesApplied, payable}`;
+ * `amountMinor`/`payableMinor` are those same two figures under this codebase's money
+ * convention (integer minor units, CONTRACT.md §5 "Nunca float"), with `currencyCode` carried
+ * alongside per the project's rule that an amount is never shown without its currency.
+ */
+export interface ParkingQuoteResponse {
+  amountMinor: number;
+  currencyCode: string;
+  /** Minutes of the citizen's time-credit balance the server applied to this quote. */
+  creditMinutesApplied: number;
+  /** What remains to be paid from the wallet after `creditMinutesApplied` is subtracted. */
+  payableMinor: number;
+}
+
+export type ParkingSessionStatus = 'ACTIVE' | 'FINISHED' | 'EXPIRED';
+
+export interface ParkingSession {
+  id: string;
+  zoneId: string;
+  zoneName: string;
+  spaceCode: string;
+  vehicleId: string;
+  /** Copy of the plate at the moment the session started (CONTRACT.md v0.2 rule 2) — verified against this, never the vehicle's possibly-since-edited plate. */
+  plateSnapshot: string;
+  minutes: number;
+  amountMinor: number;
+  currencyCode: string;
+  status: ParkingSessionStatus;
+  startedAt: string;
+  expiresAt: string;
+}
+
+export interface StartParkingSessionRequest {
+  zoneId: string;
+  spaceCode: string;
+  vehicleId: string;
+  minutes: number;
+}
+
+export type ParkingSessionsQuery = {
+  status?: ParkingSessionStatus | 'ALL';
+};
+
+export interface ExtendParkingSessionRequest {
+  minutes: number;
+}
+
+export interface ExtendParkingSessionResponse {
+  session: ParkingSession;
+  amountMinor: number;
+  currencyCode: string;
+}
+
+export interface FinishParkingSessionResponse {
+  session: ParkingSession;
+  /** 0 when the policy doesn't credit early finishes, or the remaining time was under `creditMinRemainingMinutes`. */
+  creditedMinutes: number;
+  creditExpiresAt: string | null;
+}
+
+// ---- Citizen: wallet & time credits (CONTRACT.md v0.2) -----------------------------------------
+// Both scoped to the active tenant — "las finanzas son por tenant; no hay un saldo global"
+// (CONTRACT.md v0.2 rule 6). The server derives the tenant from the access token (`tid` claim);
+// neither call takes a tenant parameter.
+
+export interface WalletResponse {
+  balanceMinor: number;
+  currencyCode: string;
+}
+
+/** Minutes saved from an early finish (CONTRACT.md v0.2 rule 5) — consumed first on this tenant's next session, never money, never portable to another tenant. */
+export interface TimeCreditsResponse {
+  minutes: number;
+  expiresAt: string | null;
+}

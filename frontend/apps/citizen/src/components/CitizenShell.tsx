@@ -1,8 +1,10 @@
 import * as React from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from '@luparx/i18n';
 import { AppBar, Brand, BottomTabBar, IconBell, IconCar, IconHome, IconList, IconPark, IconWallet } from '@luparx/ui';
 import type { BottomTab } from '@luparx/ui';
+import { ActiveSessionsBar } from './ActiveSessionsBar';
 
 export interface CitizenShellProps {
   children: React.ReactNode;
@@ -29,6 +31,26 @@ export function CitizenShell({ children, title, subtitle, onBack, bare = false }
   const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
+
+  // The footer (timer bar + tab bar) is `position: fixed`, so it never reserves space in normal
+  // flow on its own — measured here and applied as `main`'s bottom padding so it can never cover
+  // page content (CONTRACT.md v0.2 rule 3). A plain `position: sticky` footer looked equivalent
+  // but only "sticks" once its static flow position would scroll past the viewport edge; on a
+  // page taller than one screen it stayed glued to the bottom from scroll position zero and
+  // overlapped whatever content happened to render underneath — fixed + measured padding is what
+  // actually holds on every screen, tall or short.
+  const footerRef = useRef<HTMLDivElement>(null);
+  const [footerHeight, setFooterHeight] = useState(0);
+  useEffect(() => {
+    const node = footerRef.current;
+    if (!node) return;
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (entry) setFooterHeight(entry.contentRect.height);
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
 
   const tabs: BottomTab[] = [
     {
@@ -88,7 +110,10 @@ export function CitizenShell({ children, title, subtitle, onBack, bare = false }
       <main
         style={{
           flex: 1,
-          padding: 'var(--lx-space-4)',
+          paddingTop: 'var(--lx-space-4)',
+          paddingRight: 'var(--lx-space-4)',
+          paddingLeft: 'var(--lx-space-4)',
+          paddingBottom: `calc(var(--lx-space-4) + ${footerHeight}px)`,
           display: 'flex',
           flexDirection: 'column',
           gap: 'var(--lx-card-gap)',
@@ -99,7 +124,11 @@ export function CitizenShell({ children, title, subtitle, onBack, bare = false }
       >
         {children}
       </main>
-      <div style={{ position: 'sticky', bottom: 0 }}>
+      <div ref={footerRef} style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 20 }}>
+        {/* Present on every screen while >=1 session is active (CONTRACT.md v0.2 rule 3) — fixed to
+            the viewport bottom, stacked directly above the tab bar; `main`'s measured padding-bottom
+            above is what keeps it from ever covering page content. */}
+        <ActiveSessionsBar />
         <BottomTabBar tabs={tabs} />
       </div>
     </div>

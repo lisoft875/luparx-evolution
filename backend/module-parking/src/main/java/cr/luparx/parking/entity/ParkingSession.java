@@ -1,0 +1,242 @@
+package cr.luparx.parking.entity;
+
+import cr.luparx.core.id.TenantId;
+import cr.luparx.core.id.UserId;
+import cr.luparx.core.money.Money;
+import cr.luparx.parking.model.ParkingSessionStatus;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+import jakarta.persistence.Version;
+
+import java.time.Duration;
+import java.time.Instant;
+import java.util.UUID;
+
+/**
+ * A paid stay of one vehicle on one bay ({@code parking_sessions}, V11_0).
+ *
+ * <p>The two invariants of the domain are enforced by partial unique indexes over
+ * {@code status = 'ACTIVE'}, not by this class: one running session per bay, one per vehicle. That
+ * is what makes them hold with several backend instances running.</p>
+ *
+ * <p>{@link #getPlateSnapshot()} is a copy of the plate as it was when the session started. It is
+ * deliberately not a join: the inspector verifies against what was painted on the car at that
+ * moment, and a citizen correcting a typo afterwards must not rewrite history.</p>
+ */
+@Entity
+@Table(name = "parking_sessions")
+public class ParkingSession {
+
+    @Id
+    @Column(name = "id", nullable = false)
+    private UUID id;
+
+    @Column(name = "tenant_id", nullable = false)
+    private UUID tenantId;
+
+    @Column(name = "user_id", nullable = false)
+    private UUID userId;
+
+    @Column(name = "vehicle_id", nullable = false)
+    private UUID vehicleId;
+
+    @Column(name = "plate_snapshot", nullable = false, length = 16)
+    private String plateSnapshot;
+
+    @Column(name = "zone_id", nullable = false)
+    private UUID zoneId;
+
+    @Column(name = "space_id", nullable = false)
+    private UUID spaceId;
+
+    @Column(name = "started_at", nullable = false)
+    private Instant startedAt;
+
+    @Column(name = "expires_at", nullable = false)
+    private Instant expiresAt;
+
+    @Column(name = "ended_at")
+    private Instant endedAt;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, length = 32)
+    private ParkingSessionStatus status;
+
+    /** Total money charged: the start plus every extension. Never negative — money is not refunded. */
+    @Column(name = "amount_minor", nullable = false)
+    private long amountMinor;
+
+    @Column(name = "currency_code", nullable = false, length = 3)
+    private String currencyCode;
+
+    @Column(name = "credit_minutes_applied", nullable = false)
+    private int creditMinutesApplied;
+
+    @Column(name = "created_at", nullable = false)
+    private Instant createdAt;
+
+    @Column(name = "updated_at", nullable = false)
+    private Instant updatedAt;
+
+    @Version
+    @Column(name = "version", nullable = false)
+    private long version;
+
+    protected ParkingSession() {
+        // for JPA
+    }
+
+    public ParkingSession(UUID id, UUID tenantId, UUID userId, UUID vehicleId, String plateSnapshot, UUID zoneId,
+                          UUID spaceId, Instant startedAt, Instant expiresAt, Money amount,
+                          int creditMinutesApplied) {
+        this.id = id;
+        this.tenantId = tenantId;
+        this.userId = userId;
+        this.vehicleId = vehicleId;
+        this.plateSnapshot = plateSnapshot;
+        this.zoneId = zoneId;
+        this.spaceId = spaceId;
+        this.startedAt = startedAt;
+        this.expiresAt = expiresAt;
+        this.status = ParkingSessionStatus.ACTIVE;
+        this.amountMinor = amount.minorUnits();
+        this.currencyCode = amount.currencyCode();
+        this.creditMinutesApplied = creditMinutesApplied;
+        this.createdAt = startedAt;
+        this.updatedAt = startedAt;
+    }
+
+    public UUID getId() {
+        return id;
+    }
+
+    public UUID getTenantId() {
+        return tenantId;
+    }
+
+    public TenantId tenant() {
+        return TenantId.of(tenantId);
+    }
+
+    public UUID getUserId() {
+        return userId;
+    }
+
+    public UserId user() {
+        return UserId.of(userId);
+    }
+
+    public UUID getVehicleId() {
+        return vehicleId;
+    }
+
+    public String getPlateSnapshot() {
+        return plateSnapshot;
+    }
+
+    public UUID getZoneId() {
+        return zoneId;
+    }
+
+    public UUID getSpaceId() {
+        return spaceId;
+    }
+
+    public Instant getStartedAt() {
+        return startedAt;
+    }
+
+    public Instant getExpiresAt() {
+        return expiresAt;
+    }
+
+    public Instant getEndedAt() {
+        return endedAt;
+    }
+
+    public ParkingSessionStatus getStatus() {
+        return status;
+    }
+
+    public long getAmountMinor() {
+        return amountMinor;
+    }
+
+    public String getCurrencyCode() {
+        return currencyCode;
+    }
+
+    public Money getAmount() {
+        return Money.ofMinor(amountMinor, currencyCode);
+    }
+
+    public int getCreditMinutesApplied() {
+        return creditMinutesApplied;
+    }
+
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
+
+    public Instant getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public long getVersion() {
+        return version;
+    }
+
+    /** Minutes booked so far: the initial stay plus every extension already applied. */
+    public int bookedMinutes() {
+        return (int) Duration.between(startedAt, expiresAt).toMinutes();
+    }
+
+    /**
+     * Minutes still to run at {@code now}, never negative. This is what comes back as credit when a
+     * citizen finishes early.
+     */
+    public int remainingMinutesAt(Instant now) {
+        if (!now.isBefore(expiresAt)) {
+            return 0;
+        }
+        return (int) Duration.between(now, expiresAt).toMinutes();
+    }
+
+    /** True once the clock has run out past the municipality's tolerance. */
+    public boolean isExpiredAt(Instant now, int graceMinutes) {
+        return now.isAfter(expiresAt.plusSeconds((long) graceMinutes * 60L));
+    }
+
+    /**
+     * Applies an extension: more time on the clock and more money on the total. The status is
+     * unchanged on purpose — extending a session that is not running is refused by the service, not
+     * silently turned into a restart.
+     */
+    public void extend(int minutes, Money charged, int creditMinutes, Instant now) {
+        this.expiresAt = this.expiresAt.plusSeconds((long) minutes * 60L);
+        this.amountMinor = Math.addExact(this.amountMinor, charged.minorUnits());
+        this.creditMinutesApplied = Math.addExact(this.creditMinutesApplied, creditMinutes);
+        this.updatedAt = now;
+    }
+
+    /** Closed by the citizen. The bay is released the moment the status stops being ACTIVE. */
+    public void finish(Instant now) {
+        this.status = ParkingSessionStatus.FINISHED;
+        this.endedAt = now;
+        this.updatedAt = now;
+    }
+
+    /**
+     * Closed by the clock. {@code ended_at} is left null: nobody ended this session, it simply ran
+     * out, and pretending it was closed at the moment somebody happened to look would be a lie in
+     * the ledger.
+     */
+    public void expire(Instant now) {
+        this.status = ParkingSessionStatus.EXPIRED;
+        this.updatedAt = now;
+    }
+}

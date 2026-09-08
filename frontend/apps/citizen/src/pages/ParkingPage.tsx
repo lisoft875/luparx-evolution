@@ -1,68 +1,76 @@
 import * as React from 'react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useTranslation, formatCurrencyMinor, type TranslationKey } from '@luparx/i18n';
+import { useTranslation, formatCurrencyMinor } from '@luparx/i18n';
 import {
+  Alert,
   Button,
   Card,
   ChipGroup,
   IconCar,
   IconChevronRight,
   IconPin,
-  Input,
   ListRow,
   Select,
   StepList,
   type Step,
 } from '@luparx/ui';
+import { useAuth } from '@luparx/auth';
+import { formatDurationLabel } from '../lib/duration';
+import { parkingErrorKey } from '../lib/apiErrors';
 import { CitizenShell } from '../components/CitizenShell';
-import { MOCK_CURRENCY_CODE, MOCK_VEHICLES, MOCK_ZONES, primaryVehicle, startMockSession } from '../mocks/parkingDomain';
-
-type DurationOption = '30m' | '1h' | '2h' | 'other';
-const DURATION_MINUTES: Record<Exclude<DurationOption, 'other'>, number> = { '30m': 30, '1h': 60, '2h': 120 };
-// TODO(domain): fixed price tiers stand in for `/api/v1/admin/rates` (CONTRACT.md §4 "Dominio parquímetros").
-const AMOUNT_MINOR_BY_DURATION: Record<Exclude<DurationOption, 'other'>, number> = {
-  '30m': 27500,
-  '1h': 55000,
-  '2h': 110000,
-};
-const RATE_MINOR_PER_MINUTE = AMOUNT_MINOR_BY_DURATION['1h'] / 60;
+import { zonesForTenant } from '../mocks/parkingDomain';
+import { useParkingPolicy, useParkingQuote, useStartParkingSession, useVehicles } from '../lib/queries';
 
 export function ParkingPage(): React.JSX.Element {
   const { t, tPlural, locale } = useTranslation();
   const navigate = useNavigate();
+  const { me } = useAuth();
 
-  // Non-null: MOCK_ZONES/MOCK_VEHICLES are non-empty compile-time constants.
-  const [zoneId, setZoneId] = useState(MOCK_ZONES[0]!.id);
-  const [vehicleId, setVehicleId] = useState(primaryVehicle().id);
-  const [duration, setDuration] = useState<DurationOption>('1h');
-  const [customMinutes, setCustomMinutes] = useState(45);
+  const zones = useMemo(() => zonesForTenant(me?.activeTenant?.id), [me?.activeTenant?.id]);
+  // Non-null: `zones` always has at least one entry (zonesForTenant falls back to a default list).
+  const [zoneId, setZoneId] = useState(zones[0]!.id);
+  const zone = zones.find((z) => z.id === zoneId) ?? zones[0]!;
 
-  const zone = MOCK_ZONES.find((z) => z.id === zoneId) ?? MOCK_ZONES[0]!;
-  const vehicle = MOCK_VEHICLES.find((v) => v.id === vehicleId) ?? primaryVehicle();
-  const durationMinutes = duration === 'other' ? customMinutes : DURATION_MINUTES[duration];
-  const amountMinor =
-    duration === 'other' ? Math.round(customMinutes * RATE_MINOR_PER_MINUTE) : AMOUNT_MINOR_BY_DURATION[duration];
-  const durationLabel =
-    duration === 'other'
-      ? tPlural('citizen.parking.step4.customDuration', customMinutes)
-      : t(`citizen.parking.step3.duration.${duration}` as TranslationKey);
+  const { data: vehicles } = useVehicles();
+  const [vehicleId, setVehicleId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!vehicleId && vehicles && vehicles.length > 0) {
+      setVehicleId(vehicles.find((v) => v.isPrimary)?.id ?? vehicles[0]!.id);
+    }
+  }, [vehicleId, vehicles]);
+  const vehicle = vehicles?.find((v) => v.id === vehicleId);
+
+  const { data: policy } = useParkingPolicy();
+  const [minutes, setMinutes] = useState<number | null>(null);
+  useEffect(() => {
+    if (minutes === null && policy && policy.sessionIncrementsMinutes.length > 0) {
+      setMinutes(policy.sessionIncrementsMinutes[0]!);
+    }
+  }, [minutes, policy]);
+
+  const { data: quote } = useParkingQuote(zoneId, minutes);
+  const startSession = useStartParkingSession();
+  const [error, setError] = useState<string | null>(null);
 
   function cycleVehicle(): void {
-    const index = MOCK_VEHICLES.findIndex((v) => v.id === vehicleId);
-    setVehicleId(MOCK_VEHICLES[(index + 1) % MOCK_VEHICLES.length]!.id);
+    if (!vehicles || vehicles.length === 0) return;
+    const index = vehicles.findIndex((v) => v.id === vehicleId);
+    setVehicleId(vehicles[(index + 1) % vehicles.length]!.id);
   }
 
-  function handleSubmit(): void {
-    startMockSession({
-      vehiclePlate: vehicle.plate,
-      zoneName: zone.name,
-      spaceCode: zone.spaceCode,
-      durationMinutes,
-      amountMinor,
-    });
-    navigate('/');
+  async function handleSubmit(): Promise<void> {
+    if (!vehicleId || !minutes) return;
+    setError(null);
+    try {
+      await startSession.mutateAsync({ zoneId, spaceCode: zone.spaceCode, vehicleId, minutes });
+      navigate('/');
+    } catch (err) {
+      setError(t(parkingErrorKey(err)));
+    }
   }
+
+  const durationLabel = minutes !== null ? formatDurationLabel(minutes, tPlural) : '';
 
   const steps: Step[] = useMemo(
     () => [
@@ -79,7 +87,7 @@ export function ParkingPage(): React.JSX.Element {
               aria-label={t('citizen.parking.step1.zoneLabel')}
               value={zoneId}
               onChange={(e) => setZoneId(e.target.value)}
-              options={MOCK_ZONES.map((z) => ({ value: z.id, label: z.name }))}
+              options={zones.map((z) => ({ value: z.id, label: z.name }))}
             />
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--lx-space-2)', color: 'var(--lx-text-muted)' }}>
@@ -96,45 +104,44 @@ export function ParkingPage(): React.JSX.Element {
       {
         title: t('citizen.parking.step2.title'),
         state: 'active',
-        content: (
+        content: vehicle ? (
           <Card nested>
             <ListRow
               icon={<IconCar size={18} />}
               title={vehicle.plate}
-              meta={`${vehicle.brand} ${vehicle.model} · ${vehicle.year}`}
+              meta={[vehicle.brand, vehicle.model].filter(Boolean).join(' ') || undefined}
               value={<IconChevronRight size={16} />}
               onClick={cycleVehicle}
             />
           </Card>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--lx-space-2)' }}>
+            <p className="lx-text-meta" style={{ margin: 0 }}>
+              {t('citizen.parking.step2.empty')}
+            </p>
+            <Button type="button" variant="outline" onClick={() => navigate('/vehicles')}>
+              {t('citizen.parking.step2.addVehicleCta')}
+            </Button>
+          </div>
         ),
       },
       {
         title: t('citizen.parking.step3.title'),
         state: 'active',
-        content: (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--lx-space-2)' }}>
-            <ChipGroup
-              aria-label={t('citizen.parking.step3.title')}
-              value={duration}
-              onChange={setDuration}
-              options={[
-                { value: '30m', label: t('citizen.parking.step3.duration.30m') },
-                { value: '1h', label: t('citizen.parking.step3.duration.1h') },
-                { value: '2h', label: t('citizen.parking.step3.duration.2h') },
-                { value: 'other', label: t('citizen.parking.step3.duration.other') },
-              ]}
-            />
-            {duration === 'other' ? (
-              <Input
-                type="number"
-                min={5}
-                step={5}
-                aria-label={t('citizen.parking.step3.duration.other')}
-                value={customMinutes}
-                onChange={(e) => setCustomMinutes(Number(e.target.value))}
-              />
-            ) : null}
-          </div>
+        content: policy ? (
+          <ChipGroup
+            aria-label={t('citizen.parking.step3.title')}
+            value={minutes !== null ? String(minutes) : ''}
+            onChange={(value) => setMinutes(Number(value))}
+            options={policy.sessionIncrementsMinutes.map((option) => ({
+              value: String(option),
+              label: formatDurationLabel(option, tPlural),
+            }))}
+          />
+        ) : (
+          <p className="lx-text-meta" style={{ margin: 0 }}>
+            {t('common.loading')}
+          </p>
         ),
       },
       {
@@ -143,24 +150,49 @@ export function ParkingPage(): React.JSX.Element {
         content: (
           <Card nested>
             <ListRow title={t('citizen.parking.step4.zoneLabel')} value={`${zone.name} (${zone.spaceCode})`} />
-            <ListRow title={t('citizen.parking.step4.vehicleLabel')} value={vehicle.plate} />
-            <ListRow title={t('citizen.parking.step4.durationLabel')} value={durationLabel} />
-            <ListRow
-              title={t('citizen.parking.step4.amountLabel')}
-              value={formatCurrencyMinor(amountMinor, MOCK_CURRENCY_CODE, locale)}
-            />
+            <ListRow title={t('citizen.parking.step4.vehicleLabel')} value={vehicle?.plate ?? '—'} />
+            <ListRow title={t('citizen.parking.step4.durationLabel')} value={durationLabel || '—'} />
+            {quote ? (
+              <>
+                <ListRow title={t('citizen.parking.step4.amountLabel')} value={formatCurrencyMinor(quote.amountMinor, quote.currencyCode, locale)} />
+                {quote.creditMinutesApplied > 0 ? (
+                  <ListRow
+                    title={t('citizen.parking.step4.creditAppliedLabel')}
+                    value={
+                      <span style={{ color: 'var(--lx-success)' }}>
+                        {tPlural('citizen.parking.durationMinutes', quote.creditMinutesApplied)}
+                      </span>
+                    }
+                  />
+                ) : null}
+                <ListRow
+                  title={t('citizen.parking.step4.payableLabel')}
+                  value={formatCurrencyMinor(quote.payableMinor, quote.currencyCode, locale)}
+                />
+              </>
+            ) : (
+              <ListRow title={t('citizen.parking.step4.amountLabel')} value={t('common.loading')} />
+            )}
           </Card>
         ),
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [zoneId, vehicleId, duration, customMinutes, amountMinor, durationLabel, zone, vehicle, locale],
+    [zoneId, zones, zone, vehicle, policy, minutes, durationLabel, quote, locale],
   );
 
   return (
     <CitizenShell title={t('citizen.parking.title')} subtitle={t('citizen.parking.subtitle')} onBack={() => navigate('/')}>
+      {error ? <Alert tone="danger">{error}</Alert> : null}
       <StepList steps={steps} />
-      <Button type="button" variant="primary" fullWidth onClick={handleSubmit}>
+      <Button
+        type="button"
+        variant="primary"
+        fullWidth
+        loading={startSession.isPending}
+        disabled={!vehicleId || !minutes || !quote}
+        onClick={handleSubmit}
+      >
         {t('citizen.parking.submit')}
       </Button>
     </CitizenShell>

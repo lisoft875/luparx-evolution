@@ -17,8 +17,12 @@ import type {
   CreateTenantAdminRequest,
   CreateTenantAdminResponse,
   CreateTenantRequest,
+  CreateVehicleRequest,
   DocumentTypeCatalogEntry,
+  ExtendParkingSessionRequest,
+  ExtendParkingSessionResponse,
   FeatureFlag,
+  FinishParkingSessionResponse,
   ForgotPasswordRequest,
   LoginRequest,
   LoginResponse,
@@ -29,6 +33,11 @@ import type {
   MfaVerifyRequest,
   MfaVerifyResponse,
   OAuthProvider,
+  ParkingPolicy,
+  ParkingQuoteRequest,
+  ParkingQuoteResponse,
+  ParkingSession,
+  ParkingSessionsQuery,
   PlatformAuditEventsQuery,
   PlatformCountry,
   PlatformRegisteredUsersReportQuery,
@@ -48,18 +57,23 @@ import type {
   RequireMfaRequest,
   ResetPasswordRequest,
   SessionTenantRequest,
+  StartParkingSessionRequest,
   SystemHealth,
   SystemJob,
   TenantAdmin,
   TenantCatalogEntry,
   TenantSettings,
+  TimeCreditsResponse,
   UpdateMembershipRequest,
   UpdateTenantStatusRequest,
+  UpdateVehicleRequest,
   UpsertAdminLevelRequest,
   UpsertCountryRequest,
   UpsertDivisionRequest,
   UpsertDocumentTypeRequest,
+  Vehicle,
   VerifyEmailRequest,
+  WalletResponse,
 } from './types/domain';
 
 export type { PagedResponse, PageParams } from './types/http';
@@ -196,6 +210,53 @@ export class ApiClient {
     list: (): Promise<TenantAdmin[]> => this.http.request('GET', '/api/v1/admin/tenants'),
     create: (payload: CreateTenantRequest): Promise<TenantAdmin> =>
       this.http.request('POST', '/api/v1/admin/tenants', { body: payload, idempotent: true }),
+  };
+
+  // ---- Citizen: vehicles (CONTRACT.md v0.2 "Vehículos") --------------------------------------
+
+  readonly citizenVehicles = {
+    list: (): Promise<Vehicle[]> => this.http.request('GET', '/api/v1/citizen/vehicles'),
+    create: (payload: CreateVehicleRequest): Promise<Vehicle> =>
+      this.http.request('POST', '/api/v1/citizen/vehicles', { body: payload, idempotent: true }),
+    update: (id: string, payload: UpdateVehicleRequest): Promise<Vehicle> =>
+      this.http.request('PUT', `/api/v1/citizen/vehicles/${id}`, { body: payload }),
+    remove: (id: string): Promise<void> => this.http.request('DELETE', `/api/v1/citizen/vehicles/${id}`),
+    setPrimary: (id: string): Promise<void> =>
+      this.http.request('POST', `/api/v1/citizen/vehicles/${id}/primary`, { idempotent: true }),
+  };
+
+  // ---- Citizen: parking domain (CONTRACT.md v0.2) ---------------------------------------------
+  // Amount/credit math always happens server-side (v0.2 "Invariantes") — the client only ever
+  // requests a quote to display it. Start/extend/finish all carry `Idempotency-Key` so a double
+  // tap can never charge twice.
+
+  readonly citizenParking = {
+    policy: (): Promise<ParkingPolicy> => this.http.request('GET', '/api/v1/citizen/parking/policy'),
+    quote: (payload: ParkingQuoteRequest): Promise<ParkingQuoteResponse> =>
+      this.http.request('POST', '/api/v1/citizen/parking/quote', { body: payload }),
+    sessions: (query: ParkingSessionsQuery = {}): Promise<ParkingSession[]> =>
+      this.http.request('GET', '/api/v1/citizen/parking/sessions', { query }),
+    session: (id: string): Promise<ParkingSession> =>
+      this.http.request('GET', `/api/v1/citizen/parking/sessions/${id}`),
+    start: (payload: StartParkingSessionRequest): Promise<ParkingSession> =>
+      this.http.request('POST', '/api/v1/citizen/parking/sessions', { body: payload, idempotent: true }),
+    extend: (id: string, payload: ExtendParkingSessionRequest): Promise<ExtendParkingSessionResponse> =>
+      this.http.request('POST', `/api/v1/citizen/parking/sessions/${id}/extend`, {
+        body: payload,
+        idempotent: true,
+      }),
+    finish: (id: string): Promise<FinishParkingSessionResponse> =>
+      this.http.request('POST', `/api/v1/citizen/parking/sessions/${id}/finish`, { idempotent: true }),
+  };
+
+  // ---- Citizen: wallet & time credits (CONTRACT.md v0.2) ---------------------------------------
+
+  readonly citizenWallet = {
+    get: (): Promise<WalletResponse> => this.http.request('GET', '/api/v1/citizen/wallet'),
+  };
+
+  readonly citizenTimeCredits = {
+    get: (): Promise<TimeCreditsResponse> => this.http.request('GET', '/api/v1/citizen/time-credits'),
   };
 
   // ---- Platform back-office (CONTRACT.md §4 `/api/v1/platform/**`) ---------------------------

@@ -13,4 +13,7 @@ public final class OutboxEventType {
     public static final String MEMBERSHIP_REVOKED = "tenancy.membership.revoked";
     public static final String TENANT_CREATED = "tenancy.tenant.created";
     public static final String TENANT_STATUS_CHANGED = "tenancy.tenant.status-changed";
+    public static final String PARKING_SESSION_STARTED = "parking.session.started";
+    public static final String PARKING_SESSION_EXTENDED = "parking.session.extended";
+    public static final String PARKING_SESSION_FINISHED = "parking.session.finished";
 }

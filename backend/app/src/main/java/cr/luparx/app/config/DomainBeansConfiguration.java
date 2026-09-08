@@ -15,6 +15,8 @@ import cr.luparx.identity.service.SecretCipher;
 import cr.luparx.identity.service.TokenProperties;
 import cr.luparx.identity.service.TokenService;
 import cr.luparx.identity.service.TotpService;
+import cr.luparx.parking.model.MinuteIncrements;
+import cr.luparx.parking.model.ParkingPolicyDefaults;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Bean;
@@ -118,6 +120,30 @@ public class DomainBeansConfiguration {
             LOGGER.info("MFA enforced on portals: {}", enforced);
         }
         return new MfaPolicy(enforced);
+    }
+
+    /**
+     * Turns {@code platform.defaults.parking.*} into the value object the parking domain reads.
+     *
+     * <p>Composed here rather than annotated inside module-parking for the same reason as
+     * {@link #registrationPolicy}: the bounded contexts stay free of deployment concerns, and the
+     * one place that knows about YAML is the application module. A municipality that has configured
+     * its own policy never sees these values — they only fill in the row it has not written yet.</p>
+     */
+    @Bean
+    public ParkingPolicyDefaults parkingPolicyDefaults(ParkingDefaultsProperties properties) {
+        return new ParkingPolicyDefaults(
+                MinuteIncrements.of(properties.sessionIncrementsOrDefault()),
+                properties.sessionMinOrDefault(),
+                properties.sessionMaxOrDefault(),
+                properties.extensionEnabledOrDefault(),
+                MinuteIncrements.of(properties.extensionIncrementsOrDefault()),
+                properties.extensionMaxTotalOrDefault(),
+                properties.earlyFinishEnabledOrDefault(),
+                properties.creditOnEarlyFinishEnabledOrDefault(),
+                properties.creditMinRemainingOrDefault(),
+                properties.creditExpiryDaysOrDefault(),
+                properties.graceMinutesOrDefault());
     }
 
     @Bean

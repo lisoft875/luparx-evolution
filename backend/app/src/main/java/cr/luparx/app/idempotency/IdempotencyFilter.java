@@ -75,7 +75,12 @@ public class IdempotencyFilter extends OncePerRequestFilter {
             "/api/v1/platform/users/*/block",
             "/api/v1/platform/users/*/unblock",
             "/api/v1/platform/users/*/password-reset",
-            "/api/v1/platform/memberships");
+            "/api/v1/platform/memberships",
+            // Parking (CONTRACT.md v0.2 "Invariantes"): starting, extending and finishing move money,
+            // so a double tap on the button must replay the first response instead of charging again.
+            "/api/v1/citizen/parking/sessions",
+            "/api/v1/citizen/parking/sessions/*/extend",
+            "/api/v1/citizen/parking/sessions/*/finish");
 
     private final IdempotencyKeyRepository repository;
     private final ObjectMapper objectMapper;

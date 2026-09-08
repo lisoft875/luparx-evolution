@@ -12,7 +12,7 @@ the contract wins.
 | `module-geo` | `luparx-module-geo` | core | countries, N-level administrative divisions, document rules, `PhoneNumberService`, `IdentityDocumentValidator`, `AddressValidator` |
 | `module-identity` | `luparx-module-identity` | core, geo | users, credentials (Argon2id), TOTP MFA, federation linking, JWT issuance, refresh rotation, login rate limiting |
 | `module-tenancy` | `luparx-module-tenancy` | core | tenants, settings, memberships, `AccessResolver`, per-tenant reports |
-| `module-parking` | `luparx-module-parking` | core, tenancy | zones, tariffs and numbered spaces (entities + repositories); sessions, patrols, citations and finance still deferred |
+| `module-parking` | `luparx-module-parking` | core, tenancy | zones, tariffs, numbered spaces, vehicles, the per-municipality parking policy, sessions (start/extend/finish), the per-tenant wallet and the minute credits; patrols and citations still deferred |
 | `app` | `luparx-app` | all | Spring Boot bootstrap, security, controllers, Flyway, OpenAPI, observability |
 
 The dependency rule of `docs/ARCHITECTURE.md` §1 is enforced by the POMs, not by convention.
@@ -55,9 +55,10 @@ and the schema belongs to the migrations.
 
 > **Migration numbering.** `V1_0`–`V5_0` are structure by layer and `V9_x` is catalogue seed data.
 > A new migration must sort *after* everything an existing database has already applied — out-of-order
-> migration is off on purpose — which is why the parking-space table is `V10_0` and not `V6_0`:
+> migration is off on purpose — which is why the parking-space table is `V10_0` and the parking
+> domain of v0.2 is `V11_0`, not `V6_0`/`V7_0`:
 > numbering it by layer would have forced every existing database to be recreated. Nothing needs to be
-> reset; Flyway applies `V10_0`/`V9_2` on the next start. If a database is ever left inconsistent,
+> reset; Flyway applies `V10_0`/`V11_0` on the next start. If a database is ever left inconsistent,
 > `cd infra && docker compose down -v && docker compose up -d` recreates it from scratch.
 
 - API: `http://localhost:8090`
@@ -149,6 +150,57 @@ mvn -pl app -am spring-boot:run -Dspring-boot.run.profiles=dev \
 # or: export LUPARX_DEV_SEED_DEMO_DATA=false
 ```
 
+### Parking policy and wallet fixture
+
+`DevParkingSeeder` also materialises the municipality's **parking policy** and funds the development
+citizen's **wallet**. Neither writes a value of its own: the policy is created by
+`ParkingPolicyService` from `platform.defaults.parking.*`, so the fixture and a real municipality's
+first day go through the same code path, and changing what San José offers in development is a change
+to YAML rather than to Java. The wallet is funded once, with an amount declared in *major* units and
+converted with `Money.ofMajor`, so it is denominated in whatever currency the municipality was
+configured with; a wallet that already holds money is left alone, so a developer who spent it on test
+sessions keeps their state and a restart does not quietly refill it.
+
+## The parking domain (v0.2)
+
+`docs/CONTRACT.md` "v0.2 — Dominio de parqueo" is the normative source; this is the map.
+
+| Table | Owner | What it holds |
+|---|---|---|
+| `vehicles` | **the person** | The cars a citizen registered. No `tenant_id`: a person is global and drives the same car to two municipalities |
+| `parking_policies` | tenant (PK) | Every rule of the flow as data: increments, caps, extension, early finish, credit and grace |
+| `parking_sessions` | tenant | A paid stay: one vehicle, one bay, with `plate_snapshot` and the money and minutes it consumed |
+| `parking_session_extensions` | tenant | Each extension, with what it cost |
+| `wallet_accounts` / `wallet_transactions` | tenant | The citizen's money **in that municipality**; there is no global balance |
+| `parking_time_credits` / `parking_time_credit_entries` | tenant | Minutes to the citizen's favour, in lots with their own expiry |
+
+Four decisions worth not re-litigating:
+
+**A plate is unique per user, never globally.** Two people registering the same plate is legitimate —
+a shared family car, a company car, a plate reused after a transfer — so the constraint is
+`UNIQUE (user_id, plate_normalized)`. The consequence is that an inspector's lookup by plate can match
+several citizens; `ParkingSessionRepository` returns *every* active match and carries a
+`TODO(domain)` saying that disambiguating them (by zone and bay) is an open product decision. Picking
+the first match would let a real infraction be excused by somebody else's session.
+
+**The two invariants are partial unique indexes, not service code.** `uq_parking_sessions_active_space`
+and `uq_parking_sessions_active_vehicle` are defined `WHERE status = 'ACTIVE'`, so "one session per
+bay" and "one per vehicle" hold with any number of backend instances. A session past the
+municipality's grace is moved to `EXPIRED` lazily, the next time anybody looks at that bay or vehicle:
+no scheduler, idempotent, and the bay is never held by a session nobody is paying for.
+
+**Money is charged, minutes are credited.** Finishing early never returns money. If the policy allows
+it, the remaining minutes become a credit lot with its own expiry, consumed soonest-expiry-first on
+the next session *in the same municipality*. Charge and session are written in one transaction:
+`INSUFFICIENT_BALANCE` leaves no session, no spent minutes and no debit.
+
+**An option outside the policy is an error, not a rounding.** `INVALID_INCREMENT` — the platform never
+charges for something other than what the citizen asked for.
+
+Start, extend and finish are on `IdempotencyFilter`'s protected list, so the `Idempotency-Key` header
+is mandatory there and a repeated key replays the stored response instead of charging again
+(ADR 0012). The key reaches the domain only to be recorded on the rows it creates.
+
 ### MFA in development
 
 MFA is mandatory on the admin, inspector and platform portals, which means a seeded account cannot
@@ -175,6 +227,16 @@ placeholder key (`docs/SECURITY.md` §5).
 | `IP_HASH_PEPPER` | yes | Mixed into IP hashes so they cannot be reversed with a rainbow table |
 | `LUPARX_DEV_SEED_DEMO_DATA` | no (`dev` only) | `false` keeps the database untouched on start |
 | `LUPARX_DEV_PARKING_SPACES` | no (`dev` only) | Bays the fixture creates, default `5000`, maximum `10000` |
+| `PARKING_SESSION_INCREMENTS` | no | Durations offered when starting, comma-separated minutes, default `30,60,120` |
+| `PARKING_SESSION_MIN_MINUTES` / `PARKING_SESSION_MAX_MINUTES` | no | Session bounds, default `30` / `480` |
+| `PARKING_EXTENSION_ENABLED` | no | Whether a session may be extended, default `true` |
+| `PARKING_EXTENSION_INCREMENTS` | no | Durations offered when extending, default `15,30,60` |
+| `PARKING_EXTENSION_MAX_TOTAL_MINUTES` | no | Cap on session + extensions, default `720`; never below the session maximum |
+| `PARKING_EARLY_FINISH_ENABLED` | no | Whether a citizen may close a session early, default `true` |
+| `PARKING_CREDIT_ON_EARLY_FINISH_ENABLED` | no | Whether the remaining minutes come back as credit, default `true` |
+| `PARKING_CREDIT_MIN_REMAINING_MINUTES` | no | Minimum remaining minutes for a credit, default `10` |
+| `PARKING_CREDIT_EXPIRY_DAYS` | no | Days a credited minute stays usable, default `90`; `0` means never |
+| `PARKING_GRACE_MINUTES` | no | Tolerance before a session counts as expired, default `5` |
 | `SMTP_*`, `SMTP_FROM_ADDRESS` | yes | Transactional email |
 | `OAUTH_*` | no | Federation client credentials; a provider with a blank client id answers `FEDERATION_NOT_CONFIGURED` |
 | `CORS_ALLOWED_ORIGIN_{CITIZEN,ADMIN,INSPECTOR,PLATFORM}` | yes in prod | One origin list per portal — never a shared wildcard |

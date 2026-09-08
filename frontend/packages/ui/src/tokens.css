@@ -359,6 +359,23 @@ body {
   pointer-events: none;
 }
 
+.lx-checkbox {
+  display: flex;
+  align-items: center;
+  gap: var(--lx-space-2);
+  min-height: var(--lx-touch-target-min);
+  cursor: pointer;
+}
+.lx-checkbox__input {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  accent-color: var(--lx-primary);
+}
+.lx-checkbox__label {
+  font-size: var(--lx-text-body-size);
+}
+
 .lx-field {
   display: flex;
   flex-direction: column;
@@ -1042,6 +1059,80 @@ button.lx-list-row {
   font-weight: 600;
 }
 
+/* ---- Sticky timer bar (CONTRACT.md v0.2 rule 3 — fixed above the bottom tab bar on every
+   screen while a parking session is active) -------------------------------------------------- */
+
+.lx-sticky-timer-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--lx-space-3);
+  padding: var(--lx-space-2) var(--lx-space-4);
+  background: var(--lx-success-soft);
+  border-top: 1px solid var(--lx-success);
+  color: var(--lx-text);
+}
+.lx-sticky-timer-bar--warning {
+  background: var(--lx-warning-soft);
+  border-top-color: var(--lx-warning);
+}
+.lx-sticky-timer-bar__icon {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--lx-radius-md);
+  background: var(--lx-surface-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--lx-success);
+}
+.lx-sticky-timer-bar--warning .lx-sticky-timer-bar__icon {
+  color: var(--lx-warning);
+}
+.lx-sticky-timer-bar__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.lx-sticky-timer-bar__plate {
+  font-size: var(--lx-text-body-size);
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lx-sticky-timer-bar__meta {
+  font-size: 11px;
+  color: var(--lx-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lx-sticky-timer-bar .lx-timer {
+  flex-shrink: 0;
+  font-size: 17px;
+  letter-spacing: 0;
+}
+.lx-sticky-timer-bar__more {
+  flex-shrink: 0;
+  min-width: var(--lx-touch-target-min);
+  min-height: 32px;
+  padding: 0 var(--lx-space-3);
+  border-radius: var(--lx-radius-pill);
+  background: var(--lx-surface-2);
+  border: 1px solid var(--lx-border);
+  color: var(--lx-text);
+  font-weight: 700;
+  font-size: 12px;
+  cursor: pointer;
+}
+.lx-sticky-timer-bar__more:focus-visible {
+  outline: 2px solid var(--lx-focus-ring);
+  outline-offset: 2px;
+}
+
 /* ---- Timer -------------------------------------------------------------- */
 
 .lx-timer {
@@ -1467,6 +1558,7 @@ button.lx-list-row {
 .lx-page-layout__sidebar,
 .lx-app-bar,
 .lx-bottom-tab-bar,
+.lx-sticky-timer-bar,
 .lx-centered-layout__card {
   -webkit-backdrop-filter: blur(var(--lx-blur-1));
   backdrop-filter: blur(var(--lx-blur-1));
@@ -1517,6 +1609,7 @@ button.lx-list-row {
   .lx-page-layout__sidebar,
   .lx-app-bar,
   .lx-bottom-tab-bar,
+  .lx-sticky-timer-bar,
   .lx-centered-layout__card,
   .lx-modal,
   .lx-language-pill {
@@ -1536,5 +1629,22 @@ button.lx-list-row {
   gap: var(--lx-space-3, 12px);
 }
 .lx-auth-card__oauth-button-content svg {
+  flex: 0 0 auto;
+}
+
+/* Encabezado de pantalla con una accion a la derecha. El titulo manda: no se parte en dos lineas
+   por dejarle sitio al boton; si de verdad no caben, el boton baja a la linea siguiente. */
+.lx-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--lx-space-3);
+  flex-wrap: wrap;
+}
+.lx-page-header__title {
+  white-space: nowrap;
+  flex: 0 1 auto;
+}
+.lx-page-header > .lx-button {
   flex: 0 0 auto;
 }

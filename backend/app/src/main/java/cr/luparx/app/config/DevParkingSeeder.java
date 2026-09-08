@@ -1,15 +1,20 @@
 package cr.luparx.app.config;
 
+import cr.luparx.core.id.TenantId;
+import cr.luparx.core.id.UserId;
 import cr.luparx.core.id.Uuid7;
 import cr.luparx.core.money.Money;
 import cr.luparx.geo.entity.AdministrativeDivision;
 import cr.luparx.geo.repository.AdministrativeDivisionRepository;
+import cr.luparx.parking.entity.ParkingPolicy;
 import cr.luparx.parking.entity.ParkingRate;
 import cr.luparx.parking.entity.ParkingZone;
 import cr.luparx.parking.model.ParkingSpaceStatus;
 import cr.luparx.parking.repository.ParkingRateRepository;
 import cr.luparx.parking.repository.ParkingSpaceRepository;
 import cr.luparx.parking.repository.ParkingZoneRepository;
+import cr.luparx.parking.service.ParkingPolicyService;
+import cr.luparx.parking.service.WalletService;
 import cr.luparx.tenancy.entity.Tenant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,8 +41,9 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * Fills the launch municipality with the parking it actually operates: its zones, one tariff per
- * zone, and the numbered bays a citizen types a code from. Development only, and only alongside
+ * Fills the launch municipality with the parking it actually operates: its policy, its zones, one
+ * tariff per zone, the numbered bays a citizen types a code from, and a funded wallet for the
+ * development citizen. Development only, and only alongside
  * {@link DevDataSeeder}, which owns the tenant and the accounts and calls this class once the
  * municipality exists.
  *
@@ -125,7 +131,16 @@ public class DevParkingSeeder {
 
     private static final String SELECT_CODES_SQL = "SELECT code FROM parking_spaces WHERE tenant_id = ?";
 
+    /**
+     * Opening balance of the development citizen, in MAJOR units of the municipality's own currency.
+     * Enough for a long afternoon of testing at the seeded tariffs and deliberately not a round
+     * million: a fixture that can never run out never exercises INSUFFICIENT_BALANCE.
+     */
+    private static final long DEMO_WALLET_MAJOR = 50_000L;
+
     private final DevSeedProperties properties;
+    private final ParkingPolicyService policyService;
+    private final WalletService walletService;
     private final ParkingZoneRepository zoneRepository;
     private final ParkingRateRepository rateRepository;
     private final ParkingSpaceRepository spaceRepository;
@@ -135,6 +150,8 @@ public class DevParkingSeeder {
     private final Clock clock;
 
     public DevParkingSeeder(DevSeedProperties properties,
+                            ParkingPolicyService policyService,
+                            WalletService walletService,
                             ParkingZoneRepository zoneRepository,
                             ParkingRateRepository rateRepository,
                             ParkingSpaceRepository spaceRepository,
@@ -143,6 +160,8 @@ public class DevParkingSeeder {
                             PlatformTransactionManager transactionManager,
                             Clock clock) {
         this.properties = properties;
+        this.policyService = policyService;
+        this.walletService = walletService;
         this.zoneRepository = zoneRepository;
         this.rateRepository = rateRepository;
         this.spaceRepository = spaceRepository;
@@ -156,7 +175,9 @@ public class DevParkingSeeder {
      * Seeds zones, tariffs and bays for one municipality. Safe to call on every start: each step asks
      * what is already there first.
      */
-    public void seed(Tenant tenant) {
+    public void seed(Tenant tenant, UUID citizenUserId) {
+        ensurePolicy(tenant);
+        ensureWallet(tenant, citizenUserId);
         List<ParkingZone> zones = ensureZones(tenant);
         if (zones.isEmpty()) {
             LOGGER.warn("Development seed: no parking zone could be created; bays skipped.");
@@ -164,6 +185,59 @@ public class DevParkingSeeder {
         }
         ensureRates(tenant, zones);
         ensureSpaces(tenant, zones);
+    }
+
+    // --- policy ----------------------------------------------------------------------------------
+
+    /**
+     * Materialises the municipality's parking policy from {@code platform.defaults.parking.*}.
+     *
+     * <p>No values are written here on purpose. The seeder asks the domain for the policy and the
+     * domain creates it from the deployment's configured defaults, so the fixture and a real
+     * municipality's first day go through exactly the same code path. Changing what San José offers
+     * in development is a change to application-dev.yml, not to this class — which is what
+     * CONTRACT.md v0.2 means by "nada de constantes en el código".</p>
+     */
+    private void ensurePolicy(Tenant tenant) {
+        ParkingPolicy policy = policyService.require(TenantId.of(tenant.getId()));
+        LOGGER.info("Development seed: parking policy for {} — start {} min, extension {} ({}), early finish {},"
+                        + " credit {} expiring in {} days.",
+                tenant.getSlug(), policy.getSessionIncrementsMinutes(), policy.getExtensionIncrementsMinutes(),
+                policy.isExtensionEnabled() ? "enabled" : "disabled",
+                policy.isEarlyFinishEnabled() ? "enabled" : "disabled",
+                policy.isCreditOnEarlyFinishEnabled() ? "enabled" : "disabled", policy.getCreditExpiryDays());
+    }
+
+    // --- wallet ----------------------------------------------------------------------------------
+
+    /**
+     * Gives the development citizen a balance in this municipality, once.
+     *
+     * <p>Idempotent by balance rather than by a flag: a wallet that already holds money is left
+     * alone, so a developer who spent it on test sessions keeps their state and a restart does not
+     * quietly refill it. The amount is declared in major units and converted with
+     * {@link Money#ofMajor}, so the fixture is denominated in whatever currency the municipality was
+     * configured with.</p>
+     */
+    private void ensureWallet(Tenant tenant, UUID citizenUserId) {
+        if (citizenUserId == null) {
+            LOGGER.warn("Development seed: no citizen account available; wallet skipped.");
+            return;
+        }
+        TenantId tenantId = TenantId.of(tenant.getId());
+        UserId userId = UserId.of(citizenUserId);
+        try {
+            if (!walletService.balance(tenantId, userId).isZero()) {
+                return;
+            }
+            Money opening = Money.ofMajor(BigDecimal.valueOf(DEMO_WALLET_MAJOR), tenant.getCurrencyCode());
+            walletService.topUp(tenantId, userId, opening, "dev-seed-opening-balance");
+            LOGGER.warn("Development seed: citizen wallet funded with {} in {}.", DEMO_WALLET_MAJOR,
+                    tenant.getCurrencyCode());
+        } catch (RuntimeException exception) {
+            // A currency the JDK does not know, or one whose fraction digits the amount does not fit.
+            LOGGER.warn("Development seed: citizen wallet not funded ({}).", exception.toString());
+        }
     }
 
     // --- zones -----------------------------------------------------------------------------------
