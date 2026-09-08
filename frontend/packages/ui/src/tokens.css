@@ -1528,3 +1528,13 @@ button.lx-list-row {
     display: none;
   }
 }
+
+/* Provider mark to the left of the label, with the label optically centred as a block. */
+.lx-auth-card__oauth-button-content {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--lx-space-3, 12px);
+}
+.lx-auth-card__oauth-button-content svg {
+  flex: 0 0 auto;
+}

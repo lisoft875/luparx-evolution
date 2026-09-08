@@ -7,7 +7,24 @@ import type { OAuthProvider, Portal } from '@luparx/api-client';
 import { ApiError, NetworkError, oauthStartUrl } from '@luparx/api-client';
 import { useAuth } from '@luparx/auth';
 import { useTranslation, type TranslationKey } from '@luparx/i18n';
-import { Alert, Button, FormField, IconEye, IconEyeOff, Input } from '@luparx/ui';
+import {
+  Alert,
+  Button,
+  FormField,
+  IconEye,
+  IconEyeOff,
+  IconFacebook,
+  IconGoogle,
+  IconMicrosoft,
+  Input,
+} from '@luparx/ui';
+
+/** Each provider's own mark, as its sign-in guidelines require. */
+const PROVIDER_ICON: Record<OAuthProvider, (props: { size?: number }) => React.JSX.Element> = {
+  google: IconGoogle,
+  microsoft: IconMicrosoft,
+  facebook: IconFacebook,
+};
 
 export interface LoginFormProps {
   portal: Portal;
@@ -196,11 +213,17 @@ export function LoginForm({
         <hr className="lx-auth-card__divider" />
         <p className="lx-auth-card__oauth-label">{t('auth.login.oauth.divider')}</p>
         <div className="lx-auth-card__oauth-buttons">
-          {OAUTH_PROVIDERS.map((provider) => (
-            <Button key={provider} type="button" variant="secondary" fullWidth onClick={() => startOAuth(provider)}>
-              {t(`auth.login.oauth.${provider}` as TranslationKey)}
-            </Button>
-          ))}
+          {OAUTH_PROVIDERS.map((provider) => {
+            const ProviderIcon = PROVIDER_ICON[provider];
+            return (
+              <Button key={provider} type="button" variant="secondary" fullWidth onClick={() => startOAuth(provider)}>
+                <span className="lx-auth-card__oauth-button-content">
+                  <ProviderIcon />
+                  <span>{t(`auth.login.oauth.${provider}` as TranslationKey)}</span>
+                </span>
+              </Button>
+            );
+          })}
         </div>
       </div>
     </div>

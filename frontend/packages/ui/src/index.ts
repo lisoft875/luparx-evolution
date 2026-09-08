@@ -1,3 +1,4 @@
+export { IconGoogle, IconMicrosoft, IconFacebook } from './icons';
 export { Button } from './components/Button';
 export type { ButtonProps, ButtonVariant } from './components/Button';
 export { Input } from './components/Input';

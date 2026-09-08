@@ -93,7 +93,12 @@ export class HttpClient {
   constructor(options: HttpClientOptions) {
     this.baseUrl = options.baseUrl.replace(/\/$/, '');
     this.tokenProvider = options.tokenProvider;
-    this.fetchImpl = options.fetchImpl ?? fetch;
+    // `fetch` keeps `globalThis` as its receiver: storing it in a field and calling
+    // `this.fetchImpl(...)` makes the HttpClient the receiver, which browsers reject with
+    // "Illegal invocation" before the request ever leaves — surfacing as a bogus network error.
+    // The mock transport is a plain function and never hit this, which is why only the real
+    // backend was affected.
+    this.fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis);
     this.defaultHeaders = options.defaultHeaders ?? {};
   }
 
