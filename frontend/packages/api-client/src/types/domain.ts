@@ -107,11 +107,26 @@ export interface DocumentTypeCatalogEntry {
   example: string;
 }
 
+/**
+ * A municipality, carrying enough of itself to be *drawn* and not only identified
+ * (CONTRACT.md v0.4 "Identidad visual de la municipalidad").
+ *
+ * The three branding fields are nullable on purpose and their absence is a normal state, never an
+ * error: a municipality created five minutes ago has no emblem yet. `logoUrl` arrives already
+ * resolved by the server from the stored `logo_asset_key`, so no client ever decides where a logo
+ * lives; when it is null the client draws a monogram over `brandColor`.
+ */
 export interface TenantCatalogEntry {
   id: string;
   slug: string;
   name: string;
   countryCode: string;
+  /** What fits in a top bar when the full name does not ("San José" for "Municipalidad de San José"). */
+  shortName?: string | null;
+  /** Ready to render. Relative server paths are made absolute against the API base URL by ApiClient. */
+  logoUrl?: string | null;
+  /** `#rrggbb`, lowercase. Accents the UI; it never replaces the `--lx-*` design tokens. */
+  brandColor?: string | null;
 }
 
 // ---- Registration (CONTRACT.md §2 — field order is normative for UI and DTO) ------------------
@@ -268,6 +283,14 @@ export interface MembershipSummary {
   id?: string;
   tenantId: string;
   tenantName: string;
+  /**
+   * The municipality's branding, travelling with the list rather than per municipality
+   * (CONTRACT.md v0.4): the picker is a grid of icons, and a client that had to fetch each
+   * municipality separately to find its logo would get slower the more the platform serves.
+   */
+  tenantShortName?: string | null;
+  tenantLogoUrl?: string | null;
+  tenantBrandColor?: string | null;
   portal: Portal;
   role: Role;
   status: MembershipStatus;
@@ -276,11 +299,26 @@ export interface MembershipSummary {
 export interface MeResponse {
   user: UserProfile;
   memberships: MembershipSummary[];
-  activeTenant: TenantCatalogEntry | null;
+  /**
+   * The municipality this session is currently scoped to, or null/absent when none has been chosen.
+   * The server omits the key entirely rather than sending null, so this is optional as well as
+   * nullable — never narrow it to a required field.
+   */
+  activeTenant?: TenantCatalogEntry | null;
 }
 
 export interface SessionTenantRequest {
   tenantId: string;
+}
+
+/**
+ * `POST /{portal}/session/tenant` (CONTRACT.md v0.4). The new token pair AND the branding of the
+ * municipality it is scoped to, so the badge next to the LuParX logo can repaint from the same
+ * answer that changed the session, with no second request in between.
+ */
+export interface SwitchTenantResponse {
+  tokens: TokenPair;
+  activeTenant: TenantCatalogEntry | null;
 }
 
 // ---- Admin: users & memberships ---------------------------------------------------------------

@@ -26,7 +26,7 @@ export type { TableProps, TableColumn } from './components/Table';
 export { Pagination } from './components/Pagination';
 export type { PaginationProps } from './components/Pagination';
 export { Modal } from './components/Modal';
-export type { ModalProps } from './components/Modal';
+export type { ModalProps, ModalVariant } from './components/Modal';
 export { PageLayout, CenteredLayout } from './components/PageLayout';
 export type { PageLayoutProps, CenteredLayoutProps } from './components/PageLayout';
 export { AuthScreen } from './components/AuthScreen';
@@ -58,6 +58,22 @@ export { Timer } from './components/Timer';
 export type { TimerProps } from './components/Timer';
 export { Brand, Logo } from './components/Brand';
 export type { BrandProps, LogoProps } from './components/Brand';
+export { TenantMark } from './components/TenantMark';
+export type { TenantMarkProps, TenantMarkSize } from './components/TenantMark';
+export { TenantBadge } from './components/TenantBadge';
+export type { TenantBadgeProps } from './components/TenantBadge';
+export { TenantGrid, TenantTile, TenantTileSkeleton } from './components/TenantGrid';
+export type { TenantGridProps, TenantTileProps } from './components/TenantGrid';
+export {
+  contrastRatio,
+  parseHexColor,
+  readableInkOn,
+  relativeLuminance,
+  tenantAccent,
+  tenantAccentVariables,
+  tenantMonogramInitials,
+} from './tenantBrand';
+export type { Rgb, TenantAccent } from './tenantBrand';
 export { BRAND_ASSETS } from './brandAssets';
 export { PlatformBanner } from './components/PlatformBanner';
 export type { PlatformBannerProps } from './components/PlatformBanner';

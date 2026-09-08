@@ -496,25 +496,109 @@ body {
 }
 .lx-modal__header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
+  gap: var(--lx-space-3);
   padding: var(--lx-space-4) var(--lx-space-5);
   border-bottom: 1px solid var(--lx-border);
+}
+.lx-modal__heading {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
 }
 .lx-modal__title {
   font-size: 1.125rem;
   margin: 0;
 }
+.lx-modal__description {
+  margin: 0;
+  font-size: var(--lx-text-meta-size);
+  color: var(--lx-text-muted);
+}
 .lx-modal__close {
-  background: none;
-  border: none;
-  font-size: 1.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  /* A 36 px hit target in the corner the reference puts it in — the "×" glyph it replaced was a
+     10 px tap target that only worked with a mouse. */
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: var(--lx-radius-pill);
+  background: var(--lx-surface-2);
+  border: 1px solid var(--lx-border);
   line-height: 1;
   cursor: pointer;
-  color: var(--lx-text-muted);
+  color: var(--lx-text);
+}
+.lx-modal__close:hover {
+  border-color: var(--lx-border-strong);
+}
+.lx-modal__close:focus-visible {
+  outline: 2px solid var(--lx-focus-ring);
+  outline-offset: 2px;
 }
 .lx-modal__body {
   padding: var(--lx-space-5);
+}
+.lx-modal__footer {
+  padding: var(--lx-space-4) var(--lx-space-5) calc(var(--lx-space-4) + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--lx-border);
+}
+
+/* ---- The sheet variant ----
+   The municipality picker (CONTRACT.md v0.4) is a step, not a small confirm box: on a phone it
+   takes the screen so the grid of emblems *is* the context, and on a wide screen it settles into
+   a centred panel rather than stretching a two-column grid across 1440 px.
+
+   `100dvh`, not `100vh`: on a phone browser with a retracting toolbar `vh` is the *largest*
+   viewport, so a sheet measured in vh is taller than the screen and its footer sits below the
+   fold on first paint. */
+.lx-modal-backdrop--sheet {
+  padding: 0;
+  align-items: stretch;
+}
+.lx-modal--sheet {
+  max-width: none;
+  width: 100%;
+  max-height: none;
+  height: 100dvh;
+  border: none;
+  border-radius: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.lx-modal--sheet .lx-modal__header {
+  padding-top: max(var(--lx-space-4), env(safe-area-inset-top));
+}
+.lx-modal--sheet .lx-modal__title {
+  font-size: var(--lx-text-screen-title-size);
+  font-weight: var(--lx-text-screen-title-weight);
+}
+/* Only the body scrolls: the title and the close button stay put while a long list of
+   municipalities moves under them. */
+.lx-modal--sheet .lx-modal__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+@media (min-width: 700px) {
+  .lx-modal-backdrop--sheet {
+    padding: var(--lx-space-5);
+    align-items: center;
+  }
+  .lx-modal--sheet {
+    max-width: 560px;
+    height: auto;
+    max-height: min(88dvh, 780px);
+    border: 1px solid var(--lx-border-strong);
+    border-radius: var(--lx-radius-lg);
+  }
 }
 
 .lx-page-layout {
@@ -1684,4 +1768,311 @@ button.lx-list-row {
 .lx-checkbox__hint {
   display: block;
   margin-top: 2px;
+}
+
+/* ---- Municipal identity (CONTRACT.md v0.4) ------------------------------------------------
+   A municipality's own colour arrives as inline `--lx-tenant-*` custom properties, projected
+   per theme by @luparx/ui's `tenantAccentVariables`. Every rule below either uses one of those
+   or falls back to a `--lx-*` token, which is what keeps the brand an accent: it tints a ring,
+   a wash and the monogram's ground, and touches nothing else. A municipality with no colour
+   set emits no variables at all and lands on the token defaults.
+
+   `--lx-tenant-accent` picks the projection that reads on the theme actually in use — the
+   lightened one on the near-black ground, the darkened one on the light variant — so a dark
+   navy brand is never drawn as a ring nobody can see. */
+:root {
+  --lx-tenant-accent: var(--lx-tenant-accent-dark, var(--lx-primary-strong));
+  /* Ink for a glyph drawn *on* --lx-tenant-accent, measured per projection in tenantBrand.ts.
+     Distinct from --lx-tenant-ink, which is measured against the raw brand colour. */
+  --lx-tenant-accent-ink: var(--lx-tenant-accent-dark-ink, var(--lx-primary-contrast));
+  --lx-tenant-mark-size-badge: 22px;
+  --lx-tenant-mark-size-tile: 64px;
+  --lx-tenant-mark-size-hero: 96px;
+}
+:root[data-theme='light'] {
+  --lx-tenant-accent: var(--lx-tenant-accent-light, var(--lx-primary));
+  --lx-tenant-accent-ink: var(--lx-tenant-accent-light-ink, var(--lx-primary-contrast));
+}
+
+/* ---- The emblem ----
+   Circular, because a municipal coat of arms is: the emblems the reference shows are round seals,
+   and the server's generated monogram is a rounded square whose corners the circular clip simply
+   removes, leaving a filled disc with the initials — the same shape either way, so a municipality
+   with an emblem and one without sit in the same grid without one of them looking unfinished. */
+.lx-tenant-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  overflow: hidden;
+  border-radius: 50%;
+  background: var(--lx-surface-2);
+  border: none;
+}
+.lx-tenant-mark--badge {
+  width: var(--lx-tenant-mark-size-badge);
+  height: var(--lx-tenant-mark-size-badge);
+}
+.lx-tenant-mark--tile {
+  width: var(--lx-tenant-mark-size-tile);
+  height: var(--lx-tenant-mark-size-tile);
+}
+.lx-tenant-mark--hero {
+  width: var(--lx-tenant-mark-size-hero);
+  height: var(--lx-tenant-mark-size-hero);
+}
+.lx-tenant-mark__image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+/* The monogram fallback: initials on the municipality's own colour, with the ink chosen by
+   measuring the contrast of both candidates rather than assuming white always wins. */
+.lx-tenant-mark--monogram {
+  background: var(--lx-tenant-brand, var(--lx-surface-2));
+}
+.lx-tenant-mark__initials {
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  color: var(--lx-tenant-ink, var(--lx-text));
+}
+.lx-tenant-mark--badge .lx-tenant-mark__initials {
+  font-size: 11px;
+}
+.lx-tenant-mark--tile .lx-tenant-mark__initials {
+  font-size: 30px;
+}
+.lx-tenant-mark--hero .lx-tenant-mark__initials {
+  font-size: 40px;
+}
+.lx-tenant-mark--skeleton {
+  background: var(--lx-surface-2);
+  opacity: 0.5;
+}
+
+/* ---- The grid of choices ----
+   auto-fit + minmax, not breakpoints: 2 columns hold from 320 px, and the count grows on its own
+   as the container widens instead of stepping at three arbitrary widths. `minmax(0, 1fr)` (not
+   `1fr`) is what stops a long municipality name from forcing the column wider than its share. */
+.lx-tenant-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(132px, 46%), 1fr));
+  gap: var(--lx-space-5) var(--lx-space-3);
+  width: 100%;
+}
+@media (min-width: 700px) {
+  .lx-tenant-grid {
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: var(--lx-space-5) var(--lx-space-4);
+  }
+}
+
+/* ---- One municipality ----
+   No card. The reference the client approved is an emblem in a thin ring with the name centred
+   underneath, and that is the whole tile: a bordered box around each one would draw a grid of
+   containers where the point is a grid of *emblems*. The tile is still a real <button>, so what it
+   loses is chrome, not semantics — it keeps its focus ring, its pressed state and its hit area,
+   which spans the emblem and the name rather than only the disc. */
+.lx-tenant-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--lx-space-3);
+  min-width: 0;
+  padding: var(--lx-space-2);
+  background: none;
+  border: none;
+  border-radius: var(--lx-radius-lg);
+  color: var(--lx-text);
+  font-family: inherit;
+  cursor: pointer;
+  text-align: center;
+  transition: transform 120ms ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  .lx-tenant-tile {
+    transition: none;
+  }
+}
+.lx-tenant-tile:active:not(:disabled) {
+  transform: scale(0.97);
+}
+/* The system focus ring stays the system's: a municipality's colour must never decide whether a
+   keyboard user can see where they are. */
+.lx-tenant-tile:focus-visible {
+  outline: 2px solid var(--lx-focus-ring);
+  outline-offset: 2px;
+}
+.lx-tenant-tile:disabled {
+  cursor: default;
+}
+.lx-tenant-tile--busy {
+  opacity: 0.72;
+}
+
+/* The ring. Thin and in the municipality's own colour, held off the emblem by its padding so it
+   circles the artwork instead of cropping it. */
+.lx-tenant-tile__ring {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--lx-tenant-accent) 55%, transparent);
+  background: var(--lx-surface);
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  .lx-tenant-tile__ring {
+    transition: none;
+  }
+}
+.lx-tenant-tile:hover:not(:disabled) .lx-tenant-tile__ring {
+  border-color: var(--lx-tenant-accent);
+}
+/* The current municipality, unmistakably: the ring thickens into the brand colour, a soft halo
+   separates it from its neighbours, and a check sits on it — colour alone never carries the
+   distinction, because for a red/green-blind reader on a red-branded municipality it would not. */
+.lx-tenant-tile--selected .lx-tenant-tile__ring {
+  border-width: 2px;
+  border-color: var(--lx-tenant-accent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--lx-tenant-accent) 18%, transparent);
+}
+.lx-tenant-tile__check {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--lx-tenant-accent);
+  /* Measured against the projected accent, not the raw brand colour — see tenantBrand.ts. */
+  color: var(--lx-tenant-accent-ink);
+  border: 2px solid var(--lx-surface);
+  box-sizing: border-box;
+}
+.lx-tenant-tile__name {
+  font-size: var(--lx-text-body-size);
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--lx-text);
+  max-width: 100%;
+  /* Two lines, then ellipsis: "Municipalidad de Montes de Oca" must not push the tile taller than
+     its neighbours and break the grid's rhythm. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.lx-tenant-tile--selected .lx-tenant-tile__name {
+  color: var(--lx-text);
+  font-weight: 700;
+}
+.lx-tenant-tile--skeleton {
+  cursor: default;
+}
+.lx-tenant-tile__name--skeleton {
+  width: 72%;
+  height: 12px;
+  border-radius: var(--lx-radius-pill);
+  background: var(--lx-surface-2);
+  opacity: 0.6;
+}
+
+/* ---- The badge beside the LuParX mark ----
+   `min-width: 0` on the badge and its label is what lets the name actually truncate inside the
+   app bar's flex row; without it the badge sets its own minimum from the text and pushes the
+   bell off a 320 px screen. */
+.lx-tenant-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--lx-space-2);
+  min-width: 0;
+  max-width: 46vw;
+  padding: 3px var(--lx-space-2) 3px 3px;
+  border-radius: var(--lx-radius-pill);
+  background: var(--lx-surface-2);
+  border: 1px solid var(--lx-border);
+  color: var(--lx-text);
+  font-family: inherit;
+  text-decoration: none;
+}
+.lx-tenant-badge--interactive {
+  cursor: pointer;
+  /* Comfortably tappable without inflating the 56 px app bar. */
+  min-height: 32px;
+}
+.lx-tenant-badge--interactive:hover {
+  border-color: var(--lx-tenant-accent);
+}
+.lx-tenant-badge--interactive:focus-visible {
+  outline: 2px solid var(--lx-focus-ring);
+  outline-offset: 2px;
+}
+.lx-tenant-badge__label {
+  min-width: 0;
+  font-size: var(--lx-text-meta-size);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Below ~360 px the app bar has the brand, the badge and the bell to fit. The emblem is what
+   identifies the municipality at a glance, so the label is what gives ground, not the logo. */
+@media (max-width: 359px) {
+  .lx-tenant-badge {
+    max-width: 40vw;
+  }
+  .lx-tenant-badge__label {
+    max-width: 8ch;
+  }
+}
+
+/* ---- What sits behind the picker on its own route ----
+   Only the LuParX mark on the product's ground. The sheet is what carries the screen; this exists
+   so that the panel on a wide viewport, and the sheet's own translucency, have something that
+   names the product behind them rather than a blank rectangle.
+
+   `100dvh`, not `100vh`: on a phone browser with a retracting toolbar `vh` is the *largest*
+   viewport, so a "full screen" surface measured in vh is taller than the screen. */
+.lx-tenant-picker {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  padding: var(--lx-space-5) var(--lx-space-4);
+  padding-top: max(var(--lx-space-5), env(safe-area-inset-top));
+  box-sizing: border-box;
+}
+
+/* ---- The switcher inside the parking flow ---- */
+.lx-tenant-switch {
+  display: flex;
+  align-items: center;
+  gap: var(--lx-space-3);
+  min-width: 0;
+}
+.lx-tenant-switch__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+.lx-tenant-switch__name {
+  font-size: var(--lx-text-card-title-size);
+  font-weight: var(--lx-text-card-title-weight);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lx-tenant-switch__meta {
+  font-size: var(--lx-text-meta-size);
+  color: var(--lx-text-muted);
 }

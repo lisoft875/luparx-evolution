@@ -113,8 +113,20 @@ public final class AuthDtos {
     public record TokenPairResponse(String accessToken, String refreshToken, long expiresIn) {
     }
 
-    /** Envelope used by the endpoints the contract documents as returning {@code {tokens}}. */
-    public record TokensEnvelope(TokenPairResponse tokens) {
+    /**
+     * Envelope used by the endpoints the contract documents as returning {@code {tokens}}.
+     *
+     * <p>{@code activeTenant} travels with it since v0.4 so that switching municipality answers with
+     * the municipality that was switched to — name, logo and colour included. The client has to
+     * repaint the chip next to the LupaRX logo the moment the switch succeeds, and making it fetch
+     * the catalogue again to learn what it just chose would be a round trip for information the
+     * server already had in its hand. Null on the endpoints that issue a session without one.</p>
+     */
+    public record TokensEnvelope(TokenPairResponse tokens, CatalogDtos.TenantCatalogResponse activeTenant) {
+
+        public TokensEnvelope(TokenPairResponse tokens) {
+            this(tokens, null);
+        }
     }
 
     public record MfaVerifyRequest(

@@ -45,6 +45,15 @@ import java.util.List;
  * <p>Prices differ between municipalities on purpose: a quote for the same duration in two of them
  * must come back with different amounts, which is the cheapest possible proof that pricing is
  * resolved per tenant and not from a constant.</p>
+ *
+ * <h2>Logos</h2>
+ *
+ * <p>Each municipality gets a distinct brand colour and the <b>generated monogram</b> as its logo —
+ * its initials over that colour, drawn by the platform. <b>No real coat of arms is seeded.</b> A
+ * municipal emblem is that municipality's official symbol; it is theirs to provide and ours to
+ * display, never ours to invent, approximate or ship in a fixture. The real one is uploaded by the
+ * municipality from its own admin panel ({@code PUT /api/v1/admin/settings/branding}), which replaces
+ * the placeholder with an absolute https address of their choosing.</p>
  */
 final class DevMunicipalities {
 
@@ -61,7 +70,7 @@ final class DevMunicipalities {
      * it changes.
      */
     static final DevMunicipality SAN_JOSE = new DevMunicipality(
-            "san-jose", "Municipalidad de San José", "San José", "101",
+            "san-jose", "Municipalidad de San José", "San José", "San José", "#1d4ed8", "101",
             List.of(
                     new ZoneSeed("SJ-AMON", "Barrio Amón",
                             "Barrio Amón, al norte del centro: calles estrechas y casas patrimoniales.",
@@ -96,7 +105,7 @@ final class DevMunicipalities {
      */
     static final List<DevMunicipality> ADDITIONAL = List.of(
             new DevMunicipality(
-                    "escazu", "Municipalidad de Escazú", "Escazú", "102",
+                    "escazu", "Municipalidad de Escazú", "Escazú", "Escazú", "#047857", "102",
                     List.of(
                             new ZoneSeed("ESC-MULTIPLAZA", "San Rafael – Multiplaza",
                                     "San Rafael de Escazú: corredor de Multiplaza y las torres de oficinas.",
@@ -117,7 +126,8 @@ final class DevMunicipalities {
                     "Charges 24 hours a day; prefixed alphanumeric bay codes (E-0001, and E-A12B is valid too)."),
 
             new DevMunicipality(
-                    "montes-de-oca", "Municipalidad de Montes de Oca", "Montes de Oca", "115",
+                    "montes-de-oca", "Municipalidad de Montes de Oca", "Montes de Oca", "M. de Oca",
+                    "#b45309", "115",
                     List.of(
                             new ZoneSeed("MO-SANPEDRO", "San Pedro centro",
                                     "San Pedro centro: entorno de la Universidad de Costa Rica y la Fuente de la Hispanidad.",
@@ -140,7 +150,7 @@ final class DevMunicipalities {
                     "Short hours 08:00-17:00, Monday to Friday: Saturday and Sunday are not charged."),
 
             new DevMunicipality(
-                    "la-union", "Municipalidad de La Unión", "La Unión", "303",
+                    "la-union", "Municipalidad de La Unión", "La Unión", "La Unión", "#7c3aed", "303",
                     List.of(
                             new ZoneSeed("LU-TRESRIOS", "Tres Ríos centro",
                                     "Tres Ríos centro: parque, iglesia y el comercio de la calle principal.",
@@ -162,7 +172,7 @@ final class DevMunicipalities {
                     "Working day 07:00-19:00 with two public holidays loaded as dated exceptions."),
 
             new DevMunicipality(
-                    "cartago", "Municipalidad de Cartago", "Cartago", "301",
+                    "cartago", "Municipalidad de Cartago", "Cartago", "Cartago", "#be123c", "301",
                     List.of(
                             new ZoneSeed("CAR-CENTRO", "Centro histórico",
                                     "Centro histórico: Las Ruinas de Santiago Apóstol y el parque central.",
@@ -198,6 +208,8 @@ final class DevMunicipalities {
      *                      ({@code admin.<slug>@luparx.test})
      * @param legalName     legal name of the municipality
      * @param displayName   name shown to citizens
+     * @param shortName     what fits in a top bar; "M. de Oca" where the display name does not
+     * @param brandColor    the colour behind the generated monogram, {@code #rrggbb}
      * @param cantonCode    official canton code, for the log line only
      * @param zones         its parking zones, in the order the bay code blocks are dealt
      * @param schedule      charging timetable to write, or null to keep the platform defaults
@@ -210,6 +222,8 @@ final class DevMunicipalities {
             String slug,
             String legalName,
             String displayName,
+            String shortName,
+            String brandColor,
             String cantonCode,
             List<ZoneSeed> zones,
             ScheduleVariant schedule,

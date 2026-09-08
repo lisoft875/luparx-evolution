@@ -18,6 +18,7 @@ import cr.luparx.core.page.SortDirection;
 import cr.luparx.tenancy.entity.Tenant;
 import cr.luparx.tenancy.entity.TenantSetting;
 import cr.luparx.tenancy.model.SelfRegistrationPolicy;
+import cr.luparx.tenancy.model.TenantBranding;
 import cr.luparx.tenancy.model.TenantSettingKey;
 import cr.luparx.tenancy.model.TenantStatus;
 import cr.luparx.tenancy.repository.TenantRepository;
@@ -56,9 +57,26 @@ public class TenantService {
         this.clock = clock;
     }
 
+    /** Creates a municipality with no visual identity yet; see the six-argument overload. */
     @Transactional
     public Tenant create(String slug, String legalName, String displayName, String countryCode, String currencyCode,
                          String locale, String timeZone, SelfRegistrationPolicy policy, UserId actor) {
+        return create(slug, legalName, displayName, countryCode, currencyCode, locale, timeZone, policy,
+                TenantBranding.none(), actor);
+    }
+
+    /**
+     * Creates a municipality, optionally with the visual identity it launches with.
+     *
+     * <p>Branding is accepted here and not only through a later edit because the back-office creates
+     * a municipality from one form: making the operator save it and then immediately edit it would be
+     * a worse product for no gain. Every branding value is validated by the same rules
+     * {@link #rebrand} applies — a colour that is not a colour paints nothing wherever it came in.</p>
+     */
+    @Transactional
+    public Tenant create(String slug, String legalName, String displayName, String countryCode, String currencyCode,
+                         String locale, String timeZone, SelfRegistrationPolicy policy, TenantBranding branding,
+                         UserId actor) {
         ValidationException.Collector errors = new ValidationException.Collector();
         String normalizedSlug = slug == null ? "" : slug.trim().toLowerCase(Locale.ROOT);
         if (!SLUG_PATTERN.matcher(normalizedSlug).matches()) {
@@ -95,6 +113,8 @@ public class TenantService {
                 currency, locale, timeZone, TenantStatus.ACTIVE,
                 policy == null ? SelfRegistrationPolicy.APPROVAL_REQUIRED : policy, now,
                 actor == null ? null : actor.value());
+        TenantBranding validated = validateBranding(branding);
+        tenant.rebrand(validated.logoAssetKey(), validated.brandColor(), validated.shortName());
         return tenantRepository.save(tenant);
     }
 
@@ -168,6 +188,51 @@ public class TenantService {
         tenant.changeStatus(status, reason);
         tenant.touch(clock.instant(), actor == null ? null : actor.value());
         return tenant;
+    }
+
+    /**
+     * Replaces the visual identity of a municipality, as one form (CONTRACT.md v0.4).
+     *
+     * <p>Whole-row replacement, like every other "edit this configuration" method here: a null means
+     * "this municipality has none" and not "leave the old one", so clearing a logo is possible at all.
+     * A municipality with nothing set is a valid state and the client falls back to a monogram.</p>
+     */
+    @Transactional
+    public Tenant rebrand(TenantId tenantId, TenantBranding branding, UserId actor) {
+        Tenant tenant = require(tenantId);
+        TenantBranding validated = validateBranding(branding);
+        tenant.rebrand(validated.logoAssetKey(), validated.brandColor(), validated.shortName());
+        tenant.touch(clock.instant(), actor == null ? null : actor.value());
+        return tenant;
+    }
+
+    /**
+     * Canonicalises and checks a branding form, reporting every offending field at once.
+     *
+     * <p>Null fields pass: they are the "not configured" state the columns are nullable for. What is
+     * refused is a value that is present and wrong — an unparseable colour, a logo key that is
+     * neither the built-in placeholder nor an absolute https address, a short name too long for the
+     * bar it exists to fit.</p>
+     */
+    private TenantBranding validateBranding(TenantBranding branding) {
+        if (branding == null) {
+            return TenantBranding.none();
+        }
+        ValidationException.Collector errors = new ValidationException.Collector();
+        String color = TenantBranding.normalizeColor(branding.brandColor());
+        if (branding.brandColor() != null && !branding.brandColor().isBlank() && color == null) {
+            errors.add("brandColor", ErrorCode.VALIDATION_FAILED, "error.tenant.brandColor.invalid");
+        }
+        String logo = TenantBranding.normalizeLogoKey(branding.logoAssetKey());
+        if (logo != null && !TenantBranding.isValidLogoKey(logo)) {
+            errors.add("logoAssetKey", ErrorCode.VALIDATION_FAILED, "error.tenant.logo.invalid");
+        }
+        String shortName = TenantBranding.normalizeShortName(branding.shortName());
+        if (!TenantBranding.isValidShortName(shortName)) {
+            errors.add("shortName", ErrorCode.VALIDATION_FAILED, "error.tenant.shortName.tooLong");
+        }
+        errors.throwIfAny();
+        return new TenantBranding(logo, color, shortName);
     }
 
     // --- settings --------------------------------------------------------------------------------

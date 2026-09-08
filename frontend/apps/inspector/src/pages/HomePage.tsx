@@ -2,6 +2,7 @@ import * as React from 'react';
 import { useState } from 'react';
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { ActiveTenantBadge } from '@luparx/features';
 import { useAuth } from '@luparx/auth';
 import { useTranslation } from '@luparx/i18n';
 import {
@@ -45,7 +46,13 @@ export function HomePage(): React.JSX.Element {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: 'transparent' }}>
       <AppBar
-        start={<Brand name={t('app.name')} tagline={t('auth.portal.inspector.title')} />}
+        start={
+          <>
+            <Brand name={t('app.name')} tagline={t('auth.portal.inspector.title')} />
+            {/* The municipality this shift is in, beside the LuParX mark (CONTRACT.md v0.4). */}
+            <ActiveTenantBadge onOpenSelector={() => navigate('/select-tenant')} />
+          </>
+        }
         actions={[{ icon: <IconLogout />, label: t('auth.logout.action'), onClick: () => logout() }]}
       />
       <main

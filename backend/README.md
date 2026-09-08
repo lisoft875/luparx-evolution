@@ -439,6 +439,51 @@ or Spring in sight, and `ChargingScheduleTest` covers the edges that would other
 citizen or give away an afternoon: exact boundaries, crossing midnight, a weekday with no band, a
 holiday inside a long stay, overlapping bands entered by hand, and the same timetable in two zones.
 
+## Visual identity of a municipality (v0.4)
+
+The citizen picks their municipality from a grid of icons after signing in, and the active one sits
+next to the LupaRX logo. `V14_0` adds three nullable columns to `tenants` for that: `logo_asset_key`,
+`brand_color` (`#rrggbb`, CHECK-validated, lower case) and `short_name`.
+
+**A key, not a URL.** An absolute URL in a tenant row is environment-specific — restore the database
+into staging and every municipality points at production's asset host — and it ages badly: the day an
+upload endpoint and a CDN land, every stored URL has to be rewritten. A key is resolved at render
+time, so hosting changes without a row moving. Two kinds are understood today, and the CHECK admits
+only those: `generated:monogram` (the built-in placeholder) and an absolute `https://` address of an
+emblem the municipality hosts itself. Plain `http` is refused — a logo loaded over http on an https
+page is blocked as mixed content, so accepting it would only produce a broken image.
+
+**All three are nullable on purpose.** A municipality created five minutes ago has no logo, and that
+is a valid state rather than an error: `logoUrl` comes back absent and the client draws a monogram
+over `brandColor`, falling back to the platform's own colour when there is not even that.
+
+```
+GET     /api/v1/catalog/tenants                 + shortName, logoUrl, brandColor
+GET     /api/v1/catalog/tenants/{id}/logo.svg   public; the generated monogram
+GET     /api/v1/{portal}/me/memberships         + tenantShortName, tenantLogoUrl, tenantBrandColor
+POST    /api/v1/{portal}/session/tenant         answers {tokens, activeTenant}
+GET|PUT /api/v1/admin/settings/branding         permission TENANT_MANAGE
+POST|PUT /api/v1/platform/tenants[/{id}]        accept logoAssetKey, brandColor, shortName
+```
+
+`logoUrl` is resolved from the key in **one** place (`ResponseMapper.logoUrlOf`), so the catalogue,
+the membership list and the active-municipality chip cannot disagree about where a logo lives. The
+branding travels *with* the list rather than per municipality: a client that had to fetch each one
+separately to find its logo would make the picker slower the more municipalities the platform serves.
+
+**The emblem belongs to the municipality.** The platform never invents, approximates or ships a real
+coat of arms — those are official symbols and each municipality provides its own from its admin panel.
+`GET /catalog/tenants/{id}/logo.svg` draws the placeholder instead: the initials over the brand
+colour, as an SVG. A client could draw that itself, and the citizen app does whenever `logoUrl` is
+absent; the endpoint exists for everything that cannot — an email, a PDF, an `<img>` with no
+JavaScript behind it. Initials skip words starting with a lower-case letter, so "Montes de Oca" reads
+as MO and "La Unión" as LU, which handles *van*, *da* and *du* without a list of Spanish stop words.
+
+The fixture gives each of the five municipalities a distinct colour and the generated monogram:
+San José `#1d4ed8` (SJ), Escazú `#047857` (E), Montes de Oca `#b45309` (MO, short name "M. de Oca"),
+La Unión `#7c3aed` (LU), Cartago `#be123c` (C). It repairs a municipality seeded before `V14_0` once,
+and only when it has none — a developer who set a colour or uploaded an emblem keeps it.
+
 ## Environment variables
 
 Secrets have **no usable default**: the application fails to start rather than run with a

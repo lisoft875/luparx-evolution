@@ -14,6 +14,7 @@ import type {
   RegisterRequest,
   Role,
   StartParkingSessionRequest,
+  TenantCatalogEntry,
   UpdateProfileRequest,
   UpdateVehicleRequest,
 } from '../types/domain';
@@ -113,6 +114,36 @@ function membershipForPortal(user: MockUserRecord, portal: Portal): MembershipSu
   return user.memberships.find((membership) => membership.portal === portal);
 }
 
+function activeMembershipsForPortal(user: MockUserRecord, portal: Portal): MembershipSummary[] {
+  return user.memberships.filter((membership) => membership.portal === portal && membership.status === 'ACTIVE');
+}
+
+/**
+ * The municipality a fresh session resolves to, mirroring the real server (CONTRACT.md v0.4): one
+ * active membership resolves itself, several resolve to nothing and the account is asked to choose.
+ * Returning the first of several here would hide the whole picker from anyone developing on mocks.
+ */
+function autoResolvedTenantId(user: MockUserRecord, portal: Portal): string | null {
+  const active = activeMembershipsForPortal(user, portal);
+  return active.length === 1 ? active[0]!.tenantId : null;
+}
+
+/** The catalogue shape of a municipality, branding included, from the mock tenant table. */
+function tenantCatalogEntry(tenantId: string | null | undefined): TenantCatalogEntry | null {
+  if (!tenantId) return null;
+  const tenant = MOCK_TENANTS.find((candidate) => candidate.id === tenantId);
+  if (!tenant) return null;
+  return {
+    id: tenant.id,
+    slug: tenant.slug,
+    name: tenant.name,
+    countryCode: tenant.countryCode,
+    shortName: tenant.shortName ?? null,
+    logoUrl: tenant.logoUrl ?? null,
+    brandColor: tenant.brandColor ?? null,
+  };
+}
+
 /** Platform-scope roles bypass `tenant_memberships` entirely (see MockUserRecord.platformRole). */
 function rolesForLogin(user: MockUserRecord, portal: Portal, membership: MembershipSummary | undefined): Role[] {
   if (portal === 'platform') return user.platformRole ? [user.platformRole] : [];
@@ -208,7 +239,7 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
   if (method === 'GET' && path === '/api/v1/catalog/tenants') {
     const country = url.searchParams.get('country');
     const items = country ? MOCK_TENANTS.filter((t) => t.countryCode === country) : MOCK_TENANTS;
-    return json(items.map(({ id, slug, name, countryCode }) => ({ id, slug, name, countryCode })));
+    return json(items.map((tenant) => tenantCatalogEntry(tenant.id)));
   }
 
   // GET /api/v1/catalog/tenants/{id}/locales — public, the login screen needs it before auth.
@@ -289,11 +320,12 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
         return json({ mfaRequired: true, mfaToken });
       }
       const membership = membershipForPortal(user, portal);
-      const tokens = mintMockTokenPair(user, portal, membership?.tenantId ?? null, rolesForLogin(user, portal, membership));
+      const resolvedTenantId = autoResolvedTenantId(user, portal);
+      const tokens = mintMockTokenPair(user, portal, resolvedTenantId, rolesForLogin(user, portal, membership));
       refreshTokens.set(tokens.refreshToken, {
         userId: user.profile.id,
         portal,
-        tenantId: membership?.tenantId ?? null,
+        tenantId: resolvedTenantId,
       });
       return json({ ...tokens, mfaRequired: false });
     }
@@ -308,16 +340,17 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
       const user = mockUsersById.get(pending.userId);
       if (!user) return problem(404, 'USER_NOT_FOUND', 'User not found');
       const membership = membershipForPortal(user, pending.portal);
+      const resolvedTenantId = autoResolvedTenantId(user, pending.portal);
       const tokens = mintMockTokenPair(
         user,
         pending.portal,
-        membership?.tenantId ?? null,
+        resolvedTenantId,
         rolesForLogin(user, pending.portal, membership),
       );
       refreshTokens.set(tokens.refreshToken, {
         userId: user.profile.id,
         portal: pending.portal,
-        tenantId: membership?.tenantId ?? null,
+        tenantId: resolvedTenantId,
       });
       return json({ tokens });
     }
@@ -356,14 +389,18 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
   if (segments[3] === 'me' || segments[3] === 'session') {
     const portal = segments[2] as Portal;
     const authHeader = new Headers(init?.headers).get('Authorization');
-    const userId = authHeader ? decodeMockSubject(authHeader) : null;
+    const claims = authHeader ? decodeMockClaims(authHeader) : null;
+    const userId = claims?.sub ?? null;
+    const sessionTenantId = claims?.tid ?? null;
     const user = userId ? mockUsersById.get(userId) : undefined;
     if (!user) return problem(401, 'UNAUTHORIZED', 'Missing or invalid session');
 
     if (method === 'GET' && segments[3] === 'me' && segments.length === 4) {
-      const membership = membershipForPortal(user, portal);
-      const tenant = membership ? MOCK_TENANTS.find((t) => t.id === membership.tenantId) ?? null : null;
-      return json({ user: user.profile, memberships: user.memberships, activeTenant: tenant });
+      return json({
+        user: user.profile,
+        memberships: user.memberships,
+        activeTenant: tenantCatalogEntry(sessionTenantId),
+      });
     }
     if (method === 'PUT' && segments[3] === 'me' && segments.length === 4) {
       const payload = await readBody<UpdateProfileRequest>(init);
@@ -381,9 +418,11 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
         locale: payload.locale,
         timeZone: payload.timeZone,
       };
-      const membership = membershipForPortal(user, portal);
-      const tenant = membership ? MOCK_TENANTS.find((t) => t.id === membership.tenantId) ?? null : null;
-      return json({ user: user.profile, memberships: user.memberships, activeTenant: tenant });
+      return json({
+        user: user.profile,
+        memberships: user.memberships,
+        activeTenant: tenantCatalogEntry(sessionTenantId),
+      });
     }
     if (method === 'POST' && path.endsWith('/me/password')) {
       const payload = await readBody<{ currentPassword: string; newPassword: string }>(init);
@@ -409,7 +448,7 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
       }
       const tokens = mintMockTokenPair(user, portal, membership.tenantId, [membership.role]);
       refreshTokens.set(tokens.refreshToken, { userId: user.profile.id, portal, tenantId: membership.tenantId });
-      return json({ tokens });
+      return json({ tokens, activeTenant: tenantCatalogEntry(membership.tenantId) });
     }
     if (method === 'POST' && path.endsWith('/me/mfa/setup')) {
       return json({
@@ -1387,8 +1426,4 @@ function decodeMockClaims(authorizationHeader: string): AccessTokenClaims | null
   }
 }
 
-/** Decodes just the mock access token's `sub` claim without any signature check — mocks only, never used for real auth. */
-function decodeMockSubject(authorizationHeader: string): string | null {
-  return decodeMockClaims(authorizationHeader)?.sub ?? null;
-}
 

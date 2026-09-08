@@ -29,7 +29,13 @@ public final class PlatformDtos {
             @NotBlank @Size(min = 3, max = 3) String currencyCode,
             @NotBlank @Size(max = 35) String locale,
             @NotBlank @Size(max = 64) String timeZone,
-            SelfRegistrationPolicy selfRegistrationPolicy) {
+            SelfRegistrationPolicy selfRegistrationPolicy,
+            // Optional: the back-office creates a municipality from one form, so its visual identity
+            // is accepted here rather than forcing an immediate second call to set it. Validated by
+            // the same rules the municipal portal applies.
+            @Size(max = 400) String logoAssetKey,
+            @Size(max = 7) String brandColor,
+            @Size(max = 40) String shortName) {
     }
 
     public record UpdateTenantRequest(
@@ -38,7 +44,10 @@ public final class PlatformDtos {
             @NotBlank @Size(min = 3, max = 3) String currencyCode,
             @NotBlank @Size(max = 35) String locale,
             @NotBlank @Size(max = 64) String timeZone,
-            SelfRegistrationPolicy selfRegistrationPolicy) {
+            SelfRegistrationPolicy selfRegistrationPolicy,
+            @Size(max = 400) String logoAssetKey,
+            @Size(max = 7) String brandColor,
+            @Size(max = 40) String shortName) {
     }
 
     public record TenantStatusRequest(
@@ -57,7 +66,11 @@ public final class PlatformDtos {
             String timeZone,
             TenantStatus status,
             SelfRegistrationPolicy selfRegistrationPolicy,
-            Instant createdAt) {
+            Instant createdAt,
+            String shortName,
+            String logoAssetKey,
+            String logoUrl,
+            String brandColor) {
     }
 
     public record TenantSettingResponse(String key, Map<String, Object> value, Instant updatedAt) {

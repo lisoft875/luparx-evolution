@@ -66,3 +66,60 @@ class LocalStorageTokenStorage implements TokenStorage {
 export function createTokenStorage(portal: Portal): TokenStorage {
   return new LocalStorageTokenStorage(storageKeyFor(portal));
 }
+
+/**
+ * Remembers which municipality this browser last chose, per portal.
+ *
+ * Kept apart from the token record on purpose. Tokens are cleared on every sign-out and rotated on
+ * every refresh; the choice of municipality is a *preference* that should survive both, so that
+ * signing back in does not put the picker in front of someone who already answered that question.
+ *
+ * It is a hint and nothing more. What it stores is an identifier the account was a member of at
+ * some point, which says nothing about whether it still is — a membership can be revoked between
+ * two sessions. AuthProvider therefore re-checks it against the memberships the server sends on
+ * every bootstrap and drops it when it no longer matches an ACTIVE one; authority stays with the
+ * server, which refuses `POST /session/tenant` for a membership that is not active anyway. Nothing
+ * sensitive is written here: an opaque tenant id, no token, no personal data.
+ */
+export interface TenantPreferenceStorage {
+  get(): string | null;
+  set(tenantId: string): void;
+  clear(): void;
+}
+
+function tenantPreferenceKeyFor(portal: Portal): string {
+  return `luparx.tenant.${portal}.v1`;
+}
+
+class LocalStorageTenantPreference implements TenantPreferenceStorage {
+  constructor(private readonly key: string) {}
+
+  get(): string | null {
+    try {
+      const value = window.localStorage.getItem(this.key);
+      return value && value.length > 0 ? value : null;
+    } catch {
+      return null;
+    }
+  }
+
+  set(tenantId: string): void {
+    try {
+      window.localStorage.setItem(this.key, tenantId);
+    } catch {
+      // Storage unavailable (private mode / quota) — the choice simply is not remembered.
+    }
+  }
+
+  clear(): void {
+    try {
+      window.localStorage.removeItem(this.key);
+    } catch {
+      // Nothing to do if storage is unavailable.
+    }
+  }
+}
+
+export function createTenantPreferenceStorage(portal: Portal): TenantPreferenceStorage {
+  return new LocalStorageTenantPreference(tenantPreferenceKeyFor(portal));
+}

@@ -180,4 +180,37 @@ public final class AdminDtos {
     /** {@code PUT /admin/settings/locales} — the whole list, replaced as one form. */
     public record UpdateTenantLocalesRequest(@NotNull @Valid List<TenantLocaleItem> locales) {
     }
+
+    // --- visual identity of the municipality (CONTRACT.md v0.4) -----------------------------------
+
+    /**
+     * {@code GET|PUT /admin/settings/branding}.
+     *
+     * <p>{@code logoAssetKey} is what is stored and edited; {@code logoUrl} is what the same value
+     * resolves to and is read-only. Returning both is what lets the admin screen show the logo it is
+     * about to save without having to know how the platform resolves a key.</p>
+     *
+     * @param logoAssetKey {@code generated:monogram} for the built-in placeholder, or an absolute
+     *                     {@code https://} address of the municipality's own emblem; null for none
+     * @param brandColor   {@code #rrggbb}; {@code #abc} is accepted and expanded
+     * @param shortName    what fits in a top bar; null falls back to the display name
+     */
+    public record TenantBrandingResponse(
+            String logoAssetKey,
+            String logoUrl,
+            String brandColor,
+            String shortName) {
+    }
+
+    /**
+     * {@code PUT /admin/settings/branding} — the whole identity, replaced as one form.
+     *
+     * <p>A null field means "this municipality has none", not "leave the old one": clearing a logo
+     * has to be possible, and a partial update would make it unexpressible.</p>
+     */
+    public record UpdateTenantBrandingRequest(
+            @Size(max = 400) String logoAssetKey,
+            @Size(max = 7) String brandColor,
+            @Size(max = 40) String shortName) {
+    }
 }

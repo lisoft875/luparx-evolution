@@ -139,6 +139,28 @@ export class HttpClient {
         headers,
         body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
         signal: options.signal,
+        // An authenticated GET answers "…for this user, in this municipality", but the browser's
+        // HTTP cache is keyed by URL and does not look at `Authorization` unless the response says
+        // to. The server answers tenant-scoped reads (e.g. `GET /citizen/parking/zones`) with
+        // `Cache-Control: max-age=60, private` and no `Vary: Authorization`, so without this a
+        // switch of municipality would be followed, for a full minute, by the PREVIOUS
+        // municipality's body — the same URL, a different tenant, and no request ever reaching the
+        // server to disagree. That is not a stale label on a screen: it is one municipality's zones
+        // and prices presented as another's.
+        //
+        // `cache: 'no-store'` is the whole fix, and deliberately not a `Cache-Control` request
+        // header. It instructs fetch to bypass the HTTP cache in both directions — the response is
+        // never read from the store and never written to it — which is strictly stronger than the
+        // `no-cache` header it replaces, and it is a property of the fetch call rather than
+        // something sent on the wire. That distinction matters: `Cache-Control` is not a
+        // CORS-safelisted request header, so sending it made every authenticated GET preflight and
+        // then fail outright against a server whose `Access-Control-Allow-Headers` does not name it
+        // — which is every deployment of this API today. The same protection, no preflight, nothing
+        // for the server to allow-list.
+        //
+        // The durable server-side fix (`Vary: Authorization`, or `private, no-store` on
+        // tenant-scoped reads) is still worth having; this stays correct once it lands.
+        cache: 'no-store',
       });
     } catch (cause) {
       throw new NetworkError(cause);

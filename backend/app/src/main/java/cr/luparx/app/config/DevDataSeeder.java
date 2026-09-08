@@ -19,6 +19,7 @@ import cr.luparx.tenancy.entity.Tenant;
 import cr.luparx.tenancy.entity.TenantMembership;
 import cr.luparx.tenancy.model.MembershipStatus;
 import cr.luparx.tenancy.model.SelfRegistrationPolicy;
+import cr.luparx.tenancy.model.TenantBranding;
 import cr.luparx.tenancy.model.TenantStatus;
 import cr.luparx.tenancy.repository.TenantMembershipRepository;
 import cr.luparx.tenancy.repository.TenantRepository;
@@ -441,11 +442,34 @@ public class DevDataSeeder implements ApplicationRunner {
     private Tenant ensureTenant(DevMunicipality municipality, String countryCode) {
         Optional<Tenant> existing = tenantRepository.findBySlug(municipality.slug());
         if (existing.isPresent()) {
-            return existing.get();
+            return ensureBranding(existing.get(), municipality);
         }
         return tenantService.create(municipality.slug(), municipality.legalName(), municipality.displayName(),
                 countryCode, defaults.currencyCode(), defaults.locale(), defaults.timeZone(),
-                SelfRegistrationPolicy.APPROVAL_REQUIRED, null);
+                SelfRegistrationPolicy.APPROVAL_REQUIRED, brandingOf(municipality), null);
+    }
+
+    /**
+     * Gives a municipality seeded before V14_0 the visual identity the picker needs, once.
+     *
+     * <p>Only when it has none: a developer who set a colour or uploaded an emblem from the admin
+     * portal keeps it, which is what makes this safe to run on every start. The logo is the
+     * <b>generated monogram</b> and never a real coat of arms — a municipal emblem belongs to the
+     * municipality and is uploaded by them.</p>
+     */
+    private Tenant ensureBranding(Tenant tenant, DevMunicipality municipality) {
+        if (tenant.getLogoAssetKey() != null || tenant.getBrandColor() != null) {
+            return tenant;
+        }
+        Tenant rebranded = tenantService.rebrand(tenant.getTenantId(), brandingOf(municipality), null);
+        LOGGER.info("Development seed: {} had no visual identity; gave it the generated monogram over {}.",
+                municipality.slug(), municipality.brandColor());
+        return rebranded;
+    }
+
+    private static TenantBranding brandingOf(DevMunicipality municipality) {
+        return new TenantBranding(TenantBranding.GENERATED_MONOGRAM, municipality.brandColor(),
+                municipality.shortName());
     }
 
     private void seed(DemoAccount account, Tenant tenant, String countryCode, AddressChain address,

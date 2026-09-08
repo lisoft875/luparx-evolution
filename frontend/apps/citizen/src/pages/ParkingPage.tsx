@@ -2,6 +2,7 @@ import * as React from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation, formatCurrencyMinor, formatWeekdayTime } from '@luparx/i18n';
+import { TenantSwitchControl } from '@luparx/features';
 import {
   Alert,
   Button,
@@ -98,8 +99,27 @@ export function ParkingPage(): React.JSX.Element {
 
   const durationLabel = minutes !== null ? formatDurationLabel(minutes, tPlural) : '';
 
+  /**
+   * Everything chosen below belongs to the municipality that was active when it was chosen: a zone
+   * id, a bay code in that municipality's format, a duration priced by its tariff. When the
+   * municipality changes, none of it means anything any more, so it is cleared rather than left on
+   * screen looking valid. The cached server answers are dropped by TenantCacheReset; these three
+   * are local state that nothing else would reset.
+   */
+  function handleTenantSwitched(): void {
+    setZoneId('');
+    setSpaceCode('');
+    setMinutes(null);
+    setError(null);
+  }
+
   const steps: Step[] = useMemo(
     () => [
+      {
+        title: t('citizen.parking.step0.title'),
+        state: 'active',
+        content: <TenantSwitchControl hint={t('tenant.switch.parkingHint')} onSwitched={handleTenantSwitched} />,
+      },
       {
         title: t('citizen.parking.step1.title'),
         state: 'active',

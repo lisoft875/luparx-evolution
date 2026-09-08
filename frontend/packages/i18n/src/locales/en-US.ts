@@ -156,11 +156,21 @@ export const enUS: Record<TranslationKey, string> = {
   'pagination.resultCount.one': '{{count}} result',
   'pagination.resultCount.other': '{{count}} results',
 
-  'tenant.selector.title': 'Select a municipality',
+  'tenant.sheet.title': 'Municipality',
+  'tenant.sheet.description': 'Zones, rates and your balance depend on the one you choose.',
+  'tenant.selector.title': 'Choose your municipality',
   'tenant.selector.description':
-    'Your account has access to several municipalities. Choose one to continue.',
+    'Your account belongs to several municipalities. Zones, rates and your balance depend on the one you pick.',
   'tenant.selector.continue': 'Continue',
   'tenant.selector.noneAvailable': "You don't have approved access to any municipality yet.",
+  'tenant.selector.empty.title': 'No municipalities yet',
+  'tenant.selector.error.notAvailable':
+    'That municipality is no longer available to your account. Pick another one or ask an administrator for access.',
+  'tenant.selector.signOut': 'Sign out',
+  'tenant.badge.changeAction': 'change municipality',
+  'tenant.switch.action': 'Change',
+  'tenant.switch.description': 'Changing municipality updates the zones, the rates and your balance.',
+  'tenant.switch.parkingHint': 'Zones, rates and the bay code format belong to this municipality.',
   'tenant.membership.status.ACTIVE': 'Active',
   'tenant.membership.status.PENDING_APPROVAL': 'Pending approval',
   'tenant.membership.status.REJECTED': 'Rejected',
@@ -289,6 +299,7 @@ export const enUS: Record<TranslationKey, string> = {
 
   'citizen.parking.title': 'Parking',
   'citizen.parking.subtitle': 'Follow these steps to start your session.',
+  'citizen.parking.step0.title': 'Municipality',
   'citizen.parking.step1.title': 'Zone and space',
   'citizen.parking.step1.description': 'Select the zone where you are parked.',
   'citizen.parking.step1.zoneLabel': 'Zone',

@@ -2,8 +2,8 @@ import * as React from 'react';
 import { BrowserRouter, HashRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { I18nProvider } from '@luparx/i18n';
-import { LocalePreferenceSync } from '@luparx/features';
-import { AuthProvider, RequireAuth } from '@luparx/auth';
+import { LocalePreferenceSync, TenantCacheReset } from '@luparx/features';
+import { AuthProvider, RequireAuth, RequireTenant } from '@luparx/auth';
 import { mockFetch } from '@luparx/api-client/mocks';
 import { API_BASE_URL, PORTAL, USE_MOCKS } from './env';
 import { LoginPage } from './pages/LoginPage';
@@ -38,6 +38,8 @@ export function App(): React.JSX.Element {
       <QueryClientProvider client={queryClient}>
         <AuthProvider portal={PORTAL} apiBaseUrl={API_BASE_URL} fetchImpl={USE_MOCKS ? mockFetch : undefined}>
           <LocalePreferenceSync />
+          {/* Municipal data is scoped to one municipality; drop the previous one's answers on a switch. */}
+          <TenantCacheReset />
           <Router>
             <Routes>
               <Route path="/login" element={<LoginPage />} />
@@ -49,7 +51,9 @@ export function App(): React.JSX.Element {
                 path="/"
                 element={
                   <RequireAuth loginPath="/login">
-                    <HomePage />
+                    <RequireTenant selectTenantPath="/select-tenant">
+                      <HomePage />
+                    </RequireTenant>
                   </RequireAuth>
                 }
               />
@@ -65,7 +69,9 @@ export function App(): React.JSX.Element {
                 path="/users"
                 element={
                   <RequireAuth loginPath="/login">
-                    <UsersListPage />
+                    <RequireTenant selectTenantPath="/select-tenant">
+                      <UsersListPage />
+                    </RequireTenant>
                   </RequireAuth>
                 }
               />
@@ -73,7 +79,9 @@ export function App(): React.JSX.Element {
                 path="/users/:id"
                 element={
                   <RequireAuth loginPath="/login">
-                    <UserDetailPage />
+                    <RequireTenant selectTenantPath="/select-tenant">
+                      <UserDetailPage />
+                    </RequireTenant>
                   </RequireAuth>
                 }
               />
@@ -81,7 +89,9 @@ export function App(): React.JSX.Element {
                 path="/audit"
                 element={
                   <RequireAuth loginPath="/login">
-                    <AuditPage />
+                    <RequireTenant selectTenantPath="/select-tenant">
+                      <AuditPage />
+                    </RequireTenant>
                   </RequireAuth>
                 }
               />
@@ -89,7 +99,9 @@ export function App(): React.JSX.Element {
                 path="/reports"
                 element={
                   <RequireAuth loginPath="/login">
-                    <ReportsPage />
+                    <RequireTenant selectTenantPath="/select-tenant">
+                      <ReportsPage />
+                    </RequireTenant>
                   </RequireAuth>
                 }
               />
@@ -97,7 +109,9 @@ export function App(): React.JSX.Element {
                 path="/settings/locales"
                 element={
                   <RequireAuth loginPath="/login">
-                    <SettingsLocalesPage />
+                    <RequireTenant selectTenantPath="/select-tenant">
+                      <SettingsLocalesPage />
+                    </RequireTenant>
                   </RequireAuth>
                 }
               />
@@ -105,7 +119,9 @@ export function App(): React.JSX.Element {
                 path="/settings/space-format"
                 element={
                   <RequireAuth loginPath="/login">
-                    <SettingsSpaceFormatPage />
+                    <RequireTenant selectTenantPath="/select-tenant">
+                      <SettingsSpaceFormatPage />
+                    </RequireTenant>
                   </RequireAuth>
                 }
               />
@@ -113,7 +129,9 @@ export function App(): React.JSX.Element {
                 path="/settings/schedule"
                 element={
                   <RequireAuth loginPath="/login">
-                    <SettingsSchedulePage />
+                    <RequireTenant selectTenantPath="/select-tenant">
+                      <SettingsSchedulePage />
+                    </RequireTenant>
                   </RequireAuth>
                 }
               />

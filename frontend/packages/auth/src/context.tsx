@@ -10,9 +10,16 @@ import {
   type Portal,
   type RegisterRequest,
   type RegisterResponse,
+  type TenantCatalogEntry,
   type TokenProvider,
 } from '@luparx/api-client';
-import { createTokenStorage, type StoredTokens, type TokenStorage } from './storage';
+import {
+  createTenantPreferenceStorage,
+  createTokenStorage,
+  type StoredTokens,
+  type TenantPreferenceStorage,
+  type TokenStorage,
+} from './storage';
 import { decodeAccessTokenClaims, isTokenExpired } from './claims';
 
 export type AuthStatus = 'loading' | 'unauthenticated' | 'mfa_required' | 'authenticated';
@@ -27,6 +34,20 @@ export interface AuthContextValue {
   me: MeResponse | null;
   claims: AccessTokenClaims | null;
   memberships: MembershipSummary[];
+  /** Only the memberships this portal can actually act on — the picker's source of truth. */
+  activeMemberships: MembershipSummary[];
+  /**
+   * The municipality this session is scoped to, branding included (CONTRACT.md v0.4), or null
+   * when none has been chosen yet.
+   */
+  activeTenant: TenantCatalogEntry | null;
+  /**
+   * True when the account must choose before it can do anything: authenticated, no active
+   * municipality, and more than one to choose from. Deliberately false for exactly one membership
+   * — the server already scoped the session to it, and asking someone to click the only option is
+   * a step that answers itself.
+   */
+  requiresTenantSelection: boolean;
   apiClient: ApiClient;
   login: (payload: LoginRequest) => Promise<LoginResult>;
   verifyMfa: (code: string) => Promise<void>;
@@ -34,9 +55,30 @@ export interface AuthContextValue {
   logout: () => Promise<void>;
   switchTenant: (tenantId: string) => Promise<void>;
   refreshProfile: () => Promise<void>;
+  /**
+   * Notifies when the active municipality changes, so tenant-scoped caches can be dropped before
+   * anything from the previous one is shown again (zones, tariffs, bay-code format and balance are
+   * all per municipality). Returns an unsubscribe function.
+   */
+  subscribeToTenantChange: (listener: (tenantId: string | null) => void) => () => void;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+
+/**
+ * Whether a membership belongs to the portal this session is for.
+ *
+ * Compared case-insensitively because the two sides genuinely disagree today: `Portal` is the
+ * lowercase route segment the client builds URLs from (`/api/v1/citizen/...`), while a membership
+ * arrives carrying the server's enum constant (`"CITIZEN"`). A strict `===` silently matches
+ * nothing, which does not fail loudly — it empties the municipality picker and strands an account
+ * that has memberships on a screen saying it has none. Normalising here rather than everywhere a
+ * membership is read keeps the workaround in one documented place; the real fix is for the wire
+ * shape and `Portal` to agree, and this survives that fix either way.
+ */
+function belongsToPortal(membership: MembershipSummary, portal: Portal): boolean {
+  return String(membership.portal).toLowerCase() === portal.toLowerCase();
+}
 
 export interface AuthProviderProps {
   children: React.ReactNode;
@@ -46,6 +88,8 @@ export interface AuthProviderProps {
   fetchImpl?: typeof fetch;
   /** Overrides token persistence — defaults to portal-namespaced localStorage. Inject a Capacitor-backed adapter for native builds. */
   tokenStorage?: TokenStorage;
+  /** Overrides where the remembered municipality lives; defaults to portal-namespaced localStorage. */
+  tenantPreferenceStorage?: TenantPreferenceStorage;
 }
 
 export function AuthProvider({
@@ -54,8 +98,13 @@ export function AuthProvider({
   apiBaseUrl,
   fetchImpl,
   tokenStorage,
+  tenantPreferenceStorage,
 }: AuthProviderProps): React.JSX.Element {
   const storage = useMemo(() => tokenStorage ?? createTokenStorage(portal), [tokenStorage, portal]);
+  const tenantPreference = useMemo(
+    () => tenantPreferenceStorage ?? createTenantPreferenceStorage(portal),
+    [tenantPreferenceStorage, portal],
+  );
   const storedTokensRef = useRef<StoredTokens | null>(storage.getTokens());
   const mfaTokenRef = useRef<string | null>(null);
 
@@ -91,6 +140,20 @@ export function AuthProvider({
     setStatus('unauthenticated');
   }, [storage]);
 
+  // Tenant-change listeners. A Set in a ref rather than state: subscribing must not re-render the
+  // whole tree, and a listener registered during a render must be callable in the same tick.
+  const tenantListenersRef = useRef(new Set<(tenantId: string | null) => void>());
+  const subscribeToTenantChange = useCallback((listener: (tenantId: string | null) => void) => {
+    const listeners = tenantListenersRef.current;
+    listeners.add(listener);
+    return () => {
+      listeners.delete(listener);
+    };
+  }, []);
+  const notifyTenantChanged = useCallback((tenantId: string | null) => {
+    for (const listener of tenantListenersRef.current) listener(tenantId);
+  }, []);
+
   const tokenProvider = useMemo<TokenProvider>(
     () => ({
       getAccessToken: () => storedTokensRef.current?.accessToken ?? null,
@@ -124,6 +187,49 @@ export function AuthProvider({
     setMe(response);
   }, [apiClient]);
 
+  /**
+   * Re-enters the municipality this browser last chose, or forgets it.
+   *
+   * The remembered id is a hint from a previous session and is never trusted on its own: it is
+   * checked against the memberships the server has just sent, so a municipality the account was
+   * removed from cannot stay selected — it is dropped and the person is asked again. When the
+   * server has already scoped the session (a single membership resolves itself), the preference is
+   * simply brought in line with what actually happened, so the two can never drift apart.
+   *
+   * Failure here is never fatal: whatever goes wrong, the account lands on the picker, which is
+   * the honest answer to "we could not put you back where you were".
+   */
+  const adoptRememberedTenant = useCallback(
+    async (profile: MeResponse): Promise<MeResponse> => {
+      if (profile.activeTenant) {
+        tenantPreference.set(profile.activeTenant.id);
+        return profile;
+      }
+      const remembered = tenantPreference.get();
+      if (!remembered) return profile;
+      const stillActive = profile.memberships.some(
+        (membership) =>
+          membership.tenantId === remembered && membership.status === 'ACTIVE' && belongsToPortal(membership, portal),
+      );
+      if (!stillActive) {
+        tenantPreference.clear();
+        return profile;
+      }
+      try {
+        const response = await apiClient.session.switchTenant({ tenantId: remembered });
+        applyTokens(response.tokens, remembered);
+        notifyTenantChanged(remembered);
+        return { ...profile, activeTenant: response.activeTenant };
+      } catch {
+        // The server is the authority: if it refuses, the membership is not usable and the
+        // preference is stale whatever the list said.
+        tenantPreference.clear();
+        return profile;
+      }
+    },
+    [apiClient, applyTokens, notifyTenantChanged, portal, tenantPreference],
+  );
+
   useEffect(() => {
     let cancelled = false;
     async function bootstrap(): Promise<void> {
@@ -143,8 +249,11 @@ export function AuthProvider({
       }
       try {
         const response = await apiClient.session.me();
+        // Restored before the tree is told it is authenticated, so a reload lands straight back in
+        // the municipality the person was already in instead of flashing the picker on the way.
+        const resolved = await adoptRememberedTenant(response);
         if (!cancelled) {
-          setMe(response);
+          setMe(resolved);
           setStatus('authenticated');
         }
       } catch {
@@ -172,12 +281,12 @@ export function AuthProvider({
           { accessToken: response.accessToken, refreshToken: response.refreshToken, expiresIn: response.expiresIn },
           null,
         );
-        await refreshProfile();
+        setMe(await adoptRememberedTenant(await apiClient.session.me()));
         setStatus('authenticated');
       }
       return { mfaRequired: false };
     },
-    [apiClient, applyTokens, refreshProfile],
+    [adoptRememberedTenant, apiClient, applyTokens],
   );
 
   const verifyMfa = useCallback(
@@ -186,10 +295,10 @@ export function AuthProvider({
       const response = await apiClient.auth.mfaVerify({ mfaToken: mfaTokenRef.current, code });
       mfaTokenRef.current = null;
       applyTokens(response.tokens, null);
-      await refreshProfile();
+      setMe(await adoptRememberedTenant(await apiClient.session.me()));
       setStatus('authenticated');
     },
-    [apiClient, applyTokens, refreshProfile],
+    [adoptRememberedTenant, apiClient, applyTokens],
   );
 
   const register = useCallback(
@@ -213,10 +322,25 @@ export function AuthProvider({
     async (tenantId: string): Promise<void> => {
       const response = await apiClient.session.switchTenant({ tenantId });
       applyTokens(response.tokens, tenantId);
+      tenantPreference.set(tenantId);
+      // The switch answer already carries the municipality's branding (CONTRACT.md v0.4), so the
+      // badge can repaint from it immediately; `/me` is refreshed straight after to bring the rest
+      // of the profile in line, and both agree because both come from the server.
+      setMe((current) => (current ? { ...current, activeTenant: response.activeTenant } : current));
+      // Announced BEFORE the profile round-trip: anything cached for the previous municipality
+      // (zones, tariffs, bay-code format, balance) has to be dropped before a screen can re-read it.
+      notifyTenantChanged(tenantId);
       await refreshProfile();
     },
-    [apiClient, applyTokens, refreshProfile],
+    [apiClient, applyTokens, notifyTenantChanged, refreshProfile, tenantPreference],
   );
+
+  const memberships = useMemo(() => me?.memberships ?? [], [me]);
+  const activeMemberships = useMemo(
+    () => memberships.filter((membership) => membership.status === 'ACTIVE' && belongsToPortal(membership, portal)),
+    [memberships, portal],
+  );
+  const activeTenant = me?.activeTenant ?? null;
 
   const value = useMemo<AuthContextValue>(
     () => ({
@@ -224,7 +348,10 @@ export function AuthProvider({
       portal,
       me,
       claims,
-      memberships: me?.memberships ?? [],
+      memberships,
+      activeMemberships,
+      activeTenant,
+      requiresTenantSelection: status === 'authenticated' && !activeTenant && activeMemberships.length > 1,
       apiClient,
       login,
       verifyMfa,
@@ -232,8 +359,25 @@ export function AuthProvider({
       logout,
       switchTenant,
       refreshProfile,
+      subscribeToTenantChange,
     }),
-    [status, portal, me, claims, apiClient, login, verifyMfa, register, logout, switchTenant, refreshProfile],
+    [
+      status,
+      portal,
+      me,
+      claims,
+      memberships,
+      activeMemberships,
+      activeTenant,
+      apiClient,
+      login,
+      verifyMfa,
+      register,
+      logout,
+      switchTenant,
+      refreshProfile,
+      subscribeToTenantChange,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -44,10 +44,24 @@ public final class SessionDtos {
             boolean mfaEnabled) {
     }
 
+    /**
+     * One membership, with enough of its municipality to be drawn.
+     *
+     * <p>{@code GET /{portal}/me/memberships} is what the "choose your municipality" screen is built
+     * from, so it carries the short name, the logo and the brand colour alongside the identifier. It
+     * used to carry the id and the name only, which left a client holding identifiers it could not
+     * paint and no way to get the rest without a request per municipality.</p>
+     *
+     * @param tenantLogoUrl    resolved and ready to render; null when that municipality has no emblem
+     * @param tenantBrandColor {@code #rrggbb}; null when it has not picked one
+     */
     public record MembershipSummaryResponse(
             UUID id,
             UUID tenantId,
             String tenantName,
+            String tenantShortName,
+            String tenantLogoUrl,
+            String tenantBrandColor,
             Portal portal,
             Role role,
             MembershipStatus status) {

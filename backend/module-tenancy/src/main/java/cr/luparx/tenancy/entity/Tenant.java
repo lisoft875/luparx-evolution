@@ -59,6 +59,22 @@ public class Tenant {
     @Column(name = "status_reason", length = 500)
     private String statusReason;
 
+    /**
+     * How to obtain this municipality's logo, as a key the API resolves into a URL — never a stored
+     * URL (see the column comment in V14_0). Null means it has not provided an emblem yet, which is a
+     * valid state: the client draws a monogram over {@link #brandColor}.
+     */
+    @Column(name = "logo_asset_key", length = 400)
+    private String logoAssetKey;
+
+    /** Primary brand colour as {@code #rrggbb}, lower case. Null until the municipality picks one. */
+    @Column(name = "brand_color", length = 7)
+    private String brandColor;
+
+    /** What fits in a top bar when the display name does not. Null means "use the display name". */
+    @Column(name = "short_name", length = 40)
+    private String shortName;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -177,6 +193,28 @@ public class Tenant {
         this.locale = locale;
         this.timeZone = timeZone;
         this.selfRegistrationPolicy = selfRegistrationPolicy;
+    }
+
+    public String getLogoAssetKey() {
+        return logoAssetKey;
+    }
+
+    public String getBrandColor() {
+        return brandColor;
+    }
+
+    public String getShortName() {
+        return shortName;
+    }
+
+    /**
+     * Replaces the visual identity, as one form. Every value is already normalised and validated by
+     * the caller; nulls are meaningful and mean "this municipality has none", never "leave it".
+     */
+    public void rebrand(String logoAssetKey, String brandColor, String shortName) {
+        this.logoAssetKey = logoAssetKey;
+        this.brandColor = brandColor;
+        this.shortName = shortName;
     }
 
     public void changeStatus(TenantStatus status, String reason) {

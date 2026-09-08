@@ -122,6 +122,12 @@ export const MOCK_TENANTS: TenantAdmin[] = [
     name: 'Municipalidad de San José',
     legalName: 'Municipalidad de San José',
     countryCode: 'CR',
+    shortName: 'San José',
+    // Deliberately no `logoUrl`: the mock transport has no server to generate a monogram, so this
+    // is the branch that exercises the client-side fallback (CONTRACT.md v0.4 — "sin emblema
+    // todavía" is a normal state, not an error). Never invent a municipal coat of arms here.
+    logoUrl: null,
+    brandColor: '#1d4ed8',
     currencyCode: 'CRC',
     locale: 'es-CR',
     timeZone: 'America/Costa_Rica',
@@ -134,6 +140,9 @@ export const MOCK_TENANTS: TenantAdmin[] = [
     name: 'Municipalidad de Escazú',
     legalName: 'Municipalidad de Escazú',
     countryCode: 'CR',
+    shortName: 'Escazú',
+    logoUrl: null,
+    brandColor: '#047857',
     currencyCode: 'CRC',
     locale: 'es-CR',
     timeZone: 'America/Costa_Rica',
@@ -192,8 +201,8 @@ seedUser({
   },
   password: 'Password123!',
   memberships: [
-    { id: 'membership-1', tenantId: 'tenant-sanjose', tenantName: 'Municipalidad de San José', portal: 'citizen', role: 'CITIZEN', status: 'ACTIVE' },
-    { id: 'membership-2', tenantId: 'tenant-escazu', tenantName: 'Municipalidad de Escazú', portal: 'citizen', role: 'CITIZEN', status: 'ACTIVE' },
+    { id: 'membership-1', tenantId: 'tenant-sanjose', tenantName: 'Municipalidad de San José', tenantShortName: 'San José', tenantLogoUrl: null, tenantBrandColor: '#1d4ed8', portal: 'citizen', role: 'CITIZEN', status: 'ACTIVE' },
+    { id: 'membership-2', tenantId: 'tenant-escazu', tenantName: 'Municipalidad de Escazú', tenantShortName: 'Escazú', tenantLogoUrl: null, tenantBrandColor: '#047857', portal: 'citizen', role: 'CITIZEN', status: 'ACTIVE' },
   ],
   mfaEnabled: false,
 });
@@ -218,7 +227,7 @@ seedUser({
   },
   password: 'Password123!',
   memberships: [
-    { id: 'membership-3', tenantId: 'tenant-sanjose', tenantName: 'Municipalidad de San José', portal: 'admin', role: 'TENANT_ADMIN', status: 'ACTIVE' },
+    { id: 'membership-3', tenantId: 'tenant-sanjose', tenantName: 'Municipalidad de San José', tenantShortName: 'San José', tenantLogoUrl: null, tenantBrandColor: '#1d4ed8', portal: 'admin', role: 'TENANT_ADMIN', status: 'ACTIVE' },
   ],
   mfaEnabled: true,
   mfaSecret: 'JBSWY3DPEHPK3PXP',
@@ -244,7 +253,7 @@ seedUser({
   },
   password: 'Password123!',
   memberships: [
-    { id: 'membership-4', tenantId: 'tenant-sanjose', tenantName: 'Municipalidad de San José', portal: 'inspector', role: 'INSPECTOR', status: 'ACTIVE' },
+    { id: 'membership-4', tenantId: 'tenant-sanjose', tenantName: 'Municipalidad de San José', tenantShortName: 'San José', tenantLogoUrl: null, tenantBrandColor: '#1d4ed8', portal: 'inspector', role: 'INSPECTOR', status: 'ACTIVE' },
   ],
   mfaEnabled: true,
   mfaSecret: 'JBSWY3DPEHPK3PXQ',

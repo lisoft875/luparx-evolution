@@ -251,7 +251,11 @@ public class MeController {
         boolean mfaSatisfied = mfaService.isActive(context.userId());
         IssuedTokens tokens = sessionService.switchTenant(user, context.portal(),
                 TenantId.of(tenant.getId()), mfaSatisfied, httpRequest);
-        return mapper.toTokensEnvelope(tokens);
+        // The municipality that was switched to travels back with the tokens, branding included: the
+        // client has to repaint the chip next to the LupaRX logo the moment the switch succeeds, and
+        // sending it back to the catalogue to learn what it just chose would be a round trip for
+        // something the server already has in its hand.
+        return new AuthDtos.TokensEnvelope(mapper.toTokenPair(tokens), mapper.toTenantCatalog(tenant));
     }
 
     @PostMapping("/me/mfa/setup")

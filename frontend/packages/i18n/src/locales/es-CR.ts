@@ -160,10 +160,25 @@ export const esCR = {
   'pagination.resultCount.one': '{{count}} resultado',
   'pagination.resultCount.other': '{{count}} resultados',
 
-  'tenant.selector.title': 'Selecciona una municipalidad',
-  'tenant.selector.description': 'Tu cuenta tiene acceso a varias municipalidades. Elige con cuál continuar.',
+  // El título de la hoja es sólo "Municipalidad": nombra lo que se está eligiendo, y cabe en una
+  // barra de 320 px sin cortarse. La frase completa vive en la descripción, debajo.
+  'tenant.sheet.title': 'Municipalidad',
+  'tenant.sheet.description': 'Las zonas, las tarifas y tu saldo dependen de la que elijás.',
+  'tenant.selector.title': 'Elegí tu municipalidad',
+  'tenant.selector.description':
+    'Tu cuenta pertenece a varias municipalidades. Las zonas, las tarifas y tu saldo dependen de la que elijas.',
   'tenant.selector.continue': 'Continuar',
   'tenant.selector.noneAvailable': 'Aún no tienes acceso aprobado a ninguna municipalidad.',
+  'tenant.selector.empty.title': 'Sin municipalidades por ahora',
+  // El mismo caso que responde el servidor con NO_ACTIVE_MEMBERSHIP: una sola situación, una sola
+  // redacción (la descripción reutiliza esa clave, no la repite con otras palabras).
+  'tenant.selector.error.notAvailable':
+    'Esa municipalidad ya no está disponible para tu cuenta. Elegí otra o pedile acceso a un administrador.',
+  'tenant.selector.signOut': 'Cerrar sesión',
+  'tenant.badge.changeAction': 'cambiar de municipalidad',
+  'tenant.switch.action': 'Cambiar',
+  'tenant.switch.description': 'Al cambiar de municipalidad se actualizan las zonas, las tarifas y tu saldo.',
+  'tenant.switch.parkingHint': 'Las zonas, las tarifas y el formato de bahía son de esta municipalidad.',
   'tenant.membership.status.ACTIVE': 'Activo',
   'tenant.membership.status.PENDING_APPROVAL': 'Pendiente de aprobación',
   'tenant.membership.status.REJECTED': 'Rechazado',
@@ -292,6 +307,7 @@ export const esCR = {
 
   'citizen.parking.title': 'Estacionamiento',
   'citizen.parking.subtitle': 'Sigue estos pasos para iniciar tu sesión.',
+  'citizen.parking.step0.title': 'Municipalidad',
   'citizen.parking.step1.title': 'Zona y espacio',
   'citizen.parking.step1.description': 'Selecciona la zona donde estás estacionado.',
   'citizen.parking.step1.zoneLabel': 'Zona',

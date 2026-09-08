@@ -2,6 +2,7 @@ import * as React from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from '@luparx/i18n';
+import { ActiveTenantBadge, TenantSheet } from '@luparx/features';
 import { AppBar, Brand, BottomTabBar, IconBell, IconCar, IconHome, IconList, IconPark, IconWallet } from '@luparx/ui';
 import type { BottomTab } from '@luparx/ui';
 import { ActiveSessionsBar } from './ActiveSessionsBar';
@@ -39,6 +40,11 @@ export function CitizenShell({ children, title, subtitle, onBack, bare = false }
   // page taller than one screen it stayed glued to the bottom from scroll position zero and
   // overlapped whatever content happened to render underneath — fixed + measured padding is what
   // actually holds on every screen, tall or short.
+  // The municipality sheet is opened from the top-bar badge and closed again in place. It is not a
+  // route: the person is in the middle of a screen, and navigating away and back would lose
+  // whatever they had scrolled to or typed for the sake of a choice that takes one tap.
+  const [tenantSheetOpen, setTenantSheetOpen] = useState(false);
+
   const footerRef = useRef<HTMLDivElement>(null);
   const [footerHeight, setFooterHeight] = useState(0);
   useEffect(() => {
@@ -94,7 +100,17 @@ export function CitizenShell({ children, title, subtitle, onBack, bare = false }
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: 'transparent' }}>
       {bare ? null : (
         <AppBar
-          start={!onBack ? <Brand name={t('app.name')} /> : undefined}
+          start={
+            !onBack ? (
+              <>
+                <Brand name={t('app.name')} />
+                {/* The active municipality lives beside the LuParX mark (CONTRACT.md v0.4) and is
+                    the way back to the picker. It renders nothing until one is chosen, and is only
+                    pressable when the account has more than one to choose between. */}
+                <ActiveTenantBadge onOpenSelector={() => setTenantSheetOpen(true)} />
+              </>
+            ) : undefined
+          }
           onBack={onBack}
           backLabel={t('common.back')}
           title={onBack ? title : undefined}
@@ -131,6 +147,9 @@ export function CitizenShell({ children, title, subtitle, onBack, bare = false }
         <ActiveSessionsBar />
         <BottomTabBar tabs={tabs} />
       </div>
+      {/* Reopened from the badge. Everything tenant-scoped on the screen behind is dropped and
+          re-read by TenantCacheReset the moment the choice actually changes. */}
+      <TenantSheet open={tenantSheetOpen} onClose={() => setTenantSheetOpen(false)} />
     </div>
   );
 }

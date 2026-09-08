@@ -61,6 +61,7 @@ public final class AuditAction {
     public static final String USER_EMAIL_CHANGE_REQUESTED = "USER_EMAIL_CHANGE_REQUESTED";
     public static final String USER_EMAIL_CHANGED = "USER_EMAIL_CHANGED";
     public static final String TENANT_LOCALES_UPDATED = "TENANT_LOCALES_UPDATED";
+    public static final String TENANT_BRANDING_UPDATED = "TENANT_BRANDING_UPDATED";
     public static final String PARKING_SPACE_FORMAT_UPDATED = "PARKING_SPACE_FORMAT_UPDATED";
     public static final String PARKING_SCHEDULE_UPDATED = "PARKING_SCHEDULE_UPDATED";
 }

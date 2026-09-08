@@ -17,6 +17,7 @@ import cr.luparx.identity.service.IssuedTokens;
 import cr.luparx.identity.service.MfaService;
 import cr.luparx.tenancy.entity.Tenant;
 import cr.luparx.tenancy.entity.TenantLocale;
+import cr.luparx.tenancy.model.TenantBranding;
 import cr.luparx.tenancy.entity.TenantMembership;
 import cr.luparx.tenancy.entity.TenantSetting;
 import cr.luparx.tenancy.repository.TenantRepository;
@@ -75,8 +76,40 @@ public class ResponseMapper {
     }
 
     public CatalogDtos.TenantCatalogResponse toTenantCatalog(Tenant tenant) {
-        return new CatalogDtos.TenantCatalogResponse(tenant.getId(), tenant.getSlug(), tenant.getDisplayName(),
-                tenant.getCountryCode());
+        return new CatalogDtos.TenantCatalogResponse(
+                tenant.getId(),
+                tenant.getSlug(),
+                tenant.getDisplayName(),
+                tenant.getCountryCode(),
+                tenant.getShortName(),
+                logoUrlOf(tenant),
+                tenant.getBrandColor());
+    }
+
+    /**
+     * Turns the stored logo key into something a client can put in an {@code <img src>}.
+     *
+     * <p>The one place this resolution happens, so the catalogue, the membership list and the
+     * active-municipality chip can never disagree about where a logo lives. Three cases and no
+     * fourth:</p>
+     * <ul>
+     *   <li>no key — <b>null</b>, and the client draws a monogram over the brand colour. This is the
+     *       normal state of a municipality that has not provided its emblem yet, not an error;</li>
+     *   <li>{@code generated:monogram} — the platform's own endpoint, which draws that monogram
+     *       server-side for anything that cannot (an email, a PDF, an {@code <img>} with no
+     *       JavaScript behind it);</li>
+     *   <li>an https address — itself, because that is the emblem the municipality provided.</li>
+     * </ul>
+     */
+    public String logoUrlOf(Tenant tenant) {
+        String key = tenant == null ? null : tenant.getLogoAssetKey();
+        if (key == null || key.isBlank()) {
+            return null;
+        }
+        if (TenantBranding.GENERATED_MONOGRAM.equals(key)) {
+            return TenantLogoController.pathFor(tenant.getId());
+        }
+        return key;
     }
 
     // --- tokens ----------------------------------------------------------------------------------
@@ -184,13 +217,17 @@ public class ResponseMapper {
         if (memberships == null || memberships.isEmpty()) {
             return List.of();
         }
-        Map<UUID, String> names = tenantNames(memberships);
+        Map<UUID, Tenant> tenants = tenantsOf(memberships);
         List<SessionDtos.MembershipSummaryResponse> result = new ArrayList<>(memberships.size());
         for (TenantMembership membership : memberships) {
+            Tenant tenant = membership.getTenantId() == null ? null : tenants.get(membership.getTenantId());
             result.add(new SessionDtos.MembershipSummaryResponse(
                     membership.getId(),
                     membership.getTenantId(),
-                    membership.getTenantId() == null ? null : names.get(membership.getTenantId()),
+                    tenant == null ? null : tenant.getDisplayName(),
+                    tenant == null ? null : tenant.getShortName(),
+                    logoUrlOf(tenant),
+                    tenant == null ? null : tenant.getBrandColor(),
                     membership.getPortal(),
                     membership.getRole(),
                     membership.getStatus()));
@@ -198,21 +235,27 @@ public class ResponseMapper {
         return result;
     }
 
-    /** One query for every tenant referenced by the list, instead of one per membership (no N+1). */
-    private Map<UUID, String> tenantNames(List<TenantMembership> memberships) {
+    /**
+     * One query for every tenant referenced by the list, instead of one per membership (no N+1).
+     *
+     * <p>The whole tenant is loaded rather than just its name, because the membership list now has to
+     * carry the logo and the colour as well — and the alternative, one lookup per municipality to
+     * paint a picker, is exactly the shape this method exists to avoid.</p>
+     */
+    private Map<UUID, Tenant> tenantsOf(List<TenantMembership> memberships) {
         List<UUID> ids = memberships.stream()
                 .map(TenantMembership::getTenantId)
                 .filter(java.util.Objects::nonNull)
                 .distinct()
                 .toList();
-        Map<UUID, String> names = new HashMap<>();
+        Map<UUID, Tenant> tenants = new HashMap<>();
         if (ids.isEmpty()) {
-            return names;
+            return tenants;
         }
         for (Tenant tenant : tenantRepository.findAllById(ids)) {
-            names.put(tenant.getId(), tenant.getDisplayName());
+            tenants.put(tenant.getId(), tenant);
         }
-        return names;
+        return tenants;
     }
 
     public AdminDtos.MembershipResponse toMembership(TenantMembership membership) {
@@ -256,7 +299,20 @@ public class ResponseMapper {
                 tenant.getTimeZone(),
                 tenant.getStatus(),
                 tenant.getSelfRegistrationPolicy(),
-                tenant.getCreatedAt());
+                tenant.getCreatedAt(),
+                tenant.getShortName(),
+                tenant.getLogoAssetKey(),
+                logoUrlOf(tenant),
+                tenant.getBrandColor());
+    }
+
+    /** The visual identity as the admin form edits it: the stored key, plus what it resolves to. */
+    public AdminDtos.TenantBrandingResponse toBranding(Tenant tenant) {
+        return new AdminDtos.TenantBrandingResponse(
+                tenant.getLogoAssetKey(),
+                logoUrlOf(tenant),
+                tenant.getBrandColor(),
+                tenant.getShortName());
     }
 
     public PlatformDtos.TenantSettingResponse toTenantSetting(TenantSetting setting) {

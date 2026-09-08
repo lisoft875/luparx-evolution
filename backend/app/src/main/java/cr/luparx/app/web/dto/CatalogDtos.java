@@ -45,8 +45,29 @@ public final class CatalogDtos {
             String example) {
     }
 
-    /** {@code GET /catalog/tenants}. Only publishable (active) municipalities are exposed. */
-    public record TenantCatalogResponse(UUID id, String slug, String name, String countryCode) {
+    /**
+     * {@code GET /catalog/tenants}, and the shape of a municipality wherever one is named.
+     *
+     * <p>It carries what a screen needs to <em>draw</em> a municipality and not only to identify it:
+     * the login screen and the picker a citizen sees after signing in are grids of icons, and a grid
+     * of icons cannot be built from a name. Sending the branding with the list is also what keeps it
+     * one request — a client that had to fetch each municipality separately to find its logo would
+     * make the picker slower the more municipalities the platform serves.</p>
+     *
+     * @param shortName  what fits in a top bar; null means "use {@code name} and truncate it"
+     * @param logoUrl    ready to render, already resolved from the stored key. <b>Null is normal</b>:
+     *                   a municipality that has not provided an emblem yet, and the client draws a
+     *                   monogram over {@code brandColor}
+     * @param brandColor {@code #rrggbb}; null when the municipality has not picked one
+     */
+    public record TenantCatalogResponse(
+            UUID id,
+            String slug,
+            String name,
+            String countryCode,
+            String shortName,
+            String logoUrl,
+            String brandColor) {
     }
 
     /**

@@ -93,14 +93,20 @@ function ActiveSessionCard({ session, policy }: { session: ParkingSession; polic
             time: formatTime(session.expiresAt, locale, { timeZone }),
           })}
         </p>
-        <div style={{ display: 'flex', gap: 'var(--lx-space-2)' }}>
+        {/* `flex: 1` alone (basis 0) put both actions on one line whatever the width, and a flex
+            item's default `min-width: auto` will not shrink below its own label — so at 320 and
+            390 px "Extender tiempo" and "Finalizar ahora" ran off the right edge of the card and
+            gave the whole page a horizontal scrollbar. A basis wide enough to be worth keeping
+            side by side, plus wrapping, is what makes the row honest: two columns where they fit,
+            two full-width rows on a phone, and never a button hanging off the screen. */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--lx-space-2)' }}>
           {policy?.extensionEnabled ? (
-            <Button type="button" variant="outline" style={{ flex: 1 }} onClick={() => setExtendOpen(true)}>
+            <Button type="button" variant="outline" style={{ flex: '1 1 200px' }} onClick={() => setExtendOpen(true)}>
               <IconPlus size={16} /> {t('citizen.home.activeSession.extendCta')}
             </Button>
           ) : null}
           {policy?.earlyFinishEnabled ? (
-            <Button type="button" variant="secondary" style={{ flex: 1 }} onClick={() => setFinishOpen(true)}>
+            <Button type="button" variant="secondary" style={{ flex: '1 1 200px' }} onClick={() => setFinishOpen(true)}>
               {t('citizen.home.activeSession.finishCta')}
             </Button>
           ) : null}

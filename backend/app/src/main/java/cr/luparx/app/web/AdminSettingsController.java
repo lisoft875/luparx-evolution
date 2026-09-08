@@ -6,8 +6,11 @@ import cr.luparx.app.web.dto.AdminDtos;
 import cr.luparx.core.audit.AuditAction;
 import cr.luparx.core.id.TenantId;
 import cr.luparx.core.tenant.TenantContextHolder;
+import cr.luparx.tenancy.entity.Tenant;
 import cr.luparx.tenancy.entity.TenantLocale;
+import cr.luparx.tenancy.model.TenantBranding;
 import cr.luparx.tenancy.service.TenantLocaleService;
+import cr.luparx.tenancy.service.TenantService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -37,14 +40,20 @@ import java.util.stream.Collectors;
 public class AdminSettingsController {
 
     private final TenantLocaleService tenantLocaleService;
+    private final TenantService tenantService;
     private final PlatformDefaultsProperties platformDefaults;
+    private final ResponseMapper mapper;
     private final AuditRecorder auditRecorder;
 
     public AdminSettingsController(TenantLocaleService tenantLocaleService,
+                                   TenantService tenantService,
                                    PlatformDefaultsProperties platformDefaults,
+                                   ResponseMapper mapper,
                                    AuditRecorder auditRecorder) {
         this.tenantLocaleService = tenantLocaleService;
+        this.tenantService = tenantService;
         this.platformDefaults = platformDefaults;
+        this.mapper = mapper;
         this.auditRecorder = auditRecorder;
     }
 
@@ -93,6 +102,42 @@ public class AdminSettingsController {
         auditRecorder.record(AuditAction.TENANT_LOCALES_UPDATED, "tenant-locales", tenantId.toString(),
                 Map.of("enabled", enabled, "default", fallback));
         return new AdminDtos.TenantLocalesResponse(toItems(saved), platformDefaults.locale());
+    }
+
+    // --- visual identity (CONTRACT.md v0.4) --------------------------------------------------------
+
+    @GetMapping("/branding")
+    @PreAuthorize("hasAuthority('PERM_TENANT_MANAGE')")
+    @Operation(summary = "Logo, brand colour and short name of this municipality")
+    public AdminDtos.TenantBrandingResponse branding() {
+        return mapper.toBranding(tenantService.require(TenantContextHolder.requireTenantId()));
+    }
+
+    /**
+     * Replaces the visual identity of this municipality, as one form.
+     *
+     * <p>A null field means "this municipality has none", not "leave the old one": clearing a logo
+     * has to be possible at all, and a partial update would make it unexpressible. The colour and the
+     * logo key are validated by the domain — a colour that is not a colour paints nothing, and a logo
+     * address that is not an absolute https one is a broken image on every screen of the product.</p>
+     *
+     * <p>The emblem itself is the municipality's: {@code generated:monogram} is the placeholder the
+     * platform draws until they provide theirs, and it is what every municipality starts on.</p>
+     */
+    @PutMapping("/branding")
+    @PreAuthorize("hasAuthority('PERM_TENANT_MANAGE')")
+    @Operation(summary = "Replace the logo, brand colour and short name of this municipality")
+    public AdminDtos.TenantBrandingResponse updateBranding(
+            @Valid @RequestBody AdminDtos.UpdateTenantBrandingRequest request) {
+        TenantId tenantId = TenantContextHolder.requireTenantId();
+        Tenant tenant = tenantService.rebrand(tenantId,
+                new TenantBranding(request.logoAssetKey(), request.brandColor(), request.shortName()),
+                TenantContextHolder.requireUserId());
+        auditRecorder.record(AuditAction.TENANT_BRANDING_UPDATED, "tenant", tenantId.toString(),
+                Map.of("logoAssetKey", String.valueOf(tenant.getLogoAssetKey()),
+                        "brandColor", String.valueOf(tenant.getBrandColor()),
+                        "shortName", String.valueOf(tenant.getShortName())));
+        return mapper.toBranding(tenant);
     }
 
     private List<AdminDtos.TenantLocaleItem> toItems(List<TenantLocale> locales) {

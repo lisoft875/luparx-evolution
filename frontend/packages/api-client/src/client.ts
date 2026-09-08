@@ -10,6 +10,12 @@ import {
   type WireTimeCredits,
   type WireWallet,
 } from './wire';
+import {
+  withResolvedMeLogos,
+  withResolvedMembershipLogo,
+  withResolvedSwitchTenantLogo,
+  withResolvedTenantLogo,
+} from './tenantBranding';
 import type { PagedResponse, PageParams } from './types/http';
 import type {
   AdminUserDetail,
@@ -71,6 +77,7 @@ import type {
   RequireMfaRequest,
   ResetPasswordRequest,
   SessionTenantRequest,
+  SwitchTenantResponse,
   StartParkingSessionRequest,
   SystemHealth,
   SystemJob,
@@ -112,9 +119,12 @@ export function oauthStartUrl(baseUrl: string, portal: Portal, provider: OAuthPr
 export class ApiClient {
   private readonly http: HttpClient;
   private readonly portal: Portal;
+  /** Kept so a municipality's server-resolved `logoUrl` can be absolutised (see ./tenantBranding). */
+  private readonly baseUrl: string;
 
   constructor(portal: Portal, options: HttpClientOptions) {
     this.portal = portal;
+    this.baseUrl = options.baseUrl;
     this.http = new HttpClient(options);
   }
 
@@ -135,8 +145,13 @@ export class ApiClient {
       }),
     documentTypes: (countryCode: string): Promise<DocumentTypeCatalogEntry[]> =>
       this.http.request('GET', `/api/v1/catalog/countries/${countryCode}/document-types`, { auth: false }),
-    tenants: (country?: string): Promise<TenantCatalogEntry[]> =>
-      this.http.request('GET', '/api/v1/catalog/tenants', { auth: false, query: { country } }),
+    tenants: async (country?: string): Promise<TenantCatalogEntry[]> =>
+      (
+        await this.http.request<TenantCatalogEntry[]>('GET', '/api/v1/catalog/tenants', {
+          auth: false,
+          query: { country },
+        })
+      ).map((tenant) => withResolvedTenantLogo(tenant, this.baseUrl)),
     /**
      * Locales a municipality has enabled (CONTRACT.md v0.3 §"Idiomas por municipalidad").
      * Public on purpose: the login screen needs it before anyone has authenticated.
@@ -173,24 +188,40 @@ export class ApiClient {
   // ---- Session / profile ---------------------------------------------------------------------
 
   readonly session = {
-    me: (): Promise<MeResponse> => this.http.request('GET', `/api/v1/${this.portal}/me`),
+    me: async (): Promise<MeResponse> =>
+      withResolvedMeLogos(await this.http.request<MeResponse>('GET', `/api/v1/${this.portal}/me`), this.baseUrl),
     /**
      * Every personal field of CONTRACT.md §2 (v0.3 §"Perfil editable"). The e-mail is deliberately
      * NOT part of this payload: changing it is changing the identity you sign in with, so it goes
      * through {@link changeEmail} and its verification.
      */
-    updateMe: (payload: UpdateProfileRequest): Promise<MeResponse> =>
-      this.http.request('PUT', `/api/v1/${this.portal}/me`, { body: payload }),
+    updateMe: async (payload: UpdateProfileRequest): Promise<MeResponse> =>
+      withResolvedMeLogos(
+        await this.http.request<MeResponse>('PUT', `/api/v1/${this.portal}/me`, { body: payload }),
+        this.baseUrl,
+      ),
     /** Requires the current password; revokes every other session (CONTRACT.md v0.3 §1.3). */
     changePassword: (payload: ChangePasswordRequest): Promise<void> =>
       this.http.request('POST', `/api/v1/${this.portal}/me/password`, { body: payload }),
     /** Starts the e-mail change: the new address has to be verified before it replaces the current one. */
     changeEmail: (payload: ChangeEmailRequest): Promise<void> =>
       this.http.request('POST', `/api/v1/${this.portal}/me/email`, { body: payload }),
-    memberships: (): Promise<MembershipSummary[]> =>
-      this.http.request('GET', `/api/v1/${this.portal}/me/memberships`),
-    switchTenant: (payload: SessionTenantRequest): Promise<RefreshResponse> =>
-      this.http.request('POST', `/api/v1/${this.portal}/session/tenant`, { body: payload }),
+    memberships: async (): Promise<MembershipSummary[]> =>
+      (
+        await this.http.request<MembershipSummary[]>('GET', `/api/v1/${this.portal}/me/memberships`)
+      ).map((membership) => withResolvedMembershipLogo(membership, this.baseUrl)),
+    /**
+     * Scopes the session to one municipality (CONTRACT.md v0.4). The answer carries the new token
+     * pair AND that municipality's branding, so the badge in the top bar repaints from the very
+     * response that changed the session rather than from a follow-up request that could disagree.
+     */
+    switchTenant: async (payload: SessionTenantRequest): Promise<SwitchTenantResponse> =>
+      withResolvedSwitchTenantLogo(
+        await this.http.request<SwitchTenantResponse>('POST', `/api/v1/${this.portal}/session/tenant`, {
+          body: payload,
+        }),
+        this.baseUrl,
+      ),
     mfaSetup: (): Promise<MfaSetupResponse> =>
       this.http.request('POST', `/api/v1/${this.portal}/me/mfa/setup`),
     mfaActivate: (payload: MfaActivateRequest): Promise<void> =>

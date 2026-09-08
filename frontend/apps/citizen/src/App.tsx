@@ -2,8 +2,8 @@ import * as React from 'react';
 import { BrowserRouter, HashRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { I18nProvider } from '@luparx/i18n';
-import { LocalePreferenceSync } from '@luparx/features';
-import { AuthProvider, RequireAuth } from '@luparx/auth';
+import { LocalePreferenceSync, TenantCacheReset } from '@luparx/features';
+import { AuthProvider, RequireAuth, RequireTenant } from '@luparx/auth';
 import { mockFetch } from '@luparx/api-client/mocks';
 import { API_BASE_URL, PORTAL, USE_MOCKS } from './env';
 import { LoginPage } from './pages/LoginPage';
@@ -39,6 +39,9 @@ export function App(): React.JSX.Element {
       <QueryClientProvider client={queryClient}>
         <AuthProvider portal={PORTAL} apiBaseUrl={API_BASE_URL} fetchImpl={USE_MOCKS ? mockFetch : undefined}>
           <LocalePreferenceSync />
+          {/* Everything a citizen screen reads is scoped to one municipality; this drops the
+              previous one's answers the instant the active one changes. */}
+          <TenantCacheReset />
           <Router>
             <Routes>
               <Route path="/login" element={<LoginPage />} />
@@ -50,7 +53,9 @@ export function App(): React.JSX.Element {
                 path="/"
                 element={
                   <RequireAuth loginPath="/login">
-                    <HomePage />
+                    <RequireTenant selectTenantPath="/select-tenant">
+                      <HomePage />
+                    </RequireTenant>
                   </RequireAuth>
                 }
               />
@@ -90,7 +95,9 @@ export function App(): React.JSX.Element {
                 path="/park"
                 element={
                   <RequireAuth loginPath="/login">
-                    <ParkingPage />
+                    <RequireTenant selectTenantPath="/select-tenant">
+                      <ParkingPage />
+                    </RequireTenant>
                   </RequireAuth>
                 }
               />
@@ -98,7 +105,9 @@ export function App(): React.JSX.Element {
                 path="/vehicles"
                 element={
                   <RequireAuth loginPath="/login">
-                    <VehiclesPage />
+                    <RequireTenant selectTenantPath="/select-tenant">
+                      <VehiclesPage />
+                    </RequireTenant>
                   </RequireAuth>
                 }
               />
@@ -106,7 +115,9 @@ export function App(): React.JSX.Element {
                 path="/fines"
                 element={
                   <RequireAuth loginPath="/login">
-                    <FinesPage />
+                    <RequireTenant selectTenantPath="/select-tenant">
+                      <FinesPage />
+                    </RequireTenant>
                   </RequireAuth>
                 }
               />
@@ -114,7 +125,9 @@ export function App(): React.JSX.Element {
                 path="/wallet"
                 element={
                   <RequireAuth loginPath="/login">
-                    <WalletPage />
+                    <RequireTenant selectTenantPath="/select-tenant">
+                      <WalletPage />
+                    </RequireTenant>
                   </RequireAuth>
                 }
               />
@@ -122,7 +135,9 @@ export function App(): React.JSX.Element {
                 path="/movements"
                 element={
                   <RequireAuth loginPath="/login">
-                    <MovementsPage />
+                    <RequireTenant selectTenantPath="/select-tenant">
+                      <MovementsPage />
+                    </RequireTenant>
                   </RequireAuth>
                 }
               />

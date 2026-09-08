@@ -450,3 +450,59 @@ Reglas:
 - Iniciar fuera de horario responde `OUTSIDE_CHARGING_HOURS` con la próxima franja, y la app lo dice
   con claridad ("ahora no se cobra; el cobro se reanuda el lunes a las 7:00").
 - Todo se evalúa en la **zona horaria de la municipalidad**, no en la del dispositivo.
+
+---
+
+# v0.4 — Identidad visual de la municipalidad (normativo)
+
+El ciudadano **elige municipalidad después de iniciar sesión**, en una pantalla de iconos con la
+imagen de cada municipalidad y su nombre debajo; la municipalidad activa se muestra junto al logo de
+LuParX. Una lista de nombres no alcanza para eso.
+
+## Datos (`tenants`, v0.4)
+
+| Campo | Significado |
+|---|---|
+| `logo_asset_key` | **Clave**, no URL: cómo obtener el logo. Hoy `generated:monogram` (el marcador que dibuja la plataforma) o una dirección `https://` absoluta del emblema que la municipalidad hospeda. Nullable |
+| `brand_color` | Color de marca `#rrggbb` en minúscula, validado por CHECK. Nullable |
+| `short_name` | Lo que cabe en una barra superior cuando el nombre completo no ("San José" por "Municipalidad de San José"). Nullable |
+
+**Los tres son nullable a propósito.** Una municipalidad creada hace cinco minutos no tiene logo, y
+eso es un estado válido y no un error: el cliente cae a un monograma con el color de marca, y al
+color de reserva de la plataforma cuando ni eso hay.
+
+**Se guarda una clave y no una URL** porque una URL absoluta en la fila del tenant es específica del
+entorno — restaurar la base en staging deja a todas las municipalidades apuntando al host de
+producción — y envejece mal: el día que exista subida de archivos y CDN habría que reescribir cada
+fila. Una clave se resuelve al momento de renderizar y el hospedaje cambia sin mover una fila. Se
+rechaza `http` liso: un logo por http en una página https lo bloquea el navegador como contenido
+mixto, así que aceptarlo sólo produciría una imagen rota que nadie sabe explicar.
+
+**El escudo es de la municipalidad.** La plataforma no inventa ni aproxima emblemas municipales: son
+símbolos oficiales y los aporta cada municipalidad desde su panel. Hasta entonces se dibuja un
+monograma con las iniciales sobre el color de marca.
+
+## API
+
+```
+GET  /api/v1/catalog/tenants                    (v0.4) + shortName, logoUrl, brandColor
+GET  /api/v1/catalog/tenants/{id}/logo.svg      (v0.4, público) monograma generado de la municipalidad
+GET  /api/v1/{portal}/me/memberships            (v0.4) + tenantShortName, tenantLogoUrl, tenantBrandColor
+POST /api/v1/{portal}/session/tenant            (v0.4) responde {tokens, activeTenant}
+GET/PUT /api/v1/admin/settings/branding         (v0.4, permiso TENANT_MANAGE)
+POST/PUT /api/v1/platform/tenants[/{id}]        (v0.4) aceptan logoAssetKey, brandColor, shortName
+```
+
+`logoUrl` viaja **ya resuelto** desde `logo_asset_key`, en un solo lugar del servidor, para que el
+catálogo, la lista de membresías y la insignia de la municipalidad activa no puedan discrepar sobre
+dónde vive un logo. `logoUrl` ausente o nulo significa "sin emblema todavía": el cliente dibuja el
+monograma.
+
+La marca viaja **con la lista** y no por municipalidad: un cliente que tuviera que pedir cada
+municipalidad por separado para saber con qué pintarla haría la pantalla más lenta cuantas más
+municipalidades sirva la plataforma.
+
+Validación: el color se acepta como `#rrggbb` o `#rgb` (se expande) y se guarda en minúscula — dos
+filas con `#FFAA00` y `#ffaa00` son el mismo color y compararían distinto; el logo sólo se acepta como
+`generated:monogram` o `https://…`; el nombre corto, hasta 40 caracteres. Nada de aceptar cualquier
+cadena. `TENANT_BRANDING_UPDATED` queda auditado.

@@ -1,8 +1,9 @@
 import * as React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { ActiveTenantBadge } from '@luparx/features';
 import { useAuth } from '@luparx/auth';
 import { useTranslation } from '@luparx/i18n';
-import { Button, PageLayout } from '@luparx/ui';
+import { Button, Brand, PageLayout } from '@luparx/ui';
 
 export interface AdminShellProps {
   children: React.ReactNode;
@@ -11,20 +12,20 @@ export interface AdminShellProps {
 /** Shared chrome for every authenticated admin screen: top bar + left nav (CONTRACT.md §4 `/api/v1/admin/**`). */
 export function AdminShell({ children }: AdminShellProps): React.JSX.Element {
   const { t } = useTranslation();
-  const { me, memberships, logout } = useAuth();
-  const activeTenantName = me?.activeTenant?.name;
-  const activeMemberships = memberships.filter((m) => m.status === 'ACTIVE');
+  const { logout } = useAuth();
+  const navigate = useNavigate();
 
   return (
     <PageLayout
       header={
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <strong>{t('app.name')}</strong>
-            {activeTenantName ? <span> — {activeTenantName}</span> : null}
+          <div style={{ display: 'flex', gap: 'var(--lx-space-3)', alignItems: 'center', minWidth: 0 }}>
+            <Brand name={t('app.name')} />
+            {/* The municipality being administered, beside the LuParX mark (CONTRACT.md v0.4) —
+                its emblem and short name, and the way back to the picker when there is a choice. */}
+            <ActiveTenantBadge onOpenSelector={() => navigate('/select-tenant')} />
           </div>
           <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-            {activeMemberships.length > 1 ? <Link to="/select-tenant">{t('profile.changeTenant')}</Link> : null}
             <Link to="/profile">{t('nav.profile')}</Link>
             <Button type="button" variant="ghost" onClick={() => logout()}>
               {t('auth.logout.action')}

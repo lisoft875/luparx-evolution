@@ -21,6 +21,7 @@ import cr.luparx.core.tenant.TenantContextHolder;
 import cr.luparx.identity.entity.User;
 import cr.luparx.identity.repository.UserRepository;
 import cr.luparx.tenancy.entity.Tenant;
+import cr.luparx.tenancy.model.TenantBranding;
 import cr.luparx.tenancy.entity.TenantMembership;
 import cr.luparx.tenancy.model.MembershipStatus;
 import cr.luparx.tenancy.model.TenantStatus;
@@ -101,7 +102,9 @@ public class PlatformTenantController {
         TenantContext context = TenantContextHolder.require();
         Tenant tenant = tenantService.create(request.slug(), request.legalName(), request.displayName(),
                 request.countryCode(), request.currencyCode(), request.locale(), request.timeZone(),
-                request.selfRegistrationPolicy(), context.userId());
+                request.selfRegistrationPolicy(),
+                new TenantBranding(request.logoAssetKey(), request.brandColor(), request.shortName()),
+                context.userId());
         auditRecorder.record(AuditAction.TENANT_CREATED, "tenant", tenant.getId().toString(),
                 TenantId.of(tenant.getId()), context.userId(), context.portal(),
                 Map.of("slug", tenant.getSlug(), "countryCode", tenant.getCountryCode()));
@@ -125,6 +128,11 @@ public class PlatformTenantController {
         TenantContext context = TenantContextHolder.require();
         Tenant tenant = tenantService.update(TenantId.of(id), request.legalName(), request.displayName(),
                 request.currencyCode(), request.locale(), request.timeZone(), request.selfRegistrationPolicy(),
+                context.userId());
+        // The back-office edits a municipality from one form, branding included. Applied after the
+        // naming so that a rejected colour cannot leave the name half-saved.
+        tenant = tenantService.rebrand(TenantId.of(id),
+                new TenantBranding(request.logoAssetKey(), request.brandColor(), request.shortName()),
                 context.userId());
         auditRecorder.record(AuditAction.TENANT_UPDATED, "tenant", id.toString(), TenantId.of(id),
                 context.userId(), context.portal(), Map.of());

@@ -22,6 +22,36 @@ export function RequireAuth({ children, loginPath }: RequireAuthProps): React.JS
   return <>{children}</>;
 }
 
+export interface RequireTenantProps {
+  children: React.ReactNode;
+  /** Where the full-screen municipality picker is mounted in this app, e.g. '/select-tenant'. */
+  selectTenantPath: string;
+}
+
+/**
+ * Holds a tenant-scoped route until the session knows which municipality it is in.
+ *
+ * This is the first step after signing in for an account that belongs to several, and it is
+ * deliberately not a step for an account that belongs to one: the server already scoped that
+ * session, and asking someone to click the only option they have is a click that answers itself
+ * (CONTRACT.md v0.4). An account with none is sent to the picker too, which is where the
+ * "you do not belong to a municipality yet" state is explained.
+ *
+ * Like every other guard here this is UX, not authorization. The server refuses a tenant-scoped
+ * request without a tenant context regardless of what the client renders (CONTRACT.md §7).
+ */
+export function RequireTenant({ children, selectTenantPath }: RequireTenantProps): React.JSX.Element | null {
+  const { status, activeTenant, activeMemberships } = useAuth();
+  const location = useLocation();
+
+  if (status === 'loading') return null;
+  if (status !== 'authenticated') return <>{children}</>;
+  if (!activeTenant && activeMemberships.length !== 1) {
+    return <Navigate to={selectTenantPath} replace state={{ from: location }} />;
+  }
+  return <>{children}</>;
+}
+
 export interface RequirePermissionProps {
   children: React.ReactNode;
   permission: Permission;
