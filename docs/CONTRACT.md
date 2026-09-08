@@ -370,3 +370,65 @@ Errores estables: `SESSION_ALREADY_ACTIVE_FOR_VEHICLE`, `SPACE_OCCUPIED`, `EXTEN
   botón no cobra dos veces.
 - Cobro y sesión se escriben en la **misma transacción**; el saldo nunca queda debitado sin sesión.
 - Toda operación queda auditada con tenant, usuario, vehículo y espacio.
+
+---
+
+# v0.3 — Cuenta, idiomas y operación de la municipalidad (normativo)
+
+## Autenticación y cuenta
+
+1. **Sin MFA.** Ningún portal exige verificación en dos pasos. `luparx.security.mfa-enforced-portals`
+   queda vacía por defecto en todos los perfiles y la interfaz no ofrece TOTP. El código de TOTP se
+   conserva inactivo detrás de esa configuración: reactivarlo es poner portales en la lista, no
+   reescribir el módulo.
+   > Riesgo aceptado explícitamente por el producto: el back-office de plataforma administra todas
+   > las municipalidades con sólo correo y contraseña. Conviene compensarlo con contraseñas fuertes,
+   > límite de intentos (ya existe) y restricción por IP antes de exponerlo a internet.
+2. **La sesión no vence.** El refresh token no expira (`luparx.jwt.refresh-token-ttl: 0` = sin
+   vencimiento) y el cliente renueva el access token en silencio. Siguen invalidando la sesión:
+   cerrar sesión, cambiar la contraseña, y el bloqueo de la cuenta por un administrador.
+3. **Cambio de contraseña a voluntad**: `POST /api/v1/{portal}/me/password {currentPassword,
+   newPassword}`. Exige la contraseña actual, revoca las demás sesiones y sube `credentials_version`.
+
+## Perfil editable
+
+`PUT /api/v1/{portal}/me` acepta **todos** los datos personales del §2: nombre completo, documento
+de identidad, dirección completa, teléfono, nacionalidad y fecha de nacimiento.
+El **correo** se cambia por un flujo aparte (`POST /me/email` → verificación del correo nuevo antes
+de reemplazar el actual): cambiarlo es cambiar la identidad de acceso, no un campo más de un
+formulario.
+
+## Idiomas por municipalidad
+
+- `tenant_locales`: los idiomas que **habilita el administrador municipal** y cuál es el
+  predeterminado. La interfaz muestra un **desplegable** con esa lista, no una pastilla de dos
+  estados. La resolución sigue siendo determinista: preferencia del usuario → idioma habilitado por
+  la municipalidad → idioma por defecto de la municipalidad → idioma por defecto de la plataforma.
+- `GET /api/v1/catalog/tenants/{id}/locales` (público, lo necesita el login) y
+  `GET|PUT /api/v1/admin/settings/locales` (permiso `TENANT_MANAGE`).
+
+## Formato del código de espacio
+
+`parking_space_formats` (una fila por tenant): `prefix`, `digits`, `allow_letters`, `pattern`
+(regex efectiva) y `example`. San José arranca en numérico puro de 4 dígitos, `0001`–`5000`.
+El servidor valida contra el patrón del tenant al crear espacios y al iniciar una sesión; el
+frontend usa `example` como marcador y `pattern` para validar en el momento.
+
+## Horario de cobro por municipalidad
+
+`parking_schedules` + `parking_schedule_exceptions`:
+
+| Campo | Significado |
+|---|---|
+| `charges_all_day` | Si está marcado, se cobra parejo las 24 horas y el resto del horario se ignora |
+| Franjas por día de semana | `weekday`, `starts_at`, `ends_at` (varias por día); por defecto **lunes a sábado de 07:00 a 18:00** |
+| Días deshabilitados | Un día de la semana sin franjas no se cobra (por defecto, domingo) |
+| Excepciones por fecha | Feriados: fecha, si se cobra o no, y franjas propias si aplica |
+
+Reglas:
+
+- **Sólo se cobran los minutos que caen dentro de una franja.** Una sesión de 17:30 a 19:00 con
+  cierre a las 18:00 paga media hora, no hora y media. Lo mismo al extender.
+- Iniciar fuera de horario responde `OUTSIDE_CHARGING_HOURS` con la próxima franja, y la app lo dice
+  con claridad ("ahora no se cobra; el cobro se reanuda el lunes a las 7:00").
+- Todo se evalúa en la **zona horaria de la municipalidad**, no en la del dispositivo.
