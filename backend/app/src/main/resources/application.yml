@@ -120,6 +120,8 @@ luparx:
     refresh-token-ttl: ${JWT_REFRESH_TOKEN_TTL:30d}
     mfa-challenge-ttl: ${JWT_MFA_CHALLENGE_TTL:5m}
     oauth-state-ttl: ${JWT_OAUTH_STATE_TTL:10m}
+    # Sólo el perfil dev lo enciende: sin llaves, no se arranca.
+    ephemeral-keys-when-missing: ${JWT_EPHEMERAL_KEYS:false}
   security:
     ip-hash-pepper: ${IP_HASH_PEPPER:}
     mfa-encryption-key: ${MFA_TOTP_ENCRYPTION_KEY:}

@@ -16,6 +16,10 @@ logging:
     org.hibernate.SQL: DEBUG
 
 luparx:
+  jwt:
+    # Si no hay par de llaves en disco, se genera uno en memoria al arrancar y se avisa por log.
+    # Cada reinicio invalida los tokens anteriores: aceptable en una laptop, jamás en un entorno real.
+    ephemeral-keys-when-missing: ${JWT_EPHEMERAL_KEYS:true}
   security:
     # 32 bytes, Base64: "luparx-dev-only-totp-key-32bytes" — replaced per environment in every
     # deployment that is not a developer laptop.

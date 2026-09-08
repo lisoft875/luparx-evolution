@@ -21,6 +21,10 @@ import java.util.List;
  * @param refreshTokenTtl        lifetime of a refresh token (contract: 30 days)
  * @param mfaChallengeTtl        lifetime of the intermediate MFA token
  * @param oauthStateTtl          lifetime of the signed OAuth state value
+ * @param ephemeralKeysWhenMissing generate a throwaway in-memory key pair when the configured PEM
+ *                                 files are absent. Development convenience only: every restart
+ *                                 invalidates the tokens signed by the previous key, so it must stay
+ *                                 {@code false} anywhere shared.
  */
 @ConfigurationProperties(prefix = "luparx.jwt")
 public record JwtProperties(
@@ -32,5 +36,6 @@ public record JwtProperties(
         Duration accessTokenTtl,
         Duration refreshTokenTtl,
         Duration mfaChallengeTtl,
-        Duration oauthStateTtl) {
+        Duration oauthStateTtl,
+        boolean ephemeralKeysWhenMissing) {
 }

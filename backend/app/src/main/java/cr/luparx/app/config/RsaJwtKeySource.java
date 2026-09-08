@@ -14,6 +14,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.GeneralSecurityException;
 import java.security.KeyFactory;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
 import java.security.interfaces.RSAPrivateKey;
 import java.security.interfaces.RSAPublicKey;
 import java.security.spec.PKCS8EncodedKeySpec;
@@ -39,8 +41,26 @@ public class RsaJwtKeySource implements JwtKeySource {
 
     public RsaJwtKeySource(JwtProperties properties) {
         try {
-            RSAPrivateKey privateKey = readPrivateKey(Path.of(properties.privateKeyPath()));
-            RSAPublicKey publicKey = readPublicKey(Path.of(properties.publicKeyPath()));
+            Path privateKeyPath = Path.of(properties.privateKeyPath());
+            Path publicKeyPath = Path.of(properties.publicKeyPath());
+            if (!Files.isReadable(privateKeyPath) || !Files.isReadable(publicKeyPath)) {
+                if (!properties.ephemeralKeysWhenMissing()) {
+                    // The absolute path matters: a relative one resolves against the working
+                    // directory, which is not the repository root when Maven runs the app module.
+                    throw new IllegalStateException("no JWT signing key pair at "
+                            + privateKeyPath.toAbsolutePath() + " / " + publicKeyPath.toAbsolutePath()
+                            + " — run scripts/dev-setup.sh, or point JWT_PRIVATE_KEY_PATH and "
+                            + "JWT_PUBLIC_KEY_PATH at the key pair mounted by the environment");
+                }
+                this.activeKey = generateEphemeralKey(properties.keyId());
+                this.publicJwkSet = new JWKSet(this.activeKey.toPublicJWK());
+                LOGGER.warn("No JWT key pair at {} — signing with a throwaway in-memory key. "
+                        + "Every restart invalidates previously issued tokens. Development only.",
+                        privateKeyPath.toAbsolutePath());
+                return;
+            }
+            RSAPrivateKey privateKey = readPrivateKey(privateKeyPath);
+            RSAPublicKey publicKey = readPublicKey(publicKeyPath);
             this.activeKey = new RSAKey.Builder(publicKey)
                     .privateKey(privateKey)
                     .keyID(properties.keyId())
@@ -82,6 +102,18 @@ public class RsaJwtKeySource implements JwtKeySource {
     @Override
     public JWKSet publicJwkSet() {
         return publicJwkSet;
+    }
+
+    /** Throwaway key pair so a fresh checkout can boot before any secret is provisioned. */
+    private static RSAKey generateEphemeralKey(String keyId) throws GeneralSecurityException {
+        KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
+        generator.initialize(2048);
+        KeyPair pair = generator.generateKeyPair();
+        return new RSAKey.Builder((RSAPublicKey) pair.getPublic())
+                .privateKey((RSAPrivateKey) pair.getPrivate())
+                .keyID(keyId)
+                .keyUse(KeyUse.SIGNATURE)
+                .build();
     }
 
     private static RSAPrivateKey readPrivateKey(Path path) throws IOException, GeneralSecurityException {
