@@ -4,7 +4,7 @@ import { useTranslation, formatDate } from '@luparx/i18n';
 import { Alert, Button, Modal } from '@luparx/ui';
 import type { ParkingPolicy, ParkingSession } from '@luparx/api-client';
 import { useFinishParkingSession } from '../lib/queries';
-import { parkingErrorKey } from '../lib/apiErrors';
+import { parkingErrorMessage } from '../lib/apiErrors';
 
 export interface FinishSessionConfirmProps {
   open: boolean;
@@ -40,7 +40,7 @@ export function FinishSessionConfirm({ open, onClose, session, policy }: FinishS
       await finish.mutateAsync(session.id);
       onClose();
     } catch (err) {
-      setError(t(parkingErrorKey(err)));
+      setError(parkingErrorMessage(err, t));
     }
   }
 

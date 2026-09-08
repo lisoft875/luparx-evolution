@@ -8,6 +8,7 @@ import {
   type SupportedLocale,
   detectBrowserLocale,
   readStoredLocale,
+  setLocaleStorageScope,
   writeStoredLocale,
 } from './locale';
 import { pluralCategory } from './formatters';
@@ -46,9 +47,18 @@ export interface I18nProviderProps {
   children: React.ReactNode;
   /** Initial locale override, e.g. from a saved user preference. Defaults to browser detection. */
   initialLocale?: SupportedLocale;
+  /**
+   * Portal this app is (`citizen`, `admin`, …). Namespaces the remembered choice so the four
+   * portals cannot overwrite each other's language when they share a host.
+   */
+  storageScope?: string;
 }
 
-export function I18nProvider({ children, initialLocale }: I18nProviderProps): React.JSX.Element {
+export function I18nProvider({ children, initialLocale, storageScope }: I18nProviderProps): React.JSX.Element {
+  // Set before the first read below: the scope decides which key that read looks at, so doing it
+  // in an effect would read the wrong key once and then flip the language under the viewer.
+  if (storageScope) setLocaleStorageScope(storageScope);
+
   // Deterministic order, and the same one on every reload: an explicit override from the host app,
   // then this browser's remembered choice, then what the browser itself asks for.
   const [locale, setLocaleState] = useState<SupportedLocale>(

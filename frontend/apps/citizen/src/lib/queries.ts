@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tan
 import { useAuth } from '@luparx/auth';
 import { ApiError } from '@luparx/api-client';
 import type {
+  AdministrativeDivision,
   ChangeEmailRequest,
   ChangePasswordRequest,
   CreateVehicleRequest,
@@ -200,6 +201,28 @@ export function useParkingZones(): UseQueryResult<ParkingZone[]> {
         return [...byId.values()];
       }
     },
+  });
+}
+
+/**
+ * One level of a country's administrative divisions (`GET /catalog/countries/{code}/divisions`).
+ *
+ * The account screen shows an address as the person would write it — "San José, Escazú, San
+ * Rafael" — while the profile stores only the division ids, so the names have to be looked up.
+ * The catalog is public and slow-moving, hence the long `staleTime`; the query stays disabled
+ * until its parent is known, so the cascade is never asked for children of nothing.
+ */
+export function useDivisions(
+  countryCode: string | undefined,
+  level: number,
+  parentId: string | undefined,
+): UseQueryResult<AdministrativeDivision[]> {
+  const { apiClient } = useAuth();
+  return useQuery({
+    queryKey: ['catalog', 'divisions', countryCode ?? '', level, parentId ?? 'root'],
+    queryFn: () => apiClient.catalog.divisions(countryCode as string, { level, parentId }),
+    enabled: Boolean(countryCode) && (level === 1 || Boolean(parentId)),
+    staleTime: 10 * 60_000,
   });
 }
 

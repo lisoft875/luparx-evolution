@@ -211,6 +211,9 @@ export function PersonalDataFields<TValues extends PersonalDataValues>({
         line2Label={t('user.field.address.line2')}
         postalCodeLabel={t('user.field.address.postalCode')}
         optionalLabel={t('common.optional')}
+        selectPlaceholder={t('common.select.placeholder')}
+        loadErrorLabel={t('user.field.address.loadError')}
+        retryLabel={t('common.retry')}
         errors={{ level1Id: errors.addressLevel1Id?.message, line1: errors.addressLine1?.message }}
       />
 

@@ -2,11 +2,17 @@ import * as React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { ApiClient } from '@luparx/api-client';
 import { useAuth } from '@luparx/auth';
-import { SUPPORTED_LOCALES, isSupportedLocale, useTranslation, type SupportedLocale } from '@luparx/i18n';
+import { SUPPORTED_LOCALES, type SupportedLocale } from '@luparx/i18n';
 import { LocaleSelect } from '@luparx/ui';
 import { toPersonalDataValues, toUpdateProfileRequest } from '../profile/personalData';
 
 const LOCALE_STALE_TIME_MS = 10 * 60 * 1000;
+
+/** What a municipality offers: the tags it enabled, in its order, and which of them is its default. */
+export interface AvailableLocales {
+  locales: string[];
+  defaultLocale?: string;
+}
 
 /**
  * Locales offered to the viewer right now (CONTRACT.md v0.3 §"Idiomas por municipalidad").
@@ -22,14 +28,18 @@ export function useAvailableLocales(apiClient: ApiClient, tenantId: string | nul
   return useQuery({
     queryKey: ['catalog', 'tenant-locales', tenantId ?? 'platform'],
     staleTime: LOCALE_STALE_TIME_MS,
-    queryFn: async (): Promise<string[]> => {
-      if (!tenantId) return [...SUPPORTED_LOCALES];
+    queryFn: async (): Promise<AvailableLocales> => {
+      if (!tenantId) return { locales: [...SUPPORTED_LOCALES] };
       try {
-        const locales = await apiClient.catalog.tenantLocales(tenantId);
-        const ordered = [...locales].sort((a, b) => a.sortOrder - b.sortOrder).map((entry) => entry.locale);
-        return ordered.length > 0 ? ordered : [...SUPPORTED_LOCALES];
+        const entries = await apiClient.catalog.tenantLocales(tenantId);
+        const ordered = [...entries].sort((a, b) => a.sortOrder - b.sortOrder);
+        if (ordered.length === 0) return { locales: [...SUPPORTED_LOCALES] };
+        return {
+          locales: ordered.map((entry) => entry.locale),
+          defaultLocale: (ordered.find((entry) => entry.isDefault) ?? ordered[0])?.locale,
+        };
       } catch {
-        return [...SUPPORTED_LOCALES];
+        return { locales: [...SUPPORTED_LOCALES] };
       }
     },
   });
@@ -50,34 +60,26 @@ export interface LocaleSwitcherProps {
  * The language dropdown, wired to whichever municipality is in play.
  *
  * Picking a language switches the interface immediately and remembers the choice in two places,
- * because they answer two different questions. The browser remembers it so a reload — including
- * the reload that lands on the login screen — keeps the language the person chose. The account
- * remembers it so it follows them to another device, and so the server can use it for the things
- * the app never renders: e-mails, receipts, notifications (CONTRACT.md v0.3 — "preferencia del
- * usuario" is the first step of the resolution). Saving the preference is best-effort: the
- * interface has already switched, and a failed write must not undo what the person just did.
+ * because they answer two different questions. The browser remembers it, per portal, so a reload
+ * — including the reload that lands on the login screen — keeps the language the person chose.
+ * The account remembers it so it follows them to another device, and so the server can use it for
+ * the things the app never renders: e-mails, receipts, notifications.
+ *
+ * Reconciling that local copy with the account's own language is not done here — see
+ * {@link LocalePreferenceSync}, which is mounted for the whole app. This control only exists on
+ * two screens, and signing in leaves both of them, so a reconciliation living here would run only
+ * when someone happened to be looking at one of those two screens.
  */
 export function LocaleSwitcher({ tenantId, variant, id, className }: LocaleSwitcherProps): React.JSX.Element {
   const { apiClient, me, refreshProfile } = useAuth();
-  const { locale, setLocale } = useTranslation();
   const effectiveTenantId = tenantId !== undefined ? tenantId : me?.activeTenant?.id ?? null;
   const { data } = useAvailableLocales(apiClient, effectiveTenantId);
   const profile = me?.user;
-
-  // The account's stored language, applied once when the profile arrives — unless this browser
-  // already carries a different explicit choice, which is the more recent intent of the two.
-  const applied = React.useRef(false);
-  React.useEffect(() => {
-    if (applied.current || !profile) return;
-    applied.current = true;
-    if (isSupportedLocale(profile.locale) && profile.locale !== locale && !readsStoredChoice()) {
-      setLocale(profile.locale);
-    }
-    // Runs once per profile load; `locale` is read, never depended on.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [profile]);
+  const enabled = data?.locales;
 
   function handleChange(next: SupportedLocale): void {
+    // `LocaleSelect` has already switched the interface and remembered the choice in this browser.
+    // Saving it on the account is best effort: a failed write must not undo what the person did.
     if (!profile || next === profile.locale) return;
     void apiClient.session
       .updateMe({
@@ -87,27 +89,16 @@ export function LocaleSwitcher({ tenantId, variant, id, className }: LocaleSwitc
         }),
       })
       .then(() => refreshProfile())
-      .catch(() => {
-        // Best effort: the interface is already in the chosen language.
-      });
+      .catch(() => undefined);
   }
 
   return (
     <LocaleSelect
-      locales={data ?? SUPPORTED_LOCALES}
+      locales={enabled ?? SUPPORTED_LOCALES}
       variant={variant}
       id={id}
       className={className}
       onLocaleChange={handleChange}
     />
   );
-}
-
-/** True when this browser already holds an explicit choice, which outranks the stored account one. */
-function readsStoredChoice(): boolean {
-  try {
-    return Boolean(globalThis.localStorage?.getItem('luparx.locale'));
-  } catch {
-    return false;
-  }
 }

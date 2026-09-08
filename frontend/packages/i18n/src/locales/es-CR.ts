@@ -13,6 +13,12 @@ export const esCR = {
   'common.error.network': 'No se pudo conectar con el servidor.',
   'common.empty': 'No hay datos para mostrar.',
   'common.retry': 'Reintentar',
+  // Support reference for a server-produced Problem Details (CONTRACT.md §4): the stable `code`
+  // is what an engineer greps for and the `traceId` is what correlates the user's report with the
+  // server's log line. Shown instead of a bare "something went wrong", which costs a whole
+  // round-trip with the person reporting it.
+  'common.error.reference': 'Código {{code}} · Traza {{traceId}}',
+  'common.error.referenceNoTrace': 'Código {{code}}',
   'common.cancel': 'Cancelar',
   'common.save': 'Guardar',
   'common.confirm': 'Confirmar',
@@ -104,6 +110,7 @@ export const esCR = {
   'user.field.address.line1': 'Dirección (línea 1)',
   'user.field.address.line2': 'Dirección (línea 2)',
   'user.field.address.postalCode': 'Código postal',
+  'user.field.address.loadError': 'No se pudo cargar esta lista.',
   'user.field.phone.countryCode': 'País',
   'user.field.phone.nationalNumber': 'Número de teléfono',
   'user.field.nationalityCode': 'Nacionalidad',
@@ -260,6 +267,9 @@ export const esCR = {
   'citizen.home.balanceCard.action': 'Recargar',
   'citizen.home.vehicleCard.label': 'Vehículo principal',
   'citizen.home.vehicleCard.changeCta': 'Cambiar',
+  'citizen.home.vehicleCard.empty': 'Sin vehículos',
+  'citizen.home.vehicleCard.addCta': 'Agregar',
+  'citizen.home.balanceCard.empty': 'Sin saldo',
   'citizen.home.finesCard.label': 'Multas pendientes',
   'citizen.home.finesCard.none': 'Ninguna',
   'citizen.home.activity.title': 'Actividad reciente',
@@ -407,6 +417,11 @@ export const esCR = {
   'citizen.profile.security.label': 'Seguridad',
   'citizen.profile.security.value': 'Cambiar contraseña',
   'citizen.profile.language.label': 'Idioma',
+  'citizen.profile.editCta': 'Editar',
+  'citizen.profile.address.empty': 'Sin dirección registrada.',
+  'citizen.profile.phone.empty': 'Sin teléfono registrado.',
+  'citizen.profile.identification.empty': 'Sin documento registrado.',
+  'citizen.profile.loadError': 'No se pudo cargar tu cuenta.',
 
   'inspector.home.offline': 'Sin conexión — datos guardados localmente',
   'inspector.home.online': 'En línea',

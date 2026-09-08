@@ -19,6 +19,7 @@ import {
 import type { ParkingPolicy, ParkingSession, Vehicle } from '@luparx/api-client';
 import { BalanceRow } from '../components/BalanceRow';
 import { CitizenShell } from '../components/CitizenShell';
+import { QueryBoundary } from '../components/QueryBoundary';
 import { ExtendSessionSheet } from '../components/ExtendSessionSheet';
 import { FinishSessionConfirm } from '../components/FinishSessionConfirm';
 import { MOVEMENT_ICON, MOVEMENT_ICON_TONE, MOVEMENT_TITLE_KEY } from '../lib/movementPresentation';
@@ -120,18 +121,14 @@ export function HomePage(): React.JSX.Element {
   const navigate = useNavigate();
   const { data: sessions } = useActiveParkingSessions();
   const { data: policy } = useParkingPolicy();
-  const { data: wallet } = useWallet();
-  const { data: vehicles } = useVehicles();
+  const walletQuery = useWallet();
+  const vehiclesQuery = useVehicles();
   const { me } = useAuth();
   const timeZone = useTenantTimeZone();
 
   const session = [...(sessions ?? [])].sort(
     (a, b) => new Date(a.expiresAt).getTime() - new Date(b.expiresAt).getTime(),
   )[0];
-  const vehicle = primaryVehicleOf(vehicles);
-  // The wallet endpoint returns the balance together with the first page of movements, newest
-  // first — the "recent activity" row is simply the top of that ledger.
-  const recentMovement = wallet?.transactions[0];
 
   return (
     <CitizenShell>
@@ -157,39 +154,89 @@ export function HomePage(): React.JSX.Element {
 
       {session ? (
         // Mockup screen 2: only the balance row repeats here (no vehicle card) once a session is active.
-        wallet ? (
-          <BalanceRow
-            label={t('citizen.wallet.balanceLabel')}
-            balanceMinor={wallet.balanceMinor}
-            currencyCode={wallet.currencyCode}
-            locale={locale}
-            actionLabel={t('citizen.home.balanceCard.action')}
-            onAction={() => navigate('/wallet')}
-          />
-        ) : null
+        <QueryBoundary query={walletQuery} errorTitle={t('citizen.wallet.balanceLabel')}>
+          {(wallet) => (
+            <BalanceRow
+              label={t('citizen.wallet.balanceLabel')}
+              balanceMinor={wallet.balanceMinor}
+              currencyCode={wallet.currencyCode}
+              locale={locale}
+              actionLabel={t('citizen.home.balanceCard.action')}
+              onAction={() => navigate('/wallet')}
+            />
+          )}
+        </QueryBoundary>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--lx-card-gap)' }}>
-          <StatCard
-            className="lx-stat-card--compact"
-            label={t('citizen.wallet.balanceLabel')}
-            value={wallet ? formatCurrencyMinor(wallet.balanceMinor, wallet.currencyCode, locale) : t('common.loading')}
-            action={
-              <Button type="button" variant="solid" onClick={() => navigate('/wallet')}>
-                {t('citizen.home.balanceCard.action')}
-              </Button>
+        // Each card owns its own three outcomes. They used to fall back to "Cargando…" for any
+        // absent value, which turned a failed wallet call and a citizen with no car into the same
+        // permanent spinner; now a failure states itself and offers the retry, and "no vehicles
+        // yet" says so and offers the way to add one.
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 'var(--lx-card-gap)' }}>
+          <QueryBoundary
+            query={walletQuery}
+            errorTitle={t('citizen.wallet.balanceLabel')}
+            loading={
+              <StatCard
+                className="lx-stat-card--compact"
+                label={t('citizen.wallet.balanceLabel')}
+                value={t('common.loading')}
+              />
             }
-          />
-          <StatCard
-            className="lx-stat-card--compact"
-            label={t('citizen.home.vehicleCard.label')}
-            value={vehicle ? vehicle.plate : t('common.loading')}
-            hint={vehicle ? [vehicle.brand, vehicle.model].filter(Boolean).join(' ') || undefined : undefined}
-            action={
-              <Button type="button" variant="outline" onClick={() => navigate('/vehicles')}>
-                {t('citizen.home.vehicleCard.changeCta')}
-              </Button>
+          >
+            {(wallet) => (
+              <StatCard
+                className="lx-stat-card--compact"
+                label={t('citizen.wallet.balanceLabel')}
+                value={formatCurrencyMinor(wallet.balanceMinor, wallet.currencyCode, locale)}
+                action={
+                  <Button type="button" variant="solid" onClick={() => navigate('/wallet')}>
+                    {t('citizen.home.balanceCard.action')}
+                  </Button>
+                }
+              />
+            )}
+          </QueryBoundary>
+          <QueryBoundary
+            query={vehiclesQuery}
+            errorTitle={t('citizen.home.vehicleCard.label')}
+            isEmpty={(list) => list.length === 0}
+            loading={
+              <StatCard
+                className="lx-stat-card--compact"
+                label={t('citizen.home.vehicleCard.label')}
+                value={t('common.loading')}
+              />
             }
-          />
+            empty={
+              <StatCard
+                className="lx-stat-card--compact"
+                label={t('citizen.home.vehicleCard.label')}
+                value={t('citizen.home.vehicleCard.empty')}
+                action={
+                  <Button type="button" variant="outline" onClick={() => navigate('/vehicles')}>
+                    {t('citizen.home.vehicleCard.addCta')}
+                  </Button>
+                }
+              />
+            }
+          >
+            {(vehicles) => {
+              const vehicle = primaryVehicleOf(vehicles);
+              return (
+                <StatCard
+                  className="lx-stat-card--compact"
+                  label={t('citizen.home.vehicleCard.label')}
+                  value={vehicle?.plate ?? t('citizen.home.vehicleCard.empty')}
+                  hint={vehicle ? [vehicle.brand, vehicle.model].filter(Boolean).join(' ') || undefined : undefined}
+                  action={
+                    <Button type="button" variant="outline" onClick={() => navigate('/vehicles')}>
+                      {t('citizen.home.vehicleCard.changeCta')}
+                    </Button>
+                  }
+                />
+              );
+            }}
+          </QueryBoundary>
         </div>
       )}
 
@@ -212,27 +259,40 @@ export function HomePage(): React.JSX.Element {
           action={{ label: t('citizen.home.activity.viewAllCta'), onClick: () => navigate('/movements') }}
         />
         <Card>
-          {recentMovement ? (
-            <ListRow
-              icon={MOVEMENT_ICON[recentMovement.type]}
-              iconTone={MOVEMENT_ICON_TONE[recentMovement.type]}
-              title={t(MOVEMENT_TITLE_KEY[recentMovement.type])}
-              meta={formatDateTime(recentMovement.createdAt, locale, { timeZone })}
-              value={
-                <AmountText
-                  amountMinor={recentMovement.amountMinor}
-                  currencyCode={recentMovement.currencyCode}
-                  locale={locale}
-                  showSignPrefix={false}
+          {/* The wallet endpoint returns the balance together with the first page of movements,
+              newest first — this row is simply the top of that ledger. */}
+          <QueryBoundary
+            query={walletQuery}
+            errorTitle={t('citizen.home.activity.title')}
+            isEmpty={(wallet) => wallet.transactions.length === 0}
+            empty={
+              <p className="lx-text-meta" style={{ margin: 0 }}>
+                {t('citizen.movements.empty.title')}
+              </p>
+            }
+          >
+            {(wallet) => {
+              const recentMovement = wallet.transactions[0];
+              if (!recentMovement) return null;
+              return (
+                <ListRow
+                  icon={MOVEMENT_ICON[recentMovement.type]}
+                  iconTone={MOVEMENT_ICON_TONE[recentMovement.type]}
+                  title={t(MOVEMENT_TITLE_KEY[recentMovement.type])}
+                  meta={formatDateTime(recentMovement.createdAt, locale, { timeZone })}
+                  value={
+                    <AmountText
+                      amountMinor={recentMovement.amountMinor}
+                      currencyCode={recentMovement.currencyCode}
+                      locale={locale}
+                      showSignPrefix={false}
+                    />
+                  }
+                  onClick={() => navigate('/movements')}
                 />
-              }
-              onClick={() => navigate('/movements')}
-            />
-          ) : (
-            <p className="lx-text-meta" style={{ margin: 0 }}>
-              {t('citizen.movements.empty.title')}
-            </p>
-          )}
+              );
+            }}
+          </QueryBoundary>
         </Card>
       </div>
     </CitizenShell>

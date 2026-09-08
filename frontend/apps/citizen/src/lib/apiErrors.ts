@@ -1,11 +1,7 @@
-import { ApiError } from '@luparx/api-client';
-import type { TranslationKey } from '@luparx/i18n';
+import { ApiError, NetworkError } from '@luparx/api-client';
+import type { TranslationKey, TranslationParams } from '@luparx/i18n';
 
-/** Maps a stable RFC 9457 `code` (CONTRACT.md §4) to its i18n key. Unmapped/network errors fall back to a generic message. */
-function lookup(error: unknown, table: Record<string, TranslationKey>): TranslationKey | undefined {
-  if (!(error instanceof ApiError)) return undefined;
-  return table[error.code];
-}
+type Translate = (key: TranslationKey, params?: TranslationParams) => string;
 
 // The keys here are the server's stable `code` values, verbatim (platform-core ErrorCode). A code
 // that does not match exactly is not a typo with a small cost: it silently degrades a precise,
@@ -28,19 +24,9 @@ const PARKING_ERROR_KEYS: Record<string, TranslationKey> = {
   OUTSIDE_CHARGING_HOURS: 'citizen.parking.error.OUTSIDE_CHARGING_HOURS',
 };
 
-/** Translation key for a parking (start/extend/finish) mutation failure — global alert copy. */
-export function parkingErrorKey(error: unknown): TranslationKey {
-  return lookup(error, PARKING_ERROR_KEYS) ?? 'common.error.generic';
-}
-
 const VEHICLE_DELETE_ERROR_KEYS: Record<string, TranslationKey> = {
   VEHICLE_HAS_ACTIVE_SESSION: 'citizen.vehicles.delete.error.VEHICLE_HAS_ACTIVE_SESSION',
 };
-
-/** Translation key for a vehicle-deletion failure (CONTRACT.md v0.2 — "el servidor rechaza eliminar uno con sesión activa"). */
-export function vehicleDeleteErrorKey(error: unknown): TranslationKey {
-  return lookup(error, VEHICLE_DELETE_ERROR_KEYS) ?? 'common.error.generic';
-}
 
 /**
  * Field-level message for the vehicle form's `plate` input (never shown as a global error —
@@ -56,4 +42,43 @@ export function vehiclePlateError(error: unknown, t: (key: TranslationKey) => st
     return t('citizen.vehicles.form.error.PLATE_ALREADY_REGISTERED');
   }
   return undefined;
+}
+
+/**
+ * What to show when nothing more specific is known.
+ *
+ * "Ocurrió un error. Intenta de nuevo." on its own is unactionable for the person reading it and
+ * unactionable for whoever they report it to: it is the same sentence whether the plate was
+ * malformed, the token had expired, or the server was down. When the server answered with a
+ * Problem Details (CONTRACT.md §4) it always carries a stable `code` and usually a `traceId`, and
+ * showing them turns a report into something that can be looked up in one query instead of
+ * reproduced from scratch.
+ *
+ * A transport failure is a different fact and gets its own sentence: there is no server answer to
+ * quote, and telling someone to "try again" while they are offline is the wrong instruction.
+ */
+export function apiErrorMessage(error: unknown, t: Translate, known?: Record<string, TranslationKey>): string {
+  if (error instanceof NetworkError) return t('common.error.network');
+  if (!(error instanceof ApiError)) return t('common.error.generic');
+  const mapped = known?.[error.code];
+  if (mapped) return t(mapped);
+  const reference = error.traceId
+    ? t('common.error.reference', { code: error.code, traceId: error.traceId })
+    : t('common.error.referenceNoTrace', { code: error.code });
+  return `${t('common.error.generic')} ${reference}`;
+}
+
+/** Global message for a vehicle create/update failure that is not about the plate itself. */
+export function vehicleSaveErrorMessage(error: unknown, t: Translate): string {
+  return apiErrorMessage(error, t);
+}
+
+/** Message for a vehicle-deletion failure, keeping the mapped copy for the one refusal the server states. */
+export function vehicleDeleteErrorMessage(error: unknown, t: Translate): string {
+  return apiErrorMessage(error, t, VEHICLE_DELETE_ERROR_KEYS);
+}
+
+/** Global message for a parking (start/extend/finish) failure, keeping the mapped copy where one exists. */
+export function parkingErrorMessage(error: unknown, t: Translate): string {
+  return apiErrorMessage(error, t, PARKING_ERROR_KEYS);
 }

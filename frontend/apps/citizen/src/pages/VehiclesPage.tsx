@@ -18,7 +18,8 @@ import {
 } from '@luparx/ui';
 import type { CreateVehicleRequest, Vehicle } from '@luparx/api-client';
 import { CitizenShell } from '../components/CitizenShell';
-import { vehicleDeleteErrorKey, vehiclePlateError } from '../lib/apiErrors';
+import { QueryBoundary } from '../components/QueryBoundary';
+import { vehicleDeleteErrorMessage, vehiclePlateError, vehicleSaveErrorMessage } from '../lib/apiErrors';
 import { normalizePlate } from '../lib/plate';
 import {
   useActiveParkingSessions,
@@ -69,7 +70,7 @@ function toCreateRequest(form: VehicleFormState): CreateVehicleRequest {
  */
 export function VehiclesPage(): React.JSX.Element {
   const { t } = useTranslation();
-  const { data: vehicles } = useVehicles();
+  const vehiclesQuery = useVehicles();
   const { data: activeSessions } = useActiveParkingSessions();
   const createVehicle = useCreateVehicle();
   const updateVehicle = useUpdateVehicle();
@@ -80,6 +81,7 @@ export function VehiclesPage(): React.JSX.Element {
   const [formVehicle, setFormVehicle] = useState<Vehicle | null | undefined>(undefined);
   const [form, setForm] = useState<VehicleFormState>(EMPTY_FORM);
   const [plateError, setPlateError] = useState<string | undefined>(undefined);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [menuVehicle, setMenuVehicle] = useState<Vehicle | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Vehicle | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -92,12 +94,14 @@ export function VehiclesPage(): React.JSX.Element {
   function openAdd(): void {
     setForm(EMPTY_FORM);
     setPlateError(undefined);
+    setSaveError(null);
     setFormVehicle(null);
   }
 
   function openEdit(vehicle: Vehicle): void {
     setForm(formFromVehicle(vehicle));
     setPlateError(undefined);
+    setSaveError(null);
     setMenuVehicle(null);
     setFormVehicle(vehicle);
   }
@@ -108,6 +112,7 @@ export function VehiclesPage(): React.JSX.Element {
 
   async function handleSubmit(): Promise<void> {
     setPlateError(undefined);
+    setSaveError(null);
     const payload = toCreateRequest(form);
     try {
       if (formVehicle) {
@@ -117,7 +122,12 @@ export function VehiclesPage(): React.JSX.Element {
       }
       closeForm();
     } catch (error) {
-      setPlateError(vehiclePlateError(error, t) ?? t('common.error.generic'));
+      // A rejected plate belongs next to the plate field; anything else is not about that input
+      // and must not be reported as if it were — it goes above the form, carrying the server's
+      // stable code and traceId so a report can be looked up instead of reproduced.
+      const plateMessage = vehiclePlateError(error, t);
+      if (plateMessage) setPlateError(plateMessage);
+      else setSaveError(vehicleSaveErrorMessage(error, t));
     }
   }
 
@@ -133,7 +143,7 @@ export function VehiclesPage(): React.JSX.Element {
       await deleteVehicle.mutateAsync(deleteTarget.id);
       setDeleteTarget(null);
     } catch (error) {
-      setDeleteError(t(vehicleDeleteErrorKey(error)));
+      setDeleteError(vehicleDeleteErrorMessage(error, t));
     }
   }
 
@@ -149,17 +159,21 @@ export function VehiclesPage(): React.JSX.Element {
         </Button>
       </div>
 
-      {vehicles && vehicles.length === 0 ? (
-        <Card>
-          <EmptyState
-            icon={<IconCar size={28} />}
-            title={t('citizen.vehicles.empty.title')}
-            description={t('citizen.vehicles.empty.description')}
-          />
-        </Card>
-      ) : null}
-
-      {vehicles && vehicles.length > 0 ? (
+      <QueryBoundary
+        query={vehiclesQuery}
+        errorTitle={t('citizen.vehicles.title')}
+        isEmpty={(list) => list.length === 0}
+        empty={
+          <Card>
+            <EmptyState
+              icon={<IconCar size={28} />}
+              title={t('citizen.vehicles.empty.title')}
+              description={t('citizen.vehicles.empty.description')}
+            />
+          </Card>
+        }
+      >
+        {(vehicles) => (
         <CardStack>
           {vehicles.map((vehicle) => (
             <Card key={vehicle.id}>
@@ -194,7 +208,8 @@ export function VehiclesPage(): React.JSX.Element {
             </Card>
           ))}
         </CardStack>
-      ) : null}
+        )}
+      </QueryBoundary>
 
       <Modal
         open={formVehicle !== undefined}
@@ -203,6 +218,7 @@ export function VehiclesPage(): React.JSX.Element {
         closeLabel={t('common.close')}
       >
         <div style={{ display: 'flex', flexDirection: 'column' }}>
+          {saveError ? <Alert tone="danger">{saveError}</Alert> : null}
           <FormField label={t('citizen.vehicles.form.plateLabel')} hint={t('citizen.vehicles.form.plateHint')} error={plateError}>
             {({ inputId, describedBy }) => (
               <Input

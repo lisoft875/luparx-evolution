@@ -76,9 +76,17 @@ export function ProfileForm({ profile, minAgeYears = 18, onSaved }: ProfileFormP
       setSaved(true);
       onSaved?.();
     } catch (error) {
+      // The server's own reference travels with the message: a stable `code` to branch on and a
+      // `traceId` that finds the exact request in the log. A bare "something went wrong" costs a
+      // whole round-trip with the person reporting it before anyone can even look.
       if (error instanceof NetworkError) setSubmitError(t('common.error.network'));
-      else if (error instanceof ApiError) setSubmitError(`${t('common.error.generic')} (${error.code || error.status})`);
-      else setSubmitError(t('common.error.generic'));
+      else if (error instanceof ApiError) {
+        const code = error.code || String(error.status);
+        const reference = error.traceId
+          ? t('common.error.reference', { code, traceId: error.traceId })
+          : t('common.error.referenceNoTrace', { code });
+        setSubmitError(`${t('common.error.generic')} ${reference}`);
+      } else setSubmitError(t('common.error.generic'));
     }
   }
 

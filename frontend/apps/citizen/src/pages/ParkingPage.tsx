@@ -18,7 +18,7 @@ import {
   type Step,
 } from '@luparx/ui';
 import { formatDurationLabel } from '../lib/duration';
-import { parkingErrorKey } from '../lib/apiErrors';
+import { parkingErrorMessage } from '../lib/apiErrors';
 import { CitizenShell } from '../components/CitizenShell';
 import {
   useParkingPolicy,
@@ -92,7 +92,7 @@ export function ParkingPage(): React.JSX.Element {
       await startSession.mutateAsync({ zoneId, spaceCode: spaceCode.trim().toUpperCase(), vehicleId, minutes });
       navigate('/');
     } catch (err) {
-      setError(t(parkingErrorKey(err)));
+      setError(parkingErrorMessage(err, t));
     }
   }
 

@@ -61,6 +61,37 @@ export function localeEndonym(locale: string): string {
 }
 
 /**
+ * Deterministic resolution of the language to present, in the order CONTRACT.md v0.3 fixes:
+ * the person's own preference → what the municipality enabled → the municipality's default →
+ * the platform default.
+ *
+ * `enabled` is the gate, not a suggestion: a preference the municipality does not offer cannot
+ * win, or an administrator who removed a language would still be serving it. An empty or unknown
+ * `enabled` list means "not known yet" rather than "nothing is allowed" — during that window the
+ * platform's own supported set is the only defensible gate, and re-resolving once the catalog
+ * answers is what settles it.
+ */
+export interface LocaleResolutionInput {
+  /** The person's explicit choice: the account's `locale`, or this browser's remembered one. */
+  preference?: string | null;
+  /** BCP 47 tags the municipality enabled, in its own order. */
+  enabled?: readonly string[];
+  /** The municipality's default tag. */
+  tenantDefault?: string | null;
+}
+
+export function resolvePreferredLocale(input: LocaleResolutionInput): SupportedLocale {
+  const offered = (input.enabled ?? []).filter(isSupportedLocale);
+  const gate = offered.length > 0 ? offered : SUPPORTED_LOCALES;
+  const allows = (candidate: string | undefined | null): candidate is SupportedLocale =>
+    isSupportedLocale(candidate) && (gate as readonly string[]).includes(candidate);
+
+  if (allows(input.preference)) return input.preference;
+  if (allows(input.tenantDefault)) return input.tenantDefault;
+  return gate[0] ?? DEFAULT_LOCALE;
+}
+
+/**
  * Where a viewer's own language choice is remembered between visits.
  *
  * It is a *preference of this browser*, not the source of truth: the account's `locale` on the
@@ -68,13 +99,33 @@ export function localeEndonym(locale: string): string {
  * default → platform default). This exists so the choice survives a reload before anyone has
  * signed in, which is exactly when a person who cannot read the current language needs it.
  * Every access is guarded: private windows and blocked site data make storage throw.
+ *
+ * The key is scoped per portal. The four portals are four different products with four different
+ * audiences — an inspector working in English does not decide what language the citizen app opens
+ * in — and in production they may well be served from one host, where a single shared key would
+ * make each portal silently overwrite the others' choice.
  */
-const LOCALE_STORAGE_KEY = 'luparx.locale';
+const LOCALE_STORAGE_PREFIX = 'luparx.locale';
+/** The pre-portal key, still read once so an existing choice is not thrown away on upgrade. */
+const LEGACY_LOCALE_STORAGE_KEY = 'luparx.locale';
+
+let storageScope = '';
+
+/** Namespaces the remembered choice to one portal (`citizen`, `admin`, …). Set once at boot. */
+export function setLocaleStorageScope(scope: string): void {
+  storageScope = scope;
+}
+
+function storageKey(): string {
+  return storageScope ? `${LOCALE_STORAGE_PREFIX}.${storageScope}` : LOCALE_STORAGE_PREFIX;
+}
 
 export function readStoredLocale(): SupportedLocale | undefined {
   try {
-    const stored = globalThis.localStorage?.getItem(LOCALE_STORAGE_KEY);
-    return isSupportedLocale(stored) ? stored : undefined;
+    const stored = globalThis.localStorage?.getItem(storageKey());
+    if (isSupportedLocale(stored)) return stored;
+    const legacy = globalThis.localStorage?.getItem(LEGACY_LOCALE_STORAGE_KEY);
+    return isSupportedLocale(legacy) ? legacy : undefined;
   } catch {
     return undefined;
   }
@@ -82,7 +133,7 @@ export function readStoredLocale(): SupportedLocale | undefined {
 
 export function writeStoredLocale(locale: SupportedLocale): void {
   try {
-    globalThis.localStorage?.setItem(LOCALE_STORAGE_KEY, locale);
+    globalThis.localStorage?.setItem(storageKey(), locale);
   } catch {
     // A viewer who blocks site data still gets the language they picked for this session.
   }

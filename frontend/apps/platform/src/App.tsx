@@ -2,6 +2,7 @@ import * as React from 'react';
 import { BrowserRouter, HashRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { I18nProvider } from '@luparx/i18n';
+import { LocalePreferenceSync } from '@luparx/features';
 import { AuthProvider, RequireAuth } from '@luparx/auth';
 import { mockFetch } from '@luparx/api-client/mocks';
 import { API_BASE_URL, PORTAL, USE_MOCKS } from './env';
@@ -38,9 +39,10 @@ const Router = import.meta.env.VITE_ROUTER === 'hash' ? HashRouter : BrowserRout
 
 export function App(): React.JSX.Element {
   return (
-    <I18nProvider>
+    <I18nProvider storageScope={PORTAL}>
       <QueryClientProvider client={queryClient}>
         <AuthProvider portal={PORTAL} apiBaseUrl={API_BASE_URL} fetchImpl={USE_MOCKS ? mockFetch : undefined}>
+          <LocalePreferenceSync />
           <Router>
             <Routes>
               <Route path="/login" element={<LoginPage />} />

@@ -7,6 +7,7 @@ export { ResetPasswordForm } from './login/ResetPasswordForm';
 export type { ResetPasswordFormProps } from './login/ResetPasswordForm';
 export { TenantSelector } from './tenant/TenantSelector';
 export { LocaleSwitcher, useAvailableLocales } from './locale/LocaleSwitcher';
+export { LocalePreferenceSync } from './locale/LocalePreferenceSync';
 export { ProfileForm } from './profile/ProfileForm';
 export type { ProfileFormProps } from './profile/ProfileForm';
 export { ChangePasswordForm } from './profile/ChangePasswordForm';
@@ -21,7 +22,7 @@ export {
   toUpdateProfileRequest,
 } from './profile/personalData';
 export type { PersonalDataValues, PersonalDataSchemaOptions } from './profile/personalData';
-export type { LocaleSwitcherProps } from './locale/LocaleSwitcher';
+export type { LocaleSwitcherProps, AvailableLocales } from './locale/LocaleSwitcher';
 export {
   useCountries,
   useAdminLevels,

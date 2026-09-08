@@ -6,12 +6,14 @@ export {
   DEFAULT_LOCALE,
   isSupportedLocale,
   resolveLocale,
+  resolvePreferredLocale,
   detectBrowserLocale,
   localeEndonym,
   readStoredLocale,
   writeStoredLocale,
+  setLocaleStorageScope,
 } from './locale';
-export type { SupportedLocale } from './locale';
+export type { SupportedLocale, LocaleResolutionInput } from './locale';
 export {
   formatDate,
   formatDateTime,

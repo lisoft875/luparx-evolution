@@ -4,7 +4,7 @@ import { useTranslation, formatCurrencyMinor, formatTime } from '@luparx/i18n';
 import { Alert, Button, ChipGroup, Modal } from '@luparx/ui';
 import type { ParkingPolicy, ParkingSession } from '@luparx/api-client';
 import { useExtendParkingSession } from '../lib/queries';
-import { parkingErrorKey } from '../lib/apiErrors';
+import { parkingErrorMessage } from '../lib/apiErrors';
 import { formatDurationLabel } from '../lib/duration';
 
 export interface ExtendSessionSheetProps {
@@ -37,7 +37,7 @@ export function ExtendSessionSheet({ open, onClose, session, policy }: ExtendSes
       await extend.mutateAsync({ id: session.id, payload: { minutes } });
       onClose();
     } catch (err) {
-      setError(t(parkingErrorKey(err)));
+      setError(parkingErrorMessage(err, t));
     }
   }
 
