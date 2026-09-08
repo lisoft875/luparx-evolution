@@ -53,6 +53,9 @@ export const enUS: Record<TranslationKey, string> = {
   'auth.login.oauth.microsoft': 'Continue with Microsoft',
   'auth.login.oauth.facebook': 'Continue with Facebook',
   'auth.login.error.invalidCredentials': 'Incorrect email or password.',
+  'auth.login.error.network': 'Could not reach the server. Check your connection or whether the service is running.',
+  'auth.login.error.tooManyAttempts': 'Too many attempts. Wait a few minutes before trying again.',
+  'auth.login.error.server': 'The server could not process the sign-in.',
 
   'auth.mfa.title': 'Two-factor verification',
   'auth.mfa.description': 'Enter the 6-digit code from your authenticator app.',

@@ -53,6 +53,9 @@ export const esCR = {
   'auth.login.oauth.microsoft': 'Continuar con Microsoft',
   'auth.login.oauth.facebook': 'Continuar con Facebook',
   'auth.login.error.invalidCredentials': 'Correo electrónico o contraseña incorrectos.',
+  'auth.login.error.network': 'No se pudo conectar con el servidor. Revisá tu conexión o que el servicio esté disponible.',
+  'auth.login.error.tooManyAttempts': 'Demasiados intentos. Esperá unos minutos antes de volver a probar.',
+  'auth.login.error.server': 'El servidor no pudo procesar el inicio de sesión.',
 
   'auth.mfa.title': 'Verificación en dos pasos',
   'auth.mfa.description': 'Ingresa el código de 6 dígitos de tu aplicación de autenticación.',

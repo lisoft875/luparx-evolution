@@ -4,7 +4,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import type { OAuthProvider, Portal } from '@luparx/api-client';
-import { oauthStartUrl } from '@luparx/api-client';
+import { ApiError, NetworkError, oauthStartUrl } from '@luparx/api-client';
 import { useAuth } from '@luparx/auth';
 import { useTranslation, type TranslationKey } from '@luparx/i18n';
 import { Alert, Button, FormField, IconEye, IconEyeOff, Input } from '@luparx/ui';
@@ -92,8 +92,22 @@ export function LoginForm({
       } else {
         onSuccess();
       }
-    } catch {
-      setSubmitError(t('auth.login.error.invalidCredentials'));
+    } catch (error) {
+      // Every failure used to read "incorrect email or password", which sent people hunting for a
+      // typo when the real cause was an unreachable API. Say what actually happened.
+      if (error instanceof NetworkError) {
+        setSubmitError(t('auth.login.error.network'));
+      } else if (error instanceof ApiError) {
+        if (error.status === 401 || error.status === 403) {
+          setSubmitError(t('auth.login.error.invalidCredentials'));
+        } else if (error.status === 429) {
+          setSubmitError(t('auth.login.error.tooManyAttempts'));
+        } else {
+          setSubmitError(`${t('auth.login.error.server')} (${error.code || error.status})`);
+        }
+      } else {
+        setSubmitError(t('auth.login.error.server'));
+      }
     }
   }
 
