@@ -283,3 +283,90 @@ luparx-evolution/
 - Toda consulta con `tenant_id` explícito; prohibido filtrar sólo en frontend.
 - Toda escritura relevante emite `audit_events` y, si cruza frontera, `outbox_events`.
 - Validación siempre en servidor; el frontend valida sólo para UX.
+
+---
+
+# v0.2 — Dominio de parqueo (normativo)
+
+## Nombre de producto
+El nombre visible es **LuParX** (así, con esa capitalización) en toda la interfaz y en las
+comunicaciones. Los identificadores técnicos ya existentes (`cr.luparx`, `luparx-*`, dominios,
+clases) no cambian: no vale romper paquetes por una mayúscula.
+
+## Reglas de negocio acordadas
+
+1. **Un ciudadano puede tener varias sesiones activas a la vez**, una por vehículo. Nunca dos
+   sesiones activas para el mismo vehículo, ni dos para el mismo espacio.
+2. **Las placas se repiten entre usuarios.** La unicidad es `(user_id, placa normalizada)`: un
+   usuario no registra dos veces la misma placa, pero dos usuarios sí pueden tener la misma.
+   La sesión guarda una copia de la placa (`plate_snapshot`) porque el fiscalizador verifica contra
+   lo que estaba pintado en el momento, no contra lo que el usuario editó después.
+3. **Cronómetro siempre visible en móvil**: barra fija sobre la navegación inferior, presente en
+   todas las pantallas mientras haya al menos una sesión activa. Muestra la que vence primero
+   (placa + cuenta regresiva) y, si hay más, un indicador `+N` que abre la lista.
+4. **Extensión de tiempo**: el ciudadano elige cuánto extender, entre las opciones que **configura la
+   municipalidad**. Cada extensión cobra según la tarifa vigente de la zona.
+5. **Finalizar antes de tiempo**: si la municipalidad lo habilita, el ciudadano cierra la sesión y
+   **los minutos restantes se guardan como crédito de minutos de esa municipalidad**, que se consume
+   primero en su próxima sesión ahí. No es dinero, no se devuelve al saldo y no cruza a otra
+   municipalidad: lo que una cobró no lo puede consumir otra.
+6. **Pago**: contra el saldo de la billetera del ciudadano **en esa municipalidad**. Las finanzas son
+   por tenant; no hay un saldo global.
+
+## Política de parqueo por municipalidad (`parking_policies`, una fila por tenant)
+
+| Campo | Significado |
+|---|---|
+| `session_increments_minutes` | Opciones ofrecidas al iniciar (p. ej. `30,60,120`) |
+| `session_min_minutes` / `session_max_minutes` | Límites de una sesión |
+| `extension_enabled` | Si se permite extender |
+| `extension_increments_minutes` | Opciones de extensión |
+| `extension_max_total_minutes` | Tope de la suma sesión + extensiones |
+| `early_finish_enabled` | Si se permite finalizar antes |
+| `credit_on_early_finish_enabled` | Si los minutos restantes se guardan como crédito |
+| `credit_min_remaining_minutes` | Mínimo de minutos restantes para que se acredite |
+| `credit_expiry_days` | Vencimiento del crédito (0 = no vence) |
+| `grace_minutes` | Tolerancia antes de considerar vencida una sesión |
+
+Todo con valores por defecto de plataforma; nada de constantes en el código.
+
+## Vehículos
+
+`plate` (obligatoria, normalizada sin espacios ni guiones y en mayúsculas), `name` (nombre que le da
+el usuario), `brand`, `model`, `year`, `is_owner` (declara si es el propietario), `is_primary`.
+Sólo la placa es obligatoria.
+
+## API
+
+```
+GET    /api/v1/citizen/vehicles
+POST   /api/v1/citizen/vehicles                 {plate, name?, brand?, model?, year?, isOwner}
+PUT    /api/v1/citizen/vehicles/{id}
+DELETE /api/v1/citizen/vehicles/{id}            (rechaza si tiene sesión activa)
+POST   /api/v1/citizen/vehicles/{id}/primary
+
+GET    /api/v1/citizen/parking/policy           política vigente del tenant activo
+POST   /api/v1/citizen/parking/quote            {zoneId, minutes} -> {amount, creditMinutesApplied, payable}
+GET    /api/v1/citizen/parking/sessions?status=ACTIVE|ALL
+POST   /api/v1/citizen/parking/sessions         {zoneId, spaceCode, vehicleId, minutes}  (Idempotency-Key)
+GET    /api/v1/citizen/parking/sessions/{id}
+POST   /api/v1/citizen/parking/sessions/{id}/extend   {minutes}                          (Idempotency-Key)
+POST   /api/v1/citizen/parking/sessions/{id}/finish                                       (Idempotency-Key)
+GET    /api/v1/citizen/wallet                   saldo y movimientos del tenant activo
+GET    /api/v1/citizen/time-credits             minutos a favor y su vencimiento
+
+GET/PUT /api/v1/admin/parking/policy            (permiso TENANT_MANAGE)
+GET/PUT /api/v1/admin/parking/zones|rates
+```
+
+Errores estables: `SESSION_ALREADY_ACTIVE_FOR_VEHICLE`, `SPACE_OCCUPIED`, `EXTENSION_DISABLED`,
+`EARLY_FINISH_DISABLED`, `EXTENSION_EXCEEDS_MAX`, `INSUFFICIENT_BALANCE`, `INVALID_INCREMENT`.
+
+## Invariantes
+
+- El cálculo del monto y del crédito ocurre **siempre en el servidor**; el cliente sólo pide una
+  cotización para mostrarla.
+- Iniciar, extender y finalizar son **idempotentes** por `Idempotency-Key`: un doble toque en el
+  botón no cobra dos veces.
+- Cobro y sesión se escriben en la **misma transacción**; el saldo nunca queda debitado sin sesión.
+- Toda operación queda auditada con tenant, usuario, vehículo y espacio.
