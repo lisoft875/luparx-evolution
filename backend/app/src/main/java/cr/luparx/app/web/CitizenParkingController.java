@@ -12,16 +12,24 @@ import cr.luparx.core.page.PageRequest;
 import cr.luparx.core.page.PageResponse;
 import cr.luparx.core.tenant.TenantContextHolder;
 import cr.luparx.parking.entity.ParkingPolicy;
+import cr.luparx.parking.entity.ParkingRate;
+import cr.luparx.parking.entity.ParkingScheduleException;
 import cr.luparx.parking.entity.ParkingSession;
 import cr.luparx.parking.entity.ParkingSessionExtension;
+import cr.luparx.parking.entity.ParkingZone;
 import cr.luparx.parking.model.ParkingQuote;
 import cr.luparx.parking.model.ParkingSessionStatus;
+import cr.luparx.parking.service.ParkingCatalogService;
 import cr.luparx.parking.service.ParkingPolicyService;
 import cr.luparx.parking.service.ParkingQuoteService;
+import cr.luparx.parking.service.ParkingScheduleService;
 import cr.luparx.parking.service.ParkingSessionService;
+import cr.luparx.parking.service.ParkingSpaceFormatService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.springframework.http.CacheControl;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -32,6 +40,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -61,25 +72,46 @@ public class CitizenParkingController {
     /** {@code ?status=} value meaning "the whole history", as opposed to a concrete status. */
     private static final String STATUS_ALL = "ALL";
 
+    /**
+     * How long a client may reuse the zone list. Short, because it carries prices: a tariff change
+     * has to reach the app before it quotes yesterday's price at somebody.
+     */
+    private static final Duration ZONES_CACHE_TTL = Duration.ofMinutes(1);
+
+    /** The code format changes when a municipality renumbers its bays, which is to say almost never. */
+    private static final Duration SPACE_FORMAT_CACHE_TTL = Duration.ofMinutes(15);
+
     private final ParkingPolicyService policyService;
     private final ParkingQuoteService quoteService;
     private final ParkingSessionService sessionService;
+    private final ParkingScheduleService scheduleService;
+    private final ParkingCatalogService catalogService;
+    private final ParkingSpaceFormatService spaceFormatService;
     private final ParkingMapper mapper;
     private final AuditRecorder auditRecorder;
     private final OutboxRecorder outboxRecorder;
+    private final Clock clock;
 
     public CitizenParkingController(ParkingPolicyService policyService,
                                     ParkingQuoteService quoteService,
                                     ParkingSessionService sessionService,
+                                    ParkingScheduleService scheduleService,
+                                    ParkingCatalogService catalogService,
+                                    ParkingSpaceFormatService spaceFormatService,
                                     ParkingMapper mapper,
                                     AuditRecorder auditRecorder,
-                                    OutboxRecorder outboxRecorder) {
+                                    OutboxRecorder outboxRecorder,
+                                    Clock clock) {
         this.policyService = policyService;
         this.quoteService = quoteService;
         this.sessionService = sessionService;
+        this.scheduleService = scheduleService;
+        this.catalogService = catalogService;
+        this.spaceFormatService = spaceFormatService;
         this.mapper = mapper;
         this.auditRecorder = auditRecorder;
         this.outboxRecorder = outboxRecorder;
+        this.clock = clock;
     }
 
     @GetMapping("/policy")
@@ -88,6 +120,81 @@ public class CitizenParkingController {
     public ParkingDtos.ParkingPolicyResponse policy() {
         ParkingPolicy policy = policyService.require(TenantContextHolder.requireTenantId());
         return mapper.toPolicy(policy);
+    }
+
+    /**
+     * The zones of the active municipality a citizen may park in, with the price of each.
+     *
+     * <p>It exists because {@code quote} and {@code sessions} both take a {@code zoneId} and there was
+     * no citizen-reachable way to obtain one: the zone listing was on the admin portal, behind
+     * {@code PERM_TENANT_MANAGE}, so a client had no choice but to mine zone identifiers out of the
+     * caller's own session history — which shows a brand-new citizen an empty list and no way to
+     * start.</p>
+     *
+     * <p>Only zones that are still operated appear, and the tenant is the one in the token, never a
+     * parameter. Not paginated: a zone is a sector a municipality operates and the count is bounded by
+     * how a city is organised — the collection that grows without limit is the bays inside a zone, and
+     * those are only ever read by code. The response is cacheable but {@code private}: it is a
+     * tenant's price list resolved for an authenticated caller, so it must never land in a shared
+     * cache. One minute, because a tariff change has to reach the app quickly enough that a citizen is
+     * never quoted yesterday's price.</p>
+     */
+    @GetMapping("/zones")
+    @PreAuthorize("hasRole('CITIZEN')")
+    @Operation(summary = "Zones of the active municipality that are still operated, with their tariff")
+    public ResponseEntity<List<ParkingDtos.CitizenParkingZoneResponse>> zones() {
+        TenantId tenantId = TenantContextHolder.requireTenantId();
+        Instant now = clock.instant();
+        List<ParkingZone> zones = catalogService.listActiveZones(tenantId);
+        Map<UUID, ParkingRate> rates = catalogService.ratesInForce(tenantId, now);
+        List<ParkingDtos.CitizenParkingZoneResponse> body = new ArrayList<>(zones.size());
+        for (ParkingZone zone : zones) {
+            body.add(mapper.toCitizenZone(zone, rates.get(zone.getId())));
+        }
+        return privatelyCacheable(body, ZONES_CACHE_TTL);
+    }
+
+    /**
+     * The shape of a bay code in this municipality (CONTRACT.md v0.3, "Formato del código de
+     * espacio").
+     *
+     * <p>The same row the admin portal edits, read here so the citizen app can validate the bay field
+     * with {@code pattern} while the person types and show {@code example} as the placeholder, instead
+     * of assuming four digits — an assumption that is right for San José today and wrong for the first
+     * municipality that paints {@code A-12}.</p>
+     */
+    @GetMapping("/space-format")
+    @PreAuthorize("hasRole('CITIZEN')")
+    @Operation(summary = "The bay code format of the active municipality: pattern and example")
+    public ResponseEntity<ParkingDtos.ParkingSpaceFormatResponse> spaceFormat() {
+        TenantId tenantId = TenantContextHolder.requireTenantId();
+        return privatelyCacheable(mapper.toSpaceFormat(spaceFormatService.require(tenantId)),
+                SPACE_FORMAT_CACHE_TTL);
+    }
+
+    /**
+     * When the municipality charges, and whether it is charging right now (CONTRACT.md v0.3,
+     * "Horario de cobro").
+     *
+     * <p>The app needs this to say the sentence the contract asks for — "charging is not running now;
+     * it resumes on Monday at 7:00" — and to stop offering a start button that would only earn an
+     * {@code OUTSIDE_CHARGING_HOURS}. The time zone travels with it, because every hour here is the
+     * municipality's local time and not the device's.</p>
+     */
+    @GetMapping("/schedule")
+    @PreAuthorize("hasRole('CITIZEN')")
+    @Operation(summary = "Charging hours of the active municipality, and when charging next resumes")
+    public ParkingDtos.ParkingScheduleResponse schedule() {
+        TenantId tenantId = TenantContextHolder.requireTenantId();
+        Instant now = clock.instant();
+        List<ParkingScheduleException> exceptions = scheduleService.exceptions(tenantId);
+        return mapper.toSchedule(
+                scheduleService.require(tenantId),
+                scheduleService.slots(tenantId),
+                exceptions,
+                scheduleService.exceptionBands(exceptions),
+                scheduleService.scheduleFor(tenantId, now, now.plusSeconds(370L * 24L * 3600L)),
+                now);
     }
 
     @PostMapping("/quote")
@@ -218,6 +325,17 @@ public class CitizenParkingController {
         metadata.put("zoneId", session.getZoneId().toString());
         metadata.put("plate", session.getPlateSnapshot());
         auditRecorder.record(action, "parking-session", session.getId().toString(), metadata);
+    }
+
+    /**
+     * A tenant-scoped catalogue read: cacheable, but {@code private}. These bodies are resolved for
+     * one authenticated caller inside one municipality, so a shared cache holding them would be a way
+     * for one tenant's configuration to be served to another (SECURITY.md §7).
+     */
+    private <T> ResponseEntity<T> privatelyCacheable(T body, Duration ttl) {
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.maxAge(ttl).cachePrivate())
+                .body(body);
     }
 
     private ParkingSessionStatus parseStatus(String value) {

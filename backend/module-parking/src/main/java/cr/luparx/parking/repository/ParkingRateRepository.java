@@ -2,6 +2,8 @@ package cr.luparx.parking.repository;
 
 import cr.luparx.parking.entity.ParkingRate;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
 import java.util.List;
@@ -23,6 +25,23 @@ public interface ParkingRateRepository extends JpaRepository<ParkingRate, UUID> 
      */
     List<ParkingRate> findByTenantIdAndZoneIdAndValidFromLessThanEqualOrderByValidFromDesc(
             UUID tenantId, UUID zoneId, Instant at);
+
+    /**
+     * Every tariff of a municipality whose window is open at {@code at} — one per zone that has one.
+     *
+     * <p>Exists so that listing the zones a citizen may park in does not turn into one tariff query
+     * per zone (CONTRACT.md §7, no N+1). It is narrowed by tenant and by the window, so it returns at
+     * most one row per zone however long the price history has grown, and it is covered by
+     * {@code ix_parking_rates_zone_validity}.</p>
+     */
+    @Query("""
+            select r from ParkingRate r
+            where r.tenantId = :tenantId
+              and r.validFrom <= :at
+              and (r.validTo is null or r.validTo > :at)
+            order by r.zoneId asc, r.validFrom desc
+            """)
+    List<ParkingRate> findInForce(@Param("tenantId") UUID tenantId, @Param("at") Instant at);
 
     long countByTenantId(UUID tenantId);
 

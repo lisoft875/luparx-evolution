@@ -2,6 +2,7 @@ package cr.luparx.app.web.dto;
 
 import cr.luparx.core.page.PageResponse;
 import cr.luparx.parking.model.ParkingSessionStatus;
+import cr.luparx.parking.model.ParkingSpaceStatus;
 import cr.luparx.parking.model.TimeCreditSource;
 import cr.luparx.parking.model.WalletTransactionType;
 import jakarta.validation.constraints.Max;
@@ -10,7 +11,9 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
+import java.time.DayOfWeek;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -123,10 +126,39 @@ public final class ParkingDtos {
      */
     public record QuoteResponse(
             int minutes,
+            int chargeableMinutes,
             MoneyDto amount,
             int creditMinutesApplied,
             int payableMinutes,
             MoneyDto payable) {
+    }
+
+    // --- zones the citizen may park in -----------------------------------------------------------
+
+    /**
+     * {@code GET /citizen/parking/zones} — the zones of the active municipality that are still
+     * operated, with the tariff in force in each.
+     *
+     * <p>This is what a citizen picks from before asking for a quote or starting a session, both of
+     * which take a {@code zoneId}. It is a separate shape from the admin
+     * {@link ParkingZoneResponse}: a citizen has no business seeing whether a zone is active (only
+     * active ones are listed at all) or how many bays it holds, and they do need the price, which the
+     * admin listing does not carry.</p>
+     *
+     * <p>{@code rate} is null when the zone has no open tariff window. That is not a free zone — it
+     * is a misconfigured one — and starting a session there answers {@code PARKING_RATE_NOT_FOUND},
+     * so a client should show it as unavailable rather than as costing nothing.</p>
+     */
+    public record CitizenParkingZoneResponse(
+            UUID id,
+            String code,
+            String name,
+            String description,
+            ParkingRateSummary rate) {
+    }
+
+    /** The price of a zone as a citizen reads it: an exact amount per block of minutes. */
+    public record ParkingRateSummary(MoneyDto amount, int minutes) {
     }
 
     // --- sessions --------------------------------------------------------------------------------
@@ -256,5 +288,106 @@ public final class ParkingDtos {
             @NotNull UUID zoneId,
             @NotNull @Min(0) Long amountMinor,
             @NotNull @Min(1) Integer minutes) {
+    }
+
+    // --- bays ------------------------------------------------------------------------------------
+
+    /** {@code POST /admin/parking/spaces}. The code is validated against the municipality's format. */
+    public record CreateParkingSpaceRequest(
+            @NotNull UUID zoneId,
+            @NotBlank @Size(max = 16) String code) {
+    }
+
+    /** A bay as the admin portal shows it. */
+    public record ParkingSpaceResponse(UUID id, UUID zoneId, String code, ParkingSpaceStatus status) {
+    }
+
+    // --- bay code format (CONTRACT.md v0.3) -------------------------------------------------------
+
+    /**
+     * {@code GET /admin/parking/space-format} and the shape the citizen app reads.
+     *
+     * <p>{@code pattern} is the effective regular expression — the app validates with it while the
+     * citizen types, and the server validates with the same string — and {@code example} is the
+     * placeholder to show. The three parts above them are what the form edits.</p>
+     */
+    public record ParkingSpaceFormatResponse(
+            String prefix,
+            int digits,
+            boolean allowLetters,
+            String pattern,
+            String example,
+            Instant updatedAt) {
+    }
+
+    /**
+     * {@code PUT /admin/parking/space-format}.
+     *
+     * <p>Leave {@code pattern} and {@code example} out and both are derived from the parts, which is
+     * what "four digits, no prefix" means. Send a {@code pattern} and it is taken as written — for a
+     * numbering the form cannot express — but the example must still match it.</p>
+     */
+    public record UpdateParkingSpaceFormatRequest(
+            @Size(max = 8) String prefix,
+            @NotNull @Min(1) @Max(12) Integer digits,
+            @NotNull Boolean allowLetters,
+            @Size(max = 200) String pattern,
+            @Size(max = 32) String example) {
+    }
+
+    // --- charging schedule (CONTRACT.md v0.3) -----------------------------------------------------
+
+    /**
+     * One charging band, in LOCAL minutes from midnight in the municipality's own time zone.
+     *
+     * <p>Minutes and not {@code "HH:mm"} because a band has to be able to close the day: 1440 says
+     * "midnight at the end of this day" and no wall-clock string does. {@code startsAt}/{@code endsAt}
+     * travel alongside as {@code HH:mm} for display, with {@code endsAt} null when the band closes
+     * the day.</p>
+     */
+    public record ChargingBandDto(
+            @Min(0) @Max(1439) int startMinute,
+            @Min(1) @Max(1440) int endMinute,
+            String startsAt,
+            String endsAt) {
+    }
+
+    /** The bands of one weekday. A weekday with no band is a day this municipality does not charge. */
+    public record ChargingDayDto(DayOfWeek weekday, List<ChargingBandDto> bands) {
+    }
+
+    /**
+     * A dated exception.
+     *
+     * @param date          local date in the municipality's zone
+     * @param charges       false — the usual case — is a holiday: nothing is charged that day
+     * @param chargesAllDay that day is charged around the clock
+     * @param label         tenant content naming it; never a translated label
+     * @param bands         its own bands; empty means "as usual", i.e. the weekday bands
+     */
+    public record ChargingExceptionDto(
+            @NotNull LocalDate date,
+            @NotNull Boolean charges,
+            Boolean chargesAllDay,
+            @Size(max = 120) String label,
+            List<ChargingBandDto> bands) {
+    }
+
+    /** {@code GET /admin/parking/schedule} and {@code GET /citizen/parking/schedule}. */
+    public record ParkingScheduleResponse(
+            String timeZone,
+            boolean chargesAllDay,
+            List<ChargingDayDto> week,
+            List<ChargingExceptionDto> exceptions,
+            boolean chargingNow,
+            Instant nextChargingStartsAt,
+            Instant updatedAt) {
+    }
+
+    /** {@code PUT /admin/parking/schedule} — the whole timetable, replaced as one form. */
+    public record UpdateParkingScheduleRequest(
+            @NotNull Boolean chargesAllDay,
+            List<ChargingDayDto> week,
+            List<ChargingExceptionDto> exceptions) {
     }
 }

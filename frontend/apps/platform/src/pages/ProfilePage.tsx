@@ -1,43 +1,47 @@
 import * as React from 'react';
-import { useState } from 'react';
 import { useAuth } from '@luparx/auth';
-import { useTranslation, formatDate } from '@luparx/i18n';
-import { Alert, Badge, Button } from '@luparx/ui';
+import { ChangeEmailForm, ChangePasswordForm, LocaleSwitcher, ProfileForm } from '@luparx/features';
+import { useTranslation } from '@luparx/i18n';
+import { Card, CardStack, FormField, SectionHeader } from '@luparx/ui';
 import { PlatformShell } from '../components/PlatformShell';
 
+/**
+ * "My account" for the platform portal (CONTRACT.md v0.3 §"Perfil editable"): the same personal
+ * fields as registration, the e-mail behind its own verified flow, and the password behind its
+ * own. No two-step verification section — no portal enforces MFA (v0.3 §1), and the interface
+ * does not offer a setting the platform does not act on.
+ */
 export function ProfilePage(): React.JSX.Element {
-  const { t, locale } = useTranslation();
+  const { t } = useTranslation();
   const { me } = useAuth();
-  const [error] = useState<string | null>(null);
 
   return (
     <PlatformShell>
       <h1>{t('profile.title')}</h1>
-      {error ? <Alert tone="danger">{error}</Alert> : null}
-      {me ? (
-        <dl>
-          <dt>{t('user.field.givenName')}</dt>
-          <dd>
-            {me.user.givenName} {me.user.familyName}
-          </dd>
-          <dt>{t('user.field.email')}</dt>
-          <dd>{me.user.email}</dd>
-          <dt>{t('user.field.birthDate')}</dt>
-          <dd>{formatDate(me.user.birthDate, locale)}</dd>
-        </dl>
-      ) : null}
-      <section>
-        {/* `platform` requires MFA active to complete login (CONTRACT.md §0/§3) — never offered as optional here. */}
-        <Badge tone={me?.user.mfaEnabled ? 'success' : 'danger'}>
-          {me?.user.mfaEnabled ? t('profile.mfa.enabled') : t('profile.mfa.disabled')}
-        </Badge>
-        {!me?.user.mfaEnabled ? (
-          <p className="lx-field__hint">{t('auth.login.mfaMandatoryNotice')}</p>
-        ) : null}
-        <Button type="button" variant="secondary" disabled>
-          {t('profile.mfa.setup')}
-        </Button>
-      </section>
+      {me?.user ? (
+        <CardStack>
+          <Card>
+            <SectionHeader title={t('citizen.profile.personalData.label')} />
+            <ProfileForm profile={me.user} />
+          </Card>
+          <Card>
+            <SectionHeader title={t('account.email.title')} />
+            <ChangeEmailForm currentEmail={me.user.email} />
+          </Card>
+          <Card>
+            <SectionHeader title={t('account.password.label')} />
+            <ChangePasswordForm />
+          </Card>
+          <Card>
+            <SectionHeader title={t('citizen.profile.language.label')} />
+            <FormField label={t('common.languageSwitcher.label')} hint={t('account.language.meta')}>
+              {({ inputId }) => <LocaleSwitcher id={inputId} />}
+            </FormField>
+          </Card>
+        </CardStack>
+      ) : (
+        <p>{t('common.loading')}</p>
+      )}
     </PlatformShell>
   );
 }

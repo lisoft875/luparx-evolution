@@ -1,7 +1,6 @@
 import * as React from 'react';
 import { useTranslation } from '@luparx/i18n';
 import { Brand } from './Brand';
-import { LanguagePill } from './LanguagePill';
 
 export interface AuthScreenProps {
   /** One-line product tagline shown under the brand mark (e.g. t('app.tagline')). */
@@ -17,6 +16,12 @@ export interface AuthScreenProps {
    * `heroDescription` above remain the only readable copy, always real translated text on top.
    */
   heroImage?: string;
+  /**
+   * The language dropdown, floated over the screen. Injected rather than rendered here because
+   * the list belongs to the municipality and has to be fetched (see `LocaleSwitcher` in
+   * @luparx/features); this package stays presentational and free of data dependencies.
+   */
+  localeSwitcher?: React.ReactNode;
 }
 
 /**
@@ -27,7 +32,7 @@ export interface AuthScreenProps {
  * pre-authentication. The lockup is opaque artwork composed on near-black,
  * so it is only ever placed on this dark hero surface.
  */
-export function AuthScreen({ heroTitle, heroDescription, children, heroImage }: AuthScreenProps): React.JSX.Element {
+export function AuthScreen({ heroTitle, heroDescription, children, heroImage, localeSwitcher }: AuthScreenProps): React.JSX.Element {
   const { t } = useTranslation();
 
   return (
@@ -47,7 +52,7 @@ export function AuthScreen({ heroTitle, heroDescription, children, heroImage }: 
       <div className="lx-auth-screen__panel">
         <div className="lx-auth-screen__panel-inner">{children}</div>
       </div>
-      <LanguagePill />
+      {localeSwitcher}
     </div>
   );
 }

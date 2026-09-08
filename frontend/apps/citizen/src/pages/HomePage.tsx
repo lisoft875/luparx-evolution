@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useTranslation, formatCurrencyMinor, formatDateTime, formatTime, type TranslationKey } from '@luparx/i18n';
+import { useTranslation, formatCurrencyMinor, formatDateTime, formatTime } from '@luparx/i18n';
 import {
   AmountText,
   Button,
@@ -21,9 +21,16 @@ import { BalanceRow } from '../components/BalanceRow';
 import { CitizenShell } from '../components/CitizenShell';
 import { ExtendSessionSheet } from '../components/ExtendSessionSheet';
 import { FinishSessionConfirm } from '../components/FinishSessionConfirm';
-import { MOVEMENT_ICON } from '../lib/movementPresentation';
-import { useActiveParkingSessions, useParkingPolicy, useVehicles, useWallet } from '../lib/queries';
-import { MOCK_MOVEMENTS, MOCK_PROFILE, MOCK_TENANT_TIME_ZONE } from '../mocks/parkingDomain';
+import { MOVEMENT_ICON, MOVEMENT_ICON_TONE, MOVEMENT_TITLE_KEY } from '../lib/movementPresentation';
+import { useAuth } from '@luparx/auth';
+import {
+  useActiveParkingSessions,
+  useParkingPolicy,
+  useTenantTimeZone,
+  useVehicles,
+  useWallet,
+} from '../lib/queries';
+
 
 function useRemainingSeconds(expiresAt: string): number {
   const compute = (): number => Math.max(0, Math.round((new Date(expiresAt).getTime() - Date.now()) / 1000));
@@ -47,6 +54,7 @@ function useRemainingSeconds(expiresAt: string): number {
  */
 function ActiveSessionCard({ session, policy }: { session: ParkingSession; policy: ParkingPolicy | undefined }): React.JSX.Element {
   const { t, locale } = useTranslation();
+  const timeZone = useTenantTimeZone();
   const remainingSeconds = useRemainingSeconds(session.expiresAt);
   const [extendOpen, setExtendOpen] = useState(false);
   const [finishOpen, setFinishOpen] = useState(false);
@@ -81,7 +89,7 @@ function ActiveSessionCard({ session, policy }: { session: ParkingSession; polic
         </div>
         <p className="lx-text-meta" style={{ margin: 0, textAlign: 'center' }}>
           {t('citizen.home.activeSession.expiresAt', {
-            time: formatTime(session.expiresAt, locale, { timeZone: MOCK_TENANT_TIME_ZONE }),
+            time: formatTime(session.expiresAt, locale, { timeZone }),
           })}
         </p>
         <div style={{ display: 'flex', gap: 'var(--lx-space-2)' }}>
@@ -114,19 +122,22 @@ export function HomePage(): React.JSX.Element {
   const { data: policy } = useParkingPolicy();
   const { data: wallet } = useWallet();
   const { data: vehicles } = useVehicles();
+  const { me } = useAuth();
+  const timeZone = useTenantTimeZone();
 
   const session = [...(sessions ?? [])].sort(
     (a, b) => new Date(a.expiresAt).getTime() - new Date(b.expiresAt).getTime(),
   )[0];
   const vehicle = primaryVehicleOf(vehicles);
-  // Non-null: MOCK_MOVEMENTS is a non-empty compile-time constant.
-  const recentMovement = MOCK_MOVEMENTS[0]!;
+  // The wallet endpoint returns the balance together with the first page of movements, newest
+  // first — the "recent activity" row is simply the top of that ledger.
+  const recentMovement = wallet?.transactions[0];
 
   return (
     <CitizenShell>
       <div>
         <h1 className="lx-text-greeting" style={{ margin: 0 }}>
-          {t('citizen.home.greeting', { name: MOCK_PROFILE.givenName })}
+          {t('citizen.home.greeting', { name: me?.user.givenName ?? '' })}
         </h1>
         <p className="lx-text-meta" style={{ margin: 'var(--lx-space-1) 0 0 0' }}>
           {session ? t('citizen.home.subtitle.activeSession') : t('citizen.home.subtitle.noSession')}
@@ -201,20 +212,27 @@ export function HomePage(): React.JSX.Element {
           action={{ label: t('citizen.home.activity.viewAllCta'), onClick: () => navigate('/movements') }}
         />
         <Card>
-          <ListRow
-            icon={MOVEMENT_ICON[recentMovement.kind]}
-            title={t(recentMovement.titleKey as TranslationKey)}
-            meta={formatDateTime(recentMovement.occurredAt, locale, { timeZone: MOCK_TENANT_TIME_ZONE })}
-            value={
-              <AmountText
-                amountMinor={recentMovement.amountMinor}
-                currencyCode={recentMovement.currencyCode}
-                locale={locale}
-                showSignPrefix={false}
-              />
-            }
-            onClick={() => navigate('/movements')}
-          />
+          {recentMovement ? (
+            <ListRow
+              icon={MOVEMENT_ICON[recentMovement.type]}
+              iconTone={MOVEMENT_ICON_TONE[recentMovement.type]}
+              title={t(MOVEMENT_TITLE_KEY[recentMovement.type])}
+              meta={formatDateTime(recentMovement.createdAt, locale, { timeZone })}
+              value={
+                <AmountText
+                  amountMinor={recentMovement.amountMinor}
+                  currencyCode={recentMovement.currencyCode}
+                  locale={locale}
+                  showSignPrefix={false}
+                />
+              }
+              onClick={() => navigate('/movements')}
+            />
+          ) : (
+            <p className="lx-text-meta" style={{ margin: 0 }}>
+              {t('citizen.movements.empty.title')}
+            </p>
+          )}
         </Card>
       </div>
     </CitizenShell>

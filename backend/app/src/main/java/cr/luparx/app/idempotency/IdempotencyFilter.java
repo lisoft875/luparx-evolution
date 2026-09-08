@@ -69,6 +69,7 @@ public class IdempotencyFilter extends OncePerRequestFilter {
             "/api/v1/admin/memberships/*/approve",
             "/api/v1/admin/memberships/*/reject",
             "/api/v1/admin/exports",
+            "/api/v1/admin/parking/spaces",
             "/api/v1/platform/tenants",
             "/api/v1/platform/tenants/*/status",
             "/api/v1/platform/tenants/*/admins",

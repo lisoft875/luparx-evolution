@@ -55,4 +55,12 @@ public final class AuditAction {
     public static final String PARKING_POLICY_UPDATED = "PARKING_POLICY_UPDATED";
     public static final String PARKING_ZONE_UPDATED = "PARKING_ZONE_UPDATED";
     public static final String PARKING_RATE_UPDATED = "PARKING_RATE_UPDATED";
+    public static final String PARKING_SPACE_CREATED = "PARKING_SPACE_CREATED";
+
+    // --- account, locales and municipal operation (CONTRACT.md "v0.3") --------------------------
+    public static final String USER_EMAIL_CHANGE_REQUESTED = "USER_EMAIL_CHANGE_REQUESTED";
+    public static final String USER_EMAIL_CHANGED = "USER_EMAIL_CHANGED";
+    public static final String TENANT_LOCALES_UPDATED = "TENANT_LOCALES_UPDATED";
+    public static final String PARKING_SPACE_FORMAT_UPDATED = "PARKING_SPACE_FORMAT_UPDATED";
+    public static final String PARKING_SCHEDULE_UPDATED = "PARKING_SCHEDULE_UPDATED";
 }

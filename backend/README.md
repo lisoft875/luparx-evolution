@@ -201,16 +201,152 @@ Start, extend and finish are on `IdempotencyFilter`'s protected list, so the `Id
 is mandatory there and a repeated key replays the stored response instead of charging again
 (ADR 0012). The key reaches the domain only to be recorded on the rows it creates.
 
-### MFA in development
+## Account, languages and municipal operation (v0.3)
 
-MFA is mandatory on the admin, inspector and platform portals, which means a seeded account cannot
-reach those portals until it enrols a TOTP. Which portals enforce it is configuration, not a
-constant: `luparx.security.mfa-enforced-portals` (default `admin,inspector,platform`, overridable
-with `MFA_ENFORCED_PORTALS`). `application-dev.yml` sets it to **empty** so the seeded accounts can
-log in straight away, and the application logs a `WARN` on every start while it is empty.
+`docs/CONTRACT.md` "v0.3 — Cuenta, idiomas y operación de la municipalidad" is the normative source.
+Everything below arrives with migration `V12_0__account_and_tenant_operations.sql`.
 
-Leaving that list empty anywhere but a laptop means a stolen back-office password is enough to take
-over an account — set it back to `admin,inspector,platform` in every shared environment.
+### No MFA, and a session that does not expire
+
+`luparx.security.mfa-enforced-portals` is **empty by default on every profile**. No portal asks for a
+second factor and the application says so with a one-line `INFO` at start (`MFA is enforced on: no
+portal`). The TOTP code is intact behind that list: turning it back on for a portal is adding its slug
+(`MFA_ENFORCED_PORTALS=admin,inspector,platform`), not rewriting the module.
+
+> **Risk accepted in writing by the product.** The platform back-office administers every municipality
+> with an email address and a password alone. What compensates for it today is the password policy,
+> the database-backed attempt limiter, and — before this is exposed to the open internet —
+> restricting it by IP.
+
+`luparx.jwt.refresh-token-ttl` now accepts **`0`, the default, meaning no expiry**. The refresh token
+is persisted without `expires_at` (the column is nullable since `V12_0`) and is never refused for
+being old, so a signed-in citizen stays signed in while the client silently renews its access token.
+
+What still ends a session is unchanged and deliberate:
+
+* **logging out** — revokes the presented token;
+* **changing the password** — bumps `credentials_version`, so every access token minted earlier is
+  refused on its next call, and revokes every refresh token;
+* **an administrator blocking the account** — same bump, same revocation.
+
+**Rotation and reuse detection are untouched.** Every refresh still consumes its token and issues a
+successor in the same family, and a token presented twice still revokes the whole family. Setting a
+duration (`JWT_REFRESH_TOKEN_TTL=30d`) brings expiry back with no migration.
+
+### Own account
+
+```
+PUT  /api/v1/{portal}/me                 name, document, address, phone, nationality, birth date
+POST /api/v1/{portal}/me/password        {currentPassword, newPassword} -> {tokens}
+POST /api/v1/{portal}/me/email           {newEmail} -> {pendingEmail}
+POST /api/v1/auth/{portal}/email/change/confirm  {token}   (public: opened in the NEW mailbox)
+```
+
+`PUT /me` accepts every personal datum of `CONTRACT.md` §2 **except the email address**, and validates
+each of them with the rules registration uses — `UserProfileService` shares the document validator,
+the address validator, the phone service and the configured minimum age with `UserRegistrationService`.
+A null section is left untouched rather than cleared, so a screen that owns one section cannot wipe
+the others.
+
+The **email address has its own flow** because changing it is changing the identity of access. `POST
+/me/email` stores the new address *on a one-time token* and mails a link **to that address**; only
+confirming it replaces the account's address, marks it verified and revokes every session. Both the
+request and the confirmation are audited (`USER_EMAIL_CHANGE_REQUESTED`, `USER_EMAIL_CHANGED`).
+
+`POST /me/password` requires the current password — a stolen session must not be enough to lock the
+owner out — applies the existing strength policy, revokes every other session and hands the caller a
+fresh token pair so the browser that changed the password is the one session that survives.
+
+### Languages per municipality
+
+`tenant_locales` holds the languages a municipality enables, which one is its default, and the order
+of the dropdown. A municipality that has configured nothing is answered with the language it was
+created with (`tenants.locale`), materialised as a real row on first read.
+
+```
+GET     /api/v1/catalog/tenants/{id}/locales      public — the login screen needs it
+GET|PUT /api/v1/admin/settings/locales            permission TENANT_MANAGE
+```
+
+Resolution is deterministic and lives in **one** service, `EffectiveLocaleService`, never spread
+across controllers: **user preference (if the municipality offers it) → the municipality's default →
+the language the municipality was created with → `platform.defaults.locale`**. A preference the
+municipality does not offer is not honoured — a portal with no Norwegian translations must not serve a
+half-translated screen — and `PUT /me` refuses to *store* one, with `LOCALE_NOT_SUPPORTED`.
+
+### Bay code format
+
+`parking_space_formats`, one row per municipality: `prefix`, `digits`, `allow_letters`, `pattern`
+(the effective regular expression) and `example`. The server validates against `pattern` **when a bay
+is created and when a session is started**; the app uses `example` as the placeholder and `pattern` to
+validate while the citizen types. Codes are canonicalised (trimmed, upper-cased) before both.
+
+```
+GET|PUT /api/v1/admin/parking/space-format        permission TENANT_MANAGE
+POST    /api/v1/admin/parking/spaces              {zoneId, code}  (Idempotency-Key)
+GET     /api/v1/citizen/parking/space-format      the same row, read by the app
+```
+
+San José starts on four plain digits, `0001`–`5000`, which is what the fixture paints. Leave
+`pattern`/`example` out of the `PUT` and both are derived from the parts; send a `pattern` and it is
+taken as written, but the example must still match it.
+
+### Charging hours
+
+`parking_schedules` (the header, with `charges_all_day`), `parking_schedule_slots` (bands per weekday)
+and `parking_schedule_exceptions` + `..._exception_slots` (dated holidays, with or without hours of
+their own). The default is **Monday to Saturday, 07:00–18:00, Sunday not charged**, and it comes from
+`platform.defaults.parking.charging-*` — nothing in the domain carries an hour as a constant.
+
+```
+GET|PUT /api/v1/admin/parking/schedule            permission TENANT_MANAGE
+GET     /api/v1/citizen/parking/schedule          hours, whether charging now, when it resumes
+```
+
+### What a citizen needs before parking
+
+`quote` and starting a session both take a `zoneId` and a bay code, and until now the only listing of
+zones lived on the admin portal behind `PERM_TENANT_MANAGE`. A client had no citizen-reachable way to
+obtain a zone id, so it fell back to mining them out of the caller's own session history — which shows
+a newly registered citizen an empty list and no way to start.
+
+```
+GET /api/v1/citizen/parking/zones          operated zones of the active municipality, with their tariff
+GET /api/v1/citizen/parking/space-format   prefix, digits, allowLetters, pattern, example
+```
+
+Both are scoped by the tenant in the token, never by a parameter, and answer explicit `record` DTOs —
+`CitizenParkingZoneResponse` is a different shape from the admin one: a citizen has no business seeing
+whether a zone is active (only active ones are listed) or how many bays it holds, and does need the
+price, which the admin listing does not carry. A zone with no open tariff window comes back with
+`rate: null`; that is a misconfigured zone, not a free one, and starting a session there still answers
+`PARKING_RATE_NOT_FOUND`.
+
+**Not paginated, on purpose.** A zone is a sector a municipality operates — San José has eight — and
+the count is bounded by how a city is organised, not by how many citizens or sessions it has. What
+grows without limit is the bays inside a zone, and those are only ever read by code or by page. Both
+responses are cacheable but `Cache-Control: private` (60 s for the zones, because they carry prices;
+15 min for the code format): they are one municipality's configuration resolved for an authenticated
+caller, so a shared cache holding them would serve one tenant's data to another.
+
+**Only the minutes that fall inside a band are charged**, evaluated in the *municipality's* time zone.
+A stay from 17:30 to 19:00 where charging closes at 18:00 pays thirty minutes; an extension is priced
+on the stretch it adds, so extending at 17:55 into the evening is free. A stay with **no** chargeable
+minute at all is refused with `OUTSIDE_CHARGING_HOURS`, and `GET /citizen/parking/schedule` says when
+charging resumes so the app can put it in words. `POST /citizen/parking/quote` now answers
+`chargeableMinutes` alongside `minutes`.
+
+Bands are stored as local minutes from midnight (0–1440) rather than as `time` columns: a band has to
+be able to close the day, and `java.time.LocalTime` has no 24:00. A band never crosses midnight — a
+night tariff is two bands, one per day — which keeps the intersection arithmetic honest. Precedence is
+**dated exception → `charges_all_day` → the weekday's bands**; a declared holiday wins even over a
+municipality that charges around the clock, because "all day" is a statement about the daily timetable
+and a holiday is one about the calendar.
+
+The intersection lives in `ChargingSchedule`, a framework-free value object with no repository, clock
+or Spring in sight, and `ChargingScheduleTest` covers the edges that would otherwise overcharge a
+citizen or give away an afternoon: exact boundaries, crossing midnight, a weekday with no band, a
+holiday inside a long stay, overlapping bands entered by hand, and the same timetable in two zones.
 
 ## Environment variables
 
@@ -226,7 +362,7 @@ placeholder key (`docs/SECURITY.md` §5).
 | `MFA_TOTP_ENCRYPTION_KEY` | yes | Base64 32-byte AES-GCM key protecting TOTP secrets at rest |
 | `IP_HASH_PEPPER` | yes | Mixed into IP hashes so they cannot be reversed with a rainbow table |
 | `LUPARX_DEV_SEED_DEMO_DATA` | no (`dev` only) | `false` keeps the database untouched on start |
-| `LUPARX_DEV_PARKING_SPACES` | no (`dev` only) | Bays the fixture creates, default `5000`, maximum `10000` |
+| `LUPARX_DEV_PARKING_SPACES` | no (`dev` only) | Bays the fixture creates, default `5000`, maximum `9999` — a five-digit code would not match the four-digit bay format |
 | `PARKING_SESSION_INCREMENTS` | no | Durations offered when starting, comma-separated minutes, default `30,60,120` |
 | `PARKING_SESSION_MIN_MINUTES` / `PARKING_SESSION_MAX_MINUTES` | no | Session bounds, default `30` / `480` |
 | `PARKING_EXTENSION_ENABLED` | no | Whether a session may be extended, default `true` |
@@ -237,12 +373,19 @@ placeholder key (`docs/SECURITY.md` §5).
 | `PARKING_CREDIT_MIN_REMAINING_MINUTES` | no | Minimum remaining minutes for a credit, default `10` |
 | `PARKING_CREDIT_EXPIRY_DAYS` | no | Days a credited minute stays usable, default `90`; `0` means never |
 | `PARKING_GRACE_MINUTES` | no | Tolerance before a session counts as expired, default `5` |
+| `PARKING_CHARGES_ALL_DAY` | no | Whether a fresh municipality charges around the clock, default `false` |
+| `PARKING_CHARGING_WEEKDAYS` | no | Days it charges on, default `MONDAY,…,SATURDAY`; a day left out is a day it does not charge |
+| `PARKING_CHARGING_STARTS_AT` / `_ENDS_AT` | no | The daily band, `HH:mm`, default `07:00` / `18:00`; `24:00` closes the day |
+| `PARKING_SPACE_CODE_PREFIX` | no | Literal prefix of a bay code, default empty |
+| `PARKING_SPACE_CODE_DIGITS` | no | Characters after the prefix, default `4` |
+| `PARKING_SPACE_CODE_ALLOW_LETTERS` | no | Whether those characters may be letters, default `false` |
 | `SMTP_*`, `SMTP_FROM_ADDRESS` | yes | Transactional email |
 | `OAUTH_*` | no | Federation client credentials; a provider with a blank client id answers `FEDERATION_NOT_CONFIGURED` |
 | `CORS_ALLOWED_ORIGIN_{CITIZEN,ADMIN,INSPECTOR,PLATFORM}` | yes in prod | One origin list per portal — never a shared wildcard |
 | `APP_BASE_URL_*` | yes | Front-end base URLs used to build the links inside emails |
 | `PLATFORM_DEFAULT_*` | no | Deployment defaults (country, currency, locale, time zone, dial code, minimum age) |
-| `MFA_ENFORCED_PORTALS` | no | Portals requiring a second factor; default `admin,inspector,platform`. Empty disables MFA enforcement everywhere — laptops only |
+| `JWT_REFRESH_TOKEN_TTL` | no | Refresh-token lifetime; **default `0` = never expires** (CONTRACT.md v0.3 §2). Set e.g. `30d` to bring expiry back |
+| `MFA_ENFORCED_PORTALS` | no | Portals requiring a second factor; **default empty** — no portal enforces MFA (CONTRACT.md v0.3 §1). Set `admin,inspector,platform` to turn it back on |
 | `LUPARX_DEV_SEED_DEMO_DATA` | no | `false` disables the `dev`-profile demo seed; the seeder does not exist outside that profile |
 
 ### Rotating the JWT signing key
@@ -268,12 +411,14 @@ placeholder key (`docs/SECURITY.md` §5).
 - **Tenant isolation**: every tenant-owned query takes the tenant from `TenantContext`; a user with
   no membership in the active tenant is reported *not found*, not *forbidden*, because confirming an
   id exists elsewhere is itself a leak.
-- **MFA** is mandatory on the portals listed in `luparx.security.mfa-enforced-portals` (default
-  `admin,inspector,platform`). A token with `mfa=false` on one of those portals reaches only the
-  enrolment endpoints, which is how a new administrator enrols without ever holding a usable session
-  that skipped the second factor. The same list is read by the login flow and by the endpoint that
-  disables one's own TOTP, so the three cannot drift apart; the `dev` profile empties it and says so
-  at `WARN`.
+- **MFA** is enforced on the portals listed in `luparx.security.mfa-enforced-portals`, which is
+  **empty by default** since CONTRACT.md v0.3 §1: no portal asks for a second factor, and the
+  application states it in one `INFO` line at start. The mechanism is unchanged — a token with
+  `mfa=false` on an enforced portal reaches only the enrolment endpoints — and the same list is read
+  by the login flow, the servlet filter and the endpoint that disables one's own TOTP, so the three
+  cannot drift apart. Adding a slug back to the list is all it takes to require TOTP again.
+- **A session does not expire on its own** (`luparx.jwt.refresh-token-ttl: 0`). Logout, a password
+  change and an administrative block are what end one; rotation and reuse detection are unchanged.
 - **Rate limiting** lives in `auth_attempts` in PostgreSQL, so the limit holds across replicas.
 - **Idempotency**: `Idempotency-Key` is required on the sensitive `POST` routes listed in
   `IdempotencyFilter`; concurrent retries are resolved by a unique index, not by in-process state.
@@ -286,8 +431,10 @@ mvn test
 
 `MoneyTest`, `RolePermissionsTest`, `Uuid7Test` (platform-core), `PhoneNumberServiceTest`,
 `IdentityDocumentValidatorTest` (geo), `TotpServiceTest` — verified against the RFC 6238 vectors —
-(identity) and `AccessResolverTest` (tenancy), which includes the cross-tenant isolation case
-`docs/SECURITY.md` §4 requires.
+(identity), `AccessResolverTest` (tenancy), which includes the cross-tenant isolation case
+`docs/SECURITY.md` §4 requires, and `ChargingScheduleTest` (parking), which pins the v0.3 rule that
+only the minutes inside a charging band are charged: exact boundaries, crossing midnight, a weekday
+with no band, a holiday inside a long stay, overlapping bands and the same timetable in two zones.
 
 ## Deviations from the documents, and why
 
@@ -331,8 +478,7 @@ mistakes them for working features:
 
 ## Known risks
 
-This tree was written without a reachable Maven repository, so **nothing here has been compiled or
-run**. Review priorities, in order:
+Review priorities, in order:
 
 1. `PortalJwtDecoders` builds `NimbusJwtDecoder` from a `DefaultJWTProcessor` so that several keys
    can verify at once. Confirm the constructor and validator API against the Spring Security version
@@ -346,3 +492,9 @@ run**. Review priorities, in order:
    they are independent of each other, but confirm both are present in the chain.
 5. Flyway ordering and the `CHECK`/partial-index combinations on `tenant_memberships` have not been
    executed against a real PostgreSQL.
+6. The v0.3 charging timetable is replaced wholesale, dated exceptions included, so an administrator
+   editing it must send the whole calendar back. That is fine for a form and wrong for an import of
+   several years of holidays, which will need its own endpoint.
+7. Bay codes are now canonicalised to upper case before lookup. Every seeded code is numeric, so
+   nothing changes today, but a municipality that had entered lower-case codes before this change
+   would have to re-enter them.

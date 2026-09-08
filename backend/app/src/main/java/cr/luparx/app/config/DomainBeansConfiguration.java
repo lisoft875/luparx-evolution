@@ -17,6 +17,11 @@ import cr.luparx.identity.service.TokenService;
 import cr.luparx.identity.service.TotpService;
 import cr.luparx.parking.model.MinuteIncrements;
 import cr.luparx.parking.model.ParkingPolicyDefaults;
+import cr.luparx.parking.model.ParkingScheduleDefaults;
+import cr.luparx.parking.model.ParkingSpaceFormatDefaults;
+import cr.luparx.tenancy.service.EffectiveLocaleService;
+import cr.luparx.tenancy.service.TenantLocaleService;
+import cr.luparx.tenancy.service.TenantService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Bean;
@@ -93,9 +98,14 @@ public class DomainBeansConfiguration {
      * portal filter chains and the "disable my TOTP" endpoint all share.
      *
      * <p>An unknown slug is ignored with a warning rather than failing the start: a typo in one
-     * entry must not take the whole deployment down, and the remaining portals stay protected. An
-     * empty list means MFA is enforced nowhere, which is legitimate on a laptop and a serious
-     * finding anywhere else, so it is stated loudly on every start.</p>
+     * entry must not take the whole deployment down, and the remaining portals stay protected.</p>
+     *
+     * <p>Since CONTRACT.md v0.3 §1 the list is <b>empty by default</b> and that is the normal state,
+     * not an incident: no portal asks for a second factor, and the product has accepted the risk in
+     * writing. So the start-up line is an INFO that states which portals enforce it — "none" being a
+     * perfectly good answer — rather than the WARN that used to shout about a laptop. The TOTP code
+     * itself is untouched and stays behind this configuration: turning MFA back on is adding portals
+     * to the list, not rewriting the module.</p>
      */
     @Bean
     public MfaPolicy mfaPolicy(SecurityProperties securityProperties) {
@@ -112,13 +122,8 @@ public class DomainBeansConfiguration {
                                 + " '{}'; it is ignored.", slug));
             }
         }
-        if (enforced.isEmpty()) {
-            LOGGER.warn("MFA ENFORCEMENT IS DISABLED on every portal (luparx.security.mfa-enforced-portals is"
-                    + " empty). This is acceptable only on a developer laptop; every shared environment must"
-                    + " set it back to admin,inspector,platform.");
-        } else {
-            LOGGER.info("MFA enforced on portals: {}", enforced);
-        }
+        LOGGER.info("MFA is enforced on: {} (luparx.security.mfa-enforced-portals).",
+                enforced.isEmpty() ? "no portal" : enforced);
         return new MfaPolicy(enforced);
     }
 
@@ -144,6 +149,40 @@ public class DomainBeansConfiguration {
                 properties.creditMinRemainingOrDefault(),
                 properties.creditExpiryDaysOrDefault(),
                 properties.graceMinutesOrDefault());
+    }
+
+    /**
+     * Turns {@code platform.defaults.parking.charging-*} into the timetable a municipality starts
+     * with. Composed here for the same reason as {@link #parkingPolicyDefaults}: "Monday to Saturday,
+     * 07:00 to 18:00" is a line of YAML in this deployment, never a constant in the domain.
+     */
+    @Bean
+    public ParkingScheduleDefaults parkingScheduleDefaults(ParkingOperationDefaultsProperties properties) {
+        return ParkingScheduleDefaults.of(
+                properties.chargesAllDayOrDefault(),
+                properties.chargingWeekdaysOrDefault(),
+                properties.chargingStartMinuteOrDefault(),
+                properties.chargingEndMinuteOrDefault());
+    }
+
+    /** The bay-code shape a municipality starts with ({@code platform.defaults.parking.space-code-*}). */
+    @Bean
+    public ParkingSpaceFormatDefaults parkingSpaceFormatDefaults(ParkingOperationDefaultsProperties properties) {
+        return new ParkingSpaceFormatDefaults(
+                properties.spaceCodePrefixOrDefault(),
+                properties.spaceCodeDigitsOrDefault(),
+                properties.spaceCodeAllowLettersOrDefault());
+    }
+
+    /**
+     * The deterministic locale resolution of CONTRACT.md v0.3, assembled here because the platform
+     * default is deployment configuration and module-tenancy must not read YAML.
+     */
+    @Bean
+    public EffectiveLocaleService effectiveLocaleService(TenantLocaleService tenantLocaleService,
+                                                         TenantService tenantService,
+                                                         PlatformDefaultsProperties defaults) {
+        return new EffectiveLocaleService(tenantLocaleService, tenantService, defaults.locale());
     }
 
     @Bean

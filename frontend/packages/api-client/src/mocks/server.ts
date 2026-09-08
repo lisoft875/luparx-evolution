@@ -14,6 +14,7 @@ import type {
   RegisterRequest,
   Role,
   StartParkingSessionRequest,
+  UpdateProfileRequest,
   UpdateVehicleRequest,
 } from '../types/domain';
 import {
@@ -210,6 +211,11 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
     return json(items.map(({ id, slug, name, countryCode }) => ({ id, slug, name, countryCode })));
   }
 
+  // GET /api/v1/catalog/tenants/{id}/locales — public, the login screen needs it before auth.
+  if (method === 'GET' && segments[2] === 'catalog' && segments[3] === 'tenants' && segments[5] === 'locales') {
+    return json(mockTenantLocales(segments[4] ?? null).filter((l) => l.enabled).map(({ locale, isDefault, sortOrder }) => ({ locale, isDefault, sortOrder })));
+  }
+
   // ---- Auth: /api/v1/auth/{portal}/... -------------------------------------------------------
   if (segments[2] === 'auth') {
     const portal = segments[3] as Portal;
@@ -359,6 +365,39 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
       const tenant = membership ? MOCK_TENANTS.find((t) => t.id === membership.tenantId) ?? null : null;
       return json({ user: user.profile, memberships: user.memberships, activeTenant: tenant });
     }
+    if (method === 'PUT' && segments[3] === 'me' && segments.length === 4) {
+      const payload = await readBody<UpdateProfileRequest>(init);
+      // Everything of CONTRACT.md §2 except the e-mail, which has its own verified flow below.
+      user.profile = {
+        ...user.profile,
+        givenName: payload.givenName,
+        familyName: payload.familyName,
+        secondFamilyName: payload.secondFamilyName,
+        identityDocument: payload.identityDocument,
+        address: payload.address,
+        phone: payload.phone,
+        nationalityCode: payload.nationalityCode,
+        birthDate: payload.birthDate,
+        locale: payload.locale,
+        timeZone: payload.timeZone,
+      };
+      const membership = membershipForPortal(user, portal);
+      const tenant = membership ? MOCK_TENANTS.find((t) => t.id === membership.tenantId) ?? null : null;
+      return json({ user: user.profile, memberships: user.memberships, activeTenant: tenant });
+    }
+    if (method === 'POST' && path.endsWith('/me/password')) {
+      const payload = await readBody<{ currentPassword: string; newPassword: string }>(init);
+      if (payload.currentPassword !== user.password) {
+        return problem(422, 'INVALID_CREDENTIALS', 'The current password is not correct');
+      }
+      user.password = payload.newPassword;
+      return noContent();
+    }
+    if (method === 'POST' && path.endsWith('/me/email')) {
+      // The current address stays in place until the new one is verified (CONTRACT.md v0.3).
+      await readBody<{ newEmail: string }>(init);
+      return noContent();
+    }
     if (method === 'GET' && path.endsWith('/me/memberships')) {
       return json(user.memberships.filter((m) => m.portal === portal));
     }
@@ -392,6 +431,49 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
   // ---- Admin: users, memberships, audit, reports, exports, tenants ---------------------------
   if (segments[2] === 'admin') {
     const resource = segments[3];
+
+    // ---- Municipal operation settings (CONTRACT.md v0.3) --------------------------------------
+    if (resource === 'settings' && segments[4] === 'locales') {
+      const authHeader = new Headers(init?.headers).get('Authorization');
+      const claims = authHeader ? decodeMockClaims(authHeader) : null;
+      const tenantId = claims?.tid ?? null;
+      if (method === 'GET') {
+        return json({ locales: mockTenantLocales(tenantId), platformDefaultLocale: MOCK_PLATFORM_DEFAULT_LOCALE });
+      }
+      if (method === 'PUT') {
+        const payload = await readBody<{ locales: MockTenantLocale[] }>(init);
+        if (!payload.locales.some((l) => l.enabled)) {
+          return problem(422, 'LOCALE_LIST_EMPTY', 'At least one locale has to stay enabled');
+        }
+        if (payload.locales.filter((l) => l.enabled && l.isDefault).length !== 1) {
+          return problem(422, 'LOCALE_DEFAULT_REQUIRED', 'Exactly one enabled locale has to be the default');
+        }
+        mockTenantLocalesByTenant.set(tenantId ?? '', payload.locales);
+        return json({ locales: payload.locales, platformDefaultLocale: MOCK_PLATFORM_DEFAULT_LOCALE });
+      }
+    }
+
+    if (resource === 'parking' && segments[4] === 'space-format') {
+      if (method === 'GET') return json(mockSpaceFormat());
+      if (method === 'PUT') {
+        const payload = await readBody<{ prefix: string; digits: number; allowLetters: boolean }>(init);
+        return json(buildMockSpaceFormat(payload.prefix, payload.digits, payload.allowLetters));
+      }
+    }
+
+    if (resource === 'parking' && segments[4] === 'schedule') {
+      if (method === 'GET') return json(mockChargingSchedule());
+      if (method === 'PUT') {
+        const payload = await readBody<Record<string, unknown>>(init);
+        return json({ ...(mockChargingSchedule() as Record<string, unknown>), ...payload, updatedAt: new Date().toISOString() });
+      }
+    }
+
+    if (resource === 'parking' && segments[4] === 'zones' && method === 'GET') {
+      const authHeader = new Headers(init?.headers).get('Authorization');
+      const claims = authHeader ? decodeMockClaims(authHeader) : null;
+      return json(mockCitizenZones(claims?.tid ?? null));
+    }
 
     if (resource === 'users') {
       if (method === 'GET' && segments.length === 4) {
@@ -913,7 +995,17 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
 
       if (sub === 'quote' && method === 'POST') {
         const payload = await readBody<ParkingQuoteRequest>(init);
-        return json(computeMockQuote(payload.zoneId, payload.minutes, userId, tenantId));
+        return json(toWireQuote(computeMockQuote(payload.zoneId, payload.minutes, userId, tenantId)));
+      }
+
+      // The charging schedule this mock municipality runs on: Monday to Saturday 07:00–18:00, no
+      // charge on Sunday (CONTRACT.md v0.3 §"Horario de cobro" default).
+      if (sub === 'schedule' && method === 'GET') {
+        return json(mockChargingSchedule());
+      }
+
+      if (sub === 'zones' && method === 'GET') {
+        return json(mockCitizenZones(tenantId));
       }
 
       if (sub === 'sessions' && segments.length === 5 && method === 'GET') {
@@ -924,7 +1016,9 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
         const items = mockParkingSessions.filter(
           (s) => s.userId === userId && (statusFilter === 'ALL' || s.status === statusFilter),
         );
-        return json(items.map(toPublicSession));
+        // Always a page envelope, ACTIVE included — "una forma por endpoint" (CONTRACT.md v0.2).
+        const mapped = items.map(toPublicSession);
+        return json({ items: mapped, page: 0, size: 20, totalElements: mapped.length, totalPages: 1 });
       }
 
       if (sub === 'sessions' && segments.length === 5 && method === 'POST') {
@@ -968,12 +1062,16 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
             spaceCode: payload.spaceCode,
             vehicleId: payload.vehicleId,
             plateSnapshot: vehicle.plate,
+            spaceId: `space-${payload.spaceCode.toLowerCase()}`,
             minutes: payload.minutes,
+            remainingMinutes: payload.minutes,
             amountMinor: quote.amountMinor,
             currencyCode: quote.currencyCode,
+            creditMinutesApplied: quote.creditMinutesApplied,
             status: 'ACTIVE',
             startedAt: startedAt.toISOString(),
             expiresAt: new Date(startedAt.getTime() + payload.minutes * 60_000).toISOString(),
+            endedAt: null,
           };
           mockParkingSessions.push(record);
           recordAuditEvent({
@@ -992,7 +1090,7 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
       if (sub === 'sessions' && segments.length === 6) {
         const record = mockParkingSessions.find((s) => s.id === segments[5] && s.userId === userId);
         if (!record) return problem(404, 'SESSION_NOT_FOUND', 'Session not found');
-        if (method === 'GET') return json(toPublicSession(record));
+        if (method === 'GET') return json({ session: toPublicSession(record), extensions: [] });
       }
 
       if (sub === 'sessions' && segments.length === 7 && segments[6] === 'extend' && method === 'POST') {
@@ -1032,7 +1130,7 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
             resourceId: record.id,
             metadata: { minutes: payload.minutes },
           });
-          return { data: { session: toPublicSession(record), amountMinor, currencyCode: rate.currencyCode }, status: 200 };
+          return { data: toPublicSession(record), status: 200 };
         });
       }
 
@@ -1063,10 +1161,8 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
             resourceId: record.id,
             metadata: { creditedMinutes: shouldCredit ? remainingMinutes : 0 },
           });
-          return {
-            data: { session: toPublicSession(record), creditedMinutes: shouldCredit ? remainingMinutes : 0, creditExpiresAt },
-            status: 200,
-          };
+          record.endedAt = record.expiresAt;
+          return { data: toPublicSession(record), status: 200 };
         });
       }
     }
@@ -1075,13 +1171,46 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
     if (resource === 'wallet' && method === 'GET' && segments.length === 4) {
       const key = walletKey(userId, tenantId ?? '');
       const wallet = mockWallets.get(key) ?? { balanceMinor: 0, currencyCode: 'CRC' };
-      return json(wallet);
+      return json({
+        balance: { amountMinor: wallet.balanceMinor, currencyCode: wallet.currencyCode },
+        transactions: {
+          items: [
+            {
+              id: 'wallet-tx-mock-1',
+              type: 'TOP_UP' as const,
+              amount: { amountMinor: wallet.balanceMinor, currencyCode: wallet.currencyCode },
+              balanceAfter: { amountMinor: wallet.balanceMinor, currencyCode: wallet.currencyCode },
+              createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+            },
+          ],
+          page: 0,
+          size: 20,
+          totalElements: 1,
+          totalPages: 1,
+        },
+      });
     }
 
     if (resource === 'time-credits' && method === 'GET' && segments.length === 4) {
       const key = walletKey(userId, tenantId ?? '');
       const stored = mockTimeCredits.get(key) ?? { minutes: 0, expiresAt: null };
-      return json({ minutes: availableMockCreditMinutes(key), expiresAt: stored.expiresAt });
+      const minutes = availableMockCreditMinutes(key);
+      return json({
+        balanceMinutes: minutes,
+        lots:
+          minutes > 0
+            ? [
+                {
+                  id: 'time-credit-lot-mock-1',
+                  source: 'EARLY_FINISH',
+                  minutes,
+                  remainingMinutes: minutes,
+                  expiresAt: stored.expiresAt,
+                  createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+                },
+              ]
+            : [],
+      });
     }
   }
 
@@ -1101,12 +1230,141 @@ function computeMockQuote(zoneId: string, minutes: number, userId: string, tenan
   const creditMinutesApplied = Math.min(availableCreditMinutes, minutes);
   const creditValueMinor = Math.round(rate.rateMinorPerMinute * creditMinutesApplied);
   const payableMinor = Math.max(0, amountMinor - creditValueMinor);
-  return { amountMinor, currencyCode: rate.currencyCode, creditMinutesApplied, payableMinor };
+  return {
+    minutes,
+    // The mock municipality charges around the clock, so every requested minute is chargeable.
+    chargeableMinutes: minutes,
+    amountMinor,
+    currencyCode: rate.currencyCode,
+    creditMinutesApplied,
+    payableMinutes: minutes - creditMinutesApplied,
+    payableMinor,
+  };
 }
 
+/** Domain quote → the server's wire shape (money in `MoneyDto` pairs). */
+function toWireQuote(quote: ParkingQuoteResponse): unknown {
+  return {
+    minutes: quote.minutes,
+    chargeableMinutes: quote.chargeableMinutes,
+    amount: { amountMinor: quote.amountMinor, currencyCode: quote.currencyCode },
+    creditMinutesApplied: quote.creditMinutesApplied,
+    payableMinutes: quote.payableMinutes,
+    payable: { amountMinor: quote.payableMinor, currencyCode: quote.currencyCode },
+  };
+}
+
+const MOCK_WEEKDAYS = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'] as const;
+
+/** Monday–Saturday 07:00–18:00, Sunday free — CONTRACT.md v0.3's default charging schedule. */
+function mockChargingSchedule(): unknown {
+  const band = { startMinute: 420, endMinute: 1080, startsAt: '07:00', endsAt: '18:00' };
+  const now = new Date();
+  const isSunday = now.getDay() === 0;
+  const minuteOfDay = now.getHours() * 60 + now.getMinutes();
+  const chargingNow = !isSunday && minuteOfDay >= band.startMinute && minuteOfDay < band.endMinute;
+  const next = new Date(now);
+  next.setSeconds(0, 0);
+  if (chargingNow) {
+    // Already inside a band: nothing to announce.
+  } else if (!isSunday && minuteOfDay < band.startMinute) {
+    next.setHours(7, 0, 0, 0);
+  } else {
+    next.setDate(next.getDate() + (isSunday ? 1 : 1));
+    next.setHours(7, 0, 0, 0);
+    if (next.getDay() === 0) next.setDate(next.getDate() + 1);
+  }
+  return {
+    timeZone: 'America/Costa_Rica',
+    chargesAllDay: false,
+    week: MOCK_WEEKDAYS.map((weekday) => ({
+      weekday,
+      bands: weekday === 'SUNDAY' ? [] : [band],
+    })),
+    exceptions: [],
+    chargingNow,
+    nextChargingStartsAt: chargingNow ? null : next.toISOString(),
+    updatedAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+  };
+}
+
+function mockCitizenZones(tenantId: string | null): unknown {
+  return tenantId === 'tenant-escazu'
+    ? [{ id: 'zone-escazu-centro', code: 'ESC-CENTRO', name: 'Centro' }]
+    : [{ id: 'zone-centro', code: 'SJ-CENTRO', name: 'Centro' }];
+}
+
+/** The bay-code shape of the mock municipality (CONTRACT.md v0.3 §"Formato del código de espacio"). */
+function mockSpaceFormat(): unknown {
+  return buildMockSpaceFormat('LUP-', 4, false);
+}
+
+/**
+ * The server derives `pattern` and `example` from the three knobs the administrator sets; the
+ * mock derives them the same way so the admin preview matches what a real deployment would store.
+ */
+function buildMockSpaceFormat(prefix: string, digits: number, allowLetters: boolean): unknown {
+  const body = allowLetters ? `[0-9A-Z]{${digits}}` : `[0-9]{${digits}}`;
+  const escapedPrefix = prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return {
+    prefix,
+    digits,
+    allowLetters,
+    pattern: `^${escapedPrefix}${body}$`,
+    example: `${prefix}${'0'.repeat(Math.max(0, digits - 1))}1`,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+const MOCK_PLATFORM_DEFAULT_LOCALE = 'es-CR';
+
+interface MockTenantLocale {
+  locale: string;
+  enabled: boolean;
+  isDefault: boolean;
+  sortOrder: number;
+}
+
+/** Per-tenant enabled languages, mutable so the admin screen can be exercised end to end. */
+const mockTenantLocalesByTenant = new Map<string, MockTenantLocale[]>();
+
+function mockTenantLocales(tenantId: string | null): MockTenantLocale[] {
+  return (
+    mockTenantLocalesByTenant.get(tenantId ?? '') ?? [
+      { locale: 'es-CR', enabled: true, isDefault: true, sortOrder: 0 },
+      { locale: 'en-US', enabled: true, isDefault: false, sortOrder: 1 },
+    ]
+  );
+}
+
+/**
+ * Domain record → the wire shape the real server sends (see ../wire): money nested in a
+ * `MoneyDto`, booked time under `bookedMinutes`, and the remaining time recomputed on read the
+ * way a server would. The mocks answer at the transport boundary, so they have to speak the
+ * server's language, not the apps'.
+ */
 function toPublicSession(record: MockParkingSessionRecord): unknown {
-  const { userId: _userId, tenantId: _tenantId, ...session } = record;
-  return session;
+  const remainingMinutes =
+    record.status === 'ACTIVE'
+      ? Math.max(0, Math.round((new Date(record.expiresAt).getTime() - Date.now()) / 60_000))
+      : 0;
+  return {
+    id: record.id,
+    vehicleId: record.vehicleId,
+    plateSnapshot: record.plateSnapshot,
+    zoneId: record.zoneId,
+    zoneName: record.zoneName,
+    spaceId: record.spaceId,
+    spaceCode: record.spaceCode,
+    startedAt: record.startedAt,
+    expiresAt: record.expiresAt,
+    endedAt: record.endedAt,
+    status: record.status,
+    bookedMinutes: record.minutes,
+    remainingMinutes,
+    amount: { amountMinor: record.amountMinor, currencyCode: record.currencyCode },
+    creditMinutesApplied: record.creditMinutesApplied,
+  };
 }
 
 /** Decodes the mock access token's claims without any signature check — mocks only, never used for real auth. */

@@ -36,6 +36,15 @@ import java.util.UUID;
  * the rest is computed from the rest — not by discounting the full price — because blocks do not
  * divide: with an hourly tariff, 90 minutes of which 30 are credited is one paid hour, not one and a
  * half. Pricing what is actually being bought is the only rule that cannot overcharge.</p>
+ *
+ * <h2>What is actually being bought</h2>
+ *
+ * <p>Since CONTRACT.md v0.3 that is not "the minutes asked for" but "the minutes asked for that fall
+ * inside the municipality's charging hours". A stay from 17:30 to 19:00 where charging closes at
+ * 18:00 is priced as thirty minutes; the citizen still parks until 19:00, and the clock the app shows
+ * still runs to 19:00 — only the money stops at 18:00. Everything downstream (tariff blocks, credit,
+ * the wallet) then works on the chargeable minutes, so there is exactly one place where free time is
+ * turned into zero and it is here.</p>
  */
 @Service
 public class ParkingQuoteService {
@@ -43,15 +52,18 @@ public class ParkingQuoteService {
     private final ParkingZoneRepository zoneRepository;
     private final ParkingRateRepository rateRepository;
     private final TimeCreditService timeCreditService;
+    private final ParkingScheduleService scheduleService;
     private final Clock clock;
 
     public ParkingQuoteService(ParkingZoneRepository zoneRepository,
                                ParkingRateRepository rateRepository,
                                TimeCreditService timeCreditService,
+                               ParkingScheduleService scheduleService,
                                Clock clock) {
         this.zoneRepository = zoneRepository;
         this.rateRepository = rateRepository;
         this.timeCreditService = timeCreditService;
+        this.scheduleService = scheduleService;
         this.clock = clock;
     }
 
@@ -99,7 +111,25 @@ public class ParkingQuoteService {
         Instant now = clock.instant();
         ParkingRate rate = requireRate(tenantId, zoneId, now);
         int available = timeCreditService.availableMinutes(tenantId, userId);
-        return price(rate, minutes, available);
+        int chargeable = chargeableMinutes(tenantId, now, minutes);
+        return price(rate, minutes, chargeable, available);
+    }
+
+    /**
+     * How many of the {@code minutes} starting at {@code from} the municipality charges for.
+     *
+     * <p>A quote for a stay entirely outside the hours answers zero rather than failing: the citizen
+     * asked what it would cost and the honest answer is "nothing". Refusing to <em>start</em> such a
+     * session is a separate decision, taken in {@code ParkingSessionService} with
+     * {@code OUTSIDE_CHARGING_HOURS}, because that is where the next charging band can be offered
+     * alongside the refusal.</p>
+     */
+    @Transactional
+    public int chargeableMinutes(TenantId tenantId, Instant from, int minutes) {
+        if (minutes <= 0) {
+            return 0;
+        }
+        return scheduleService.chargeableMinutes(tenantId, from, from.plusSeconds((long) minutes * 60L));
     }
 
     /**
@@ -107,17 +137,23 @@ public class ParkingQuoteService {
      * Separated from the lookups so that the session flow — which has already loaded the tariff and
      * locked the credit — reuses exactly the same arithmetic instead of a copy of it.
      */
-    public ParkingQuote price(ParkingRate rate, int minutes, int availableCreditMinutes) {
+    public ParkingQuote price(ParkingRate rate, int minutes, int chargeableMinutes, int availableCreditMinutes) {
         if (minutes <= 0) {
             throw new IllegalArgumentException("a quote covers a positive number of minutes");
         }
-        int creditApplied = Math.max(0, Math.min(availableCreditMinutes, minutes));
-        int payableMinutes = minutes - creditApplied;
-        Money amount = rate.getAmount().multipliedBy(blocks(minutes, rate.getMinutes()));
+        int chargeable = Math.max(0, Math.min(chargeableMinutes, minutes));
+        if (chargeable == 0) {
+            // Free time: no money, and no credit spent on it either.
+            Money nothing = Money.zero(rate.getCurrencyCode());
+            return new ParkingQuote(minutes, 0, 0, 0, nothing, nothing);
+        }
+        int creditApplied = Math.max(0, Math.min(availableCreditMinutes, chargeable));
+        int payableMinutes = chargeable - creditApplied;
+        Money amount = rate.getAmount().multipliedBy(blocks(chargeable, rate.getMinutes()));
         Money payable = payableMinutes == 0
                 ? Money.zero(rate.getCurrencyCode())
                 : rate.getAmount().multipliedBy(blocks(payableMinutes, rate.getMinutes()));
-        return new ParkingQuote(minutes, creditApplied, payableMinutes, amount, payable);
+        return new ParkingQuote(minutes, chargeable, creditApplied, payableMinutes, amount, payable);
     }
 
     /** Started blocks, rounding up. {@code blockMinutes} is positive by CHECK in V5_0. */

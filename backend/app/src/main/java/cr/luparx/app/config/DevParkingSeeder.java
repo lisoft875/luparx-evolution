@@ -8,13 +8,18 @@ import cr.luparx.geo.entity.AdministrativeDivision;
 import cr.luparx.geo.repository.AdministrativeDivisionRepository;
 import cr.luparx.parking.entity.ParkingPolicy;
 import cr.luparx.parking.entity.ParkingRate;
+import cr.luparx.parking.entity.ParkingScheduleSlot;
+import cr.luparx.parking.entity.ParkingSpaceFormat;
 import cr.luparx.parking.entity.ParkingZone;
 import cr.luparx.parking.model.ParkingSpaceStatus;
 import cr.luparx.parking.repository.ParkingRateRepository;
 import cr.luparx.parking.repository.ParkingSpaceRepository;
 import cr.luparx.parking.repository.ParkingZoneRepository;
 import cr.luparx.parking.service.ParkingPolicyService;
+import cr.luparx.parking.service.ParkingScheduleService;
+import cr.luparx.parking.service.ParkingSpaceFormatService;
 import cr.luparx.parking.service.WalletService;
+import cr.luparx.tenancy.service.TenantLocaleService;
 import cr.luparx.tenancy.entity.Tenant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -140,6 +145,9 @@ public class DevParkingSeeder {
 
     private final DevSeedProperties properties;
     private final ParkingPolicyService policyService;
+    private final ParkingSpaceFormatService spaceFormatService;
+    private final ParkingScheduleService scheduleService;
+    private final TenantLocaleService tenantLocaleService;
     private final WalletService walletService;
     private final ParkingZoneRepository zoneRepository;
     private final ParkingRateRepository rateRepository;
@@ -151,6 +159,9 @@ public class DevParkingSeeder {
 
     public DevParkingSeeder(DevSeedProperties properties,
                             ParkingPolicyService policyService,
+                            ParkingSpaceFormatService spaceFormatService,
+                            ParkingScheduleService scheduleService,
+                            TenantLocaleService tenantLocaleService,
                             WalletService walletService,
                             ParkingZoneRepository zoneRepository,
                             ParkingRateRepository rateRepository,
@@ -161,6 +172,9 @@ public class DevParkingSeeder {
                             Clock clock) {
         this.properties = properties;
         this.policyService = policyService;
+        this.spaceFormatService = spaceFormatService;
+        this.scheduleService = scheduleService;
+        this.tenantLocaleService = tenantLocaleService;
         this.walletService = walletService;
         this.zoneRepository = zoneRepository;
         this.rateRepository = rateRepository;
@@ -177,6 +191,7 @@ public class DevParkingSeeder {
      */
     public void seed(Tenant tenant, UUID citizenUserId) {
         ensurePolicy(tenant);
+        ensureOperationalSettings(tenant);
         ensureWallet(tenant, citizenUserId);
         List<ParkingZone> zones = ensureZones(tenant);
         if (zones.isEmpty()) {
@@ -206,6 +221,28 @@ public class DevParkingSeeder {
                 policy.isExtensionEnabled() ? "enabled" : "disabled",
                 policy.isEarlyFinishEnabled() ? "enabled" : "disabled",
                 policy.isCreditOnEarlyFinishEnabled() ? "enabled" : "disabled", policy.getCreditExpiryDays());
+    }
+
+    /**
+     * Materialises the municipality's bay-code format and charging timetable
+     * (CONTRACT.md v0.3), so the admin portal opens on real rows instead of on nothing.
+     *
+     * <p>No values are written here either: the seeder asks the domain, and the domain creates both
+     * from {@code platform.defaults.parking.*}. San José therefore starts on four plain digits and on
+     * Monday to Saturday, 07:00 to 18:00, with Sunday free — which is a line of YAML, not a constant
+     * in this class.</p>
+     */
+    private void ensureOperationalSettings(Tenant tenant) {
+        TenantId tenantId = TenantId.of(tenant.getId());
+        ParkingSpaceFormat format = spaceFormatService.require(tenantId);
+        scheduleService.require(tenantId);
+        List<ParkingScheduleSlot> bands = scheduleService.slots(tenantId);
+        // The languages of the municipality are materialised too, so the login dropdown has a list
+        // to show on a fresh database (CONTRACT.md v0.3, "Idiomas por municipalidad").
+        int locales = tenantLocaleService.list(tenantId).size();
+        LOGGER.info("Development seed: {} bay codes look like {} (pattern {}), charging bands: {},"
+                        + " languages offered: {}.",
+                tenant.getSlug(), format.getExample(), format.getPattern(), bands.size(), locales);
     }
 
     // --- wallet ----------------------------------------------------------------------------------

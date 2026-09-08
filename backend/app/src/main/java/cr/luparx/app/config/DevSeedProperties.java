@@ -26,6 +26,11 @@ public record DevSeedProperties(Boolean seedDemoData, Integer parkingSpaces) {
      * Upper bound of the fixture. Not a limit of the schema — {@code parking_spaces.code} is text and
      * accepts any short code a municipality paints — but the point beyond which a development fixture
      * stops being a fixture and starts being a load test.
+     *
+     * <p>9999 and not 10000: the codes are zero-padded to four digits and the launch municipality's
+     * bay-code format is four digits ({@code platform.defaults.parking.space-code-digits}), so a
+     * ten-thousandth bay would be the one code in the fixture that its own municipality refuses
+     * (CONTRACT.md v0.3, "Formato del código de espacio").</p>
      */
-    public static final int MAXIMUM_PARKING_SPACES = 10_000;
+    public static final int MAXIMUM_PARKING_SPACES = 9_999;
 }

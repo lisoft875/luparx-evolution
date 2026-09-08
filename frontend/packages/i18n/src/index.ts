@@ -7,9 +7,20 @@ export {
   isSupportedLocale,
   resolveLocale,
   detectBrowserLocale,
+  localeEndonym,
+  readStoredLocale,
+  writeStoredLocale,
 } from './locale';
 export type { SupportedLocale } from './locale';
-export { formatDate, formatDateTime, formatTime, formatNumber, formatCurrencyMinor, pluralCategory } from './formatters';
+export {
+  formatDate,
+  formatDateTime,
+  formatTime,
+  formatWeekdayTime,
+  formatNumber,
+  formatCurrencyMinor,
+  pluralCategory,
+} from './formatters';
 export { currencyDisplayFractionDigits, applyNumberSymbolOverrides, localeHourCycle } from './presentation';
 export { minorUnitExponent, minorToMajor, majorToMinor } from './currency';
 export { I18nProvider, useI18n, useTranslation } from './context';

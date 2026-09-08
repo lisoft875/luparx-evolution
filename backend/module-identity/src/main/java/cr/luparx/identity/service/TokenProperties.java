@@ -7,7 +7,8 @@ import java.time.Duration;
  *
  * @param issuer            {@code iss} claim; also the expected issuer on the resource-server side
  * @param accessTokenTtl    lifetime of the signed access token
- * @param refreshTokenTtl   lifetime of the opaque refresh token
+ * @param refreshTokenTtl   lifetime of the opaque refresh token; {@link Duration#ZERO} (or anything
+ *                          non-positive) means the refresh token never expires (CONTRACT.md v0.3 §2)
  * @param mfaChallengeTtl   lifetime of the short-lived token handed out between password and TOTP
  * @param oauthStateTtl     lifetime of the signed OAuth {@code state} value
  */
@@ -19,7 +20,19 @@ public record TokenProperties(
         Duration oauthStateTtl) {
 
     public static TokenProperties defaults(String issuer) {
-        return new TokenProperties(issuer, Duration.ofMinutes(15), Duration.ofDays(30),
+        return new TokenProperties(issuer, Duration.ofMinutes(15), Duration.ZERO,
                 Duration.ofMinutes(5), Duration.ofMinutes(10));
+    }
+
+    /**
+     * Whether a refresh token is minted without an expiry.
+     *
+     * <p>This is THE switch behind "the session does not expire" (CONTRACT.md v0.3 §2). It changes
+     * nothing else: rotation still happens on every refresh and reuse detection still revokes the
+     * whole family. What ends a session stays explicit — logging out, changing the password, and an
+     * administrator blocking the account.</p>
+     */
+    public boolean refreshTokenNeverExpires() {
+        return refreshTokenTtl == null || refreshTokenTtl.isZero() || refreshTokenTtl.isNegative();
     }
 }

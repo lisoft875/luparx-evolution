@@ -23,6 +23,11 @@ import java.util.UUID;
  * again, the only sound explanation is that a copy leaked, so the entire family is revoked and the
  * caller is forced to authenticate from scratch — the legitimate client loses its session too, which
  * is the intended trade-off.</p>
+ *
+ * <p><b>Expiry is configuration; rotation is not.</b> With {@code luparx.jwt.refresh-token-ttl = 0}
+ * (the default since CONTRACT.md v0.3 §2) a token is persisted without {@code expires_at} and is
+ * never refused for being old. Everything above still applies: each use rotates, a replay still
+ * kills the family, and logout, a password change and an administrative block still revoke.</p>
  */
 @Service
 public class RefreshTokenService {
@@ -60,7 +65,8 @@ public class RefreshTokenService {
                 Hashing.sha256Hex(raw),
                 familyId,
                 now,
-                now.plus(properties.refreshTokenTtl()),
+                // null = no expiry (CONTRACT.md v0.3 §2). Nothing else about the token changes.
+                properties.refreshTokenNeverExpires() ? null : now.plus(properties.refreshTokenTtl()),
                 truncate(userAgent),
                 ipHash);
         refreshTokenRepository.save(token);

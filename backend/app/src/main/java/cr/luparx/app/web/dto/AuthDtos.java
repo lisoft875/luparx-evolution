@@ -143,4 +143,14 @@ public final class AuthDtos {
 
     public record VerifyEmailRequest(@NotBlank String token) {
     }
+
+    /**
+     * {@code POST /auth/{portal}/email/change/confirm} — completes a change started from the profile
+     * (CONTRACT.md v0.3, "Perfil editable").
+     *
+     * <p>Unauthenticated on purpose: the link is opened in the NEW mailbox, which may well be on a
+     * device that has never signed in. The token is the authorisation, and it is single-use.</p>
+     */
+    public record ConfirmEmailChangeRequest(@NotBlank String token) {
+    }
 }

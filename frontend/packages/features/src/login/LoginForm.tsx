@@ -29,14 +29,13 @@ const PROVIDER_ICON: Record<OAuthProvider, (props: { size?: number }) => React.J
 export interface LoginFormProps {
   portal: Portal;
   apiBaseUrl: string;
-  onMfaRequired: () => void;
   onSuccess: () => void;
   forgotPasswordHref: string;
   /** Omit for portals with no self-registration (CONTRACT.md §0 — `platform` has no `/register` route at all). */
   registerHref?: string;
   /** Muted one-line subtitle under the card title, e.g. t('auth.portal.citizen.title'). */
   subtitle: string;
-  /** Optional extra notice under the subtitle, e.g. t('auth.login.mfaMandatoryNotice') for `platform`. */
+  /** Optional extra notice under the subtitle. */
   notice?: string;
 }
 
@@ -69,7 +68,6 @@ type LoginValues = z.infer<ReturnType<typeof buildLoginSchema>>;
 export function LoginForm({
   portal,
   apiBaseUrl,
-  onMfaRequired,
   onSuccess,
   forgotPasswordHref,
   registerHref,
@@ -105,10 +103,14 @@ export function LoginForm({
     try {
       const result = await login(values);
       if (result.mfaRequired) {
-        onMfaRequired();
-      } else {
-        onSuccess();
+        // No portal enforces two-factor verification (CONTRACT.md v0.3 §1) and no app screen
+        // offers to complete one, so a challenge here means a deployment turned MFA back on
+        // server-side without an interface to answer it. Say that, rather than dead-ending on a
+        // step that does not exist.
+        setSubmitError(t('auth.login.error.mfaChallengeUnsupported'));
+        return;
       }
+      onSuccess();
     } catch (error) {
       // Every failure used to read "incorrect email or password", which sent people hunting for a
       // typo when the real cause was an unreachable API. Say what actually happened.

@@ -1,15 +1,20 @@
 import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 import { useAuth } from '@luparx/auth';
+import { ApiError } from '@luparx/api-client';
 import type {
+  ChangeEmailRequest,
+  ChangePasswordRequest,
   CreateVehicleRequest,
   ExtendParkingSessionRequest,
-  ExtendParkingSessionResponse,
-  FinishParkingSessionResponse,
+  MeResponse,
   ParkingPolicy,
   ParkingQuoteResponse,
+  ParkingSchedule,
   ParkingSession,
+  ParkingZone,
   StartParkingSessionRequest,
   TimeCreditsResponse,
+  UpdateProfileRequest,
   UpdateVehicleRequest,
   Vehicle,
   WalletResponse,
@@ -28,6 +33,8 @@ const KEYS = {
   quote: (zoneId: string, minutes: number) => ['citizen', 'parking', 'quote', zoneId, minutes] as const,
   wallet: ['citizen', 'wallet'] as const,
   timeCredits: ['citizen', 'time-credits'] as const,
+  schedule: ['citizen', 'parking', 'schedule'] as const,
+  zones: ['citizen', 'parking', 'zones'] as const,
 };
 
 export function useVehicles(): UseQueryResult<Vehicle[]> {
@@ -117,7 +124,7 @@ export function useStartParkingSession() {
 export function useExtendParkingSession() {
   const { apiClient } = useAuth();
   const queryClient = useQueryClient();
-  return useMutation<ExtendParkingSessionResponse, unknown, { id: string; payload: ExtendParkingSessionRequest }>({
+  return useMutation<ParkingSession, unknown, { id: string; payload: ExtendParkingSessionRequest }>({
     mutationFn: ({ id, payload }) => apiClient.citizenParking.extend(id, payload),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: KEYS.activeSessions });
@@ -129,7 +136,7 @@ export function useExtendParkingSession() {
 export function useFinishParkingSession() {
   const { apiClient } = useAuth();
   const queryClient = useQueryClient();
-  return useMutation<FinishParkingSessionResponse, unknown, string>({
+  return useMutation<ParkingSession, unknown, string>({
     mutationFn: (id) => apiClient.citizenParking.finish(id),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: KEYS.activeSessions });
@@ -146,4 +153,98 @@ export function useWallet(): UseQueryResult<WalletResponse> {
 export function useTimeCredits(): UseQueryResult<TimeCreditsResponse> {
   const { apiClient } = useAuth();
   return useQuery({ queryKey: KEYS.timeCredits, queryFn: () => apiClient.citizenTimeCredits.get() });
+}
+
+/**
+ * The municipality's charging schedule (CONTRACT.md v0.3 §"Horario de cobro"). Refetched on a
+ * timer because `chargingNow` is a point-in-time answer: a screen left open across 18:00 has to
+ * stop telling the citizen they are about to be charged.
+ */
+export function useParkingSchedule(): UseQueryResult<ParkingSchedule> {
+  const { apiClient } = useAuth();
+  return useQuery({
+    queryKey: KEYS.schedule,
+    queryFn: () => apiClient.citizenParking.schedule(),
+    refetchInterval: 60_000,
+    staleTime: 30_000,
+  });
+}
+
+/**
+ * Zones the citizen can park in.
+ *
+ * TODO(backend): there is no `GET /citizen/parking/zones` yet — the list is only published under
+ * `/admin/parking/zones`, behind `TENANT_MANAGE` — while `POST /quote` and `POST /sessions` both
+ * require a `zoneId`. Until the endpoint exists this degrades to the zones the citizen has
+ * already parked in, read from their own session history, and the parking screen says plainly
+ * when that leaves it with nothing to offer. No zone is ever invented client-side: a made-up id
+ * would only fail later, at the moment of charging.
+ */
+export function useParkingZones(): UseQueryResult<ParkingZone[]> {
+  const { apiClient } = useAuth();
+  return useQuery({
+    queryKey: KEYS.zones,
+    staleTime: 5 * 60_000,
+    queryFn: async () => {
+      try {
+        return await apiClient.citizenParking.zones();
+      } catch (error) {
+        if (!(error instanceof ApiError) || error.status !== 404) throw error;
+        const history = await apiClient.citizenParking.sessions({ status: 'ALL' });
+        const byId = new Map<string, ParkingZone>();
+        for (const session of history) {
+          if (!byId.has(session.zoneId)) {
+            byId.set(session.zoneId, { id: session.zoneId, code: session.zoneId, name: session.zoneName });
+          }
+        }
+        return [...byId.values()];
+      }
+    },
+  });
+}
+
+// ---- Account (CONTRACT.md v0.3 §"Perfil editable") ---------------------------------------------
+
+/**
+ * Saves the personal data of CONTRACT.md §2. The server answers with the whole `/me` payload, so
+ * the auth context is refreshed from that answer rather than from what the form believed it sent.
+ */
+export function useUpdateProfile() {
+  const { apiClient, refreshProfile } = useAuth();
+  return useMutation<MeResponse, unknown, UpdateProfileRequest>({
+    mutationFn: (payload) => apiClient.session.updateMe(payload),
+    onSuccess: () => {
+      void refreshProfile();
+    },
+  });
+}
+
+/** Changing the password signs every other session out (CONTRACT.md v0.3 §1.3) — the screen says so before submitting. */
+export function useChangePassword() {
+  const { apiClient } = useAuth();
+  return useMutation<void, unknown, ChangePasswordRequest>({
+    mutationFn: (payload) => apiClient.session.changePassword(payload),
+  });
+}
+
+/** Starts the e-mail change; the current address keeps working until the new one is verified. */
+export function useChangeEmail() {
+  const { apiClient } = useAuth();
+  return useMutation<void, unknown, ChangeEmailRequest>({
+    mutationFn: (payload) => apiClient.session.changeEmail(payload),
+  });
+}
+
+/**
+ * The time zone every parking time is stated in.
+ *
+ * The municipality's, not the device's (CONTRACT.md v0.3 §"Horario de cobro"): a stay bought in
+ * San José expires at a San José clock time, whatever the phone is set to. Falls back to the
+ * account's own zone while the schedule is still loading, and to the device only if neither is
+ * known — never a hardcoded zone.
+ */
+export function useTenantTimeZone(): string | undefined {
+  const { me } = useAuth();
+  const { data: schedule } = useParkingSchedule();
+  return schedule?.timeZone ?? me?.user.timeZone ?? undefined;
 }

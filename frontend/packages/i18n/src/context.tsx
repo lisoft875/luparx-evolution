@@ -3,7 +3,13 @@ import { createContext, useCallback, useContext, useMemo, useState } from 'react
 import type { TranslationKey } from './locales/es-CR';
 import { esCR } from './locales/es-CR';
 import { enUS } from './locales/en-US';
-import { DEFAULT_LOCALE, type SupportedLocale, detectBrowserLocale } from './locale';
+import {
+  DEFAULT_LOCALE,
+  type SupportedLocale,
+  detectBrowserLocale,
+  readStoredLocale,
+  writeStoredLocale,
+} from './locale';
 import { pluralCategory } from './formatters';
 
 const dictionaries: Record<SupportedLocale, Record<TranslationKey, string>> = {
@@ -43,7 +49,16 @@ export interface I18nProviderProps {
 }
 
 export function I18nProvider({ children, initialLocale }: I18nProviderProps): React.JSX.Element {
-  const [locale, setLocale] = useState<SupportedLocale>(initialLocale ?? detectBrowserLocale());
+  // Deterministic order, and the same one on every reload: an explicit override from the host app,
+  // then this browser's remembered choice, then what the browser itself asks for.
+  const [locale, setLocaleState] = useState<SupportedLocale>(
+    () => initialLocale ?? readStoredLocale() ?? detectBrowserLocale(),
+  );
+
+  const setLocale = useCallback((next: SupportedLocale): void => {
+    setLocaleState(next);
+    writeStoredLocale(next);
+  }, []);
 
   const t = useCallback(
     (key: TranslationKey, params?: TranslationParams): string => {
@@ -69,7 +84,7 @@ export function I18nProvider({ children, initialLocale }: I18nProviderProps): Re
 
   const value = useMemo<I18nContextValue>(
     () => ({ locale, setLocale, t, tPlural }),
-    [locale, t, tPlural],
+    [locale, setLocale, t, tPlural],
   );
 
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;

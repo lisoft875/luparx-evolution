@@ -17,6 +17,7 @@ import cr.luparx.core.outbox.OutboxEventType;
 import cr.luparx.identity.entity.User;
 import cr.luparx.identity.model.UserStatus;
 import cr.luparx.identity.service.AuthenticationService;
+import cr.luparx.identity.service.EmailChangeService;
 import cr.luparx.identity.service.EmailVerificationService;
 import cr.luparx.identity.service.IssuedTokens;
 import cr.luparx.identity.service.MfaService;
@@ -66,6 +67,7 @@ public class AuthController {
     private final SessionService sessionService;
     private final TokenService tokenService;
     private final EmailVerificationService emailVerificationService;
+    private final EmailChangeService emailChangeService;
     private final PasswordResetService passwordResetService;
     private final NotificationSender notificationSender;
     private final SmtpNotificationSender portalUrls;
@@ -80,6 +82,7 @@ public class AuthController {
                           SessionService sessionService,
                           TokenService tokenService,
                           EmailVerificationService emailVerificationService,
+                          EmailChangeService emailChangeService,
                           PasswordResetService passwordResetService,
                           NotificationSender notificationSender,
                           SmtpNotificationSender portalUrls,
@@ -93,6 +96,7 @@ public class AuthController {
         this.sessionService = sessionService;
         this.tokenService = tokenService;
         this.emailVerificationService = emailVerificationService;
+        this.emailChangeService = emailChangeService;
         this.passwordResetService = passwordResetService;
         this.notificationSender = notificationSender;
         this.portalUrls = portalUrls;
@@ -278,6 +282,31 @@ public class AuthController {
                 user.userId(), target, Map.of());
         outboxRecorder.record("user", user.getId().toString(), null, OutboxEventType.USER_EMAIL_VERIFIED,
                 Map.of("userId", user.getId().toString()));
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Completes a change of email address started from the profile (CONTRACT.md v0.3, "Perfil
+     * editable").
+     *
+     * <p>It lives on the unauthenticated auth chain, next to {@code /email/verify}, because the link
+     * is opened in the <b>new</b> mailbox — very possibly on a device that has never signed in. The
+     * single-use token is the authorisation.</p>
+     *
+     * <p>Confirming replaces the address, marks it verified (the token proved the mailbox is
+     * readable) and revokes every session of that person: from this moment the account answers to a
+     * different identity, and a session opened under the old one has no business surviving.</p>
+     */
+    @PostMapping("/email/change/confirm")
+    @Operation(summary = "Confirm a change of email address from the new mailbox")
+    public ResponseEntity<Void> confirmEmailChange(@PathVariable String portal,
+                                                   @Valid @RequestBody AuthDtos.ConfirmEmailChangeRequest request) {
+        Portal target = PortalPathVariable.require(portal);
+        User user = emailChangeService.confirm(request.token());
+        auditRecorder.record(AuditAction.USER_EMAIL_CHANGED, "user", user.getId().toString(), null,
+                user.userId(), target, Map.of("email", user.getEmail()));
+        outboxRecorder.record("user", user.getId().toString(), null, OutboxEventType.USER_EMAIL_VERIFIED,
+                Map.of("userId", user.getId().toString(), "reason", "emailChanged"));
         return ResponseEntity.noContent().build();
     }
 

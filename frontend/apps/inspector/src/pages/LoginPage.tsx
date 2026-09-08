@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LoginForm } from '@luparx/features';
+import { LocaleSwitcher, LoginForm } from '@luparx/features';
 import { AuthScreen, BRAND_ASSETS } from '@luparx/ui';
 import { useTranslation } from '@luparx/i18n';
 import { API_BASE_URL, PORTAL } from '../env';
@@ -13,13 +13,13 @@ export function LoginPage(): React.JSX.Element {
     <AuthScreen
       heroTitle={t('app.tagline')}
       heroDescription={t('auth.hero.description')}
+      localeSwitcher={<LocaleSwitcher variant="compact" />}
       heroImage={BRAND_ASSETS.heroInspectorBg}
     >
       <LoginForm
         portal={PORTAL}
         apiBaseUrl={API_BASE_URL}
         subtitle={t('auth.portal.inspector.title')}
-        onMfaRequired={() => navigate('/mfa')}
         onSuccess={() => navigate('/')}
         forgotPasswordHref="/forgot-password"
         registerHref="/register"

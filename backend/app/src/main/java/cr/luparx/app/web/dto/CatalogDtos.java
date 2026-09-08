@@ -48,4 +48,20 @@ public final class CatalogDtos {
     /** {@code GET /catalog/tenants}. Only publishable (active) municipalities are exposed. */
     public record TenantCatalogResponse(UUID id, String slug, String name, String countryCode) {
     }
+
+    /**
+     * {@code GET /catalog/tenants/{id}/locales} — the languages a municipality offers
+     * (CONTRACT.md v0.3, "Idiomas por municipalidad").
+     *
+     * <p>Public because the login screen needs it before anybody has a token, and because a language
+     * list discloses nothing: it is what the municipality prints on its own website. Only enabled
+     * languages appear — a client is told what it may pick, not what an administrator is still
+     * preparing.</p>
+     *
+     * @param locale     BCP 47 tag, canonicalised
+     * @param isDefault  whether this is the municipality's fallback
+     * @param sortOrder  the order the dropdown shows them in
+     */
+    public record TenantLocaleResponse(String locale, boolean isDefault, int sortOrder) {
+    }
 }

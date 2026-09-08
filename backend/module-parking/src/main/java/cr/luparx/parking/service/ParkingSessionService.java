@@ -47,6 +47,10 @@ import java.util.UUID;
  *       {@code INSUFFICIENT_BALANCE} and no session, no spent minutes, no debit.</li>
  *   <li><b>The offered options are the municipality's.</b> A duration that is not on the configured
  *       list is {@code INVALID_INCREMENT} — never silently rounded.</li>
+ *   <li><b>Only charged time is charged.</b> Starting and extending price the minutes that fall
+ *       inside the municipality's charging hours, in the municipality's own time zone; a stay with
+ *       no chargeable minute at all is {@code OUTSIDE_CHARGING_HOURS} and says when charging
+ *       resumes (CONTRACT.md v0.3, "Horario de cobro").</li>
  *   <li><b>Tenant comes from the context.</b> Every method takes the resolved {@link TenantId} of the
  *       request; nothing here accepts a tenant from a client parameter.</li>
  * </ul>
@@ -72,6 +76,8 @@ public class ParkingSessionService {
     private final ParkingSpaceRepository spaceRepository;
     private final ParkingPolicyService policyService;
     private final ParkingQuoteService quoteService;
+    private final ParkingScheduleService scheduleService;
+    private final ParkingSpaceFormatService spaceFormatService;
     private final VehicleService vehicleService;
     private final WalletService walletService;
     private final TimeCreditService timeCreditService;
@@ -82,6 +88,8 @@ public class ParkingSessionService {
                                  ParkingSpaceRepository spaceRepository,
                                  ParkingPolicyService policyService,
                                  ParkingQuoteService quoteService,
+                                 ParkingScheduleService scheduleService,
+                                 ParkingSpaceFormatService spaceFormatService,
                                  VehicleService vehicleService,
                                  WalletService walletService,
                                  TimeCreditService timeCreditService,
@@ -91,6 +99,8 @@ public class ParkingSessionService {
         this.spaceRepository = spaceRepository;
         this.policyService = policyService;
         this.quoteService = quoteService;
+        this.scheduleService = scheduleService;
+        this.spaceFormatService = spaceFormatService;
         this.vehicleService = vehicleService;
         this.walletService = walletService;
         this.timeCreditService = timeCreditService;
@@ -188,7 +198,11 @@ public class ParkingSessionService {
 
         Vehicle vehicle = vehicleService.requireOwn(userId, vehicleId);
         quoteService.requireActiveZone(tenantId, zoneId);
-        ParkingSpace space = requireUsableSpace(tenantId, zoneId, spaceCode);
+        // The code is checked against the municipality's own format BEFORE it is looked up, so a
+        // shape that municipality never paints is refused as such instead of as "no such bay"
+        // (CONTRACT.md v0.3, "Formato del código de espacio").
+        ParkingSpace space = requireUsableSpace(tenantId, zoneId,
+                spaceFormatService.requireValidCode(tenantId, spaceCode));
 
         // Free whatever the clock already ended, then refuse what is genuinely taken.
         releaseIfExpired(sessionRepository.findBySpaceIdAndStatus(space.getId(), ParkingSessionStatus.ACTIVE),
@@ -205,8 +219,9 @@ public class ParkingSessionService {
 
         Instant now = clock.instant();
         ParkingRate rate = quoteService.requireRate(tenantId, zoneId, now);
+        int chargeable = requireChargeableWindow(tenantId, now, minutes);
         int available = timeCreditService.availableMinutesForUpdate(tenantId, userId);
-        ParkingQuote quote = quoteService.price(rate, minutes, available);
+        ParkingQuote quote = quoteService.price(rate, minutes, chargeable, available);
 
         ParkingSession session = new ParkingSession(Uuid7.generate(), tenantId.value(), userId.value(),
                 vehicle.getId(), vehicle.getPlateNormalized(), zoneId, space.getId(), now,
@@ -257,8 +272,12 @@ public class ParkingSessionService {
 
         Instant now = clock.instant();
         ParkingRate rate = quoteService.requireRate(tenantId, session.getZoneId(), now);
+        // An extension adds time to the END of the session, so what it costs is decided by the
+        // charging hours of the stretch it adds — not by the hours at the moment the button is
+        // pressed. Extending a 17:30 session at 17:55 buys 18:00-19:00, which is free.
+        int chargeable = requireChargeableWindow(tenantId, session.getExpiresAt(), minutes);
         int available = timeCreditService.availableMinutesForUpdate(tenantId, userId);
-        ParkingQuote quote = quoteService.price(rate, minutes, available);
+        ParkingQuote quote = quoteService.price(rate, minutes, chargeable, available);
 
         session.extend(minutes, quote.payable(), quote.creditMinutesApplied(), now);
         sessionRepository.save(session);
@@ -280,7 +299,8 @@ public class ParkingSessionService {
 
     /**
      * Closes a session. The minutes left over come back as credit if the municipality says so; money
-     * never does (CONTRACT.md v0.2, rule 5).
+     * never does (CONTRACT.md v0.2, rule 5), and only the ones that were actually charged for come
+     * back at all (CONTRACT.md v0.3, "Horario de cobro").
      *
      * @throws ConflictException {@code EARLY_FINISH_DISABLED} when the municipality does not allow
      *         closing a session that still has time on it. Note that a session whose clock has
@@ -299,18 +319,48 @@ public class ParkingSessionService {
         if (remaining > 0 && !policy.isEarlyFinishEnabled()) {
             throw ConflictException.of(ErrorCode.EARLY_FINISH_DISABLED, "error.parking.earlyFinish.disabled");
         }
-        if (policy.isCreditOnEarlyFinishEnabled() && remaining > 0
-                && remaining >= policy.getCreditMinRemainingMinutes()) {
+        // Only PAID time comes back. Since v0.3 a stay can cover minutes the municipality does not
+        // charge for, and crediting those would hand the citizen minutes they never bought: a session
+        // started at 17:30 for ninety minutes pays for thirty, so finishing it at 17:45 gives back
+        // fifteen, not seventy-five.
+        int creditable = remaining <= 0
+                ? 0
+                : Math.min(remaining, quoteService.chargeableMinutes(tenantId, now, remaining));
+        if (policy.isCreditOnEarlyFinishEnabled() && creditable > 0
+                && creditable >= policy.getCreditMinRemainingMinutes()) {
             // At or above the threshold, not strictly above: a municipality that configures 10 means
             // "ten minutes are worth keeping", and losing exactly ten would be the surprise.
-            timeCreditService.grant(tenantId, userId, remaining, TimeCreditSource.EARLY_FINISH, session.getId(),
-                    policy.getCreditExpiryDays());
+            timeCreditService.grant(tenantId, userId, creditable, TimeCreditSource.EARLY_FINISH,
+                    session.getId(), policy.getCreditExpiryDays());
         }
         session.finish(now);
         return sessionRepository.save(session);
     }
 
     // --- helpers ---------------------------------------------------------------------------------
+
+    /**
+     * The chargeable minutes of a stretch that is about to be bought, refusing the ones that are
+     * entirely outside the municipality's charging hours.
+     *
+     * <p>The refusal is deliberate and it is narrow: only a stretch with <em>no</em> chargeable minute
+     * at all is refused. A stay that starts at 17:30 and runs past closing is perfectly normal and is
+     * simply charged for the part inside the hours. Refusing it would tell a citizen who is legitimately
+     * parking that they may not — and letting the other case through would open a session nobody is
+     * paying for and hold a bay for it.</p>
+     *
+     * @throws ConflictException {@code OUTSIDE_CHARGING_HOURS}, carrying when charging next resumes so
+     *         the app can say it in words ("charging resumes on Monday at 7:00")
+     */
+    private int requireChargeableWindow(TenantId tenantId, Instant from, int minutes) {
+        int chargeable = quoteService.chargeableMinutes(tenantId, from, minutes);
+        if (chargeable > 0) {
+            return chargeable;
+        }
+        Instant next = scheduleService.nextChargingStart(tenantId, from).orElse(null);
+        throw ConflictException.of(ErrorCode.OUTSIDE_CHARGING_HOURS, "error.parking.schedule.outsideHours",
+                next == null ? "-" : next.toString());
+    }
 
     private ParkingSpace requireUsableSpace(TenantId tenantId, UUID zoneId, String spaceCode) {
         String code = spaceCode == null ? "" : spaceCode.trim();

@@ -381,4 +381,38 @@ public class User {
         this.nationalityCode = nationalityCode;
         this.updatedAt = now;
     }
+
+    public void updateBirthDate(LocalDate birthDate, Instant now) {
+        this.birthDate = birthDate;
+        this.updatedAt = now;
+    }
+
+    /**
+     * Replaces the identity document. The caller has already validated and normalised it and has
+     * checked that no other person holds the same one; the unique index is what actually guarantees
+     * it (CONTRACT.md §2 item 2).
+     */
+    public void updateIdentityDocument(String countryCode, IdentityDocumentTypeCode type, String number,
+                                       String numberNormalized, Instant now) {
+        this.documentCountryCode = countryCode;
+        this.documentType = type;
+        this.documentNumber = number;
+        this.documentNumberNormalized = numberNormalized;
+        this.updatedAt = now;
+    }
+
+    /**
+     * Moves the account to a new address, which is verified by construction: the only way to get
+     * here is a token that was read in that mailbox (CONTRACT.md v0.3, "Perfil editable"). The
+     * credentials version is bumped by the caller so that every token minted for the old identity
+     * stops being accepted.
+     */
+    public void changeEmail(String email, Instant now) {
+        this.email = email;
+        this.emailVerifiedAt = now;
+        if (this.status == UserStatus.PENDING_VERIFICATION) {
+            this.status = UserStatus.ACTIVE;
+        }
+        this.updatedAt = now;
+    }
 }

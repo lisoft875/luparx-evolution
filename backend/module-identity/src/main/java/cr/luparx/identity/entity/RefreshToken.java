@@ -48,7 +48,13 @@ public class RefreshToken {
     @Column(name = "issued_at", nullable = false)
     private Instant issuedAt;
 
-    @Column(name = "expires_at", nullable = false)
+    /**
+     * When this token stops being accepted, or {@code null} when it never does (CONTRACT.md v0.3
+     * §2: {@code luparx.jwt.refresh-token-ttl = 0}). A token without an expiry is not an unbounded
+     * grant — logout, a password change and an administrative block all revoke it, and rotation
+     * still replaces it on every use.
+     */
+    @Column(name = "expires_at")
     private Instant expiresAt;
 
     @Column(name = "revoked_at")
@@ -134,8 +140,9 @@ public class RefreshToken {
         return revokedAt != null;
     }
 
+    /** False for a token minted without an expiry: age alone never invalidates such a session. */
     public boolean isExpired(Instant now) {
-        return !now.isBefore(expiresAt);
+        return expiresAt != null && !now.isBefore(expiresAt);
     }
 
     public boolean isUsable(Instant now) {

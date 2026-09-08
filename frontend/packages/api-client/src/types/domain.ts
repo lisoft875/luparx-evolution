@@ -73,7 +73,12 @@ export interface TokenPair {
 
 export interface CountryCatalogEntry {
   code: string;
-  name: string;
+  /**
+   * Stable translation key (`country.CR`), not a rendered name: the catalog is shared by every
+   * locale, so the country's name is resolved by the client's dictionary (CONTRACT.md §5/§7 —
+   * user-facing text is never stored rendered).
+   */
+  nameKey: string;
   dialCode: string;
   flagEmoji: string;
   defaultLocale: string;
@@ -150,6 +155,24 @@ export interface RegisterRequest {
   acceptedTermsVersion: string;
   tenantId?: string;
   portal: Portal;
+}
+
+/**
+ * `PUT /{portal}/me` — every personal field of CONTRACT.md §2, in the same order (v0.3
+ * §"Perfil editable"). No `email` and no `password`: both change the credentials you sign in with
+ * and each has its own flow, `POST /me/email` (with verification) and `POST /me/password`.
+ */
+export interface UpdateProfileRequest {
+  givenName: string;
+  familyName: string;
+  secondFamilyName?: string;
+  identityDocument: IdentityDocumentInput;
+  address: AddressInput;
+  phone: PhoneInput;
+  nationalityCode: string;
+  birthDate: string; // ISO-8601 YYYY-MM-DD
+  locale: string;
+  timeZone: string;
 }
 
 export interface RegisterResponse {
@@ -570,16 +593,24 @@ export interface ParkingQuoteRequest {
 }
 
 /**
- * CONTRACT.md v0.2 specifies the wire shape as `{amount, creditMinutesApplied, payable}`;
- * `amountMinor`/`payableMinor` are those same two figures under this codebase's money
- * convention (integer minor units, CONTRACT.md §5 "Nunca float"), with `currencyCode` carried
- * alongside per the project's rule that an amount is never shown without its currency.
+ * A quote is entirely the server's arithmetic (CONTRACT.md v0.2 §Invariantes); the client only
+ * displays it. `chargeableMinutes` is what the municipality's charging schedule (CONTRACT.md v0.3
+ * §"Horario de cobro") actually bills out of `minutes` — a stay from 17:30 to 19:00 against a
+ * band that closes at 18:00 pays half an hour, so whenever the two differ the screen has to say so.
+ * `payableMinor` is what really leaves the wallet after the citizen's minute credit is applied;
+ * it is not `amountMinor` minus a converted credit, the remaining minutes are priced on their own.
  */
 export interface ParkingQuoteResponse {
+  /** Minutes the citizen asked for. */
+  minutes: number;
+  /** Of those, the ones that fall inside a charging band. Equal to `minutes` when charging is continuous. */
+  chargeableMinutes: number;
   amountMinor: number;
   currencyCode: string;
   /** Minutes of the citizen's time-credit balance the server applied to this quote. */
   creditMinutesApplied: number;
+  /** Chargeable minutes left after the credit was applied — what `payableMinor` prices. */
+  payableMinutes: number;
   /** What remains to be paid from the wallet after `creditMinutesApplied` is subtracted. */
   payableMinor: number;
 }
@@ -590,16 +621,23 @@ export interface ParkingSession {
   id: string;
   zoneId: string;
   zoneName: string;
+  spaceId: string;
   spaceCode: string;
   vehicleId: string;
   /** Copy of the plate at the moment the session started (CONTRACT.md v0.2 rule 2) — verified against this, never the vehicle's possibly-since-edited plate. */
   plateSnapshot: string;
+  /** Total booked time, session plus every extension. */
   minutes: number;
+  /** Time left before it expires, as the server counted it. */
+  remainingMinutes: number;
   amountMinor: number;
   currencyCode: string;
+  /** Minutes of time credit this session consumed. */
+  creditMinutesApplied: number;
   status: ParkingSessionStatus;
   startedAt: string;
   expiresAt: string;
+  endedAt: string | null;
 }
 
 export interface StartParkingSessionRequest {
@@ -617,31 +655,155 @@ export interface ExtendParkingSessionRequest {
   minutes: number;
 }
 
-export interface ExtendParkingSessionResponse {
-  session: ParkingSession;
-  amountMinor: number;
-  currencyCode: string;
+/**
+ * A parking zone as the citizen picks it. The tariff lives on the zone, so the zone plus the
+ * duration is all a quote needs.
+ */
+export interface ParkingZone {
+  id: string;
+  code: string;
+  name: string;
+  description?: string;
 }
 
-export interface FinishParkingSessionResponse {
-  session: ParkingSession;
-  /** 0 when the policy doesn't credit early finishes, or the remaining time was under `creditMinRemainingMinutes`. */
-  creditedMinutes: number;
-  creditExpiresAt: string | null;
+/**
+ * The municipality's charging schedule (CONTRACT.md v0.3 §"Horario de cobro"), evaluated by the
+ * server in `timeZone` — the municipality's, never the device's. `chargingNow` and
+ * `nextChargingStartsAt` are what let the parking flow say "ahora no se cobra; el cobro se
+ * reanuda el lunes a las 7:00" instead of failing at the last step.
+ */
+export interface ParkingSchedule {
+  timeZone: string;
+  chargesAllDay: boolean;
+  week: ChargingDay[];
+  exceptions: ChargingException[];
+  chargingNow: boolean;
+  nextChargingStartsAt: string | null;
+  updatedAt?: string;
 }
+
+export type Weekday = 'MONDAY' | 'TUESDAY' | 'WEDNESDAY' | 'THURSDAY' | 'FRIDAY' | 'SATURDAY' | 'SUNDAY';
+
+/** A day with no bands is a day the municipality does not charge (by default, Sunday). */
+export interface ChargingDay {
+  weekday: Weekday;
+  bands: ChargingBand[];
+}
+
+/** Minutes from midnight, plus the same instant pre-formatted as `HH:mm` for display and editing. */
+export interface ChargingBand {
+  startMinute: number;
+  endMinute: number;
+  startsAt: string;
+  endsAt: string;
+}
+
+/** A dated override — a public holiday that suspends charging, or one with its own hours. */
+export interface ChargingException {
+  date: string;
+  charges: boolean;
+  chargesAllDay: boolean;
+  label?: string;
+  bands: ChargingBand[];
+}
+
+export interface UpdateParkingScheduleRequest {
+  chargesAllDay: boolean;
+  week: ChargingDay[];
+  exceptions: ChargingException[];
+}
+
+/**
+ * The shape of a bay code in this municipality (CONTRACT.md v0.3 §"Formato del código de
+ * espacio"). `pattern` is the effective regex the server validates against and `example` is what
+ * the citizen's field shows as a placeholder — both server-owned, never rebuilt client-side.
+ */
+export interface ParkingSpaceFormat {
+  prefix: string;
+  digits: number;
+  allowLetters: boolean;
+  pattern: string;
+  example: string;
+  updatedAt?: string;
+}
+
+export interface UpdateParkingSpaceFormatRequest {
+  prefix: string;
+  digits: number;
+  allowLetters: boolean;
+}
+
+// ---- Locales per municipality (CONTRACT.md v0.3 §"Idiomas por municipalidad") ------------------
+// The municipal administrator enables the list and picks the default; every portal renders it as a
+// dropdown. Resolution stays deterministic: user preference → enabled by the tenant → tenant
+// default → platform default.
+
+/** One entry of the public list (`GET /catalog/tenants/{id}/locales`): only enabled locales appear. */
+export interface TenantLocale {
+  /** BCP 47 tag, e.g. `es-CR`. */
+  locale: string;
+  isDefault: boolean;
+  sortOrder: number;
+}
+
+/** The admin view (`GET /admin/settings/locales`): disabled locales included, so they can be turned back on. */
+export interface TenantLocaleSetting extends TenantLocale {
+  enabled: boolean;
+}
+
+export interface TenantLocaleSettings {
+  locales: TenantLocaleSetting[];
+  platformDefaultLocale: string;
+}
+
+export interface UpdateTenantLocalesRequest {
+  locales: TenantLocaleSetting[];
+}
+
+// ---- Account (CONTRACT.md v0.3 §"Perfil editable") ---------------------------------------------
+
+/** `POST /{portal}/me/password`: revokes every other session and bumps `credentials_version`. */
+export interface ChangePasswordRequest {
+  currentPassword: string;
+  newPassword: string;
+}
+
+/** `POST /{portal}/me/email`: the new address must be verified before it replaces the current one. */
+export interface ChangeEmailRequest {
+  newEmail: string;
+}
+
 
 // ---- Citizen: wallet & time credits (CONTRACT.md v0.2) -----------------------------------------
 // Both scoped to the active tenant — "las finanzas son por tenant; no hay un saldo global"
 // (CONTRACT.md v0.2 rule 6). The server derives the tenant from the access token (`tid` claim);
 // neither call takes a tenant parameter.
 
+/** The server's own ledger vocabulary (`module-parking` WalletTransactionType) — never widened or renamed here. */
+export type WalletTransactionType = 'TOP_UP' | 'SESSION_CHARGE' | 'EXTENSION_CHARGE' | 'ADJUSTMENT';
+
+/** One movement of the tenant wallet, already flattened out of the server's `MoneyDto` pairs. */
+export interface WalletTransaction {
+  id: string;
+  type: WalletTransactionType;
+  /** Signed: negative when money left the wallet. */
+  amountMinor: number;
+  currencyCode: string;
+  balanceAfterMinor: number;
+  reference: string | null;
+  createdAt: string;
+}
+
 export interface WalletResponse {
   balanceMinor: number;
   currencyCode: string;
+  /** First page of movements, newest first — the wallet endpoint returns them alongside the balance. */
+  transactions: WalletTransaction[];
 }
 
 /** Minutes saved from an early finish (CONTRACT.md v0.2 rule 5) — consumed first on this tenant's next session, never money, never portable to another tenant. */
 export interface TimeCreditsResponse {
   minutes: number;
+  /** Earliest expiry among the lots that still have minutes left; `null` when nothing expires. */
   expiresAt: string | null;
 }

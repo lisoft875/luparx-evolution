@@ -105,4 +105,21 @@ public final class ErrorCode {
     public static final String EXTENSION_EXCEEDS_MAX = "EXTENSION_EXCEEDS_MAX";
     public static final String INSUFFICIENT_BALANCE = "INSUFFICIENT_BALANCE";
     public static final String INVALID_INCREMENT = "INVALID_INCREMENT";
+
+    // --- account, locales and municipal operation (CONTRACT.md "v0.3") --------------------------
+    /** The current password given to {@code POST /{portal}/me/password} did not match. */
+    public static final String CURRENT_PASSWORD_INVALID = "CURRENT_PASSWORD_INVALID";
+    /** The address a {@code POST /{portal}/me/email} is moving to already belongs to somebody. */
+    public static final String EMAIL_CHANGE_NOT_ALLOWED = "EMAIL_CHANGE_NOT_ALLOWED";
+    /** The requested locale is not one this municipality offers. */
+    public static final String LOCALE_NOT_SUPPORTED = "LOCALE_NOT_SUPPORTED";
+    /** The bay code does not match the code format this municipality configured. */
+    public static final String PARKING_SPACE_CODE_INVALID = "PARKING_SPACE_CODE_INVALID";
+    /** A bay with that code already exists in this municipality. */
+    public static final String PARKING_SPACE_CODE_TAKEN = "PARKING_SPACE_CODE_TAKEN";
+    /**
+     * The whole requested stay falls outside the municipality's charging hours. The next band is
+     * readable from {@code GET /citizen/parking/schedule}.
+     */
+    public static final String OUTSIDE_CHARGING_HOURS = "OUTSIDE_CHARGING_HOURS";
 }

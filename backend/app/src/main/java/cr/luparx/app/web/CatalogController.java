@@ -3,6 +3,10 @@ package cr.luparx.app.web;
 import cr.luparx.app.web.dto.CatalogDtos;
 import cr.luparx.geo.service.AdministrativeDivisionService;
 import cr.luparx.geo.service.CountryCatalogService;
+import cr.luparx.core.error.ErrorCode;
+import cr.luparx.core.error.NotFoundException;
+import cr.luparx.core.id.TenantId;
+import cr.luparx.tenancy.service.TenantLocaleService;
 import cr.luparx.tenancy.service.TenantService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -37,15 +41,18 @@ public class CatalogController {
     private final CountryCatalogService countryCatalogService;
     private final AdministrativeDivisionService divisionService;
     private final TenantService tenantService;
+    private final TenantLocaleService tenantLocaleService;
     private final ResponseMapper mapper;
 
     public CatalogController(CountryCatalogService countryCatalogService,
                              AdministrativeDivisionService divisionService,
                              TenantService tenantService,
+                             TenantLocaleService tenantLocaleService,
                              ResponseMapper mapper) {
         this.countryCatalogService = countryCatalogService;
         this.divisionService = divisionService;
         this.tenantService = tenantService;
+        this.tenantLocaleService = tenantLocaleService;
         this.mapper = mapper;
     }
 
@@ -94,6 +101,28 @@ public class CatalogController {
             @RequestParam(required = false) String country) {
         List<CatalogDtos.TenantCatalogResponse> body = tenantService.listPublishable(country).stream()
                 .map(mapper::toTenantCatalog)
+                .toList();
+        return cacheable(body);
+    }
+
+    /**
+     * The languages a municipality offers (CONTRACT.md v0.3, "Idiomas por municipalidad").
+     *
+     * <p>Public because the login screen needs it before anybody has a token. A municipality that is
+     * not publishable answers exactly as a non-existent one does — the same 404, not a 409 that would
+     * confirm the identifier is real — so the endpoint cannot be used to enumerate suspended or
+     * unlaunched tenants (SECURITY.md §1). Only enabled languages are listed: a client is told what it
+     * may pick, not what an administrator is still preparing.</p>
+     */
+    @GetMapping("/tenants/{id}/locales")
+    @Operation(summary = "Languages a municipality offers, and which of them is its default")
+    public ResponseEntity<List<CatalogDtos.TenantLocaleResponse>> tenantLocales(@PathVariable UUID id) {
+        TenantId tenantId = TenantId.of(id);
+        if (!tenantService.require(tenantId).getStatus().allowsAccess()) {
+            throw NotFoundException.of(ErrorCode.TENANT_NOT_FOUND, "error.tenant.notFound");
+        }
+        List<CatalogDtos.TenantLocaleResponse> body = tenantLocaleService.listEnabled(tenantId).stream()
+                .map(mapper::toTenantLocale)
                 .toList();
         return cacheable(body);
     }

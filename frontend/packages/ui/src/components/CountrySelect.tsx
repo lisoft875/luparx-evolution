@@ -1,5 +1,6 @@
 import * as React from 'react';
 import type { CountryCatalogEntry } from '@luparx/api-client';
+import { useTranslation, type TranslationKey } from '@luparx/i18n';
 import { Select } from './Select';
 
 export interface CountrySelectProps {
@@ -15,7 +16,12 @@ export interface CountrySelectProps {
   onBlur?: () => void;
 }
 
-/** Country picker with the catalog-provided flag emoji prefixed to each option label — never a bundled flag image (CONTRACT.md §2). */
+/**
+ * Country picker with the catalog-provided flag emoji prefixed to each option label — never a
+ * bundled flag image (CONTRACT.md §2). The catalog gives a translation key rather than a name, so
+ * the label is resolved here; a country the dictionary does not know yet falls back to its ISO
+ * 3166 code, which is still a usable option rather than a blank one.
+ */
 export function CountrySelect({
   id,
   countries,
@@ -28,6 +34,7 @@ export function CountrySelect({
   onBlur,
   ...aria
 }: CountrySelectProps): React.JSX.Element {
+  const { t } = useTranslation();
   return (
     <Select
       id={id}
@@ -39,10 +46,13 @@ export function CountrySelect({
       onBlur={onBlur}
       placeholder={placeholder}
       aria-describedby={aria['aria-describedby']}
-      options={countries.map((country) => ({
-        value: country.code,
-        label: `${country.flagEmoji} ${country.name}`.trim(),
-      }))}
+      options={countries.map((country) => {
+        const name = t(country.nameKey as TranslationKey);
+        return {
+          value: country.code,
+          label: `${country.flagEmoji} ${name === country.nameKey ? country.code : name}`.trim(),
+        };
+      })}
     />
   );
 }

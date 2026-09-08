@@ -1,9 +1,9 @@
 import * as React from 'react';
-import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@luparx/auth';
-import { useTranslation, SUPPORTED_LOCALES, type TranslationKey } from '@luparx/i18n';
+import { LocaleSwitcher } from '@luparx/features';
+import { useTranslation } from '@luparx/i18n';
 import {
-  Alert,
   Badge,
   Button,
   Card,
@@ -11,21 +11,13 @@ import {
   IconChevronRight,
   IconGlobe,
   IconIdCard,
+  IconShield,
   IconLogout,
   IconMail,
-  IconPhone,
-  IconPin,
-  IconShield,
   IconUser,
   ListRow,
 } from '@luparx/ui';
 import { CitizenShell } from '../components/CitizenShell';
-import { MOCK_PROFILE } from '../mocks/parkingDomain';
-
-const LOCALE_NAME_KEY: Record<(typeof SUPPORTED_LOCALES)[number], TranslationKey> = {
-  'es-CR': 'locale.name.es-CR',
-  'en-US': 'locale.name.en-US',
-};
 
 function chevronValue(trailing?: React.ReactNode): React.ReactNode {
   return (
@@ -36,129 +28,90 @@ function chevronValue(trailing?: React.ReactNode): React.ReactNode {
   );
 }
 
+/**
+ * "My account" (CONTRACT.md v0.3 §"Perfil editable"): the hub, one row per thing that can be
+ * changed and where changing it leads.
+ *
+ * Personal data, e-mail and password are separate destinations rather than one long form,
+ * because they are three different operations with three different consequences: one saves a
+ * record, one starts a verification, and one signs your other devices out. There is no two-step
+ * verification row: no portal enforces MFA (CONTRACT.md v0.3 §1) and offering a setting that
+ * changes nothing would be worse than not offering it.
+ */
 export function ProfilePage(): React.JSX.Element {
-  const { t, locale, setLocale } = useTranslation();
-  const { me, apiClient, refreshProfile, logout } = useAuth();
-  const [securityOpen, setSecurityOpen] = useState(false);
-  const [otpauthUri, setOtpauthUri] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  function cycleLocale(): void {
-    const index = SUPPORTED_LOCALES.indexOf(locale);
-    // Non-null: SUPPORTED_LOCALES is a non-empty compile-time constant.
-    setLocale(SUPPORTED_LOCALES[(index + 1) % SUPPORTED_LOCALES.length]!);
-  }
-
-  async function handleSetupMfa(): Promise<void> {
-    setError(null);
-    try {
-      const result = await apiClient.session.mfaSetup();
-      setOtpauthUri(result.otpauthUri);
-    } catch {
-      setError(t('common.error.generic'));
-    }
-  }
-
-  async function handleDisableMfa(): Promise<void> {
-    setError(null);
-    try {
-      // A full flow collects a fresh TOTP code first; simplified here for the v0.1 stub.
-      await apiClient.session.mfaDisable({ code: '000000' });
-      await refreshProfile();
-    } catch {
-      setError(t('common.error.generic'));
-    }
-  }
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const { me, logout } = useAuth();
+  const profile = me?.user;
+  const fullName = profile ? [profile.givenName, profile.familyName].filter(Boolean).join(' ') : undefined;
 
   return (
     <CitizenShell bare>
       <h1 className="lx-text-screen-title">{t('citizen.profile.title')}</h1>
-      {error ? <Alert tone="danger">{error}</Alert> : null}
 
       <CardStack>
         <Card>
           <ListRow
             icon={<IconUser size={18} />}
             title={t('citizen.profile.personalData.label')}
-            meta={`${MOCK_PROFILE.givenName} ${MOCK_PROFILE.familyName}`}
+            meta={fullName ?? t('common.loading')}
             value={chevronValue()}
-            onClick={() => undefined}
+            onClick={() => navigate('/profile/personal')}
           />
         </Card>
         <Card>
           <ListRow
             icon={<IconMail size={18} />}
             title={t('user.field.email')}
-            meta={MOCK_PROFILE.email}
-            value={chevronValue(MOCK_PROFILE.emailVerified ? <Badge tone="success">{t('profile.verifiedBadge')}</Badge> : undefined)}
-            onClick={() => undefined}
-          />
-        </Card>
-        <Card>
-          <ListRow
-            icon={<IconPhone size={18} />}
-            title={t('citizen.profile.phoneLabel')}
-            meta={MOCK_PROFILE.phoneNational}
-            value={chevronValue()}
-            onClick={() => undefined}
+            meta={profile?.email ?? t('common.loading')}
+            value={chevronValue(
+              profile?.emailVerified ? <Badge tone="success">{t('profile.verifiedBadge')}</Badge> : undefined,
+            )}
+            onClick={() => navigate('/profile/email')}
           />
         </Card>
         <Card>
           <ListRow
             icon={<IconIdCard size={18} />}
             title={t('citizen.profile.identification.label')}
-            meta={t('citizen.profile.identification.value')}
+            meta={
+              profile?.identityDocument
+                ? `${profile.identityDocument.type} · ${profile.identityDocument.number}`
+                : t('common.empty')
+            }
             value={chevronValue()}
-            onClick={() => undefined}
-          />
-        </Card>
-        <Card>
-          <ListRow
-            icon={<IconPin size={18} />}
-            title={t('citizen.profile.address.label')}
-            meta={MOCK_PROFILE.addressLine}
-            value={chevronValue()}
-            onClick={() => undefined}
+            onClick={() => navigate('/profile/personal')}
           />
         </Card>
         <Card>
           <ListRow
             icon={<IconShield size={18} />}
-            title={t('citizen.profile.security.label')}
-            meta={t('citizen.profile.security.value')}
+            title={t('account.password.label')}
+            meta={t('account.password.meta')}
             value={chevronValue()}
-            onClick={() => setSecurityOpen((open) => !open)}
+            onClick={() => navigate('/profile/password')}
           />
-          {securityOpen ? (
-            <div style={{ paddingTop: 'var(--lx-space-3)' }}>
-              <p className="lx-text-card-title" style={{ margin: '0 0 var(--lx-space-3) 0' }}>
-                {me?.user.mfaEnabled ? t('profile.mfa.enabled') : t('profile.mfa.disabled')}
-              </p>
-              {me?.user.mfaEnabled ? (
-                <Button type="button" variant="secondary" onClick={handleDisableMfa}>
-                  {t('auth.mfa.title')}
-                </Button>
-              ) : (
-                <Button type="button" variant="secondary" onClick={handleSetupMfa}>
-                  {t('profile.mfa.setup')}
-                </Button>
-              )}
-              {otpauthUri ? (
-                <p style={{ wordBreak: 'break-all', marginTop: 'var(--lx-space-2)' }} className="lx-text-meta">
-                  {otpauthUri}
-                </p>
-              ) : null}
-            </div>
-          ) : null}
         </Card>
+        {/* The language row is a full-width block rather than a list row: a dropdown wide enough
+            to hold "Español (Costa Rica)" does not fit in a row's trailing value slot, and squeezing
+            it there collapses the label to one letter per line on a phone. */}
         <Card>
-          <ListRow
-            icon={<IconGlobe size={18} />}
-            title={t('citizen.profile.language.label')}
-            meta={t(LOCALE_NAME_KEY[locale])}
-            value={chevronValue()}
-            onClick={cycleLocale}
-          />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--lx-space-3)' }}>
+            <span className="lx-list-row__icon" aria-hidden="true">
+              <IconGlobe size={18} />
+            </span>
+            <div>
+              <p className="lx-text-card-title" style={{ margin: 0 }}>
+                {t('citizen.profile.language.label')}
+              </p>
+              <p className="lx-text-meta" style={{ margin: 0 }}>
+                {t('account.language.meta')}
+              </p>
+            </div>
+          </div>
+          <div style={{ marginTop: 'var(--lx-space-3)' }}>
+            <LocaleSwitcher />
+          </div>
         </Card>
       </CardStack>
 

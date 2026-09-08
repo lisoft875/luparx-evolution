@@ -2,7 +2,7 @@ import * as React from 'react';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@luparx/auth';
-import { useTranslation } from '@luparx/i18n';
+import { useTranslation, type TranslationKey } from '@luparx/i18n';
 import { ChipGroup, Button, Input, Select, Table } from '@luparx/ui';
 import { PlatformShell } from '../components/PlatformShell';
 
@@ -53,7 +53,7 @@ function CountriesTab(): React.JSX.Element {
         rowKey={(row) => row.code}
         columns={[
           { key: 'code', header: t('platform.catalogs.countries.column.code'), render: (row) => row.code },
-          { key: 'name', header: t('platform.catalogs.countries.column.name'), render: (row) => row.name },
+          { key: 'name', header: t('platform.catalogs.countries.column.name'), render: (row) => t(row.nameKey as TranslationKey) },
           { key: 'dialCode', header: t('platform.catalogs.countries.column.dialCode'), render: (row) => row.dialCode },
           { key: 'currency', header: t('platform.catalogs.countries.column.currency'), render: (row) => row.defaultCurrency },
           { key: 'locale', header: t('platform.catalogs.countries.column.locale'), render: (row) => row.defaultLocale },
@@ -77,6 +77,8 @@ function CountriesTab(): React.JSX.Element {
 
 function CountryScopedTab({ tab }: { tab: 'adminLevels' | 'divisions' | 'documentTypes' }): React.JSX.Element {
   const { t } = useTranslation();
+  /** Catalog label keys are data (CONTRACT.md §5), not statically known TranslationKeys. */
+  const tKey = (key: string): string => t(key as TranslationKey);
   const { apiClient } = useAuth();
   const [countryCode, setCountryCode] = useState('CR');
 
@@ -104,7 +106,7 @@ function CountryScopedTab({ tab }: { tab: 'adminLevels' | 'divisions' | 'documen
           aria-label={t('platform.catalogs.selectCountry')}
           value={countryCode}
           onChange={(e) => setCountryCode(e.target.value)}
-          options={(countriesQuery.data ?? []).map((c) => ({ value: c.code, label: `${c.flagEmoji} ${c.name}`.trim() }))}
+          options={(countriesQuery.data ?? []).map((c) => ({ value: c.code, label: `${c.flagEmoji} ${tKey(c.nameKey)}`.trim() }))}
         />
       </div>
       {tab === 'adminLevels' ? (

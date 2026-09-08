@@ -155,4 +155,29 @@ public final class AdminDtos {
 
     public record CreateExportResponse(String exportId) {
     }
+
+    // --- languages of the municipality (CONTRACT.md v0.3) -----------------------------------------
+
+    /**
+     * One language in {@code GET|PUT /admin/settings/locales}.
+     *
+     * @param locale    BCP 47 tag; canonicalised by the domain before it is stored
+     * @param enabled   whether citizens may pick it
+     * @param isDefault whether it is this municipality\'s fallback; exactly one row carries it
+     * @param sortOrder position in the dropdown; omit to keep the order sent
+     */
+    public record TenantLocaleItem(
+            @NotBlank @Size(max = 35) String locale,
+            @NotNull Boolean enabled,
+            @NotNull Boolean isDefault,
+            Integer sortOrder) {
+    }
+
+    /** {@code GET /admin/settings/locales}. */
+    public record TenantLocalesResponse(List<TenantLocaleItem> locales, String platformDefaultLocale) {
+    }
+
+    /** {@code PUT /admin/settings/locales} — the whole list, replaced as one form. */
+    public record UpdateTenantLocalesRequest(@NotNull @Valid List<TenantLocaleItem> locales) {
+    }
 }

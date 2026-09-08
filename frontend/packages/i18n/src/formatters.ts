@@ -108,3 +108,33 @@ function pluralRulesFor(locale: SupportedLocale): Intl.PluralRules {
 export function pluralCategory(count: number, locale: SupportedLocale): Intl.LDMLPluralRule {
   return pluralRulesFor(locale).select(count);
 }
+
+/**
+ * "lunes a las 7:00" — a weekday plus a clock time, for saying when something resumes
+ * (CONTRACT.md v0.3 §"Horario de cobro": the citizen is told when charging starts again).
+ *
+ * Formatted in the municipality's time zone, not the device's: a schedule set by a municipality
+ * is stated in that municipality's clock, or someone travelling reads the wrong hour. The
+ * weekday is dropped when the instant falls on today, because "today at 7:00" is what a person
+ * would say and "Tuesday at 7:00" makes them check a calendar.
+ */
+export function formatWeekdayTime(
+  value: Date | string,
+  locale: SupportedLocale,
+  options: { timeZone?: string; now?: Date } = {},
+): string {
+  const date = typeof value === 'string' ? new Date(value) : value;
+  const timeZone = options.timeZone;
+  const now = options.now ?? new Date();
+  const sameDay =
+    new Intl.DateTimeFormat('en-CA', { timeZone, dateStyle: 'short' }).format(date) ===
+    new Intl.DateTimeFormat('en-CA', { timeZone, dateStyle: 'short' }).format(now);
+  const time = new Intl.DateTimeFormat(locale, {
+    timeStyle: 'short',
+    hourCycle: localeHourCycle(locale),
+    timeZone,
+  }).format(date);
+  if (sameDay) return time;
+  const weekday = new Intl.DateTimeFormat(locale, { weekday: 'long', timeZone }).format(date);
+  return `${weekday} · ${time}`;
+}

@@ -76,7 +76,7 @@ export function TenantCreatePage(): React.JSX.Element {
             value={countryCode}
             onChange={(e) => handleCountryChange(e.target.value)}
             placeholder={t('common.select.placeholder')}
-            options={(countriesQuery.data ?? []).map((c) => ({ value: c.code, label: `${c.flagEmoji} ${c.name}`.trim() }))}
+            options={(countriesQuery.data ?? []).map((c) => ({ value: c.code, label: `${c.flagEmoji} ${t(c.nameKey as TranslationKey)}`.trim() }))}
           />
         </FormField>
         <FormField label={t('platform.tenants.create.currencyLabel')}>

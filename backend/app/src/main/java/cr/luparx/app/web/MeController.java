@@ -9,17 +9,24 @@ import cr.luparx.core.audit.AuditAction;
 import cr.luparx.core.domain.Portal;
 import cr.luparx.core.error.ErrorCode;
 import cr.luparx.core.error.ForbiddenException;
+import cr.luparx.core.error.ValidationException;
 import cr.luparx.core.id.TenantId;
 import cr.luparx.core.id.UserId;
 import cr.luparx.core.tenant.TenantContext;
 import cr.luparx.core.tenant.TenantContextHolder;
-import cr.luparx.geo.model.AddressInput;
 import cr.luparx.identity.entity.User;
+import cr.luparx.identity.port.NotificationSender;
+import cr.luparx.identity.service.EmailChangeService;
 import cr.luparx.identity.service.IssuedTokens;
 import cr.luparx.identity.service.MfaPolicy;
 import cr.luparx.identity.service.MfaService;
 import cr.luparx.identity.service.MfaSetup;
+import cr.luparx.identity.service.PasswordChangeService;
+import cr.luparx.identity.service.ProfileUpdateCommand;
 import cr.luparx.identity.service.UserDirectoryService;
+import cr.luparx.identity.service.UserProfileService;
+import cr.luparx.app.notification.SmtpNotificationSender;
+import cr.luparx.tenancy.service.EffectiveLocaleService;
 import cr.luparx.tenancy.entity.Tenant;
 import cr.luparx.tenancy.entity.TenantMembership;
 import cr.luparx.tenancy.repository.TenantRepository;
@@ -54,6 +61,12 @@ import java.util.Map;
 public class MeController {
 
     private final UserDirectoryService userDirectoryService;
+    private final UserProfileService userProfileService;
+    private final PasswordChangeService passwordChangeService;
+    private final EmailChangeService emailChangeService;
+    private final EffectiveLocaleService effectiveLocaleService;
+    private final NotificationSender notificationSender;
+    private final SmtpNotificationSender portalUrls;
     private final AccessResolver accessResolver;
     private final TenantRepository tenantRepository;
     private final MfaService mfaService;
@@ -63,6 +76,12 @@ public class MeController {
     private final ResponseMapper mapper;
 
     public MeController(UserDirectoryService userDirectoryService,
+                        UserProfileService userProfileService,
+                        PasswordChangeService passwordChangeService,
+                        EmailChangeService emailChangeService,
+                        EffectiveLocaleService effectiveLocaleService,
+                        NotificationSender notificationSender,
+                        SmtpNotificationSender portalUrls,
                         AccessResolver accessResolver,
                         TenantRepository tenantRepository,
                         MfaService mfaService,
@@ -71,6 +90,12 @@ public class MeController {
                         AuditRecorder auditRecorder,
                         ResponseMapper mapper) {
         this.userDirectoryService = userDirectoryService;
+        this.userProfileService = userProfileService;
+        this.passwordChangeService = passwordChangeService;
+        this.emailChangeService = emailChangeService;
+        this.effectiveLocaleService = effectiveLocaleService;
+        this.notificationSender = notificationSender;
+        this.portalUrls = portalUrls;
         this.accessResolver = accessResolver;
         this.tenantRepository = tenantRepository;
         this.mfaService = mfaService;
@@ -93,32 +118,114 @@ public class MeController {
                 activeTenant);
     }
 
+    /**
+     * Every personal datum of CONTRACT.md §2 except the email address (v0.3, "Perfil editable").
+     *
+     * <p>The controller does no validating of its own beyond the structural annotations: the rules
+     * are {@link UserProfileService}'s, and they are the rules registration applies. A preferred
+     * language the active municipality does not offer is refused here rather than stored, because a
+     * stored preference nobody can serve is a silent downgrade the citizen never asked for.</p>
+     */
     @PutMapping("/me")
-    @Operation(summary = "Update the editable part of one's own profile")
+    @Operation(summary = "Update one's own profile: name, document, address, phone, nationality, birth date")
     public SessionDtos.UserProfileResponse updateMe(@PathVariable String portal,
                                                     @Valid @RequestBody SessionDtos.UpdateProfileRequest request) {
         TenantContext context = requireContext(portal);
-        AddressInput address = request.address() == null ? null : new AddressInput(
-                request.address().countryCode(),
-                request.address().level1Id(),
-                request.address().level2Id(),
-                request.address().level3Id(),
-                request.address().line1(),
-                request.address().line2(),
-                request.address().postalCode());
-        User user = userDirectoryService.updateProfile(
-                context.userId(),
+        if (request.locale() != null && !request.locale().isBlank() && context.tenantId() != null
+                && !effectiveLocaleService.isOfferedBy(context.tenantId(), request.locale())) {
+            throw new ValidationException("locale", ErrorCode.LOCALE_NOT_SUPPORTED, "error.locale.notOffered");
+        }
+        ProfileUpdateCommand command = new ProfileUpdateCommand(
                 request.givenName(),
                 request.familyName(),
                 request.secondFamilyName(),
+                request.identityDocument() == null ? null : request.identityDocument().countryCode(),
+                request.identityDocument() == null ? null : request.identityDocument().type(),
+                request.identityDocument() == null ? null : request.identityDocument().number(),
+                request.address() == null ? null : request.address().countryCode(),
+                request.address() == null ? null : request.address().level1Id(),
+                request.address() == null ? null : request.address().level2Id(),
+                request.address() == null ? null : request.address().level3Id(),
+                request.address() == null ? null : request.address().line1(),
+                request.address() == null ? null : request.address().line2(),
+                request.address() == null ? null : request.address().postalCode(),
                 request.phone() == null ? null : request.phone().countryCode(),
                 request.phone() == null ? null : request.phone().nationalNumber(),
-                address,
                 request.nationalityCode(),
+                request.birthDate(),
                 request.locale(),
                 request.timeZone());
-        auditRecorder.record(AuditAction.USER_UPDATED, "user", user.getId().toString(), Map.of("self", "true"));
+        User user = userProfileService.update(context.userId(), command);
+        // What changed is audited by section, never by value: an audit row must not become a second
+        // copy of somebody's identity document (SECURITY.md §11).
+        auditRecorder.record(AuditAction.USER_UPDATED, "user", user.getId().toString(),
+                Map.of("self", "true",
+                        "document", String.valueOf(request.identityDocument() != null),
+                        "address", String.valueOf(request.address() != null),
+                        "phone", String.valueOf(request.phone() != null),
+                        "birthDate", String.valueOf(request.birthDate() != null)));
         return mapper.toProfile(user);
+    }
+
+    /**
+     * Changes one's own password (CONTRACT.md v0.3 §3).
+     *
+     * <p>Every other session of this person is revoked and {@code credentials_version} is bumped, so
+     * a token issued before this moment stops being accepted on its next call. That matters more now
+     * than it used to: since v0.3 a refresh token does not expire on its own, so a password change is
+     * one of the few things that actually ends a session, and it has to reach the device the password
+     * is being changed because of.</p>
+     *
+     * <p>The caller is handed a brand new pair rather than being signed out with everybody else. The
+     * browser doing the change proved it holds the current password one line ago; making that person
+     * log in again would teach them that changing a password is a chore, which is how weak passwords
+     * survive.</p>
+     */
+    @PostMapping("/me/password")
+    @Operation(summary = "Change one's own password; every other session is revoked")
+    public SessionDtos.PasswordChangedResponse changePassword(
+            @PathVariable String portal,
+            @Valid @RequestBody SessionDtos.ChangePasswordRequest request,
+            HttpServletRequest httpRequest) {
+        TenantContext context = requireContext(portal);
+        User user = passwordChangeService.change(context.userId(), request.currentPassword(),
+                request.newPassword());
+        auditRecorder.record(AuditAction.USER_PASSWORD_CHANGED, "user", user.getId().toString(),
+                Map.of("self", "true"));
+        IssuedTokens tokens = sessionService.issue(user, context.portal(), context.tenantId(),
+                mfaService.isActive(context.userId()), httpRequest);
+        return new SessionDtos.PasswordChangedResponse(mapper.toTokensEnvelope(tokens).tokens());
+    }
+
+    /**
+     * Starts a change of email address (CONTRACT.md v0.3, "Perfil editable").
+     *
+     * <p>Nothing about the account moves here. A single-use link is sent to the <b>new</b> address and
+     * the change happens when it is opened from there — proving the person can read the mailbox they
+     * are asking to move to. Sending it to the old address instead would prove nothing about the new
+     * one, and letting a {@code PUT} do it would let anyone holding a session redirect password
+     * recovery to a mailbox of their own.</p>
+     */
+    @PostMapping("/me/email")
+    @Operation(summary = "Request a change of email address; confirmed from the new mailbox")
+    public SessionDtos.EmailChangeRequestedResponse changeEmail(
+            @PathVariable String portal,
+            @Valid @RequestBody SessionDtos.ChangeEmailRequest request) {
+        TenantContext context = requireContext(portal);
+        EmailChangeService.Requested requested =
+                emailChangeService.request(context.userId(), request.newEmail());
+        notificationSender.send(
+                requested.newEmail(),
+                effectiveLocaleService.resolve(requested.user().getLocale(), context.tenantId()),
+                "email.changeEmail",
+                Map.of("name", requested.user().getGivenName(),
+                        "link", portalUrls.portalBaseUrl(context.portal().slug())
+                                + "/email/change/confirm?token=" + requested.token()));
+        // The address it is moving TO is the point of the row; it is the person's own datum and the
+        // only thing that makes this trail readable when they later ask what happened to their login.
+        auditRecorder.record(AuditAction.USER_EMAIL_CHANGE_REQUESTED, "user",
+                requested.user().getId().toString(), Map.of("newEmail", requested.newEmail()));
+        return new SessionDtos.EmailChangeRequestedResponse(requested.newEmail());
     }
 
     @GetMapping("/me/memberships")

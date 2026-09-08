@@ -346,7 +346,10 @@ DELETE /api/v1/citizen/vehicles/{id}            (rechaza si tiene sesión activa
 POST   /api/v1/citizen/vehicles/{id}/primary
 
 GET    /api/v1/citizen/parking/policy           política vigente del tenant activo
-POST   /api/v1/citizen/parking/quote            {zoneId, minutes} -> {amount, creditMinutesApplied, payable}
+GET    /api/v1/citizen/parking/zones            (v0.3) zonas operadas del tenant activo, con su tarifa vigente
+GET    /api/v1/citizen/parking/space-format     (v0.3) {prefix, digits, allowLetters, pattern, example}
+GET    /api/v1/citizen/parking/schedule         (v0.3) horario de cobro, si se cobra ahora y cuándo se reanuda
+POST   /api/v1/citizen/parking/quote            {zoneId, minutes} -> {minutes, chargeableMinutes, amount, creditMinutesApplied, payable}
 GET    /api/v1/citizen/parking/sessions?status=ACTIVE|ALL
 POST   /api/v1/citizen/parking/sessions         {zoneId, spaceCode, vehicleId, minutes}  (Idempotency-Key)
 GET    /api/v1/citizen/parking/sessions/{id}
@@ -357,10 +360,25 @@ GET    /api/v1/citizen/time-credits             minutos a favor y su vencimiento
 
 GET/PUT /api/v1/admin/parking/policy            (permiso TENANT_MANAGE)
 GET/PUT /api/v1/admin/parking/zones|rates
+GET/PUT /api/v1/admin/parking/space-format     (v0.3, permiso TENANT_MANAGE)
+GET/PUT /api/v1/admin/parking/schedule         (v0.3, permiso TENANT_MANAGE)
+POST    /api/v1/admin/parking/spaces           (v0.3) {zoneId, code}                     (Idempotency-Key)
 ```
 
+`GET /citizen/parking/zones` y `GET /citizen/parking/space-format` existen porque `quote` e iniciar
+sesión piden `zoneId` y un código de bahía, y el listado de zonas y el formato del código sólo vivían
+en el portal de administración, detrás de `TENANT_MANAGE`: sin ellos un ciudadano recién registrado no
+tiene de dónde sacar una zona ni cómo saber qué forma tiene un código. Ambos van filtrados por el
+tenant del token, devuelven sólo zonas **operadas**, y son cacheables como catálogo pero siempre
+`private`: son la configuración de una municipalidad resuelta para un usuario autenticado.
+
+La lista de zonas **no se pagina**: una zona es un sector que opera la municipalidad y su cantidad la
+acota cómo está organizada la ciudad, no cuántos ciudadanos tenga. Lo que sí crece sin techo son las
+bahías dentro de una zona, y ésas sólo se leen por código o por página.
+
 Errores estables: `SESSION_ALREADY_ACTIVE_FOR_VEHICLE`, `SPACE_OCCUPIED`, `EXTENSION_DISABLED`,
-`EARLY_FINISH_DISABLED`, `EXTENSION_EXCEEDS_MAX`, `INSUFFICIENT_BALANCE`, `INVALID_INCREMENT`.
+`EARLY_FINISH_DISABLED`, `EXTENSION_EXCEEDS_MAX`, `INSUFFICIENT_BALANCE`, `INVALID_INCREMENT`, y
+desde v0.3 `PARKING_SPACE_CODE_INVALID` y `OUTSIDE_CHARGING_HOURS`.
 
 ## Invariantes
 

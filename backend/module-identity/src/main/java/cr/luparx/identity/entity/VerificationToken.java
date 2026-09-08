@@ -43,18 +43,31 @@ public class VerificationToken {
     @Column(name = "used_at")
     private Instant usedAt;
 
+    /**
+     * For {@link VerificationPurpose#EMAIL_CHANGE} only: the address the account moves to once this
+     * token is confirmed. Null for every other purpose, and a CHECK in V12_0 keeps it that way.
+     */
+    @Column(name = "new_email", length = 320)
+    private String newEmail;
+
     protected VerificationToken() {
         // for JPA
     }
 
     public VerificationToken(UUID id, UUID userId, VerificationPurpose purpose, String tokenHash, Instant createdAt,
                              Instant expiresAt) {
+        this(id, userId, purpose, tokenHash, createdAt, expiresAt, null);
+    }
+
+    public VerificationToken(UUID id, UUID userId, VerificationPurpose purpose, String tokenHash, Instant createdAt,
+                             Instant expiresAt, String newEmail) {
         this.id = id;
         this.userId = userId;
         this.purpose = purpose;
         this.tokenHash = tokenHash;
         this.createdAt = createdAt;
         this.expiresAt = expiresAt;
+        this.newEmail = newEmail;
     }
 
     public UUID getId() {
@@ -83,6 +96,10 @@ public class VerificationToken {
 
     public Instant getUsedAt() {
         return usedAt;
+    }
+
+    public String getNewEmail() {
+        return newEmail;
     }
 
     public boolean isUsable(Instant now) {

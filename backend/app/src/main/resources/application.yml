@@ -127,6 +127,22 @@ platform:
       # Days a credited minute stays usable; 0 means it never expires.
       credit-expiry-days: ${PARKING_CREDIT_EXPIRY_DAYS:90}
       grace-minutes: ${PARKING_GRACE_MINUTES:5}
+      # --- charging hours (CONTRACT.md v0.3) ---
+      # Defaults of THIS deployment, applied only to a municipality that has not written its own
+      # timetable; the real one lives in `parking_schedules`, one row per municipality. A day left
+      # out of the list is a day that is not charged, which is how Sunday ends up free here.
+      # Everything is evaluated in the MUNICIPALITY's time zone, never the device's.
+      charges-all-day: ${PARKING_CHARGES_ALL_DAY:false}
+      charging-weekdays: ${PARKING_CHARGING_WEEKDAYS:MONDAY,TUESDAY,WEDNESDAY,THURSDAY,FRIDAY,SATURDAY}
+      charging-starts-at: ${PARKING_CHARGING_STARTS_AT:07:00}
+      # 24:00 would mean "until the day ends"; 18:00 is when this deployment's launch municipality closes.
+      charging-ends-at: ${PARKING_CHARGING_ENDS_AT:18:00}
+      # --- bay code format (CONTRACT.md v0.3) ---
+      # Four plain digits, no prefix: the bays San José paints, 0001-5000. A municipality numbering
+      # its bays "A-12" or "LUP-0001" edits its own row in `parking_space_formats`.
+      space-code-prefix: ${PARKING_SPACE_CODE_PREFIX:}
+      space-code-digits: ${PARKING_SPACE_CODE_DIGITS:4}
+      space-code-allow-letters: ${PARKING_SPACE_CODE_ALLOW_LETTERS:false}
 
 luparx:
   jwt:
@@ -137,7 +153,13 @@ luparx:
     # Retired keys stay published while their tokens expire: "<kid>:<path>" per entry.
     previous-public-key-paths: ${JWT_PREVIOUS_PUBLIC_KEYS:}
     access-token-ttl: ${JWT_ACCESS_TOKEN_TTL:15m}
-    refresh-token-ttl: ${JWT_REFRESH_TOKEN_TTL:30d}
+    # 0 = the refresh token never expires, so a signed-in citizen stays signed in (CONTRACT.md v0.3
+    # §2). It is stored without an `expires_at` and is never refused for being old. What still ends a
+    # session is unchanged and deliberate: logging out, changing the password (which bumps
+    # `credentials_version` and revokes every token), and an administrator blocking the account.
+    # Rotation and reuse detection are untouched — every refresh consumes its token, and a replayed
+    # one still revokes the whole family. Set a duration (e.g. 30d) to bring expiry back.
+    refresh-token-ttl: ${JWT_REFRESH_TOKEN_TTL:0}
     mfa-challenge-ttl: ${JWT_MFA_CHALLENGE_TTL:5m}
     oauth-state-ttl: ${JWT_OAUTH_STATE_TTL:10m}
     # Sólo el perfil dev lo enciende: sin llaves, no se arranca.
@@ -146,11 +168,17 @@ luparx:
     ip-hash-pepper: ${IP_HASH_PEPPER:}
     mfa-encryption-key: ${MFA_TOTP_ENCRYPTION_KEY:}
     mfa-issuer-name: ${MFA_ISSUER_NAME:LupaRX}
-    # Portals that require a second factor (CONTRACT.md §3). A list, not a constant in the code: a
-    # deployment decides it. Removing a portal from this list weakens the account protection of that
-    # portal for everyone, so the only environment allowed to shorten it is a developer laptop
-    # (see application-dev.yml). An empty list is announced with a WARN on every start.
-    mfa-enforced-portals: ${MFA_ENFORCED_PORTALS:admin,inspector,platform}
+    # Portals that require a second factor. EMPTY BY DEFAULT since CONTRACT.md v0.3 §1: no portal
+    # asks for TOTP, on any profile, and the application says so with a one-line INFO at start.
+    #
+    # RISK ACCEPTED IN WRITING BY THE PRODUCT: the platform back-office administers every
+    # municipality with an email address and a password alone. What compensates for it today is the
+    # password policy, the database-backed attempt limiter, and — before this is exposed to the open
+    # internet — restricting it by IP.
+    #
+    # The TOTP code is intact behind this list. Turning MFA back on for a portal is adding its slug
+    # here (e.g. "admin,inspector,platform"), not rewriting the module.
+    mfa-enforced-portals: ${MFA_ENFORCED_PORTALS:}
     password-min-length: ${PASSWORD_MIN_LENGTH:10}
     login-window: ${LOGIN_ATTEMPT_WINDOW:15m}
     login-max-per-email: ${LOGIN_MAX_FAILURES_PER_EMAIL:5}

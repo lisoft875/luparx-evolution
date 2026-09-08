@@ -25,7 +25,7 @@ import type {
 export const MOCK_COUNTRIES: CountryCatalogEntry[] = [
   {
     code: 'CR',
-    name: 'Costa Rica',
+    nameKey: 'country.CR',
     dialCode: '+506',
     flagEmoji: '🇨🇷',
     defaultLocale: 'es-CR',
@@ -34,7 +34,7 @@ export const MOCK_COUNTRIES: CountryCatalogEntry[] = [
   },
   {
     code: 'US',
-    name: 'United States',
+    nameKey: 'country.US',
     dialCode: '+1',
     flagEmoji: '🇺🇸',
     defaultLocale: 'en-US',
@@ -43,7 +43,7 @@ export const MOCK_COUNTRIES: CountryCatalogEntry[] = [
   },
   {
     code: 'PA',
-    name: 'Panamá',
+    nameKey: 'country.PA',
     dialCode: '+507',
     flagEmoji: '🇵🇦',
     defaultLocale: 'es-CR',
@@ -508,15 +508,19 @@ export const mockParkingSessions: MockParkingSessionRecord[] = [
     tenantId: 'tenant-sanjose',
     zoneId: 'zone-centro',
     zoneName: 'Centro',
+    spaceId: 'space-lup-0001',
     spaceCode: 'LUP-0001',
     vehicleId: 'vehicle-bhl019',
     plateSnapshot: 'BHL019',
     minutes: 60,
+    remainingMinutes: 55,
     amountMinor: 55020,
     currencyCode: 'CRC',
+    creditMinutesApplied: 0,
     status: 'ACTIVE',
     startedAt: new Date(now - 5 * 60_000).toISOString(),
     expiresAt: new Date(now + 55 * 60_000).toISOString(),
+    endedAt: null,
   },
 ];
 

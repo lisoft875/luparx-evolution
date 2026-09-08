@@ -1,64 +1,46 @@
 import * as React from 'react';
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
 import { useAuth } from '@luparx/auth';
-import { useTranslation, formatDate } from '@luparx/i18n';
-import { Alert, Button, PageLayout } from '@luparx/ui';
+import { ChangeEmailForm, ChangePasswordForm, LocaleSwitcher, ProfileForm } from '@luparx/features';
+import { useTranslation } from '@luparx/i18n';
+import { Card, CardStack, FormField, PageLayout, SectionHeader } from '@luparx/ui';
 
+/**
+ * "My account" for the inspector portal (CONTRACT.md v0.3 §"Perfil editable"): the same personal
+ * fields as registration, the e-mail behind its own verified flow, and the password behind its
+ * own. No two-step verification section — no portal enforces MFA (v0.3 §1), and the interface
+ * does not offer a setting the platform does not act on.
+ */
 export function ProfilePage(): React.JSX.Element {
-  const { t, locale } = useTranslation();
-  const { me, apiClient, refreshProfile } = useAuth();
-  const [otpauthUri, setOtpauthUri] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  async function handleSetupMfa(): Promise<void> {
-    setError(null);
-    try {
-      const result = await apiClient.session.mfaSetup();
-      setOtpauthUri(result.otpauthUri);
-    } catch {
-      setError(t('common.error.generic'));
-    }
-  }
-
-  async function handleDisableMfa(): Promise<void> {
-    setError(null);
-    try {
-      // In a full flow this collects a fresh TOTP code first; simplified here for the v0.1 stub.
-      await apiClient.session.mfaDisable({ code: '000000' });
-      await refreshProfile();
-    } catch {
-      setError(t('common.error.generic'));
-    }
-  }
+  const { t } = useTranslation();
+  const { me } = useAuth();
 
   return (
-    <PageLayout header={<Link to="/">{t('nav.home')}</Link>}>
+    <PageLayout>
       <h1>{t('profile.title')}</h1>
-      {error ? <Alert tone="danger">{error}</Alert> : null}
-      {me ? (
-        <dl>
-          <dt>{t('user.field.givenName')}</dt>
-          <dd>{me.user.givenName}</dd>
-          <dt>{t('user.field.email')}</dt>
-          <dd>{me.user.email}</dd>
-          <dt>{t('user.field.birthDate')}</dt>
-          <dd>{formatDate(me.user.birthDate, locale)}</dd>
-        </dl>
-      ) : null}
-      <section>
-        <h2>{me?.user.mfaEnabled ? t('profile.mfa.enabled') : t('profile.mfa.disabled')}</h2>
-        {me?.user.mfaEnabled ? (
-          <Button type="button" variant="secondary" onClick={handleDisableMfa}>
-            {t('auth.mfa.title')}
-          </Button>
-        ) : (
-          <Button type="button" onClick={handleSetupMfa}>
-            {t('profile.mfa.setup')}
-          </Button>
-        )}
-        {otpauthUri ? <p style={{ wordBreak: 'break-all' }}>{otpauthUri}</p> : null}
-      </section>
+      {me?.user ? (
+        <CardStack>
+          <Card>
+            <SectionHeader title={t('citizen.profile.personalData.label')} />
+            <ProfileForm profile={me.user} />
+          </Card>
+          <Card>
+            <SectionHeader title={t('account.email.title')} />
+            <ChangeEmailForm currentEmail={me.user.email} />
+          </Card>
+          <Card>
+            <SectionHeader title={t('account.password.label')} />
+            <ChangePasswordForm />
+          </Card>
+          <Card>
+            <SectionHeader title={t('citizen.profile.language.label')} />
+            <FormField label={t('common.languageSwitcher.label')} hint={t('account.language.meta')}>
+              {({ inputId }) => <LocaleSwitcher id={inputId} />}
+            </FormField>
+          </Card>
+        </CardStack>
+      ) : (
+        <p>{t('common.loading')}</p>
+      )}
     </PageLayout>
   );
 }

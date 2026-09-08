@@ -7,12 +7,14 @@ import { mockFetch } from '@luparx/api-client/mocks';
 import { API_BASE_URL, PORTAL, USE_MOCKS } from './env';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
-import { MfaPage } from './pages/MfaPage';
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import { TenantSelectPage } from './pages/TenantSelectPage';
 import { HomePage } from './pages/HomePage';
 import { ProfilePage } from './pages/ProfilePage';
+import { SettingsLocalesPage } from './pages/SettingsLocalesPage';
+import { SettingsSpaceFormatPage } from './pages/SettingsSpaceFormatPage';
+import { SettingsSchedulePage } from './pages/SettingsSchedulePage';
 import { UsersListPage } from './pages/UsersListPage';
 import { UserDetailPage } from './pages/UserDetailPage';
 import { AuditPage } from './pages/AuditPage';
@@ -38,7 +40,6 @@ export function App(): React.JSX.Element {
             <Routes>
               <Route path="/login" element={<LoginPage />} />
               <Route path="/register" element={<RegisterPage />} />
-              <Route path="/mfa" element={<MfaPage />} />
               <Route path="/forgot-password" element={<ForgotPasswordPage />} />
               <Route path="/reset-password" element={<ResetPasswordPage />} />
               <Route path="/select-tenant" element={<TenantSelectPage />} />
@@ -87,6 +88,30 @@ export function App(): React.JSX.Element {
                 element={
                   <RequireAuth loginPath="/login">
                     <ReportsPage />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/settings/locales"
+                element={
+                  <RequireAuth loginPath="/login">
+                    <SettingsLocalesPage />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/settings/space-format"
+                element={
+                  <RequireAuth loginPath="/login">
+                    <SettingsSpaceFormatPage />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/settings/schedule"
+                element={
+                  <RequireAuth loginPath="/login">
+                    <SettingsSchedulePage />
                   </RequireAuth>
                 }
               />

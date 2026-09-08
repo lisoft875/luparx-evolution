@@ -7,21 +7,29 @@ import cr.luparx.core.id.TenantId;
 import cr.luparx.core.tenant.TenantContextHolder;
 import cr.luparx.parking.entity.ParkingPolicy;
 import cr.luparx.parking.entity.ParkingRate;
+import cr.luparx.parking.entity.ParkingScheduleException;
+import cr.luparx.parking.entity.ParkingSpace;
+import cr.luparx.parking.entity.ParkingSpaceFormat;
 import cr.luparx.parking.entity.ParkingZone;
 import cr.luparx.parking.service.ParkingCatalogService;
 import cr.luparx.parking.service.ParkingPolicyService;
+import cr.luparx.parking.service.ParkingScheduleService;
+import cr.luparx.parking.service.ParkingSpaceFormatService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.Clock;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -42,17 +50,26 @@ public class AdminParkingController {
 
     private final ParkingPolicyService policyService;
     private final ParkingCatalogService catalogService;
+    private final ParkingSpaceFormatService spaceFormatService;
+    private final ParkingScheduleService scheduleService;
     private final ParkingMapper mapper;
     private final AuditRecorder auditRecorder;
+    private final Clock clock;
 
     public AdminParkingController(ParkingPolicyService policyService,
                                   ParkingCatalogService catalogService,
+                                  ParkingSpaceFormatService spaceFormatService,
+                                  ParkingScheduleService scheduleService,
                                   ParkingMapper mapper,
-                                  AuditRecorder auditRecorder) {
+                                  AuditRecorder auditRecorder,
+                                  Clock clock) {
         this.policyService = policyService;
         this.catalogService = catalogService;
+        this.spaceFormatService = spaceFormatService;
+        this.scheduleService = scheduleService;
         this.mapper = mapper;
         this.auditRecorder = auditRecorder;
+        this.clock = clock;
     }
 
     // --- policy ----------------------------------------------------------------------------------
@@ -147,5 +164,125 @@ public class AdminParkingController {
                         "amountMinor", String.valueOf(rate.getAmountMinor()),
                         "minutes", String.valueOf(rate.getMinutes())));
         return mapper.toRate(rate);
+    }
+
+    // --- bays and their code format (CONTRACT.md v0.3) ---------------------------------------------
+
+    @GetMapping("/space-format")
+    @PreAuthorize("hasAuthority('PERM_TENANT_MANAGE')")
+    @Operation(summary = "The shape of a bay code in this municipality, with its pattern and example")
+    public ParkingDtos.ParkingSpaceFormatResponse spaceFormat() {
+        return mapper.toSpaceFormat(spaceFormatService.require(TenantContextHolder.requireTenantId()));
+    }
+
+    /**
+     * Changes the shape of a bay code.
+     *
+     * <p>Existing bays are <b>not</b> renumbered or re-validated: their codes are painted on the
+     * street and a change here describes what is painted next, not a retroactive claim about what was
+     * painted before. A municipality that renumbers its bays creates the new ones and takes the old
+     * ones out of service, which is the same thing that happens on the street.</p>
+     */
+    @PutMapping("/space-format")
+    @PreAuthorize("hasAuthority('PERM_TENANT_MANAGE')")
+    @Operation(summary = "Replace the bay code format of this municipality")
+    public ParkingDtos.ParkingSpaceFormatResponse updateSpaceFormat(
+            @Valid @RequestBody ParkingDtos.UpdateParkingSpaceFormatRequest request) {
+        TenantId tenantId = TenantContextHolder.requireTenantId();
+        ParkingSpaceFormat format = spaceFormatService.replace(tenantId, request.prefix(),
+                request.digits().intValue(), request.allowLetters().booleanValue(), request.pattern(),
+                request.example());
+        auditRecorder.record(AuditAction.PARKING_SPACE_FORMAT_UPDATED, "parking-space-format",
+                tenantId.toString(), Map.of("pattern", format.getPattern(), "example", format.getExample()));
+        return mapper.toSpaceFormat(format);
+    }
+
+    @PostMapping("/spaces")
+    @PreAuthorize("hasAuthority('PERM_TENANT_MANAGE')")
+    @Operation(summary = "Add a bay to a zone; its code is validated against this municipality's format")
+    public ParkingDtos.ParkingSpaceResponse createSpace(
+            @Valid @RequestBody ParkingDtos.CreateParkingSpaceRequest request) {
+        TenantId tenantId = TenantContextHolder.requireTenantId();
+        ParkingSpace space = catalogService.createSpace(tenantId, request.zoneId(), request.code());
+        auditRecorder.record(AuditAction.PARKING_SPACE_CREATED, "parking-space", space.getId().toString(),
+                Map.of("code", space.getCode(), "zoneId", space.getZoneId().toString()));
+        return mapper.toSpace(space);
+    }
+
+    // --- charging schedule (CONTRACT.md v0.3) ------------------------------------------------------
+
+    @GetMapping("/schedule")
+    @PreAuthorize("hasAuthority('PERM_TENANT_MANAGE')")
+    @Operation(summary = "When this municipality charges: weekly bands, dated exceptions and its time zone")
+    public ParkingDtos.ParkingScheduleResponse schedule() {
+        return readSchedule(TenantContextHolder.requireTenantId());
+    }
+
+    /**
+     * Replaces the whole timetable, as one form.
+     *
+     * <p>Wholesale for the same reason the policy is: an administrator edits a timetable as one
+     * screen, and a partial update leaves "what does an absent band mean?" unanswerable. Exceptions
+     * are a forward-looking calendar — a stay that was already priced is never re-priced — so this
+     * rewrites the plan, never the record.</p>
+     */
+    @PutMapping("/schedule")
+    @PreAuthorize("hasAuthority('PERM_TENANT_MANAGE')")
+    @Operation(summary = "Replace the charging timetable of this municipality")
+    public ParkingDtos.ParkingScheduleResponse updateSchedule(
+            @Valid @RequestBody ParkingDtos.UpdateParkingScheduleRequest request) {
+        TenantId tenantId = TenantContextHolder.requireTenantId();
+        List<ParkingScheduleService.BandEntry> bands = new ArrayList<>();
+        if (request.week() != null) {
+            for (ParkingDtos.ChargingDayDto day : request.week()) {
+                if (day == null || day.bands() == null) {
+                    continue;
+                }
+                for (ParkingDtos.ChargingBandDto band : day.bands()) {
+                    bands.add(new ParkingScheduleService.BandEntry(day.weekday(), band.startMinute(),
+                            band.endMinute()));
+                }
+            }
+        }
+        List<ParkingScheduleService.ExceptionEntry> exceptions = new ArrayList<>();
+        if (request.exceptions() != null) {
+            for (ParkingDtos.ChargingExceptionDto exception : request.exceptions()) {
+                if (exception == null) {
+                    continue;
+                }
+                List<ParkingScheduleService.BandEntry> exceptionBands = new ArrayList<>();
+                if (exception.bands() != null) {
+                    for (ParkingDtos.ChargingBandDto band : exception.bands()) {
+                        exceptionBands.add(new ParkingScheduleService.BandEntry(null, band.startMinute(),
+                                band.endMinute()));
+                    }
+                }
+                exceptions.add(new ParkingScheduleService.ExceptionEntry(
+                        exception.date(),
+                        exception.charges() != null && exception.charges().booleanValue(),
+                        exception.chargesAllDay() != null && exception.chargesAllDay().booleanValue(),
+                        exception.label(),
+                        exceptionBands));
+            }
+        }
+        scheduleService.replace(tenantId, request.chargesAllDay().booleanValue(), bands, exceptions);
+        auditRecorder.record(AuditAction.PARKING_SCHEDULE_UPDATED, "parking-schedule", tenantId.toString(),
+                Map.of("chargesAllDay", String.valueOf(request.chargesAllDay()),
+                        "bands", String.valueOf(bands.size()),
+                        "exceptions", String.valueOf(exceptions.size())));
+        return readSchedule(tenantId);
+    }
+
+    /** One read shared by the GET and by the answer to the PUT, so both always agree. */
+    private ParkingDtos.ParkingScheduleResponse readSchedule(TenantId tenantId) {
+        Instant now = clock.instant();
+        List<ParkingScheduleException> exceptions = scheduleService.exceptions(tenantId);
+        return mapper.toSchedule(
+                scheduleService.require(tenantId),
+                scheduleService.slots(tenantId),
+                exceptions,
+                scheduleService.exceptionBands(exceptions),
+                scheduleService.scheduleFor(tenantId, now, now.plusSeconds(370L * 24L * 3600L)),
+                now);
     }
 }

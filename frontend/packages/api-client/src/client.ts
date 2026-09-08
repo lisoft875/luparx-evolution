@@ -1,4 +1,15 @@
 import { HttpClient, type HttpClientOptions } from './http';
+import {
+  toParkingSession,
+  toParkingSessions,
+  toQuote,
+  toTimeCredits,
+  toWallet,
+  type WireParkingSession,
+  type WireQuote,
+  type WireTimeCredits,
+  type WireWallet,
+} from './wire';
 import type { PagedResponse, PageParams } from './types/http';
 import type {
   AdminUserDetail,
@@ -19,10 +30,10 @@ import type {
   CreateTenantRequest,
   CreateVehicleRequest,
   DocumentTypeCatalogEntry,
+  ChangeEmailRequest,
+  ChangePasswordRequest,
   ExtendParkingSessionRequest,
-  ExtendParkingSessionResponse,
   FeatureFlag,
-  FinishParkingSessionResponse,
   ForgotPasswordRequest,
   LoginRequest,
   LoginResponse,
@@ -37,7 +48,10 @@ import type {
   ParkingQuoteRequest,
   ParkingQuoteResponse,
   ParkingSession,
+  ParkingSchedule,
   ParkingSessionsQuery,
+  ParkingSpaceFormat,
+  ParkingZone,
   PlatformAuditEventsQuery,
   PlatformCountry,
   PlatformRegisteredUsersReportQuery,
@@ -62,9 +76,15 @@ import type {
   SystemJob,
   TenantAdmin,
   TenantCatalogEntry,
+  TenantLocale,
+  TenantLocaleSettings,
   TenantSettings,
   TimeCreditsResponse,
   UpdateMembershipRequest,
+  UpdateParkingScheduleRequest,
+  UpdateParkingSpaceFormatRequest,
+  UpdateProfileRequest,
+  UpdateTenantLocalesRequest,
   UpdateTenantStatusRequest,
   UpdateVehicleRequest,
   UpsertAdminLevelRequest,
@@ -117,6 +137,12 @@ export class ApiClient {
       this.http.request('GET', `/api/v1/catalog/countries/${countryCode}/document-types`, { auth: false }),
     tenants: (country?: string): Promise<TenantCatalogEntry[]> =>
       this.http.request('GET', '/api/v1/catalog/tenants', { auth: false, query: { country } }),
+    /**
+     * Locales a municipality has enabled (CONTRACT.md v0.3 §"Idiomas por municipalidad").
+     * Public on purpose: the login screen needs it before anyone has authenticated.
+     */
+    tenantLocales: (tenantId: string): Promise<TenantLocale[]> =>
+      this.http.request('GET', `/api/v1/catalog/tenants/${tenantId}/locales`, { auth: false }),
   };
 
   // ---- Auth (one root per portal) ------------------------------------------------------------
@@ -148,8 +174,19 @@ export class ApiClient {
 
   readonly session = {
     me: (): Promise<MeResponse> => this.http.request('GET', `/api/v1/${this.portal}/me`),
-    updateMe: (payload: Partial<RegisterRequest>): Promise<MeResponse> =>
+    /**
+     * Every personal field of CONTRACT.md §2 (v0.3 §"Perfil editable"). The e-mail is deliberately
+     * NOT part of this payload: changing it is changing the identity you sign in with, so it goes
+     * through {@link changeEmail} and its verification.
+     */
+    updateMe: (payload: UpdateProfileRequest): Promise<MeResponse> =>
       this.http.request('PUT', `/api/v1/${this.portal}/me`, { body: payload }),
+    /** Requires the current password; revokes every other session (CONTRACT.md v0.3 §1.3). */
+    changePassword: (payload: ChangePasswordRequest): Promise<void> =>
+      this.http.request('POST', `/api/v1/${this.portal}/me/password`, { body: payload }),
+    /** Starts the e-mail change: the new address has to be verified before it replaces the current one. */
+    changeEmail: (payload: ChangeEmailRequest): Promise<void> =>
+      this.http.request('POST', `/api/v1/${this.portal}/me/email`, { body: payload }),
     memberships: (): Promise<MembershipSummary[]> =>
       this.http.request('GET', `/api/v1/${this.portal}/me/memberships`),
     switchTenant: (payload: SessionTenantRequest): Promise<RefreshResponse> =>
@@ -228,35 +265,95 @@ export class ApiClient {
   // ---- Citizen: parking domain (CONTRACT.md v0.2) ---------------------------------------------
   // Amount/credit math always happens server-side (v0.2 "Invariantes") — the client only ever
   // requests a quote to display it. Start/extend/finish all carry `Idempotency-Key` so a double
-  // tap can never charge twice.
+  // tap can never charge twice. Everything the server returns goes through ./wire: money arrives
+  // as `{amountMinor, currencyCode}` and lists arrive inside a page envelope, and no screen should
+  // have to know that.
 
   readonly citizenParking = {
     policy: (): Promise<ParkingPolicy> => this.http.request('GET', '/api/v1/citizen/parking/policy'),
-    quote: (payload: ParkingQuoteRequest): Promise<ParkingQuoteResponse> =>
-      this.http.request('POST', '/api/v1/citizen/parking/quote', { body: payload }),
-    sessions: (query: ParkingSessionsQuery = {}): Promise<ParkingSession[]> =>
-      this.http.request('GET', '/api/v1/citizen/parking/sessions', { query }),
-    session: (id: string): Promise<ParkingSession> =>
-      this.http.request('GET', `/api/v1/citizen/parking/sessions/${id}`),
-    start: (payload: StartParkingSessionRequest): Promise<ParkingSession> =>
-      this.http.request('POST', '/api/v1/citizen/parking/sessions', { body: payload, idempotent: true }),
-    extend: (id: string, payload: ExtendParkingSessionRequest): Promise<ExtendParkingSessionResponse> =>
-      this.http.request('POST', `/api/v1/citizen/parking/sessions/${id}/extend`, {
-        body: payload,
-        idempotent: true,
-      }),
-    finish: (id: string): Promise<FinishParkingSessionResponse> =>
-      this.http.request('POST', `/api/v1/citizen/parking/sessions/${id}/finish`, { idempotent: true }),
+    /** The municipality's charging schedule, evaluated in its own time zone (CONTRACT.md v0.3). */
+    schedule: (): Promise<ParkingSchedule> => this.http.request('GET', '/api/v1/citizen/parking/schedule'),
+    /**
+     * Zones the citizen can park in.
+     *
+     * TODO(backend): `GET /api/v1/citizen/parking/zones` does not exist yet — today the zone list
+     * is only published under `/api/v1/admin/parking/zones`, which needs `TENANT_MANAGE` and is
+     * therefore unreachable from this portal, while `POST /quote` and `POST /sessions` both take a
+     * mandatory `zoneId`. Until the backend publishes it, {@link useParkingZones} degrades to the
+     * zones the citizen has already parked in (their own session history).
+     */
+    zones: (): Promise<ParkingZone[]> => this.http.request('GET', '/api/v1/citizen/parking/zones'),
+    quote: async (payload: ParkingQuoteRequest): Promise<ParkingQuoteResponse> =>
+      toQuote(await this.http.request<WireQuote>('POST', '/api/v1/citizen/parking/quote', { body: payload })),
+    sessions: async (query: ParkingSessionsQuery = {}): Promise<ParkingSession[]> =>
+      toParkingSessions(
+        await this.http.request<PagedResponse<WireParkingSession>>('GET', '/api/v1/citizen/parking/sessions', {
+          query,
+        }),
+      ),
+    session: async (id: string): Promise<ParkingSession> =>
+      toParkingSession(
+        (
+          await this.http.request<{ session: WireParkingSession }>(
+            'GET',
+            `/api/v1/citizen/parking/sessions/${id}`,
+          )
+        ).session,
+      ),
+    start: async (payload: StartParkingSessionRequest): Promise<ParkingSession> =>
+      toParkingSession(
+        await this.http.request<WireParkingSession>('POST', '/api/v1/citizen/parking/sessions', {
+          body: payload,
+          idempotent: true,
+        }),
+      ),
+    extend: async (id: string, payload: ExtendParkingSessionRequest): Promise<ParkingSession> =>
+      toParkingSession(
+        await this.http.request<WireParkingSession>(`POST`, `/api/v1/citizen/parking/sessions/${id}/extend`, {
+          body: payload,
+          idempotent: true,
+        }),
+      ),
+    finish: async (id: string): Promise<ParkingSession> =>
+      toParkingSession(
+        await this.http.request<WireParkingSession>('POST', `/api/v1/citizen/parking/sessions/${id}/finish`, {
+          idempotent: true,
+        }),
+      ),
   };
 
   // ---- Citizen: wallet & time credits (CONTRACT.md v0.2) ---------------------------------------
 
   readonly citizenWallet = {
-    get: (): Promise<WalletResponse> => this.http.request('GET', '/api/v1/citizen/wallet'),
+    get: async (): Promise<WalletResponse> =>
+      toWallet(await this.http.request<WireWallet>('GET', '/api/v1/citizen/wallet')),
   };
 
   readonly citizenTimeCredits = {
-    get: (): Promise<TimeCreditsResponse> => this.http.request('GET', '/api/v1/citizen/time-credits'),
+    get: async (): Promise<TimeCreditsResponse> =>
+      toTimeCredits(await this.http.request<WireTimeCredits>('GET', '/api/v1/citizen/time-credits')),
+  };
+
+  // ---- Municipal operation settings (CONTRACT.md v0.3) -----------------------------------------
+  // The three knobs a municipal administrator owns: which languages the portals offer, how a bay
+  // code is written, and when parking is actually charged. All three are configuration read by
+  // every portal, never constants in the apps.
+
+  readonly adminSettings = {
+    locales: (): Promise<TenantLocaleSettings> => this.http.request('GET', '/api/v1/admin/settings/locales'),
+    updateLocales: (payload: UpdateTenantLocalesRequest): Promise<TenantLocaleSettings> =>
+      this.http.request('PUT', '/api/v1/admin/settings/locales', { body: payload }),
+  };
+
+  readonly adminParking = {
+    spaceFormat: (): Promise<ParkingSpaceFormat> =>
+      this.http.request('GET', '/api/v1/admin/parking/space-format'),
+    updateSpaceFormat: (payload: UpdateParkingSpaceFormatRequest): Promise<ParkingSpaceFormat> =>
+      this.http.request('PUT', '/api/v1/admin/parking/space-format', { body: payload }),
+    schedule: (): Promise<ParkingSchedule> => this.http.request('GET', '/api/v1/admin/parking/schedule'),
+    updateSchedule: (payload: UpdateParkingScheduleRequest): Promise<ParkingSchedule> =>
+      this.http.request('PUT', '/api/v1/admin/parking/schedule', { body: payload }),
+    zones: (): Promise<ParkingZone[]> => this.http.request('GET', '/api/v1/admin/parking/zones'),
   };
 
   // ---- Platform back-office (CONTRACT.md §4 `/api/v1/platform/**`) ---------------------------

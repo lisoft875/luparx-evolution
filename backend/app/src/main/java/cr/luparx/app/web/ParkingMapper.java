@@ -4,21 +4,30 @@ import cr.luparx.app.web.dto.ParkingDtos;
 import cr.luparx.core.money.Money;
 import cr.luparx.parking.entity.ParkingPolicy;
 import cr.luparx.parking.entity.ParkingRate;
+import cr.luparx.parking.entity.ParkingSchedule;
+import cr.luparx.parking.entity.ParkingScheduleException;
+import cr.luparx.parking.entity.ParkingScheduleSlot;
 import cr.luparx.parking.entity.ParkingSession;
 import cr.luparx.parking.entity.ParkingSessionExtension;
 import cr.luparx.parking.entity.ParkingSpace;
+import cr.luparx.parking.entity.ParkingSpaceFormat;
 import cr.luparx.parking.entity.ParkingTimeCreditEntry;
 import cr.luparx.parking.entity.ParkingZone;
 import cr.luparx.parking.entity.Vehicle;
 import cr.luparx.parking.entity.WalletTransaction;
+import cr.luparx.parking.model.ChargingBand;
+import cr.luparx.parking.model.ChargingSchedule;
 import cr.luparx.parking.model.ParkingQuote;
 import cr.luparx.parking.repository.ParkingSpaceRepository;
 import cr.luparx.parking.repository.ParkingZoneRepository;
 import org.springframework.stereotype.Component;
 
 import java.time.Clock;
+import java.time.DayOfWeek;
 import java.time.Instant;
+import java.time.LocalTime;
 import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -86,9 +95,24 @@ public class ParkingMapper {
                 policy.getUpdatedAt());
     }
 
+    /**
+     * A zone as a citizen sees it, with the tariff in force. The rate is passed in rather than looked
+     * up here so that a list of zones resolves its prices in one query instead of one per row.
+     */
+    public ParkingDtos.CitizenParkingZoneResponse toCitizenZone(ParkingZone zone, ParkingRate rate) {
+        return new ParkingDtos.CitizenParkingZoneResponse(
+                zone.getId(),
+                zone.getCode(),
+                zone.getName(),
+                zone.getDescription(),
+                rate == null ? null : new ParkingDtos.ParkingRateSummary(toMoney(rate.getAmount()),
+                        rate.getMinutes()));
+    }
+
     public ParkingDtos.QuoteResponse toQuote(ParkingQuote quote) {
         return new ParkingDtos.QuoteResponse(
                 quote.minutes(),
+                quote.chargeableMinutes(),
                 toMoney(quote.amount()),
                 quote.creditMinutesApplied(),
                 quote.payableMinutes(),
@@ -202,6 +226,84 @@ public class ParkingMapper {
                 zone.getDivisionId(),
                 zone.isActive(),
                 spaceCount);
+    }
+
+    public ParkingDtos.ParkingSpaceResponse toSpace(ParkingSpace space) {
+        return new ParkingDtos.ParkingSpaceResponse(space.getId(), space.getZoneId(), space.getCode(),
+                space.getStatus());
+    }
+
+    public ParkingDtos.ParkingSpaceFormatResponse toSpaceFormat(ParkingSpaceFormat format) {
+        return new ParkingDtos.ParkingSpaceFormatResponse(
+                format.getPrefix(),
+                format.getDigits(),
+                format.isAllowLetters(),
+                format.getPattern(),
+                format.getExample(),
+                format.getUpdatedAt());
+    }
+
+    // --- charging schedule -------------------------------------------------------------------------
+
+    /**
+     * A band on the wire: the minutes the domain works in, plus the {@code HH:mm} a screen prints.
+     * {@code endsAt} is null when the band closes the day, which is the honest rendering of 1440 —
+     * there is no wall-clock string for midnight-at-the-end.
+     */
+    public ParkingDtos.ChargingBandDto toBand(ChargingBand band) {
+        LocalTime end = band.endTime();
+        return new ParkingDtos.ChargingBandDto(
+                band.startMinute(),
+                band.endMinute(),
+                band.startTime().toString(),
+                end == null ? null : end.toString());
+    }
+
+    /**
+     * The whole timetable, week and exceptions, plus the two answers a client actually renders:
+     * whether charging is running right now and, if not, when it resumes.
+     */
+    public ParkingDtos.ParkingScheduleResponse toSchedule(ParkingSchedule header,
+                                                          List<ParkingScheduleSlot> slots,
+                                                          List<ParkingScheduleException> exceptions,
+                                                          Map<UUID, List<ChargingBand>> exceptionBands,
+                                                          ChargingSchedule resolved,
+                                                          Instant now) {
+        Map<DayOfWeek, List<ParkingDtos.ChargingBandDto>> byDay = new EnumMap<>(DayOfWeek.class);
+        for (ParkingScheduleSlot slot : slots) {
+            byDay.computeIfAbsent(slot.weekday(), key -> new ArrayList<>()).add(toBand(slot.band()));
+        }
+        // Every weekday is listed, including the ones with no band: a form has to be able to show
+        // "Sunday — not charged" rather than leave the reader to notice an absence.
+        List<ParkingDtos.ChargingDayDto> week = new ArrayList<>(DayOfWeek.values().length);
+        for (DayOfWeek weekday : DayOfWeek.values()) {
+            week.add(new ParkingDtos.ChargingDayDto(weekday, byDay.getOrDefault(weekday, List.of())));
+        }
+
+        List<ParkingDtos.ChargingExceptionDto> mappedExceptions = new ArrayList<>(exceptions.size());
+        for (ParkingScheduleException exception : exceptions) {
+            List<ParkingDtos.ChargingBandDto> bands = new ArrayList<>();
+            for (ChargingBand band : exceptionBands.getOrDefault(exception.getId(), List.of())) {
+                bands.add(toBand(band));
+            }
+            mappedExceptions.add(new ParkingDtos.ChargingExceptionDto(
+                    exception.getExceptionDate(),
+                    Boolean.valueOf(exception.isCharges()),
+                    Boolean.valueOf(exception.isChargesAllDay()),
+                    exception.getLabel(),
+                    bands));
+        }
+
+        boolean chargingNow = resolved.chargesAt(now);
+        Instant next = chargingNow ? null : resolved.nextChargingStart(now).orElse(null);
+        return new ParkingDtos.ParkingScheduleResponse(
+                resolved.zone().getId(),
+                header.isChargesAllDay(),
+                week,
+                mappedExceptions,
+                chargingNow,
+                next,
+                header.getUpdatedAt());
     }
 
     public ParkingDtos.ParkingRateResponse toRate(ParkingRate rate) {

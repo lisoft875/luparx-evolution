@@ -1498,38 +1498,65 @@ button.lx-list-row {
   border-radius: var(--lx-radius-sm);
 }
 
-/* Normal document flow on mobile (centered, below the card) — a *fixed*
-   pill would float over whatever content happens to sit at the bottom of
-   the viewport (the card can be taller than short phone screens), covering
-   the OAuth buttons. Only promoted to a true floating position once the
-   two-column desktop layout gives it guaranteed clear space bottom-left. */
-.lx-language-pill {
+/* Language dropdown (CONTRACT.md v0.3 §"Idiomas por municipalidad"). The list is whatever the
+   municipality enabled, so the control is a real <select>: it has to hold two entries or ten.
+   On mobile it sits in normal flow, centered below the card — a floating control would cover the
+   OAuth buttons on short screens — and only floats bottom-left once the two-column desktop layout
+   guarantees it clear space. */
+.lx-locale-select {
   position: relative;
-  z-index: 2;
-  align-self: center;
-  margin: var(--lx-space-6) 0 0;
   display: inline-flex;
   align-items: center;
-  gap: var(--lx-space-2);
   min-height: var(--lx-touch-target-min);
-  padding: 0 var(--lx-space-4);
   border-radius: var(--lx-radius-pill);
-  /* Level 2 — floating surface. */
   border: 1px solid var(--lx-border-strong);
   background: var(--lx-surface-raised);
   color: var(--lx-text);
-  box-shadow: var(--lx-shadow-md), var(--lx-inset-highlight);
   font-size: var(--lx-text-meta-size);
   font-weight: 600;
+}
+.lx-locale-select__icon {
+  position: absolute;
+  left: var(--lx-space-4);
+  display: inline-flex;
+  pointer-events: none;
+  color: var(--lx-text-muted);
+}
+.lx-locale-select__control {
+  appearance: none;
+  -webkit-appearance: none;
+  min-height: var(--lx-touch-target-min);
+  max-width: 100%;
+  padding: 0 var(--lx-space-6) 0 calc(var(--lx-space-4) + 16px + var(--lx-space-2));
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  color: inherit;
+  font: inherit;
   cursor: pointer;
 }
-.lx-language-pill:focus-visible {
+.lx-locale-select__control:focus-visible {
   outline: 2px solid var(--lx-focus-ring);
   outline-offset: 2px;
 }
 
+.lx-locale-select--compact {
+  z-index: 2;
+  align-self: center;
+  margin: var(--lx-space-6) 0 0;
+  box-shadow: var(--lx-shadow-md), var(--lx-inset-highlight);
+}
+
+.lx-locale-select--field {
+  width: 100%;
+  border-radius: var(--lx-radius-md);
+}
+.lx-locale-select--field .lx-locale-select__control {
+  width: 100%;
+}
+
 @media (min-width: 1024px) {
-  .lx-language-pill {
+  .lx-locale-select--compact {
     position: absolute;
     align-self: auto;
     bottom: var(--lx-space-6);
@@ -1647,4 +1674,14 @@ button.lx-list-row {
 }
 .lx-page-header > .lx-button {
   flex: 0 0 auto;
+}
+
+/* Supporting line under a section title or a checkbox label — the "what this actually does"
+   sentence that settings screens need and list headers do not. */
+.lx-section-header__description {
+  margin: 2px 0 0;
+}
+.lx-checkbox__hint {
+  display: block;
+  margin-top: 2px;
 }

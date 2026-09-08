@@ -1,30 +1,28 @@
 import * as React from 'react';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useTranslation, formatDateTime, type TranslationKey } from '@luparx/i18n';
+import { useTranslation, formatDateTime } from '@luparx/i18n';
 import { AmountText, Card, ChipGroup, EmptyState, IconTopUp, ListRow } from '@luparx/ui';
 import { CitizenShell } from '../components/CitizenShell';
-import { MOVEMENT_ICON, MOVEMENT_ICON_TONE } from '../lib/movementPresentation';
-import { MOCK_MOVEMENTS, MOCK_TENANT_TIME_ZONE } from '../mocks/parkingDomain';
-
-type MovementFilter = 'all' | 'parking' | 'topups' | 'fines';
+import {
+  MOVEMENT_ICON,
+  MOVEMENT_ICON_TONE,
+  MOVEMENT_TITLE_KEY,
+  filterMovements,
+  type MovementFilter,
+} from '../lib/movementPresentation';
+import { useTenantTimeZone, useWallet } from '../lib/queries';
 
 export function MovementsPage(): React.JSX.Element {
   const { t, locale } = useTranslation();
   const navigate = useNavigate();
   const [filter, setFilter] = useState<MovementFilter>('all');
+  const { data: wallet } = useWallet();
+  const timeZone = useTenantTimeZone();
 
-  // TODO(domain): `MOCK_MOVEMENTS` stands in for a real citizen ledger endpoint (module-parking/module-wallet, CONTRACT.md §4).
-  const movements = useMemo(
-    () =>
-      MOCK_MOVEMENTS.filter((movement) => {
-        if (filter === 'all') return true;
-        if (filter === 'parking') return movement.kind === 'parking' || movement.kind === 'parkingExtension';
-        if (filter === 'topups') return movement.kind === 'topup';
-        return movement.kind === 'fine';
-      }),
-    [filter],
-  );
+  // The tenant wallet is the citizen's ledger (CONTRACT.md v0.2 rule 6): one balance and one list
+  // of movements per municipality. Filtering happens on what the server already sent.
+  const movements = useMemo(() => filterMovements(wallet?.transactions ?? [], filter), [wallet, filter]);
 
   return (
     <CitizenShell title={t('citizen.movements.title')} onBack={() => navigate('/wallet')}>
@@ -48,20 +46,16 @@ export function MovementsPage(): React.JSX.Element {
           {movements.map((movement) => (
             <ListRow
               key={movement.id}
-              icon={MOVEMENT_ICON[movement.kind]}
-              iconTone={MOVEMENT_ICON_TONE[movement.kind]}
-              title={t(movement.titleKey as TranslationKey)}
+              icon={MOVEMENT_ICON[movement.type]}
+              iconTone={MOVEMENT_ICON_TONE[movement.type]}
+              title={t(MOVEMENT_TITLE_KEY[movement.type])}
               meta={
                 <>
                   <span className="lx-list-row__meta-line">
-                    {formatDateTime(movement.occurredAt, locale, { timeZone: MOCK_TENANT_TIME_ZONE })}
+                    {formatDateTime(movement.createdAt, locale, { timeZone })}
                   </span>
-                  {movement.zoneName ? (
-                    <span className="lx-list-row__meta-line">
-                      {movement.zoneName} · {movement.spaceCode}
-                    </span>
-                  ) : movement.cardLast4 ? (
-                    <span className="lx-list-row__meta-line">•••• {movement.cardLast4}</span>
+                  {movement.reference ? (
+                    <span className="lx-list-row__meta-line">{movement.reference}</span>
                   ) : null}
                 </>
               }

@@ -22,15 +22,11 @@ luparx:
     ephemeral-keys-when-missing: ${JWT_EPHEMERAL_KEYS:true}
   security:
     # 32 bytes, Base64: "luparx-dev-only-totp-key-32bytes" — replaced per environment in every
-    # deployment that is not a developer laptop.
+    # deployment that is not a developer laptop. Still configured although no portal enforces MFA
+    # (CONTRACT.md v0.3 §1): the TOTP code is dormant, not deleted, and it needs a key the day a
+    # deployment puts a portal back on luparx.security.mfa-enforced-portals.
     mfa-encryption-key: ${MFA_TOTP_ENCRYPTION_KEY:bHVwYXJ4LWRldi1vbmx5LXRvdHAta2V5LTMyYnl0ZXM=}
     ip-hash-pepper: ${IP_HASH_PEPPER:luparx-dev-only-ip-pepper}
-    # RISK, ACCEPTED FOR LOCAL DEVELOPMENT ONLY. Empty means no portal enforces MFA, so a freshly
-    # seeded admin, inspector or platform account can reach its portal without first enrolling a TOTP
-    # in an authenticator app. On any shared environment this MUST stay at the base value
-    # "admin,inspector,platform": with it empty, a stolen password is enough to take over a
-    # back-office account. The application logs a WARN on every start while this list is empty.
-    mfa-enforced-portals: ${MFA_ENFORCED_PORTALS:}
   dev:
     # Creates the launch municipality (San José), one account per portal, and its parking zones,
     # tariffs and numbered bays on start (DevDataSeeder + DevParkingSeeder), so a fresh database is

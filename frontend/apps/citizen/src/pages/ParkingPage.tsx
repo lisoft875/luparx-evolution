@@ -1,36 +1,48 @@
 import * as React from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useTranslation, formatCurrencyMinor } from '@luparx/i18n';
+import { useTranslation, formatCurrencyMinor, formatWeekdayTime } from '@luparx/i18n';
 import {
   Alert,
   Button,
   Card,
   ChipGroup,
+  FormField,
   IconCar,
   IconChevronRight,
   IconPin,
+  Input,
   ListRow,
   Select,
   StepList,
   type Step,
 } from '@luparx/ui';
-import { useAuth } from '@luparx/auth';
 import { formatDurationLabel } from '../lib/duration';
 import { parkingErrorKey } from '../lib/apiErrors';
 import { CitizenShell } from '../components/CitizenShell';
-import { zonesForTenant } from '../mocks/parkingDomain';
-import { useParkingPolicy, useParkingQuote, useStartParkingSession, useVehicles } from '../lib/queries';
+import {
+  useParkingPolicy,
+  useParkingQuote,
+  useParkingSchedule,
+  useParkingZones,
+  useStartParkingSession,
+  useVehicles,
+} from '../lib/queries';
 
 export function ParkingPage(): React.JSX.Element {
   const { t, tPlural, locale } = useTranslation();
   const navigate = useNavigate();
-  const { me } = useAuth();
 
-  const zones = useMemo(() => zonesForTenant(me?.activeTenant?.id), [me?.activeTenant?.id]);
-  // Non-null: `zones` always has at least one entry (zonesForTenant falls back to a default list).
-  const [zoneId, setZoneId] = useState(zones[0]!.id);
-  const zone = zones.find((z) => z.id === zoneId) ?? zones[0]!;
+  const { data: zones } = useParkingZones();
+  const [zoneId, setZoneId] = useState<string>('');
+  useEffect(() => {
+    if (!zoneId && zones && zones.length > 0) setZoneId(zones[0]!.id);
+  }, [zoneId, zones]);
+  const zone = zones?.find((z) => z.id === zoneId) ?? null;
+
+  // The bay code as it is painted on the ground. Kept as typed-in text rather than derived from
+  // the zone: one zone holds hundreds of bays, and only the person standing in one knows which.
+  const [spaceCode, setSpaceCode] = useState('');
 
   const { data: vehicles } = useVehicles();
   const [vehicleId, setVehicleId] = useState<string | null>(null);
@@ -49,9 +61,23 @@ export function ParkingPage(): React.JSX.Element {
     }
   }, [minutes, policy]);
 
-  const { data: quote } = useParkingQuote(zoneId, minutes);
+  const { data: quote } = useParkingQuote(zoneId || null, minutes);
+  const { data: schedule } = useParkingSchedule();
   const startSession = useStartParkingSession();
   const [error, setError] = useState<string | null>(null);
+
+  // "Right now the municipality is not charging." Said before the citizen picks anything, because
+  // it changes what the whole screen means (CONTRACT.md v0.3 §"Horario de cobro"): starting a stay
+  // outside the charging bands is refused with OUTSIDE_CHARGING_HOURS, and a citizen who was not
+  // told will read that as a broken app rather than as a Sunday.
+  const notChargingNotice =
+    schedule && !schedule.chargingNow
+      ? schedule.nextChargingStartsAt
+        ? t('citizen.parking.schedule.notChargingWithResume', {
+            resumesAt: formatWeekdayTime(schedule.nextChargingStartsAt, locale, { timeZone: schedule.timeZone }),
+          })
+        : t('citizen.parking.schedule.notCharging')
+      : null;
 
   function cycleVehicle(): void {
     if (!vehicles || vehicles.length === 0) return;
@@ -60,10 +86,10 @@ export function ParkingPage(): React.JSX.Element {
   }
 
   async function handleSubmit(): Promise<void> {
-    if (!vehicleId || !minutes) return;
+    if (!vehicleId || !minutes || !zoneId || !spaceCode.trim()) return;
     setError(null);
     try {
-      await startSession.mutateAsync({ zoneId, spaceCode: zone.spaceCode, vehicleId, minutes });
+      await startSession.mutateAsync({ zoneId, spaceCode: spaceCode.trim().toUpperCase(), vehicleId, minutes });
       navigate('/');
     } catch (err) {
       setError(t(parkingErrorKey(err)));
@@ -82,22 +108,30 @@ export function ParkingPage(): React.JSX.Element {
             <p className="lx-text-meta" style={{ margin: '-4px 0 0 0' }}>
               {t('citizen.parking.step1.description')}
             </p>
-            <Select
-              icon={<IconPin size={18} />}
-              aria-label={t('citizen.parking.step1.zoneLabel')}
-              value={zoneId}
-              onChange={(e) => setZoneId(e.target.value)}
-              options={zones.map((z) => ({ value: z.id, label: z.name }))}
-            />
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--lx-space-2)', color: 'var(--lx-text-muted)' }}>
-                <IconPin size={16} />
-                {zone.spaceCode}
-              </span>
-              <button type="button" className="lx-link-button" onClick={() => undefined}>
-                {t('citizen.parking.step1.viewMapCta')}
-              </button>
-            </div>
+            {zones && zones.length === 0 ? (
+              <Alert tone="danger">{t('citizen.parking.step1.noZones')}</Alert>
+            ) : (
+              <Select
+                icon={<IconPin size={18} />}
+                aria-label={t('citizen.parking.step1.zoneLabel')}
+                value={zoneId}
+                onChange={(e) => setZoneId(e.target.value)}
+                placeholder={t('common.select.placeholder')}
+                options={(zones ?? []).map((z) => ({ value: z.id, label: z.name }))}
+              />
+            )}
+            <FormField label={t('citizen.parking.step1.spaceCodeLabel')} hint={t('citizen.parking.step1.spaceCodeHint')}>
+              {({ inputId }) => (
+                <Input
+                  id={inputId}
+                  value={spaceCode}
+                  autoCapitalize="characters"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  onChange={(e) => setSpaceCode(e.target.value.toUpperCase())}
+                />
+              )}
+            </FormField>
           </div>
         ),
       },
@@ -149,11 +183,24 @@ export function ParkingPage(): React.JSX.Element {
         state: 'active',
         content: (
           <Card nested>
-            <ListRow title={t('citizen.parking.step4.zoneLabel')} value={`${zone.name} (${zone.spaceCode})`} />
+            <ListRow
+              title={t('citizen.parking.step4.zoneLabel')}
+              value={zone ? `${zone.name}${spaceCode ? ` (${spaceCode})` : ''}` : '—'}
+            />
             <ListRow title={t('citizen.parking.step4.vehicleLabel')} value={vehicle?.plate ?? '—'} />
             <ListRow title={t('citizen.parking.step4.durationLabel')} value={durationLabel || '—'} />
             {quote ? (
               <>
+                {/* Only the minutes inside a charging band are billed (CONTRACT.md v0.3): when the
+                    stay spills past closing time, the difference is shown rather than left to be
+                    discovered on the receipt. */}
+                {quote.chargeableMinutes !== quote.minutes ? (
+                  <ListRow
+                    title={t('citizen.parking.step4.chargeableMinutesLabel')}
+                    meta={t('citizen.parking.step4.chargeableMinutesHint')}
+                    value={tPlural('citizen.parking.durationMinutes', quote.chargeableMinutes)}
+                  />
+                ) : null}
                 <ListRow title={t('citizen.parking.step4.amountLabel')} value={formatCurrencyMinor(quote.amountMinor, quote.currencyCode, locale)} />
                 {quote.creditMinutesApplied > 0 ? (
                   <ListRow
@@ -178,19 +225,20 @@ export function ParkingPage(): React.JSX.Element {
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [zoneId, zones, zone, vehicle, policy, minutes, durationLabel, quote, locale],
+    [zoneId, zones, zone, spaceCode, vehicle, policy, minutes, durationLabel, quote, locale],
   );
 
   return (
     <CitizenShell title={t('citizen.parking.title')} subtitle={t('citizen.parking.subtitle')} onBack={() => navigate('/')}>
       {error ? <Alert tone="danger">{error}</Alert> : null}
+      {notChargingNotice ? <Alert tone="info">{notChargingNotice}</Alert> : null}
       <StepList steps={steps} />
       <Button
         type="button"
         variant="primary"
         fullWidth
         loading={startSession.isPending}
-        disabled={!vehicleId || !minutes || !quote}
+        disabled={!vehicleId || !minutes || !quote || !zoneId || spaceCode.trim().length === 0}
         onClick={handleSubmit}
       >
         {t('citizen.parking.submit')}

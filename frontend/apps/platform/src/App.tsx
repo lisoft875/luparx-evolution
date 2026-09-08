@@ -6,7 +6,6 @@ import { AuthProvider, RequireAuth } from '@luparx/auth';
 import { mockFetch } from '@luparx/api-client/mocks';
 import { API_BASE_URL, PORTAL, USE_MOCKS } from './env';
 import { LoginPage } from './pages/LoginPage';
-import { MfaPage } from './pages/MfaPage';
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import { ProfilePage } from './pages/ProfilePage';
@@ -45,7 +44,6 @@ export function App(): React.JSX.Element {
           <Router>
             <Routes>
               <Route path="/login" element={<LoginPage />} />
-              <Route path="/mfa" element={<MfaPage />} />
               <Route path="/forgot-password" element={<ForgotPasswordPage />} />
               <Route path="/reset-password" element={<ResetPasswordPage />} />
               <Route

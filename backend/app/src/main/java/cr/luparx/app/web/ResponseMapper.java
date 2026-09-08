@@ -16,6 +16,7 @@ import cr.luparx.identity.entity.User;
 import cr.luparx.identity.service.IssuedTokens;
 import cr.luparx.identity.service.MfaService;
 import cr.luparx.tenancy.entity.Tenant;
+import cr.luparx.tenancy.entity.TenantLocale;
 import cr.luparx.tenancy.entity.TenantMembership;
 import cr.luparx.tenancy.entity.TenantSetting;
 import cr.luparx.tenancy.repository.TenantRepository;
@@ -128,6 +129,12 @@ public class ResponseMapper {
                 user.getStatus(),
                 user.isMfaRequired(),
                 mfaService.isActive(UserId.of(user.getId())));
+    }
+
+    /** One language a municipality offers, for the public catalogue and the admin form. */
+    public CatalogDtos.TenantLocaleResponse toTenantLocale(TenantLocale locale) {
+        return new CatalogDtos.TenantLocaleResponse(locale.getLocale(), locale.isDefaultLocale(),
+                locale.getSortOrder());
     }
 
     /** Display name; the presentation order is a locale concern the client resolves. */

@@ -38,6 +38,13 @@ export function AdminShell({ children }: AdminShellProps): React.JSX.Element {
           <Link to="/users">{t('nav.users')}</Link>
           <Link to="/audit">{t('nav.audit')}</Link>
           <Link to="/reports">{t('nav.reports')}</Link>
+          <hr />
+          {/* Municipal operation settings (CONTRACT.md v0.3) — everything a municipality tunes for
+              itself: the languages its portals speak, how a bay is numbered, and when it charges. */}
+          <strong className="lx-text-meta">{t('nav.settings')}</strong>
+          <Link to="/settings/locales">{t('admin.settings.locales.title')}</Link>
+          <Link to="/settings/space-format">{t('admin.settings.spaceFormat.title')}</Link>
+          <Link to="/settings/schedule">{t('admin.settings.schedule.title')}</Link>
         </nav>
       }
     >
