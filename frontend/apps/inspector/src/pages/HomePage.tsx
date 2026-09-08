@@ -43,7 +43,7 @@ export function HomePage(): React.JSX.Element {
   const activeMemberships = memberships.filter((m) => m.status === 'ACTIVE');
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: 'var(--lx-bg)' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: 'transparent' }}>
       <AppBar
         start={<Brand name={t('app.name')} tagline={t('auth.portal.inspector.title')} />}
         actions={[{ icon: <IconLogout />, label: t('auth.logout.action'), onClick: () => logout() }]}

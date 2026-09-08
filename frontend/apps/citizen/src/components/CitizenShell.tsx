@@ -69,7 +69,7 @@ export function CitizenShell({ children, title, subtitle, onBack, bare = false }
   ];
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: 'var(--lx-bg)' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: 'transparent' }}>
       {bare ? null : (
         <AppBar
           start={!onBack ? <Brand name={t('app.name')} /> : undefined}

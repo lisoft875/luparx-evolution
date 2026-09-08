@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { BRAND_ASSETS } from '../brandAssets';
 
 export interface LogoProps {
   size?: number;
@@ -6,30 +7,22 @@ export interface LogoProps {
   title: string;
 }
 
-/** LK monogram, SVG, colored only by tokens (never recolored ad hoc or stretched — DESIGN_SYSTEM.md §2 rule 6). */
+/**
+ * The real LuParx mark (`brandAssets.markTransparent`) — the pack's one genuinely transparent
+ * asset, so it is the only logo safe on any background (any theme, any surface). This is the
+ * single sanctioned way to render just the icon; never a hand-drawn substitute and never a
+ * different file.
+ */
 export function Logo({ size = 32, className, title }: LogoProps): React.JSX.Element {
-  const gradientId = React.useId();
   return (
-    <svg
+    <img
+      src={BRAND_ASSETS.markTransparent}
       width={size}
       height={size}
-      viewBox="0 0 32 32"
-      role="img"
-      aria-label={title}
+      alt={title}
       className={className}
-    >
-      <defs>
-        <linearGradient id={gradientId} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" style={{ stopColor: 'var(--lx-primary)' }} />
-          <stop offset="100%" style={{ stopColor: 'var(--lx-primary-strong)' }} />
-        </linearGradient>
-      </defs>
-      <rect width="32" height="32" rx="9" fill={`url(#${gradientId})`} />
-      <path
-        d="M9 8v16h6.5v-2.6H11.9V8H9zm10.4 0v16h2.6v-6.4l1-1.1L26.4 24H29.8l-6.1-8.9L29.4 8h-3.4l-6.6 7.7V8h-2.6z"
-        fill="var(--lx-primary-contrast)"
-      />
-    </svg>
+      style={{ objectFit: 'contain', flexShrink: 0 }}
+    />
   );
 }
 
@@ -39,10 +32,28 @@ export interface BrandProps {
   tagline?: string;
   size?: number;
   className?: string;
+  /**
+   * 'icon' (default): mark + text wordmark — safe anywhere (app bars, shells, any background).
+   * 'lockup': the supplied opaque wordmark artwork — DARK BRAND SURFACES ONLY (login/auth hero,
+   * onboarding). It is composed on near-black and is not safe on a light or busy background.
+   */
+  variant?: 'icon' | 'lockup';
 }
 
-/** Logo + wordmark (+ optional tagline) — the only sanctioned way to render the LupaRX mark in an app bar or splash. */
-export function Brand({ name, tagline, size = 28, className }: BrandProps): React.JSX.Element {
+/** Logo + wordmark (+ optional tagline) — the only sanctioned way to render the LuParx mark. */
+export function Brand({ name, tagline, size = 28, className, variant = 'icon' }: BrandProps): React.JSX.Element {
+  if (variant === 'lockup') {
+    return (
+      <span className={['lx-brand', 'lx-brand--lockup', className].filter(Boolean).join(' ')}>
+        <img
+          src={BRAND_ASSETS.wordmarkDark}
+          alt={name}
+          style={{ height: size * 1.6, width: 'auto', display: 'block' }}
+        />
+        {tagline ? <span className="lx-brand__tagline">{tagline}</span> : null}
+      </span>
+    );
+  }
   return (
     <span className={['lx-brand', className].filter(Boolean).join(' ')}>
       <Logo size={size} title={name} />

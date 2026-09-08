@@ -4,6 +4,7 @@ import cr.luparx.geo.entity.AdministrativeDivision;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
@@ -22,4 +23,13 @@ public interface AdministrativeDivisionRepository extends JpaRepository<Administ
 
     List<AdministrativeDivision> findByCountryCodeAndParentIdIsNullAndActiveTrueOrderByNameAsc(
             String countryCode, Pageable pageable);
+
+    /**
+     * Resolves an explicit, caller-supplied list of official codes at one level. Bounded by the list
+     * itself rather than paginated, which is what makes it safe here: the caller already knows every
+     * code it is asking for. Codes are unique within (country, level), so the result holds at most
+     * one row per requested code.
+     */
+    List<AdministrativeDivision> findByCountryCodeAndLevelAndCodeIn(
+            String countryCode, int level, Collection<String> codes);
 }

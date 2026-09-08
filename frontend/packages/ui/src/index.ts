@@ -55,6 +55,7 @@ export { Timer } from './components/Timer';
 export type { TimerProps } from './components/Timer';
 export { Brand, Logo } from './components/Brand';
 export type { BrandProps, LogoProps } from './components/Brand';
+export { BRAND_ASSETS } from './brandAssets';
 export { PlatformBanner } from './components/PlatformBanner';
 export type { PlatformBannerProps } from './components/PlatformBanner';
 export { HeroCard } from './components/HeroCard';

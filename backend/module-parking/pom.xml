@@ -22,5 +22,14 @@
       <groupId>cr.luparx</groupId>
       <artifactId>luparx-module-tenancy</artifactId>
     </dependency>
+    <!--
+      Declared explicitly rather than inherited through module-tenancy: this module maps its own
+      entities and repositories, so it depends on JPA in its own right. Relying on somebody else's
+      transitive dependency is how a build breaks the day that module stops needing it.
+    -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-data-jpa</artifactId>
+    </dependency>
   </dependencies>
 </project>

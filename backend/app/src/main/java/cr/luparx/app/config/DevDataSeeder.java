@@ -17,6 +17,7 @@ import cr.luparx.identity.service.UserRegistrationService;
 import cr.luparx.tenancy.entity.Tenant;
 import cr.luparx.tenancy.model.MembershipStatus;
 import cr.luparx.tenancy.model.SelfRegistrationPolicy;
+import cr.luparx.tenancy.model.TenantStatus;
 import cr.luparx.tenancy.repository.TenantMembershipRepository;
 import cr.luparx.tenancy.repository.TenantRepository;
 import cr.luparx.tenancy.service.MembershipService;
@@ -37,9 +38,11 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Creates a demo municipality and one account per portal so a developer can log in on a fresh
- * database. Development only, twice over: the bean exists solely under the {@code dev} profile and
- * can still be switched off with {@code luparx.dev.seed-demo-data=false}.
+ * Creates the launch municipality, one account per portal, and — through {@link DevParkingSeeder} —
+ * the zones, tariffs and numbered bays that municipality operates, so a developer can log in and
+ * exercise a real flow on a fresh database. Development only, twice over: the bean exists solely
+ * under the {@code dev} profile and can still be switched off with
+ * {@code luparx.dev.seed-demo-data=false}.
  *
  * <p>Idempotent by construction. Every step first asks whether the row already exists (tenant by
  * slug, user by email, membership by tenant+user+portal) and does nothing when it does, so the
@@ -48,6 +51,12 @@ import java.util.UUID;
  * here, or an administrative tree the deployment default country has no rows for — is logged and
  * skipped rather than allowed to break startup.</p>
  *
+ * <p>There is exactly one municipality. The placeholder tenant earlier revisions of this fixture
+ * created ({@value #LEGACY_TENANT_SLUG}) is closed rather than deleted when it is found: a tenant is
+ * never removed — its memberships, audit rows and ledgers reference it — but leaving it ACTIVE would
+ * show a developer two municipalities where the product has one. A database created after this
+ * change simply never has it.</p>
+ *
  * <p>Nothing here is written with SQL or by assembling entities by hand: the accounts go through
  * {@link UserRegistrationService}, the address chain comes from the divisions actually seeded in the
  * migrations, the password is hashed by the real {@code PasswordService} behind the registration
@@ -55,8 +64,10 @@ import java.util.UUID;
  * therefore exactly what a real registration produces — a fixture that lies about the domain would
  * be worse than no fixture at all.</p>
  *
- * <p>The country, currency, locale and time zone of the demo tenant are read from
- * {@code platform.defaults.*}: no market is assumed here either (CONTRACT.md §7).</p>
+ * <p>The country, currency, locale and time zone of the municipality are read from
+ * {@code platform.defaults.*}: no market is assumed here either (CONTRACT.md §7). San José is seed
+ * DATA — a real customer to develop against — and a deployment elsewhere changes the constants below,
+ * never a line of domain logic.</p>
  */
 @Component
 @Profile("dev")
@@ -65,9 +76,15 @@ public class DevDataSeeder implements ApplicationRunner {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(DevDataSeeder.class);
 
-    private static final String TENANT_SLUG = "demo-municipality";
-    private static final String TENANT_LEGAL_NAME = "Demo Municipality (development seed)";
-    private static final String TENANT_DISPLAY_NAME = "Demo Municipality";
+    /** The launch municipality. Seed data, not an assumption: see the class javadoc. */
+    private static final String TENANT_SLUG = "san-jose";
+    private static final String TENANT_LEGAL_NAME = "Municipalidad de San José";
+    private static final String TENANT_DISPLAY_NAME = "San José";
+
+    /** The placeholder municipality earlier revisions created; closed on sight, never deleted. */
+    private static final String LEGACY_TENANT_SLUG = "demo-municipality";
+    private static final String LEGACY_TENANT_REASON =
+            "Replaced by the San José development seed; closed so only one municipality is active.";
 
     /** Well-known and intentionally weak: it is printed to the console on every start. */
     private static final String PASSWORD = "Password123!";
@@ -98,6 +115,7 @@ public class DevDataSeeder implements ApplicationRunner {
     private final TenantMembershipRepository membershipRepository;
     private final AdministrativeDivisionRepository divisionRepository;
     private final PhoneNumberService phoneNumberService;
+    private final DevParkingSeeder parkingSeeder;
 
     public DevDataSeeder(PlatformDefaultsProperties defaults,
                          TenantService tenantService,
@@ -108,7 +126,8 @@ public class DevDataSeeder implements ApplicationRunner {
                          MembershipService membershipService,
                          TenantMembershipRepository membershipRepository,
                          AdministrativeDivisionRepository divisionRepository,
-                         PhoneNumberService phoneNumberService) {
+                         PhoneNumberService phoneNumberService,
+                         DevParkingSeeder parkingSeeder) {
         this.defaults = defaults;
         this.tenantService = tenantService;
         this.tenantRepository = tenantRepository;
@@ -119,6 +138,7 @@ public class DevDataSeeder implements ApplicationRunner {
         this.membershipRepository = membershipRepository;
         this.divisionRepository = divisionRepository;
         this.phoneNumberService = phoneNumberService;
+        this.parkingSeeder = parkingSeeder;
     }
 
     @Override
@@ -126,6 +146,7 @@ public class DevDataSeeder implements ApplicationRunner {
         String countryCode = CountryCodes.normalize(defaults.countryCode());
         List<DemoAccount> available = new ArrayList<>();
         try {
+            retireLegacyTenant();
             Tenant tenant = ensureTenant(countryCode);
             AddressChain address = resolveAddressChain(countryCode);
             String phoneNumber = phoneNumberService.exampleNationalNumber(countryCode);
@@ -138,6 +159,7 @@ public class DevDataSeeder implements ApplicationRunner {
                             account.email(), exception.toString());
                 }
             }
+            seedParking(tenant);
         } catch (RuntimeException exception) {
             // A broken fixture must never stop the application from starting.
             LOGGER.warn("Development seed skipped: {}", exception.toString());
@@ -147,6 +169,34 @@ public class DevDataSeeder implements ApplicationRunner {
     }
 
     // --- steps -----------------------------------------------------------------------------------
+
+    /**
+     * Closes the placeholder municipality of earlier revisions if this database still has it. Closing
+     * rather than deleting is not caution about foreign keys alone — a municipality is a soft
+     * lifecycle by contract (CONTRACT.md §4), so the fixture uses the same transition the back-office
+     * would. Accounts keep their old membership and gain one in San José, which is harmless.
+     */
+    private void retireLegacyTenant() {
+        tenantRepository.findBySlug(LEGACY_TENANT_SLUG)
+                .filter(legacy -> legacy.getStatus() != TenantStatus.CLOSED)
+                .ifPresent(legacy -> {
+                    tenantService.changeStatus(legacy.getTenantId(), TenantStatus.CLOSED, LEGACY_TENANT_REASON, null);
+                    LOGGER.warn("Development seed: legacy municipality '{}' closed; '{}' is now the only active one.",
+                            LEGACY_TENANT_SLUG, TENANT_SLUG);
+                });
+    }
+
+    /**
+     * Zones, tariffs and bays. Isolated from the accounts on purpose: a parking fixture that fails is
+     * worth a warning, never the loss of the credentials a developer needs to log in at all.
+     */
+    private void seedParking(Tenant tenant) {
+        try {
+            parkingSeeder.seed(tenant);
+        } catch (RuntimeException exception) {
+            LOGGER.warn("Development seed: parking fixture skipped ({}).", exception.toString());
+        }
+    }
 
     private Tenant ensureTenant(String countryCode) {
         Optional<Tenant> existing = tenantRepository.findBySlug(TENANT_SLUG);
@@ -273,7 +323,7 @@ public class DevDataSeeder implements ApplicationRunner {
         for (DemoAccount account : accounts) {
             LOGGER.warn("  portal={} email={} password={}", account.portal().slug(), account.email(), PASSWORD);
         }
-        LOGGER.warn("Demo municipality slug: {}", TENANT_SLUG);
+        LOGGER.warn("Municipality: {} (slug '{}')", TENANT_DISPLAY_NAME, TENANT_SLUG);
         LOGGER.warn("=================================================================================");
     }
 

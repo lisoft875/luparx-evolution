@@ -1,6 +1,7 @@
-# module-parking (stub)
+# module-parking
 
-Frontier module for the parking-meter domain. **No production code yet on purpose.**
+Bounded context of the parking-meter domain. Zones, tariffs and numbered spaces are modelled;
+sessions, patrols, citations and finance are still deferred on purpose.
 
 ## Why it exists already
 
@@ -30,3 +31,17 @@ Adding a forbidden dependency later fails the build, which is exactly the guaran
 - The REST paths reserved in CONTRACT.md §4 are published by `app` and answer
   `501 Not Implemented` with the RFC 9457 code `NOT_IMPLEMENTED`, so the contract surface is
   discoverable in OpenAPI and no client accidentally believes the feature exists.
+- `V10_0__parking_spaces.sql` adds `parking_spaces` and gives a zone a `description` and a
+  `division_id`. The module now owns three entities and their repositories — `ParkingZone`,
+  `ParkingRate`, `ParkingSpace` — read only by the `dev` fixture so far. No service, no controller.
+
+## Two decisions worth not re-litigating
+
+**A space code is text.** `parking_spaces.code` is what is painted on the bay and what the citizen
+types: `0001`, `A12`, `B-125`, `LUP-0001`. An integer column would turn `0001` into `1` and stop
+matching the sign on the street. It is unique per tenant, never globally — two municipalities both
+numbering from `0001` is the normal case.
+
+**`division_id` is a database foreign key, not a Java association.** This module has no Maven
+dependency on `module-geo` and must not grow one; the reference lives in the schema while the
+boundary lives in the build, exactly as `module-tenancy` already does with users.

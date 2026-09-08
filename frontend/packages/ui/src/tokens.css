@@ -14,35 +14,58 @@
  */
 
 :root {
-  /* ---- Color (dark, default) ------------------------------------------ */
-  --lx-bg: #070c18;
-  --lx-bg-elevated: #0e1526;
-  --lx-surface: #121a2e;
-  --lx-surface-2: #18213a;
-  --lx-border: rgba(255, 255, 255, 0.08);
-  --lx-text: #f5f8ff;
-  --lx-text-muted: #9aa8c7;
-  --lx-text-subtle: #67769a;
+  /* ------------------------------------------------------------------------
+     LuParx Neon — ported verbatim from the production site's real, shipped
+     design system (`luparx-frontend/src/shared/styles/tokens.css` +
+     `skins/luparx-neon.css`, Prompt #25 "glass layer"). These are not an
+     approximation of the client's palette: they are its actual hex/rgba
+     values, re-homed under our own `--lx-*` names so no component here had
+     to change. See that repo's CLAUDE.md for why these particular values
+     were chosen (near-black ground matching the opaque brand artwork, status
+     colors kept off-blue so they're never confused with the brand accent).
+     ------------------------------------------------------------------------ */
+  --lx-bg: #020612;
+  --lx-bg-elevated: #0b1730;
+  /* Level 1 glass — translucent; paired with --lx-blur-1 on cards/tables/nav. */
+  --lx-surface: rgba(7, 16, 38, 0.72);
+  --lx-surface-2: rgba(15, 39, 82, 0.72);
+  /* Level 2 glass — floating surfaces only (modal, popover, drawer, pill). */
+  --lx-surface-raised: rgba(10, 23, 52, 0.82);
+  --lx-border: rgba(40, 130, 255, 0.24);
+  --lx-border-strong: rgba(45, 190, 255, 0.62);
+  --lx-text: #f5f9ff;
+  --lx-text-muted: #9caeca;
+  --lx-text-subtle: #8095b4;
 
-  --lx-primary: #1d7bff;
-  --lx-primary-strong: #0a4dff;
-  --lx-primary-soft: rgba(29, 123, 255, 0.14);
+  --lx-primary: #075cff;
+  --lx-primary-strong: #00a8ff;
+  --lx-primary-soft: rgba(8, 116, 255, 0.14);
   --lx-primary-contrast: #ffffff;
 
-  --lx-success: #22c55e;
-  --lx-success-soft: rgba(34, 197, 94, 0.12);
-  --lx-warning: #f5a524;
-  --lx-warning-soft: rgba(245, 165, 36, 0.14);
-  --lx-danger: #f04438;
-  --lx-danger-soft: rgba(240, 68, 56, 0.14);
-  --lx-info: #38bdf8;
-  --lx-info-soft: rgba(56, 189, 248, 0.14);
+  --lx-success: #35e0a1;
+  --lx-success-soft: rgba(41, 211, 145, 0.14);
+  --lx-warning: #ffc766;
+  --lx-warning-soft: rgba(255, 189, 74, 0.14);
+  --lx-danger: #ff7d8a;
+  --lx-danger-soft: rgba(255, 90, 106, 0.16);
+  --lx-info: #62ccff;
+  --lx-info-soft: rgba(67, 191, 255, 0.14);
 
-  --lx-focus-ring: #1d7bff;
+  --lx-focus-ring: #38d2ff;
 
   /* ---- Gradient & glow (single primary CTA per screen, DESIGN_SYSTEM §2) */
-  --lx-gradient-primary: linear-gradient(135deg, var(--lx-primary), var(--lx-primary-strong));
-  --lx-glow-primary: 0 8px 24px rgba(29, 123, 255, 0.35);
+  --lx-gradient-primary: linear-gradient(135deg, var(--lx-primary) 0%, var(--lx-primary-strong) 100%);
+  /* A radiating glow (blur only, no offset) rather than a directional drop
+     shadow — this is what the source site's buttons/CTAs actually use. */
+  --lx-glow-primary: 0 0 28px rgba(8, 116, 255, 0.34);
+
+  /* ---- Glass depth model (source site's "three depth levels, nothing in
+     between" — level 0 = --lx-bg on body, level 1 = --lx-surface + blur-1,
+     level 2 = --lx-surface-raised + blur-2). Nested blur is disabled below,
+     phones halve the radius, and reduced-transparency/contrast solidify. */
+  --lx-blur-1: 18px;
+  --lx-blur-2: 26px;
+  --lx-inset-highlight: inset 0 1px 0 rgba(150, 200, 255, 0.09);
 
   /* ---- Shape & space ---------------------------------------------------- */
   --lx-radius-sm: 10px;
@@ -62,9 +85,9 @@
   --lx-card-gap: 12px;
 
   /* ---- Elevation --------------------------------------------------------- */
-  --lx-shadow-card: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 8px 24px rgba(0, 0, 0, 0.35);
+  --lx-shadow-card: var(--lx-inset-highlight), 0 12px 32px rgba(0, 0, 0, 0.34);
   --lx-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --lx-shadow-md: 0 4px 16px rgba(0, 0, 0, 0.4);
+  --lx-shadow-md: 0 24px 64px rgba(0, 0, 0, 0.48);
 
   /* ---- Typography --------------------------------------------------------- */
   --lx-font-sans: system-ui, -apple-system, 'SF Pro Text', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
@@ -162,11 +185,20 @@
 
 html,
 body {
-  background: var(--lx-bg);
   color: var(--lx-text);
 }
 
+/* Level 0 — the application ground. Fixed radial gradients over the near-black
+   base, ported verbatim from the source site: a "room" the content scrolls
+   through rather than a huge painted layer repainted on every scroll frame. */
 body {
+  background:
+    radial-gradient(62rem 40rem at 8% -10%, rgba(7, 92, 255, 0.16), transparent 70%),
+    radial-gradient(52rem 36rem at 100% 8%, rgba(0, 168, 255, 0.1), transparent 70%),
+    radial-gradient(46rem 34rem at 50% 108%, rgba(123, 97, 255, 0.08), transparent 70%),
+    var(--lx-bg);
+  background-attachment: fixed;
+  color-scheme: dark;
   font-family: var(--lx-font-sans);
   font-size: var(--lx-text-body-size);
   line-height: 1.45;
@@ -435,10 +467,11 @@ body {
   padding: var(--lx-space-4);
 }
 .lx-modal {
-  background: var(--lx-surface);
-  border: 1px solid var(--lx-border);
+  /* Level 2 — floating surface. */
+  background: var(--lx-surface-raised);
+  border: 1px solid var(--lx-border-strong);
   border-radius: var(--lx-radius-lg);
-  box-shadow: var(--lx-shadow-md);
+  box-shadow: var(--lx-shadow-md), var(--lx-inset-highlight);
   max-width: 480px;
   width: 100%;
   max-height: 90vh;
@@ -471,12 +504,15 @@ body {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background: var(--lx-bg);
+  /* Transparent so the Level 0 radial-gradient ground painted on <body> shows
+     through, instead of a second, flat, occluding fill. */
+  background: transparent;
   color: var(--lx-text);
 }
 .lx-page-layout__header {
+  /* Level 1 glass — nav chrome, same as the source site's classification. */
   border-bottom: 1px solid var(--lx-border);
-  background: var(--lx-bg-elevated);
+  background: var(--lx-surface);
   padding: var(--lx-space-3) var(--lx-space-5);
 }
 .lx-page-layout__body {
@@ -488,7 +524,7 @@ body {
   width: 240px;
   flex-shrink: 0;
   border-right: 1px solid var(--lx-border);
-  background: var(--lx-bg-elevated);
+  background: var(--lx-surface);
   padding: var(--lx-space-4);
 }
 .lx-page-layout__content {
@@ -506,7 +542,7 @@ body {
   align-items: center;
   justify-content: center;
   padding: var(--lx-space-5);
-  background: var(--lx-bg);
+  background: transparent;
 }
 .lx-centered-layout__card {
   width: 100%;
@@ -542,6 +578,7 @@ body {
 /* ---- Card / StatCard / ListRow (DESIGN_SYSTEM §3) ------------------------- */
 
 .lx-card {
+  /* Level 1 glass. */
   background: var(--lx-surface);
   border: 1px solid var(--lx-border);
   border-radius: var(--lx-radius-lg);
@@ -871,7 +908,7 @@ button.lx-list-row {
   gap: var(--lx-space-3);
   padding: var(--lx-space-3) var(--lx-space-4);
   min-height: 56px;
-  background: var(--lx-bg-elevated);
+  background: var(--lx-surface);
   border-bottom: 1px solid var(--lx-border);
   padding-top: max(var(--lx-space-3), env(safe-area-inset-top));
 }
@@ -968,7 +1005,7 @@ button.lx-list-row {
 .lx-bottom-tab-bar {
   display: flex;
   border-top: 1px solid var(--lx-border);
-  background: var(--lx-bg-elevated);
+  background: var(--lx-surface);
   padding-bottom: env(safe-area-inset-bottom);
 }
 .lx-bottom-tab-bar__tab {
@@ -1144,7 +1181,14 @@ button.lx-list-row {
   min-height: 100dvh;
   width: 100%;
   overflow-x: hidden;
-  background: linear-gradient(135deg, var(--lx-bg-elevated) 0%, var(--lx-bg) 65%);
+  /* Same Level-0 ambient ground as the rest of the app (see body, above) —
+     the login screen is part of the one continuous dark environment, not a
+     separately-styled page. */
+  background:
+    radial-gradient(62rem 40rem at 8% -10%, rgba(7, 92, 255, 0.16), transparent 70%),
+    radial-gradient(52rem 36rem at 100% 8%, rgba(0, 168, 255, 0.1), transparent 70%),
+    radial-gradient(46rem 34rem at 50% 108%, rgba(123, 97, 255, 0.08), transparent 70%),
+    var(--lx-bg);
   display: flex;
   flex-direction: column;
   isolation: isolate;
@@ -1175,6 +1219,29 @@ button.lx-list-row {
   flex-direction: column;
   gap: var(--lx-space-4);
   padding: var(--lx-space-6) var(--lx-space-6) var(--lx-space-4);
+  isolation: isolate;
+}
+
+/* Optional dimmed background art, set per app via the `--lx-auth-hero-image`
+   custom property (AuthScreen's `heroImage` prop) — the supplied hero
+   photography, used strictly as atmosphere behind a scrim, masked to a fade
+   so it never competes with the card. Its baked-in wordmark/tagline is
+   Spanish-only pixels, so it is never the message: every readable word is
+   translated text rendered in the DOM on top (heroTitle/heroDescription),
+   never the image itself. Absent for a surface with no supplied art. */
+.lx-auth-screen__hero::before {
+  content: '';
+  position: absolute;
+  /* Bleeds past the hero column and dissolves with a single radial mask: a mask that
+     stopped at the column edge drew a visible rectangle seam down the middle of the page. */
+  inset: -12% -34% -12% -12%;
+  z-index: -1;
+  background-image: var(--lx-auth-hero-image, none);
+  background-size: cover;
+  background-position: center;
+  opacity: 0.34;
+  -webkit-mask-image: radial-gradient(120% 108% at 22% 42%, black 0%, black 42%, transparent 76%);
+  mask-image: radial-gradient(120% 108% at 22% 42%, black 0%, black 42%, transparent 76%);
 }
 
 .lx-auth-screen__hero-bar {
@@ -1356,10 +1423,11 @@ button.lx-list-row {
   min-height: var(--lx-touch-target-min);
   padding: 0 var(--lx-space-4);
   border-radius: var(--lx-radius-pill);
-  border: 1px solid var(--lx-border);
-  background: var(--lx-surface);
+  /* Level 2 — floating surface. */
+  border: 1px solid var(--lx-border-strong);
+  background: var(--lx-surface-raised);
   color: var(--lx-text);
-  box-shadow: var(--lx-shadow-md);
+  box-shadow: var(--lx-shadow-md), var(--lx-inset-highlight);
   font-size: var(--lx-text-meta-size);
   font-weight: 600;
   cursor: pointer;
@@ -1376,5 +1444,87 @@ button.lx-list-row {
     bottom: var(--lx-space-6);
     left: var(--lx-space-7);
     margin: 0;
+  }
+}
+
+/* ==============================================================================================
+   GLASS DEPTH LAYER — ported from the source site's `.lp-glass` / `.lp-glass-raised` model
+   (luparx-frontend/src/shared/styles/skins/luparx-neon.css, Prompt #25). Backdrop-filter is
+   applied directly to each existing surface selector rather than a new className, so no component
+   needed to change — only its background token (--lx-surface / --lx-surface-2 / --lx-surface-raised)
+   is now translucent instead of solid.
+
+   LEVEL 0  application background         body (see above)
+   LEVEL 1  ordinary surfaces               .lx-card, .lx-table-wrapper, .lx-page-layout__header,
+                                             .lx-page-layout__sidebar, .lx-app-bar,
+                                             .lx-bottom-tab-bar, .lx-centered-layout__card
+   LEVEL 2  floating surfaces               .lx-modal, .lx-language-pill
+   ============================================================================================== */
+
+.lx-card,
+.lx-table-wrapper,
+.lx-page-layout__header,
+.lx-page-layout__sidebar,
+.lx-app-bar,
+.lx-bottom-tab-bar,
+.lx-centered-layout__card {
+  -webkit-backdrop-filter: blur(var(--lx-blur-1));
+  backdrop-filter: blur(var(--lx-blur-1));
+}
+
+.lx-modal,
+.lx-language-pill {
+  -webkit-backdrop-filter: blur(var(--lx-blur-2));
+  backdrop-filter: blur(var(--lx-blur-2));
+}
+
+/* Nested blur is the expensive mistake: a glass surface inside a glass surface composites the
+   same region twice for no visual gain, because the inner one is already sampling a blurred
+   backdrop. Drop the filter on any glass surface with a glass ancestor. */
+.lx-card .lx-card,
+.lx-card .lx-table-wrapper,
+.lx-modal .lx-card,
+.lx-modal .lx-table-wrapper,
+.lx-page-layout__content .lx-page-layout__header {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+/* Phones composite on far less GPU, and a full-bleed blurred surface is where it shows. Halve
+   the radius rather than dropping it: the surfaces stay translucent, the cost does not. */
+@media (max-width: 640px) {
+  :root {
+    --lx-blur-1: 10px;
+    --lx-blur-2: 14px;
+  }
+}
+
+/* Reduced transparency is an accessibility preference, not a performance one — honour it by
+   making the surfaces solid rather than blurrier, and increase contrast likewise. */
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  :root {
+    --lx-surface: #0a1428;
+    --lx-surface-2: #10203f;
+    --lx-surface-raised: #16305f;
+    --lx-border: rgba(90, 165, 255, 0.5);
+    --lx-text-muted: #c2d3ea;
+    --lx-text-subtle: #b0c3dd;
+  }
+
+  .lx-card,
+  .lx-table-wrapper,
+  .lx-page-layout__header,
+  .lx-page-layout__sidebar,
+  .lx-app-bar,
+  .lx-bottom-tab-bar,
+  .lx-centered-layout__card,
+  .lx-modal,
+  .lx-language-pill {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .lx-auth-screen__hero::before {
+    display: none;
   }
 }

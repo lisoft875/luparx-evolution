@@ -12,7 +12,7 @@ the contract wins.
 | `module-geo` | `luparx-module-geo` | core | countries, N-level administrative divisions, document rules, `PhoneNumberService`, `IdentityDocumentValidator`, `AddressValidator` |
 | `module-identity` | `luparx-module-identity` | core, geo | users, credentials (Argon2id), TOTP MFA, federation linking, JWT issuance, refresh rotation, login rate limiting |
 | `module-tenancy` | `luparx-module-tenancy` | core | tenants, settings, memberships, `AccessResolver`, per-tenant reports |
-| `module-parking` | `luparx-module-parking` | core, tenancy | declared boundary only — see its own README |
+| `module-parking` | `luparx-module-parking` | core, tenancy | zones, tariffs and numbered spaces (entities + repositories); sessions, patrols, citations and finance still deferred |
 | `app` | `luparx-app` | all | Spring Boot bootstrap, security, controllers, Flyway, OpenAPI, observability |
 
 The dependency rule of `docs/ARCHITECTURE.md` §1 is enforced by the POMs, not by convention.
@@ -53,6 +53,13 @@ Flyway runs at startup and creates the schema plus the catalogue seed. Hibernate
 `ddl-auto: none` on purpose: `citext` and `jsonb` columns are beyond what the dialect would infer,
 and the schema belongs to the migrations.
 
+> **Migration numbering.** `V1_0`–`V5_0` are structure by layer and `V9_x` is catalogue seed data.
+> A new migration must sort *after* everything an existing database has already applied — out-of-order
+> migration is off on purpose — which is why the parking-space table is `V10_0` and not `V6_0`:
+> numbering it by layer would have forced every existing database to be recreated. Nothing needs to be
+> reset; Flyway applies `V10_0`/`V9_2` on the next start. If a database is ever left inconsistent,
+> `cd infra && docker compose down -v && docker compose up -d` recreates it from scratch.
+
 - API: `http://localhost:8090`
 - OpenAPI: `http://localhost:8090/v3/api-docs` — Swagger UI at `/swagger-ui.html`
 - JWKS: `http://localhost:8090/.well-known/jwks.json`
@@ -61,9 +68,9 @@ and the schema belongs to the migrations.
 ## Development seed data (`dev` profile only)
 
 A fresh database has no users, so a login can only answer `INVALID_CREDENTIALS`. Under the `dev`
-profile `DevDataSeeder` creates a demo municipality (slug `demo-municipality`, whose country,
-currency, locale and time zone come from `platform.defaults.*` — nothing is hardcoded) and one
-account per portal, each with an **active** membership and a verified email:
+profile `DevDataSeeder` creates the launch municipality — **Municipalidad de San José**, slug
+`san-jose`, whose country, currency, locale and time zone come from `platform.defaults.*`, nothing
+hardcoded — and one account per portal, each with an **active** membership and a verified email:
 
 | Portal | Email | Password | Role |
 |---|---|---|---|
@@ -76,6 +83,13 @@ account per portal, each with an **active** membership and a verified email:
 > laptop usable and **must never exist in any environment somebody else can reach**. The bean is
 > annotated `@Profile("dev")`, so it does not exist at all under any other profile.
 
+San José is **seed data, not an assumption of the code**: the zone list and the municipality name are
+constants of the fixture, and a deployment in another country changes them without a line of domain
+logic moving. Earlier revisions of this fixture created a placeholder tenant `demo-municipality`; if
+your database still has it, the seeder **closes** it (a tenant is never deleted — memberships, audit
+rows and ledgers reference it) so exactly one municipality is active. A database created from scratch
+never has it at all.
+
 The seeder is idempotent: it looks the tenant up by slug, the users by email and the memberships by
 tenant + user + portal, and does nothing when they are already there. It runs through the real
 `UserRegistrationService`, `EmailVerificationService` and `MembershipService` — the password is
@@ -83,6 +97,47 @@ hashed by the real `PasswordService`, never written as a literal — so what it 
 what a real registration produces. An account it cannot create (a catalogue that does not offer a
 passport for the configured default country, or a country with no administrative divisions seeded)
 is logged and skipped; the seeder never prevents startup.
+
+### Parking fixture (zones, tariffs and bays)
+
+Once the municipality exists, `DevParkingSeeder` gives it the parking it operates: **8 zones** across
+six districts of the canton of San José, each linked to its real district in
+`administrative_divisions` (seeded by `V9_1`/`V9_2`), one open-ended **hourly tariff** per zone priced
+in the municipality's own currency, and **5000 numbered bays**.
+
+| Zone code | Name | District | Bays (default 5000) |
+|---|---|---|---|
+| `SJ-AMON` | Barrio Amón | Carmen (`10101`) | `0001`–`0500` |
+| `SJ-ESCALANTE` | Barrio Escalante | Carmen (`10101`) | `0501`–`1250` |
+| `SJ-MERCADO` | Mercado Central | Merced (`10102`) | `1251`–`2000` |
+| `SJ-COLON` | Paseo Colón | Merced (`10102`) | `2001`–`2750` |
+| `SJ-HOSPITAL` | Hospital San Juan de Dios | Hospital (`10103`) | `2751`–`3350` |
+| `SJ-CATEDRAL` | Catedral – La Soledad | Catedral (`10104`) | `3351`–`3950` |
+| `SJ-ZAPOTE` | Zapote Centro | Zapote (`10105`) | `3951`–`4450` |
+| `SJ-SABANA` | La Sabana | Mata Redonda (`10108`) | `4451`–`5000` |
+
+A bay's `code` is what is painted on the street and what the citizen types, so it is **text with its
+leading zeros intact** (`0001`), never a number, and it is unique per municipality rather than
+globally. Codes are dealt to the zones in contiguous blocks proportional to a declared share, with
+the boundaries computed from the cumulative share (`start = total × cumulative ÷ totalShare`) — that
+partitions the range exactly, so there is no remainder to hand out, no gap and no bay in two zones.
+Changing the count re-derives every boundary; the table above is the default of 5000.
+
+The insert is batched (`JdbcTemplate.batchUpdate`, 1000 rows per statement) inside a single
+transaction and takes well under a second; the log line says how many rows it created and in how
+long. It is idempotent by code: the codes already present are read once and skipped, so an
+interrupted run completes on the next start. Only *missing* codes are created — an existing bay is
+never moved to another zone, so changing the shares after a seed has run has no effect until the
+database is recreated.
+
+How many bays is configuration, not a constant:
+
+```bash
+# Anything from 1 to 10000; above the maximum it is clamped and a WARN says so.
+mvn -pl app -am spring-boot:run -Dspring-boot.run.profiles=dev \
+    -Dspring-boot.run.arguments=--luparx.dev.parking-spaces=50
+# or: export LUPARX_DEV_PARKING_SPACES=50
+```
 
 To turn it off:
 
@@ -118,6 +173,8 @@ placeholder key (`docs/SECURITY.md` §5).
 | `JWT_ISSUER` | yes in prod | `iss` claim and expected issuer on verification |
 | `MFA_TOTP_ENCRYPTION_KEY` | yes | Base64 32-byte AES-GCM key protecting TOTP secrets at rest |
 | `IP_HASH_PEPPER` | yes | Mixed into IP hashes so they cannot be reversed with a rainbow table |
+| `LUPARX_DEV_SEED_DEMO_DATA` | no (`dev` only) | `false` keeps the database untouched on start |
+| `LUPARX_DEV_PARKING_SPACES` | no (`dev` only) | Bays the fixture creates, default `5000`, maximum `10000` |
 | `SMTP_*`, `SMTP_FROM_ADDRESS` | yes | Transactional email |
 | `OAUTH_*` | no | Federation client credentials; a provider with a blank client id answers `FEDERATION_NOT_CONFIGURED` |
 | `CORS_ALLOWED_ORIGIN_{CITIZEN,ADMIN,INSPECTOR,PLATFORM}` | yes in prod | One origin list per portal — never a shared wildcard |
