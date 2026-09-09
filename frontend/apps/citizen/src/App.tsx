@@ -12,6 +12,7 @@ import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import { TenantSelectPage } from './pages/TenantSelectPage';
 import { HomePage } from './pages/HomePage';
+import { MorePage } from './pages/MorePage';
 import { ProfilePage } from './pages/ProfilePage';
 import { ParkingPage } from './pages/ParkingPage';
 import { VehiclesPage } from './pages/VehiclesPage';
@@ -54,6 +55,14 @@ export function App(): React.JSX.Element {
                     <RequireTenant selectTenantPath="/select-tenant">
                       <HomePage />
                     </RequireTenant>
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/more"
+                element={
+                  <RequireAuth loginPath="/login">
+                    <MorePage />
                   </RequireAuth>
                 }
               />

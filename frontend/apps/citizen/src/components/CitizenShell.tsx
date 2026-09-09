@@ -91,8 +91,11 @@ export function CitizenShell({ children, title, subtitle, onBack, bare = false }
       key: 'more',
       label: t('nav.more'),
       icon: <IconList />,
-      onSelect: () => navigate('/profile'),
-      current: location.pathname === '/profile' || location.pathname === '/fines',
+      onSelect: () => navigate('/more'),
+      current:
+        location.pathname === '/more' ||
+        location.pathname.startsWith('/profile') ||
+        location.pathname.startsWith('/fines'),
     },
   ];
 
