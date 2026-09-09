@@ -338,6 +338,7 @@ export const esCR = {
   'citizen.parking.step2.addVehicleCta': 'Agregar vehículo',
   'citizen.parking.step3.title': 'Tiempo',
   'citizen.parking.step3.creditApplied': 'incluye {{minutes}} a favor',
+  'citizen.parking.step3.savedMinutes': 'Tus minutos guardados',
   'citizen.parking.step4.title': 'Resumen y pago',
   'citizen.parking.step4.zoneLabel': 'Zona',
   'citizen.parking.step4.vehicleLabel': 'Vehículo',

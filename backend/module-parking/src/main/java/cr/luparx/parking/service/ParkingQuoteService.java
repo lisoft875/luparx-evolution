@@ -53,17 +53,20 @@ public class ParkingQuoteService {
     private final ParkingRateRepository rateRepository;
     private final TimeCreditService timeCreditService;
     private final ParkingScheduleService scheduleService;
+    private final ParkingPolicyService policyService;
     private final Clock clock;
 
     public ParkingQuoteService(ParkingZoneRepository zoneRepository,
                                ParkingRateRepository rateRepository,
                                TimeCreditService timeCreditService,
                                ParkingScheduleService scheduleService,
+                               ParkingPolicyService policyService,
                                Clock clock) {
         this.zoneRepository = zoneRepository;
         this.rateRepository = rateRepository;
         this.timeCreditService = timeCreditService;
         this.scheduleService = scheduleService;
+        this.policyService = policyService;
         this.clock = clock;
     }
 
@@ -104,6 +107,11 @@ public class ParkingQuoteService {
      * <p>Read-only and side-effect free: asking for a quote never consumes a minute and never opens
      * an account. The same computation is redone inside the transaction that actually starts the
      * session, because a quote the client held on to for ten minutes is a display, not a promise.</p>
+     *
+     * <p>The duration is checked here against what the municipality offers — plus the citizen's own
+     * saved minutes (CONTRACT.md v0.12) — rather than by the caller, so that the check and the
+     * balance it depends on are read together. Quoting a duration the start would refuse would show
+     * a price nobody can buy.</p>
      */
     @Transactional
     public ParkingQuote quote(TenantId tenantId, UserId userId, UUID zoneId, int minutes) {
@@ -111,6 +119,7 @@ public class ParkingQuoteService {
         Instant now = clock.instant();
         ParkingRate rate = requireRate(tenantId, zoneId, now);
         int available = timeCreditService.availableMinutes(tenantId, userId);
+        policyService.requireSessionIncrement(policyService.require(tenantId), minutes, available);
         int chargeable = chargeableMinutes(tenantId, now, minutes);
         return price(rate, minutes, chargeable, available);
     }

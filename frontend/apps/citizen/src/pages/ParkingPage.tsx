@@ -32,6 +32,7 @@ import {
   useParkingSpaceFormat,
   useParkingZones,
   useStartParkingSession,
+  useTimeCredits,
   useVehicleColorCatalog,
   useVehicleTypeCatalog,
   useVehicles,
@@ -121,6 +122,7 @@ export function ParkingPage(): React.JSX.Element {
 
   const policyQuery = useParkingPolicy();
   const policy = policyQuery.data;
+  const { data: timeCredits } = useTimeCredits();
 
   /**
    * The stay lengths this municipality actually sells.
@@ -131,7 +133,7 @@ export function ParkingPage(): React.JSX.Element {
    * and maximum the server applies — a free-text minute box would only manufacture requests that
    * are certain to be refused.
    */
-  const offeredMinutes = useMemo(
+  const incrementMinutes = useMemo(
     () =>
       (policy?.sessionIncrementsMinutes ?? []).filter(
         (option) => option >= (policy?.sessionMinMinutes ?? 0) && option <= (policy?.sessionMaxMinutes ?? Infinity),
@@ -139,10 +141,47 @@ export function ParkingPage(): React.JSX.Element {
     [policy?.sessionIncrementsMinutes, policy?.sessionMinMinutes, policy?.sessionMaxMinutes],
   );
 
+  /**
+   * The minutes the citizen has saved in this municipality, as a duration of their own — when they
+   * have any and it is not already one of the increments above (CONTRACT.md v0.12).
+   *
+   * Saved minutes come from finishing early and almost never land on an offered option: 44 left
+   * over from an hour, against a list of 30, 60 and 120. Without this entry they can only be spent
+   * inside a longer stay — ask for 60 and the 44 come off it, ask for 30 and 14 stay behind — and
+   * there is no way to say "just use what I have". The municipality's *minimum* deliberately does
+   * not apply: it is the shortest stay it sells, and this time was paid for already.
+   */
+  const savedMinutes = timeCredits?.minutes ?? 0;
+  const savedMinutesOption =
+    savedMinutes > 0 &&
+    savedMinutes <= (policy?.sessionMaxMinutes ?? Infinity) &&
+    !incrementMinutes.includes(savedMinutes)
+      ? savedMinutes
+      : null;
+
+  // First, because it is free and it is theirs — then the municipality's ladder.
+  const offeredMinutes = useMemo(
+    () => (savedMinutesOption !== null ? [savedMinutesOption, ...incrementMinutes] : incrementMinutes),
+    [savedMinutesOption, incrementMinutes],
+  );
+
+  /**
+   * Preselected: the municipality's shortest sold stay — deliberately **not** the saved-minute
+   * option, even though that one is listed first and costs nothing.
+   *
+   * <p>Saved minutes are whatever was left over, which can be three. Opening the screen already set
+   * to a three-minute stay would let somebody who came to park for an hour start one with a tap,
+   * and they would find out at the windscreen. Being at the top of the list is what makes it easy
+   * to choose; being chosen for them is what makes it a trap. Preselecting the smallest sold
+   * duration is also stable — it does not depend on whether the credit balance arrived before the
+   * policy did, which is what it depended on until this was written down.</p>
+   */
   const [minutes, setMinutes] = useState<number | null>(null);
   useEffect(() => {
-    if (minutes === null && offeredMinutes.length > 0) setMinutes(offeredMinutes[0]!);
-  }, [minutes, offeredMinutes]);
+    if (minutes !== null) return;
+    const preselected = incrementMinutes[0] ?? offeredMinutes[0];
+    if (preselected !== undefined) setMinutes(preselected);
+  }, [minutes, incrementMinutes, offeredMinutes]);
 
   /**
    * Priced only against a zone this municipality actually publishes.
@@ -394,8 +433,17 @@ export function ParkingPage(): React.JSX.Element {
                       label: formatDurationLabel(option, tPlural),
                       // Absent while its quote is still in flight, and absent for good if that
                       // request failed: a duration without a price is still choosable, and the
-                      // summary below states the amount before anything is charged.
-                      detail: price ? [price, credited].filter(Boolean).join(' · ') : undefined,
+                      // summary below states the amount before anything is charged. The saved-minute
+                      // option says so in words as well: its price is ₡0 for a reason the citizen
+                      // should be able to read, not because parking became free.
+                      detail:
+                        [
+                          option === savedMinutesOption ? t('citizen.parking.step3.savedMinutes') : undefined,
+                          price,
+                          option === savedMinutesOption ? undefined : credited,
+                        ]
+                          .filter(Boolean)
+                          .join(' · ') || undefined,
                       icon: <IconClock size={16} />,
                     };
                   })}

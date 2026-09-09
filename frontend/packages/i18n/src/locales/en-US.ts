@@ -326,6 +326,7 @@ export const enUS: Record<TranslationKey, string> = {
   'citizen.parking.step2.addVehicleCta': 'Add vehicle',
   'citizen.parking.step3.title': 'Time',
   'citizen.parking.step3.creditApplied': 'includes {{minutes}} of credit',
+  'citizen.parking.step3.savedMinutes': 'Your saved minutes',
   'citizen.parking.step4.title': 'Summary and payment',
   'citizen.parking.step4.zoneLabel': 'Zone',
   'citizen.parking.step4.vehicleLabel': 'Vehicle',

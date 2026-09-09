@@ -1097,7 +1097,16 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
       if (sub === 'sessions' && segments.length === 5 && method === 'POST') {
         const payload = await readBody<StartParkingSessionRequest>(init);
         const policy = mockParkingPolicyForTenant(tenantId);
-        if (!policy.sessionIncrementsMinutes.includes(payload.minutes)) {
+        // The municipality's increments, plus the one duration that is the citizen's own: exactly
+        // their saved minutes (CONTRACT.md v0.12). That one is not held to the minimum stay — it was
+        // paid for already — but it is still held to the maximum, which is about the bay.
+        const savedMinutes = availableMockCreditMinutes(walletKey(userId, tenantId ?? ''));
+        const spendsSavedMinutes = payload.minutes > 0 && payload.minutes === savedMinutes;
+        if (
+          !spendsSavedMinutes
+            ? !policy.sessionIncrementsMinutes.includes(payload.minutes)
+            : payload.minutes > policy.sessionMaxMinutes
+        ) {
           return problem(422, 'INVALID_INCREMENT', 'Invalid session duration');
         }
         // A vehicle of the citizen's, or a plate typed for somebody else's car (CONTRACT.md v0.11).

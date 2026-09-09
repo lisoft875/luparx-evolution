@@ -202,7 +202,12 @@ public class ParkingSessionService {
     public ParkingSession start(TenantId tenantId, UserId userId, UUID zoneId, String spaceCode,
                                 SessionVehicleRef vehicleRef, int minutes, String idempotencyKey) {
         ParkingPolicy policy = policyService.require(tenantId);
-        policyService.requireSessionIncrement(policy, minutes);
+        // Read — and locked — before the duration is judged, because one of the durations a citizen
+        // may ask for is exactly their saved minutes (CONTRACT.md v0.12), and the same number then
+        // prices the stay below. Reading it twice would let the balance move in between and make the
+        // check and the price disagree about what "all of it" means.
+        int savedMinutes = timeCreditService.availableMinutesForUpdate(tenantId, userId);
+        policyService.requireSessionIncrement(policy, minutes, savedMinutes);
 
         // Resolved to the two facts a stay actually records — the plate as it will be verified, and
         // what kind of vehicle it is. For a registered car they come from the record (so a citizen
@@ -244,8 +249,7 @@ public class ParkingSessionService {
         Instant now = clock.instant();
         ParkingRate rate = quoteService.requireRate(tenantId, zoneId, now);
         int chargeable = requireChargeableWindow(tenantId, now, minutes);
-        int available = timeCreditService.availableMinutesForUpdate(tenantId, userId);
-        ParkingQuote quote = quoteService.price(rate, minutes, chargeable, available);
+        ParkingQuote quote = quoteService.price(rate, minutes, chargeable, savedMinutes);
 
         ParkingSession session = new ParkingSession(Uuid7.generate(), tenantId.value(), userId.value(),
                 vehicleId, plate, vehicleType, zoneId, space.getId(), now,

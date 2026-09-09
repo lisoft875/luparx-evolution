@@ -1134,3 +1134,57 @@ los datos de producción, y queda anotado como tal.
 El precio no depende del tipo de vehículo. `vehicleType` se pide y se guarda porque es lo que el
 fiscalizador busca y porque es el dato por el que una municipalidad cobraría distinto el día que
 decida hacerlo —no porque hoy cambie el monto—.
+
+# v0.12 — Gastar los minutos guardados enteros (normativo)
+
+## El caso
+
+Los minutos guardados vienen de finalizar antes de tiempo (v0.2, regla 5) y casi nunca caen sobre una
+de las opciones que vende la municipalidad: 44 minutos sobrantes de una hora, contra una lista de 30,
+60 y 120.
+
+Hasta aquí sólo se podían gastar **dentro** de una estadía más larga —pedís 60 y los 44 se descuentan
+de ahí, o pedís 30 y 14 se quedan guardados—. No había forma de decir «usá justo lo que tengo», que es
+lo único que quiere hacer alguien que tiene minutos guardados.
+
+## La regla
+
+Al iniciar un estacionamiento, las duraciones que se ofrecen son **las de la municipalidad más una
+que es del ciudadano**: exactamente su saldo de minutos guardados en esa municipalidad, cuando tiene y
+cuando ese número no coincide ya con un incremento publicado.
+
+Va **primera** en el desplegable y las demás siguen en el orden de la municipalidad (30 min, 1 hora,
+2 horas…). Sale siempre en **₡0**: el saldo cubre por definición todos los minutos que se están
+pidiendo. En pantalla dice por qué —«Tus minutos guardados»— porque un ₡0 sin explicación es un número
+sobre el que nadie puede decidir.
+
+**El mínimo de la municipalidad no le aplica.** `sessionMinMinutes` es la estadía más corta que la
+municipalidad **vende**, y esta no se está vendiendo: ya se pagó, y la plata se movió cuando se pagó.
+Aplicarle el mínimo rechazaría justo el caso para el que existe la regla, porque una municipalidad
+normalmente pone el mínimo igual a su incremento más chico. El **máximo sí aplica**: es sobre cuánto
+tiempo puede un carro ocupar una bahía, y eso es cierto sin importar quién pagó el tiempo.
+
+## No queda preseleccionada
+
+La opción va de primera en la lista, pero **el desplegable abre con la estadía vendida más corta**, no
+con ella. Los minutos guardados son lo que haya sobrado y pueden ser tres; abrir la pantalla ya puesta
+en tres minutos dejaría que alguien que venía a parquear una hora arranque una estadía de tres con un
+toque y se entere en el parabrisas. Estar de primera es lo que la hace fácil de escoger; estar
+escogida por defecto la haría una trampa.
+
+## Dónde se valida
+
+`POST /citizen/parking/sessions` y `POST /citizen/parking/quote` aceptan esa duración además de los
+incrementos; cualquier otra sigue siendo `INVALID_INCREMENT` y **nunca** se redondea a la más cercana.
+
+El saldo se lee **una sola vez y con bloqueo** al inicio de la transacción que va a gastarlo, y ese
+mismo número valida la duración y cotiza la estadía. Leerlo dos veces dejaría que el saldo se moviera
+en el medio y que la validación y el precio no estuvieran de acuerdo sobre qué quiere decir «todo lo
+que tengo».
+
+## Pendiente
+
+Ampliar tiempo todavía ofrece sólo los incrementos de ampliación de la municipalidad. La misma regla
+tiene sentido ahí y no se aplicó en esta versión: la ampliación tiene además el tope
+`extensionMaxTotalMinutes`, y cómo se combinan las dos cosas es una decisión de producto que no se
+inventa acá.

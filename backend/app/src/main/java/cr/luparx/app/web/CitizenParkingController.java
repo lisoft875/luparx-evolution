@@ -217,10 +217,9 @@ public class CitizenParkingController {
     public ParkingDtos.QuoteResponse quote(@Valid @RequestBody ParkingDtos.QuoteRequest request) {
         TenantId tenantId = TenantContextHolder.requireTenantId();
         UserId userId = TenantContextHolder.requireUserId();
-        ParkingPolicy policy = policyService.require(tenantId);
-        // The same check the start would make: a quote for an option the municipality does not offer
-        // would show the citizen a price they can never pay.
-        policyService.requireSessionIncrement(policy, request.minutes().intValue());
+        // The duration is judged inside `quote`, together with the saved-minute balance it depends
+        // on (CONTRACT.md v0.12): one of the durations a citizen may ask for is exactly the minutes
+        // they have saved, so the check cannot be made here without reading that balance twice.
         ParkingQuote quote = quoteService.quote(tenantId, userId, request.zoneId(), request.minutes().intValue());
         return mapper.toQuote(quote);
     }

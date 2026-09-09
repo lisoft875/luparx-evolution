@@ -132,6 +132,33 @@ public class ParkingPolicyService {
      *         than what the citizen asked for is worse than refusing.
      */
     public void requireSessionIncrement(ParkingPolicy policy, int minutes) {
+        requireSessionIncrement(policy, minutes, 0);
+    }
+
+    /**
+     * The same check, plus the one duration that is the citizen's rather than the municipality's:
+     * exactly the minutes they have saved (CONTRACT.md v0.12).
+     *
+     * <p>Saved minutes come from finishing early and rarely land on an offered increment — 44 left
+     * over from an hour, against a list of 30, 60 and 120. Without this, they can only be spent as
+     * part of a longer stay: ask for 60 and the 44 are applied to it, or ask for 30 and 14 of them
+     * stay behind. There was no way to say "just use what I have", which is the one thing a person
+     * with saved minutes wants to do.</p>
+     *
+     * <p><b>The municipality's minimum does not apply to it.</b> {@code sessionMinMinutes} is the
+     * shortest stay the municipality <em>sells</em>, and this one is not being sold: it was paid for
+     * already, and the money for it moved when it was. Applying the minimum here would refuse the
+     * exact case the rule exists for, since a municipality typically sets the minimum to its
+     * smallest increment. The maximum <em>does</em> apply: it is about how long a car may hold a bay,
+     * which is true whoever paid for the time.</p>
+     *
+     * @param savedMinutes the citizen's time-credit balance in this municipality, read inside the
+     *                     same transaction that will spend it; 0 when they have none
+     */
+    public void requireSessionIncrement(ParkingPolicy policy, int minutes, int savedMinutes) {
+        if (minutes > 0 && minutes == savedMinutes && minutes <= policy.getSessionMaxMinutes()) {
+            return;
+        }
         if (!policy.sessionIncrements().allows(minutes)
                 || minutes < policy.getSessionMinMinutes()
                 || minutes > policy.getSessionMaxMinutes()) {
