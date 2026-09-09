@@ -3,7 +3,7 @@ import { BrowserRouter, HashRouter, Navigate, Route, Routes } from 'react-router
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { I18nProvider } from '@luparx/i18n';
 import { LocalePreferenceSync, TenantCacheReset } from '@luparx/features';
-import { AuthProvider, RequireAuth, RequireTenant } from '@luparx/auth';
+import { AuthProvider, RequireAuth, RequirePermission, RequireTenant } from '@luparx/auth';
 import { mockFetch } from '@luparx/api-client/mocks';
 import { API_BASE_URL, PORTAL, USE_MOCKS } from './env';
 import { LoginPage } from './pages/LoginPage';
@@ -20,6 +20,9 @@ import { UsersListPage } from './pages/UsersListPage';
 import { UserDetailPage } from './pages/UserDetailPage';
 import { AuditPage } from './pages/AuditPage';
 import { ReportsPage } from './pages/ReportsPage';
+import { EnforcementCitationsPage } from './pages/EnforcementCitationsPage';
+import { EnforcementCitationDetailPage } from './pages/EnforcementCitationDetailPage';
+import { SettingsInfractionTypesPage } from './pages/SettingsInfractionTypesPage';
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
@@ -131,6 +134,45 @@ export function App(): React.JSX.Element {
                   <RequireAuth loginPath="/login">
                     <RequireTenant selectTenantPath="/select-tenant">
                       <SettingsSchedulePage />
+                    </RequireTenant>
+                  </RequireAuth>
+                }
+              />
+              {/* Enforcement (CONTRACT.md v0.7). Reading is `CITATION_READ`, held by finance and
+                  support too; annulment is `CITATION_VOID` and is checked on the detail screen
+                  itself, because the list is legitimately readable by people who may not annul. */}
+              <Route
+                path="/enforcement/citations"
+                element={
+                  <RequireAuth loginPath="/login">
+                    <RequireTenant selectTenantPath="/select-tenant">
+                      <RequirePermission permission="CITATION_READ" fallback={<Navigate to="/" replace />}>
+                        <EnforcementCitationsPage />
+                      </RequirePermission>
+                    </RequireTenant>
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/enforcement/citations/:id"
+                element={
+                  <RequireAuth loginPath="/login">
+                    <RequireTenant selectTenantPath="/select-tenant">
+                      <RequirePermission permission="CITATION_READ" fallback={<Navigate to="/" replace />}>
+                        <EnforcementCitationDetailPage />
+                      </RequirePermission>
+                    </RequireTenant>
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/settings/infraction-types"
+                element={
+                  <RequireAuth loginPath="/login">
+                    <RequireTenant selectTenantPath="/select-tenant">
+                      <RequirePermission permission="ENFORCEMENT_MANAGE" fallback={<Navigate to="/" replace />}>
+                        <SettingsInfractionTypesPage />
+                      </RequirePermission>
                     </RequireTenant>
                   </RequireAuth>
                 }

@@ -1,9 +1,9 @@
 /**
- * TODO(domain): everything in this file stands in for citizen-facing endpoints that CONTRACT.md's
- * "v0.2 — Dominio de parqueo" section does not yet define a contract for: fines
- * (`/api/v1/citizen/fines`), payment methods (`/api/v1/citizen/payment-methods`) and the
- * ledger/movements list. Vehicles, parking sessions, the wallet balance and time credits are wired
- * to the real `@luparx/api-client` contract (see `../lib/queries.ts`) and no longer live here.
+ * TODO(domain): everything in this file stands in for citizen-facing endpoints that CONTRACT.md
+ * does not yet define a contract for: payment methods (`/api/v1/citizen/payment-methods`) and the
+ * ledger/movements list. Vehicles, parking sessions, the wallet balance, time credits and — since
+ * v0.7 — fines are wired to the real `@luparx/api-client` contract (see `../lib/queries.ts`) and no
+ * longer live here.
  *
  * Sample data intentionally matches the client's reference mockup
  * (docs/brand/citizen-app-reference-screens.png): citizen "Leana Vásquez", a card ending in 4242,
@@ -56,21 +56,6 @@ const DEFAULT_ZONES: MockZone[] = ZONES_BY_TENANT['tenant-sanjose']!;
 export function zonesForTenant(tenantId: string | null | undefined): MockZone[] {
   return (tenantId && ZONES_BY_TENANT[tenantId]) || DEFAULT_ZONES;
 }
-
-// ---- Fines ------------------------------------------------------------------
-
-export interface MockFine {
-  id: string;
-  plate: string;
-  reasonKey: string;
-  amountMinor: number;
-  currencyCode: string;
-  status: 'PENDING' | 'PAID';
-  issuedAt: string;
-  dueAt: string;
-}
-
-export const MOCK_FINES: MockFine[] = [];
 
 // ---- Payment methods ----------------------------------------------------
 

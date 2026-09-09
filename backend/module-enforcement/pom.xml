@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>cr.luparx</groupId>
+    <artifactId>luparx-backend</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+  </parent>
+
+  <artifactId>luparx-module-enforcement</artifactId>
+  <name>luparx-module-enforcement</name>
+  <description>Enforcement domain: infraction catalogue, citations, their legal life cycle and their evidence.</description>
+
+  <dependencies>
+    <dependency>
+      <groupId>cr.luparx</groupId>
+      <artifactId>luparx-platform-core</artifactId>
+    </dependency>
+    <!--
+      Tenancy, because a citation belongs to a municipality and its number, currency and time zone
+      are read from it. Deliberately NOT module-parking: a citation outlives the session it may or
+      may not relate to, and the only thing this module needs from parking is the answer to "was
+      this plate covered on this bay at this moment", which it asks through the ParkingStatus port.
+      That is what would become an HTTP call the day enforcement is extracted, instead of a rewrite.
+    -->
+    <dependency>
+      <groupId>cr.luparx</groupId>
+      <artifactId>luparx-module-tenancy</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-data-jpa</artifactId>
+    </dependency>
+  </dependencies>
+</project>

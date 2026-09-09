@@ -6,6 +6,12 @@ export interface BottomTab {
   icon: React.ReactNode;
   onSelect: () => void;
   current?: boolean;
+  /**
+   * Count drawn on the icon — how many citations are still waiting to be sent, in the officer's
+   * app. Omitted, and not zero, when there is nothing to report: a badge showing "0" is a mark on
+   * the screen that means "nothing", which is worse than no mark at all.
+   */
+  badgeCount?: number;
 }
 
 export interface BottomTabBarProps {
@@ -37,6 +43,9 @@ export function BottomTabBar({ tabs, className }: BottomTabBarProps): React.JSX.
         >
           <span className="lx-bottom-tab-bar__icon" aria-hidden="true">
             {tab.icon}
+            {tab.badgeCount && tab.badgeCount > 0 ? (
+              <span className="lx-bottom-tab-bar__badge">{tab.badgeCount}</span>
+            ) : null}
           </span>
           <span className="lx-bottom-tab-bar__label">{tab.label}</span>
         </button>

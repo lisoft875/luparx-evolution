@@ -537,6 +537,11 @@ body {
   color: var(--lx-success);
   border-color: var(--lx-success-soft);
 }
+.lx-alert--warning {
+  background: var(--lx-warning-soft);
+  color: var(--lx-warning);
+  border-color: var(--lx-warning-soft);
+}
 .lx-alert--danger {
   background: var(--lx-danger-soft);
   color: var(--lx-danger);
@@ -1261,6 +1266,26 @@ button.lx-list-row {
   justify-content: center;
   width: 24px;
   height: 24px;
+}
+.lx-bottom-tab-bar__icon {
+  position: relative;
+}
+/* Pending work on a destination, drawn on its icon. Same shape and colour as the app bar's own
+   counter so "there is something waiting for you" reads the same wherever it appears. */
+.lx-bottom-tab-bar__badge {
+  position: absolute;
+  top: -4px;
+  right: -8px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: var(--lx-radius-pill);
+  background: var(--lx-danger);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
 }
 .lx-bottom-tab-bar__label {
   font-size: 11px;

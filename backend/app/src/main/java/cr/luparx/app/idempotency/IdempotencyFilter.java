@@ -81,7 +81,13 @@ public class IdempotencyFilter extends OncePerRequestFilter {
             // so a double tap on the button must replay the first response instead of charging again.
             "/api/v1/citizen/parking/sessions",
             "/api/v1/citizen/parking/sessions/*/extend",
-            "/api/v1/citizen/parking/sessions/*/finish");
+            "/api/v1/citizen/parking/sessions/*/finish",
+            // Enforcement (CONTRACT.md v0.7): a citation is an administrative act, and two of them
+            // for one infraction is a problem the citizen has to travel to an office to undo. The
+            // header protects the request; `deviceCitationId` protects the act itself, for the
+            // retry that arrives from a reinstalled app with a brand-new key.
+            "/api/v1/inspector/citations",
+            "/api/v1/inspector/citations/*/issue");
 
     private final IdempotencyKeyRepository repository;
     private final ObjectMapper objectMapper;

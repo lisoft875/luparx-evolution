@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ActiveTenantBadge } from '@luparx/features';
-import { useAuth } from '@luparx/auth';
+import { useAuth, usePermissions } from '@luparx/auth';
 import { useTranslation } from '@luparx/i18n';
 import { Button, Brand, PageLayout } from '@luparx/ui';
 
@@ -13,6 +13,7 @@ export interface AdminShellProps {
 export function AdminShell({ children }: AdminShellProps): React.JSX.Element {
   const { t } = useTranslation();
   const { logout } = useAuth();
+  const permissions = usePermissions();
   const navigate = useNavigate();
 
   return (
@@ -40,6 +41,20 @@ export function AdminShell({ children }: AdminShellProps): React.JSX.Element {
           <Link to="/audit">{t('nav.audit')}</Link>
           <Link to="/reports">{t('nav.reports')}</Link>
           <hr />
+          {/* Enforcement (CONTRACT.md v0.7). Shown only to whoever may read a citation: finance and
+              support hold `CITATION_READ`; the catalogue additionally needs `ENFORCEMENT_MANAGE`.
+              The server checks both again — this only keeps a control off a screen where pressing
+              it could only ever produce a 403. */}
+          {permissions.has('CITATION_READ') ? (
+            <>
+              <strong className="lx-text-meta">{t('nav.enforcement')}</strong>
+              <Link to="/enforcement/citations">{t('nav.enforcement.citations')}</Link>
+              {permissions.has('ENFORCEMENT_MANAGE') ? (
+                <Link to="/settings/infraction-types">{t('nav.enforcement.types')}</Link>
+              ) : null}
+              <hr />
+            </>
+          ) : null}
           {/* Municipal operation settings (CONTRACT.md v0.3) — everything a municipality tunes for
               itself: the languages its portals speak, how a bay is numbered, and when it charges. */}
           <strong className="lx-text-meta">{t('nav.settings')}</strong>

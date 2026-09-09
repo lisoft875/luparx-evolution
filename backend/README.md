@@ -12,7 +12,8 @@ the contract wins.
 | `module-geo` | `luparx-module-geo` | core | countries, N-level administrative divisions, document rules, `PhoneNumberService`, `IdentityDocumentValidator`, `AddressValidator` |
 | `module-identity` | `luparx-module-identity` | core, geo | users, credentials (Argon2id), TOTP MFA, federation linking, JWT issuance, refresh rotation, login rate limiting |
 | `module-tenancy` | `luparx-module-tenancy` | core | tenants, settings, memberships, `AccessResolver`, per-tenant reports |
-| `module-parking` | `luparx-module-parking` | core, tenancy | zones, tariffs, numbered spaces, vehicles, the per-municipality parking policy, sessions (start/extend/finish), the per-tenant wallet and the minute credits; patrols and citations still deferred |
+| `module-parking` | `luparx-module-parking` | core, tenancy | zones, tariffs, numbered spaces, vehicles, the per-municipality parking policy, sessions (start/extend/finish), the per-tenant wallet and the minute credits; patrols still deferred |
+| `module-enforcement` | `luparx-module-enforcement` | core, tenancy | the infraction catalogue, citations and their legal life cycle, the citation's own history, evidence metadata, the per-municipality consecutive; talks to parking only through `ParkingStatusPort` (ADR 0014) |
 | `app` | `luparx-app` | all | Spring Boot bootstrap, security, controllers, Flyway, OpenAPI, observability |
 
 The dependency rule of `docs/ARCHITECTURE.md` §1 is enforced by the POMs, not by convention.
@@ -591,6 +592,98 @@ Options that cannot be taken are listed too, with `allowed: false` and a reason 
 instead of silently dropping an option. A municipality with extensions disabled fails the whole
 endpoint with `EXTENSION_DISABLED` (409), exactly as extending does.
 
+## Enforcement: citations that survive being challenged (v0.7)
+
+`module-enforcement` is a bounded context of its own (ADR 0014), not a corner of `module-parking`. A
+citation is an administrative act somebody appeals months later; a parking session is paid, runs and
+ends the same afternoon. And most citations exist *because* there is no session, so modelling one as
+an appendix of the other would be false in the ordinary case.
+
+```
+platform-core  ->  (nothing)
+module-tenancy ->  platform-core
+module-parking ->  platform-core, module-tenancy
+module-enforcement -> platform-core, module-tenancy      <- NOT module-parking
+app            ->  every module
+```
+
+Enforcement asks parking only one kind of question, through `ParkingStatusPort`: is this plate
+covered, does this bay exist, is this plate registered by exactly one person. `ParkingStatusAdapter`
+in `app` answers it by calling the parking services today; the day enforcement is extracted it
+becomes an HTTP client and nothing inside the module changes.
+
+**The plate lookup, and the open question it closes.** `GET /inspector/plates/{plate}/status` takes
+the bay the officer is standing at, and the bay is the discriminator: a plate is unique *per citizen*
+and not globally, so several people may have a running session for `SJP123` in the same municipality.
+`COVERED` only when a session for that plate is on *that* bay; `BAY_MISMATCH` when the matches are
+elsewhere (a different infraction from not paying at all, and the officer is shown where they are);
+`NOT_COVERED` when nothing is running; and `AMBIGUOUS`, with `requiresBay: true`, when matches exist
+and no bay was given. **The server never says `COVERED` without a bay** — answering with the first
+match would let one citizen's payment excuse another's infraction, silently, because nobody complains
+about a citation that was not written. That is the resolution of the `TODO(domain)`
+`ParkingSessionRepository` had left open.
+
+**The consecutive.** `PREFIX-YEAR-NNNNNN`, per municipality and per year, taken at issue and never at
+capture — an abandoned draft must not burn a number, because a municipality has to be able to defend
+its numbering as complete. It comes from a counter row locked with `SELECT … FOR UPDATE` inside the
+same transaction that inserts the citation, so two instances issuing at the same instant queue in the
+database and a rollback gives the number back. A database sequence was rejected for the two reasons
+that matter: it cannot be per tenant-year without DDL at runtime, and by design it leaves holes. The
+cost is named: issuing serialises on one row per municipality-year for the length of one insert.
+
+**Offline: two idempotencies, protecting two different things.** The `Idempotency-Key` header (ADR
+0012, enforced by `IdempotencyFilter`) protects the *request* — a double tap replays the stored
+response with `Idempotent-Replay: true`. `citations.device_citation_id`, unique per municipality,
+protects the *act*: a queue flushed twice, or an app reinstalled mid-shift with brand-new keys, gets
+**200** with the original citation instead of 201 with a second one. The device also declares
+`occurredAt`; the server records `issuedAt` separately and keeps the difference in
+`deviceClockSkewSeconds` rather than smoothing it away, because "issued four hours after the
+infraction" is what a defence is built on.
+
+**Evidence.** `EvidenceStorage` is a port. `FilesystemEvidenceStorage` is the development
+implementation and writes `<root>/<tenant>/<yyyy>/<mm>/<citation>/<uuid>.<ext>`, every segment
+generated here so a caller cannot steer the path. **It is not suitable for more than one instance** —
+two backends behind a load balancer do not share a disk — so a horizontally scaled deployment swaps
+the bean for an object store (S3/GCS/Azure): write bytes, return key and digest; read bytes for a
+key, and that is the whole surface. Size and type are validated in the domain *before* any storage
+implementation sees the bytes, so two backends can never disagree about what is acceptable, and the
+type is decided by reading the file's own header (`ImageSniffer`) — never the filename, never the
+declared `Content-Type`. The SHA-256 of the stored bytes goes on the row: months later it is what
+separates "the photograph the officer took" from "a photograph somebody put there afterwards".
+
+**Never edited, never deleted.** There is no `PUT` and no `DELETE` on a citation anywhere in the API.
+It moves through `CitationStatus` (`DRAFT → ISSUED → PAID | APPEALED → UPHELD/DISMISSED | CANCELLED |
+EXPIRED`), every move guarded by the transition table and written into `citation_events` with actor,
+portal, moment, reason and hashed IP. That history is part of the act, returned with it, and the
+citizen who was fined reads the same one the office does.
+
+**Permissions**, added to `RolePermissions` rather than to an `if` at a call site: `CITATION_ISSUE`
+and `CITATION_READ` for the inspector; `CITATION_VOID` for the inspection lead and the administrator;
+`ENFORCEMENT_MANAGE` for the catalogue. The officer who writes a citation cannot annul it — the first
+question a municipal auditor asks. Finance and support read citations without being able to void one.
+The mirror table in `frontend/packages/auth/src/permissions.ts` needs the same four values; the server
+is the authority and does not depend on that happening.
+
+**The citizen's fines** are matched **by vehicle, never by plate**. Anybody may register any plate —
+that is what makes the family car work — so listing every citation whose plate matches one somebody
+typed into their garage would hand one person another person's fines. A citation is linked to a
+vehicle only when the plate resolves to exactly one registered on the platform; when two citizens
+registered the same plate it is linked to neither and neither sees it in the app. The safe failure is
+stated rather than hidden. Paying online is declared and not built: `POST /citizen/fines/{id}/payments`
+answers 501 with the contract already fixed, and `PAID` is already in the transition table.
+
+**Configuration** (`luparx.enforcement.*`): `evidence-root`, `max-evidence-bytes` (10 MB),
+`allowed-image-types`, `max-photos-per-citation`, `max-note-length`. What is fined and for how much is
+**not** here — that is each municipality's own catalogue in `infraction_types`, edited through
+`PUT /admin/enforcement/infraction-types`, with the currency taken from the municipality so one
+catalogue can never hold two.
+
+**Development fixture.** Every seeded municipality gets five infraction types (one demanding a
+photograph, one not, one admitting no defence, two with an early-payment discount) and six citations
+that are deliberately *not* all alike: issued, issued-with-photograph, annulled with its reason, under
+appeal, paid, and one left as a draft with no number. One of them carries `SJP123`, the plate two
+citizens registered, so the "linked to nobody" case is visible on a screen instead of only in a test.
+
 ## Environment variables
 
 Secrets have **no usable default**: the application fails to start rather than run with a
@@ -734,8 +827,16 @@ mistakes them for working features:
   granting `TENANT_ADMIN` to an **existing** user already works.
 - `POST /api/v1/admin/exports` (v0.1 synchronous CSV) and the `month` / `district` groupings of
   `GET /admin/reports/registered-users`.
-- The whole parking domain (`/citizen/vehicles`, `/citizen/parking-sessions`, `/inspector/patrols`,
-  `/inspector/citations`, `/admin/zones`, `/admin/rates`, `/admin/finance/*`).
+- `/inspector/patrols/*` (patrol routes) and `/admin/finance/*` (municipal finance). Vehicles,
+  parking sessions, zones and tariffs shipped in v0.2; citations, their evidence and the citizen's
+  fines shipped in v0.7 and their stub was removed with them.
+- `POST /api/v1/citizen/fines/{id}/payments`: paying a fine online. Declared with its contract fixed
+  (see CONTRACT.md v0.7) because the client is built against it; the state machine already has
+  `PAID` and the server already computes the amount payable, so the payments batch adds the provider,
+  the receipt and the reconciliation rather than a new concept.
+- The scheduled sweep that moves overdue citations to `EXPIRED` in bulk. The operation exists and is
+  idempotent, bounded and tenant-scoped (`CitationService.expireOverdue`), and a citation read one at
+  a time already corrects itself; only the schedule is missing.
 - The outbox relay: rows are written transactionally and the queue index exists, but nothing
   publishes them yet.
 - Housekeeping jobs for `auth_attempts`, `verification_tokens`, expired `refresh_tokens` and

@@ -19,6 +19,8 @@ de rollback, estado y fecha.
 | [0011](0011-api-errors-versioning.md) | Errores de API con RFC 9457, versionado `/api/v1` y política de cambios incompatibles | Aceptado |
 | [0012](0012-idempotency-transactional-outbox.md) | Idempotencia y outbox transaccional para pagos, webhooks y eventos | Aceptado |
 | [0013](0013-audit-trail.md) | Auditoría y trazabilidad de accesos | Aceptado |
+| [0014](0014-enforcement-bounded-context.md) | Fiscalización como contexto propio (`module-enforcement`), con puerto hacia parqueo | Aceptado |
 
-Todas las decisiones datan del scaffold inicial (2026-09-07) y se revisan cuando cambian los
-supuestos que las motivaron (volumen, número de tenants, regulación por país, etc.).
+Las decisiones 0001–0013 datan del scaffold inicial (2026-09-07); 0014 se tomó al construir el
+módulo de fiscalización (2026-09-09). Todas se revisan cuando cambian los supuestos que las
+motivaron (volumen, número de tenants, regulación por país, etc.).

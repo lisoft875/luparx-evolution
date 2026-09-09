@@ -13,6 +13,22 @@ import {
   type WireWallet,
 } from './wire';
 import {
+  toCitation,
+  toCitationDetail,
+  toEvidence,
+  toFine,
+  toFineDetail,
+  toInfractionType,
+  toPlateStatus,
+  type WireCitation,
+  type WireCitationDetail,
+  type WireEvidence,
+  type WireFine,
+  type WireFineDetail,
+  type WireInfractionType,
+  type WirePlateStatus,
+} from './wireEnforcement';
+import {
   withResolvedMeLogos,
   withResolvedMembershipLogo,
   withResolvedSwitchTenantLogo,
@@ -22,6 +38,7 @@ import type { PagedResponse, PageParams } from './types/http';
 import type {
   AdminUserDetail,
   AdminUserListItem,
+  AdminCitationsQuery,
   AdminUsersQuery,
   AdministrativeDivision,
   AdminLevelCatalogEntry,
@@ -40,9 +57,20 @@ import type {
   DocumentTypeCatalogEntry,
   ChangeEmailRequest,
   ChangePasswordRequest,
+  Citation,
+  CitationCaptureResult,
+  CitationDetail,
+  CitationEvidence,
+  CitationReasonRequest,
+  CitationStatus,
+  CreateCitationRequest,
   ExtendParkingSessionRequest,
   FeatureFlag,
+  Fine,
+  FineDetail,
   ForgotPasswordRequest,
+  InfractionType,
+  InfractionTypeDraft,
   LoginRequest,
   LoginResponse,
   MeResponse,
@@ -61,6 +89,7 @@ import type {
   ParkingSessionsQuery,
   ParkingSpaceFormat,
   ParkingZone,
+  PlateStatus,
   PlatformAuditEventsQuery,
   PlatformCountry,
   PlatformRegisteredUsersReportQuery,
@@ -499,6 +528,182 @@ export class ApiClient {
       this.http.request('GET', `/api/v1/platform/catalog/countries/${countryCode}/document-types`),
     upsertDocumentType: (payload: UpsertDocumentTypeRequest): Promise<void> =>
       this.http.request('POST', '/api/v1/platform/catalog/document-types', { body: payload, idempotent: true }),
+  };
+
+  // ---- Enforcement (CONTRACT.md v0.7, ADR 0014) -----------------------------------------------
+  // Three audiences, three roots, and no shortcut between them: the officer reads and writes their
+  // own citations, the administration reads the municipality's and annuls them, and the citizen
+  // reads the ones issued against their own vehicles. The server enforces that separation; these
+  // roots exist so no screen is ever one typo away from calling the wrong one.
+
+  readonly inspectorEnforcement = {
+    /**
+     * Has this plate paid, on this bay, right now?
+     *
+     * `zoneId` and `spaceCode` travel together or not at all — half a pair is `VALIDATION_FAILED`,
+     * by the server's own rule. Without them the verdict can only ever be `NOT_COVERED` or
+     * `AMBIGUOUS`: the platform refuses to guess which of several cars carrying a plate is the one
+     * in front of the officer, and the client must not paper over that with a hopeful default.
+     */
+    plateStatus: async (
+      plate: string,
+      bay: { zoneId?: string; spaceCode?: string } = {},
+    ): Promise<PlateStatus> =>
+      toPlateStatus(
+        await this.http.request<WirePlateStatus>(
+          'GET',
+          `/api/v1/inspector/plates/${encodeURIComponent(plate)}/status`,
+          { query: { zoneId: bay.zoneId, spaceCode: bay.spaceCode } },
+        ),
+      ),
+    /** What this municipality fines today. Only the kinds still in force. */
+    infractionTypes: async (): Promise<InfractionType[]> =>
+      (
+        await this.http.request<WireInfractionType[]>('GET', '/api/v1/inspector/enforcement/infraction-types')
+      ).map(toInfractionType),
+    /**
+     * Write a citation.
+     *
+     * `idempotencyKey` is the caller's, not the transport's, because the offline queue mints it
+     * once with the capture and reuses it on every flush. `created` reports whether this call made
+     * the act (201) or recognised a resend by `deviceCitationId` and returned the one that already
+     * existed (200) — the distinction a queue needs so it never reports two tickets for one.
+     */
+    create: async (
+      payload: CreateCitationRequest,
+      idempotencyKey: string,
+    ): Promise<CitationCaptureResult> => {
+      const { data, status } = await this.http.requestWithStatus<WireCitationDetail>(
+        'POST',
+        '/api/v1/inspector/citations',
+        { body: payload, idempotencyKey },
+      );
+      return { ...toCitationDetail(data), created: status === 201 };
+    },
+    /**
+     * Close a draft once the photograph its infraction type demands has landed.
+     *
+     * Takes the caller's key for the same reason `create` does: a queue that retries this step with
+     * a fresh key gets `CITATION_INVALID_TRANSITION` on the second try — the citation is already
+     * issued — and would report a failure over an operation that had in fact succeeded.
+     */
+    issue: async (id: string, idempotencyKey?: string): Promise<CitationDetail> =>
+      toCitationDetail(
+        await this.http.request<WireCitationDetail>('POST', `/api/v1/inspector/citations/${id}/issue`, {
+          idempotencyKey,
+          idempotent: idempotencyKey === undefined,
+        }),
+      ),
+    /**
+     * Attach a photograph. `multipart/form-data`, and the capture time and coordinates travel as
+     * text parts beside it — they belong to the photograph, not to the citation.
+     */
+    attachPhoto: async (
+      id: string,
+      photo: Blob,
+      meta: { fileName?: string; capturedAt?: string; latitude?: number; longitude?: number } = {},
+    ): Promise<CitationEvidence> => {
+      const form = new FormData();
+      form.append('file', photo, meta.fileName ?? 'evidence.jpg');
+      if (meta.capturedAt) form.append('capturedAt', meta.capturedAt);
+      if (meta.latitude !== undefined) form.append('latitude', String(meta.latitude));
+      if (meta.longitude !== undefined) form.append('longitude', String(meta.longitude));
+      return toEvidence(
+        await this.http.upload<WireEvidence>(`/api/v1/inspector/citations/${id}/evidence`, form),
+      );
+    },
+    /** Attach a written note. Same table as a photograph: legally the same thing. */
+    attachNote: async (id: string, note: string): Promise<CitationEvidence> =>
+      toEvidence(
+        await this.http.request<WireEvidence>('POST', `/api/v1/inspector/citations/${id}/evidence`, {
+          body: { note },
+        }),
+      ),
+    /** My citations, newest first. Always paginated: a shift writes many. */
+    list: async (params: PageParams = {}): Promise<PagedResponse<Citation>> => {
+      const page = await this.http.request<PagedResponse<WireCitation>>('GET', '/api/v1/inspector/citations', {
+        query: { page: params.page, size: params.size },
+      });
+      return { ...page, items: (page.items ?? []).map(toCitation) };
+    },
+    get: async (id: string): Promise<CitationDetail> =>
+      toCitationDetail(await this.http.request<WireCitationDetail>('GET', `/api/v1/inspector/citations/${id}`)),
+    /** The bytes of one photograph. Authenticated, so it can never be a bare `<img src>`. */
+    evidenceContent: (citationId: string, evidenceId: string): Promise<Blob> =>
+      this.http.blob(`/api/v1/inspector/citations/${citationId}/evidence/${evidenceId}`),
+  };
+
+  readonly adminEnforcement = {
+    citations: async (query: AdminCitationsQuery & PageParams = {}): Promise<PagedResponse<Citation>> => {
+      const page = await this.http.request<PagedResponse<WireCitation>>(
+        'GET',
+        '/api/v1/admin/enforcement/citations',
+        {
+          query: {
+            status: query.status,
+            zoneId: query.zoneId,
+            inspectorUserId: query.inspectorUserId,
+            plate: query.plate,
+            from: query.from,
+            to: query.to,
+            page: query.page,
+            size: query.size,
+          },
+        },
+      );
+      return { ...page, items: (page.items ?? []).map(toCitation) };
+    },
+    get: async (id: string): Promise<CitationDetail> =>
+      toCitationDetail(
+        await this.http.request<WireCitationDetail>('GET', `/api/v1/admin/enforcement/citations/${id}`),
+      ),
+    /**
+     * Annul a citation, with a reason. The only way an issued citation stops standing: there is no
+     * PUT and no DELETE on a citation anywhere in this API, and there should never be one.
+     */
+    cancel: async (id: string, payload: CitationReasonRequest): Promise<CitationDetail> =>
+      toCitationDetail(
+        await this.http.request<WireCitationDetail>('POST', `/api/v1/admin/enforcement/citations/${id}/cancel`, {
+          body: payload,
+          idempotent: true,
+        }),
+      ),
+    evidenceContent: (citationId: string, evidenceId: string): Promise<Blob> =>
+      this.http.blob(`/api/v1/admin/enforcement/citations/${citationId}/evidence/${evidenceId}`),
+    /** The whole catalogue, retired kinds included — the administrator edits what exists, not what is live. */
+    infractionTypes: async (): Promise<InfractionType[]> =>
+      (
+        await this.http.request<WireInfractionType[]>('GET', '/api/v1/admin/enforcement/infraction-types')
+      ).map(toInfractionType),
+    /**
+     * Replace the catalogue in one call — that is what the screen edits: a table with rows added,
+     * changed and removed, saved once. A row left out is deactivated, never deleted, because
+     * citations years old reference it.
+     */
+    updateInfractionTypes: async (drafts: InfractionTypeDraft[]): Promise<InfractionType[]> =>
+      (
+        await this.http.request<WireInfractionType[]>('PUT', '/api/v1/admin/enforcement/infraction-types', {
+          body: { infractionTypes: drafts },
+        })
+      ).map(toInfractionType),
+  };
+
+  readonly citizenFines = {
+    /** Citations against my own vehicles, matched by vehicle and never by plate (see the server's own note). */
+    list: async (query: { status?: CitationStatus } & PageParams = {}): Promise<PagedResponse<Fine>> => {
+      const page = await this.http.request<PagedResponse<WireFine>>('GET', '/api/v1/citizen/fines', {
+        query: { status: query.status, page: query.page, size: query.size },
+      });
+      return { ...page, items: (page.items ?? []).map(toFine) };
+    },
+    get: async (id: string): Promise<FineDetail> =>
+      toFineDetail(await this.http.request<WireFineDetail>('GET', `/api/v1/citizen/fines/${id}`)),
+    evidenceContent: (fineId: string, evidenceId: string): Promise<Blob> =>
+      this.http.blob(`/api/v1/citizen/fines/${fineId}/evidence/${evidenceId}`),
+    // Paying a fine online is declared and not implemented: the server answers 501 NOT_IMPLEMENTED
+    // on `POST /citizen/fines/{id}/payments` so a client can tell "not built yet" from "wrong URL".
+    // No method is exposed here, deliberately — a call that can only fail is worse than none, and
+    // the screen states the situation instead of offering a button that pretends.
   };
 
   readonly platformSystem = {

@@ -1,6 +1,11 @@
 import * as React from 'react';
 
-export type AlertTone = 'info' | 'success' | 'danger';
+/**
+ * `warning` is not a weaker `danger`: it marks a state the reader still controls — a rule they have
+ * not satisfied yet, evidence the client had to shrink — where `danger` marks something that
+ * already failed. Announced politely (role="status") for the same reason.
+ */
+export type AlertTone = 'info' | 'success' | 'warning' | 'danger';
 
 export interface AlertProps {
   tone?: AlertTone;

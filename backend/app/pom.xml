@@ -34,6 +34,10 @@
       <groupId>cr.luparx</groupId>
       <artifactId>luparx-module-parking</artifactId>
     </dependency>
+    <dependency>
+      <groupId>cr.luparx</groupId>
+      <artifactId>luparx-module-enforcement</artifactId>
+    </dependency>
 
     <dependency>
       <groupId>org.springframework.boot</groupId>

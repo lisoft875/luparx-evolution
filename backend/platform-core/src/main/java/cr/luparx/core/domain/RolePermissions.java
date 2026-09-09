@@ -13,8 +13,9 @@ import java.util.Set;
  * {@code frontend/packages/auth/src/permissions.ts}; the server table is the authoritative one and
  * is enforced independently of anything the client believes.
  *
- * <p>Inspector permissions are intentionally empty in v0.1: the patrol/zone capabilities arrive with
- * module-parking and are added here, not by branching on the role name at a call site.</p>
+ * <p>Inspector permissions were intentionally empty until v0.7. The enforcement capabilities arrive
+ * with module-enforcement and are added <em>here</em>, as configuration, rather than by branching on
+ * the role name at a call site — which is the whole point of the table.</p>
  */
 public final class RolePermissions {
 
@@ -39,16 +40,30 @@ public final class RolePermissions {
                 Permission.ZONE_ASSIGN,
                 Permission.AUDIT_READ,
                 Permission.EXPORT_RUN,
-                Permission.TENANT_MANAGE));
+                Permission.TENANT_MANAGE,
+                Permission.CITATION_READ,
+                Permission.CITATION_VOID,
+                Permission.ENFORCEMENT_MANAGE));
+        // Finance reads citations because collecting on them is its job; it cannot annul one, which
+        // is precisely the separation of duties a municipality's own auditor asks about.
         table.put(Role.TENANT_FINANCE, EnumSet.of(
                 Permission.USER_READ,
                 Permission.AUDIT_READ,
-                Permission.EXPORT_RUN));
+                Permission.EXPORT_RUN,
+                Permission.CITATION_READ));
         table.put(Role.TENANT_SUPPORT, EnumSet.of(
                 Permission.USER_READ,
-                Permission.AUDIT_READ));
-        table.put(Role.INSPECTOR, EnumSet.noneOf(Permission.class));
-        table.put(Role.INSPECTOR_LEAD, EnumSet.noneOf(Permission.class));
+                Permission.AUDIT_READ,
+                Permission.CITATION_READ));
+        // The officer writes citations and reads what they wrote. Annulment is deliberately not
+        // here: the person who issued an act is not the person who should be able to erase it.
+        table.put(Role.INSPECTOR, EnumSet.of(
+                Permission.CITATION_ISSUE,
+                Permission.CITATION_READ));
+        table.put(Role.INSPECTOR_LEAD, EnumSet.of(
+                Permission.CITATION_ISSUE,
+                Permission.CITATION_READ,
+                Permission.CITATION_VOID));
         table.put(Role.CITIZEN, EnumSet.noneOf(Permission.class));
 
         EnumMap<Role, Set<Permission>> immutable = new EnumMap<>(Role.class);

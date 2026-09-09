@@ -177,6 +177,7 @@ public class DevDataSeeder implements ApplicationRunner {
     private final PhoneNumberService phoneNumberService;
     private final DevParkingSeeder parkingSeeder;
     private final DevActivitySeeder activitySeeder;
+    private final DevEnforcementSeeder enforcementSeeder;
     private final DevSeedProperties properties;
 
     public DevDataSeeder(PlatformDefaultsProperties defaults,
@@ -191,6 +192,7 @@ public class DevDataSeeder implements ApplicationRunner {
                          PhoneNumberService phoneNumberService,
                          DevParkingSeeder parkingSeeder,
                          DevActivitySeeder activitySeeder,
+                         DevEnforcementSeeder enforcementSeeder,
                          DevSeedProperties properties) {
         this.defaults = defaults;
         this.tenantService = tenantService;
@@ -204,6 +206,7 @@ public class DevDataSeeder implements ApplicationRunner {
         this.phoneNumberService = phoneNumberService;
         this.parkingSeeder = parkingSeeder;
         this.activitySeeder = activitySeeder;
+        this.enforcementSeeder = enforcementSeeder;
         this.properties = properties;
     }
 
@@ -409,6 +412,14 @@ public class DevDataSeeder implements ApplicationRunner {
             activitySeeder.seed(tenants, citizens, CITIZENS);
         } catch (RuntimeException exception) {
             LOGGER.warn("Development seed: activity fixture skipped ({}).", exception.toString());
+        }
+        // Enforcement last of all: it needs the zones, the bays, the officers and the vehicles that
+        // every step above created. Isolated for the same reason as the rest — a fixture must never
+        // be able to stop the application from starting.
+        try {
+            enforcementSeeder.seed(tenants, citizens);
+        } catch (RuntimeException exception) {
+            LOGGER.warn("Development seed: enforcement fixture skipped ({}).", exception.toString());
         }
     }
 

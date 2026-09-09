@@ -86,6 +86,20 @@ public class AuditRecorder {
                 event.occurredAt()));
     }
 
+    /**
+     * The caller's IP, hashed with the platform pepper — the same value this recorder writes into
+     * {@code audit_events}.
+     *
+     * <p>Exposed because the enforcement module keeps a citation's history <em>inside the citation</em>
+     * (it is part of the administrative act, not a platform log) and that history has to carry the
+     * same hash, so the two records can be correlated without either of them storing a raw address.
+     * Returns null outside a request, which is what a scheduled job is.</p>
+     */
+    public String currentIpHash() {
+        HttpServletRequest request = currentRequest();
+        return request == null ? null : Hashing.ipHash(clientIp(request), securityProperties.ipHashPepper());
+    }
+
     /** Client address, honouring a single-hop {@code X-Forwarded-For} set by our own proxy. */
     public static String clientIp(HttpServletRequest request) {
         String forwarded = request.getHeader("X-Forwarded-For");

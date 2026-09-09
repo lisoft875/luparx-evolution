@@ -31,7 +31,13 @@ export type Permission =
   | 'AUDIT_READ'
   | 'EXPORT_RUN'
   | 'TENANT_MANAGE'
-  | 'PLATFORM_MANAGE';
+  | 'PLATFORM_MANAGE'
+  // Enforcement (CONTRACT.md v0.7 / ADR 0014). Four capabilities and not one, because issuing an
+  // act, reading it, annulling it and configuring what may be fined are held by different people.
+  | 'CITATION_ISSUE'
+  | 'CITATION_READ'
+  | 'CITATION_VOID'
+  | 'ENFORCEMENT_MANAGE';
 
 export type MembershipStatus = 'ACTIVE' | 'PENDING_APPROVAL' | 'REJECTED' | 'REVOKED';
 
@@ -909,4 +915,277 @@ export interface TimeCreditsResponse {
   minutes: number;
   /** Earliest expiry among the lots that still have minutes left; `null` when nothing expires. */
   expiresAt: string | null;
+}
+
+
+// ---- Enforcement (CONTRACT.md v0.7, ADR 0014) --------------------------------------------------
+// A citation is an administrative act, not a payment row: it is append-only once issued, it is
+// annulled with a reason rather than edited, and its own history travels with it because whoever
+// challenges it is entitled to read what happened. The three audiences below — officer,
+// administration and the citizen who was fined — read deliberately different shapes, and those
+// shapes are kept apart here for the same reason the server keeps them apart.
+
+/** The answer to "has this plate paid, on this bay, right now?" — never `COVERED` without a bay. */
+export type PlateVerdict = 'COVERED' | 'BAY_MISMATCH' | 'NOT_COVERED' | 'AMBIGUOUS';
+
+/** The legal life of a citation (`CitationStatus`); the transition table lives on the server. */
+export type CitationStatus =
+  | 'DRAFT'
+  | 'ISSUED'
+  | 'PAID'
+  | 'APPEALED'
+  | 'UPHELD'
+  | 'DISMISSED'
+  | 'CANCELLED'
+  | 'EXPIRED';
+
+/** What was done to a citation, as written in its own history (`CitationAction`). */
+export type CitationAction =
+  | 'DRAFTED'
+  | 'ISSUED'
+  | 'EVIDENCE_ATTACHED'
+  | 'PAID'
+  | 'APPEALED'
+  | 'APPEAL_UPHELD'
+  | 'APPEAL_DISMISSED'
+  | 'CANCELLED'
+  | 'EXPIRED';
+
+/** A photograph has bytes behind it; a note has only the officer's text. Same table, same weight. */
+export type EvidenceKind = 'PHOTO' | 'NOTE';
+
+/**
+ * One kind of infraction as the municipality configures it. The currency is the municipality's and
+ * never a field of a request: a catalogue holding two currencies is a report that adds up wrong.
+ */
+export interface InfractionType {
+  id: string;
+  code: string;
+  name: string;
+  description: string | null;
+  fineMinor: number;
+  currencyCode: string;
+  /** The reduced amount while the early window is open; null when this kind offers no discount. */
+  discountedFineMinor: number | null;
+  discountDays: number | null;
+  discountPercent: number | null;
+  dueDays: number;
+  /** When true the citation is captured as a DRAFT and cannot be issued until a photograph lands. */
+  requiresPhoto: boolean;
+  allowsAppeal: boolean;
+  active: boolean;
+}
+
+/** One row of `PUT /admin/enforcement/infraction-types`. Absent rows are deactivated, never deleted. */
+export interface InfractionTypeDraft {
+  /** Present updates that row; absent creates one. */
+  id?: string;
+  code: string;
+  name: string;
+  description?: string;
+  fineAmountMinor: number;
+  requiresPhoto: boolean;
+  allowsAppeal: boolean;
+  discountDays?: number | null;
+  discountPercent?: number | null;
+  dueDays: number;
+  active: boolean;
+}
+
+/** The bay the officer is standing at, as the server resolved it. */
+export interface EnforcementBay {
+  spaceId: string;
+  spaceCode: string;
+  zoneId: string;
+  zoneCode: string;
+  zoneName: string;
+}
+
+/** A running stay as enforcement sees it: where, and until when. Never who paid for it. */
+export interface EnforcementStay {
+  sessionId: string;
+  zoneId: string;
+  zoneCode: string;
+  zoneName: string;
+  spaceId: string;
+  spaceCode: string;
+  startedAt: string;
+  expiresAt: string;
+}
+
+export interface PlateStatus {
+  plate: string;
+  plateNormalized: string;
+  verdict: PlateVerdict;
+  /** The server's own translation key for the verdict; the client keeps its own copy keyed by verdict. */
+  verdictLabelKey: string;
+  /** True when matches exist and no bay was supplied — the answer is incomplete, not negative. */
+  requiresBay: boolean;
+  bay: EnforcementBay | null;
+  coveringStay: EnforcementStay | null;
+  /** Running stays for the same plate elsewhere in the municipality. What makes BAY_MISMATCH legible. */
+  otherStays: EnforcementStay[];
+  checkedAt: string;
+}
+
+/** What the officer's device sends. Everything about location is optional and never invented. */
+export interface CreateCitationRequest {
+  infractionTypeId: string;
+  plate: string;
+  zoneId?: string;
+  spaceId?: string;
+  spaceCode?: string;
+  latitude?: number;
+  longitude?: number;
+  locationAccuracyM?: number;
+  addressText?: string;
+  /** The officer's declaration of when it happened. The server records its own emission time apart. */
+  occurredAt?: string;
+  /**
+   * Generated on the device once, when the capture is created, and unique per municipality. It is
+   * what makes a resend after a lost connection resolve to the same citation even when the retry
+   * carries a brand-new `Idempotency-Key`: the header protects the request, this protects the act.
+   */
+  deviceCitationId?: string;
+  parkingSessionId?: string;
+  notes?: string;
+}
+
+/** A reason is mandatory wherever an act is annulled or an appeal resolved. */
+export interface CitationReasonRequest {
+  reason: string;
+}
+
+/** The citation as the officer and the administration read it. */
+export interface Citation {
+  id: string;
+  /** Absent while DRAFT: an abandoned capture must not burn a number of the municipality's series. */
+  number: string | null;
+  seriesYear: number | null;
+  status: CitationStatus;
+  statusLabelKey: string;
+  statusReason: string | null;
+  plate: string;
+  vehicleId: string | null;
+  zoneId: string | null;
+  zoneCode: string | null;
+  zoneName: string | null;
+  spaceId: string | null;
+  spaceCode: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  locationAccuracyM: number | null;
+  addressText: string | null;
+  infractionTypeId: string;
+  infractionCode: string;
+  infractionName: string;
+  fineMinor: number;
+  /** The amount actually owed today: the reduced one while the early window is open. */
+  amountPayableMinor: number;
+  discountedFineMinor: number | null;
+  currencyCode: string;
+  discountUntil: string | null;
+  dueAt: string | null;
+  occurredAt: string;
+  issuedAt: string | null;
+  /** Declared time minus emission time. A defence is built out of exactly this number. */
+  deviceClockSkewSeconds: number | null;
+  inspectorUserId: string | null;
+  parkingSessionId: string | null;
+  notes: string | null;
+  /**
+   * Only meaningful on a **detail** response. The server leaves it at zero in listings on purpose —
+   * counting evidence per row is the N+1 its mapper exists to avoid — so no list screen may render
+   * it, and none does.
+   */
+  evidenceCount: number;
+}
+
+/** A piece of evidence. The digest is what proves, later, that the photograph is the one taken. */
+export interface CitationEvidence {
+  id: string;
+  kind: EvidenceKind;
+  contentType: string | null;
+  byteSize: number | null;
+  sha256: string | null;
+  note: string | null;
+  capturedAt: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  createdAt: string;
+  /** Path of the bytes, relative to the API base. Authenticated: never put it in a bare `<img src>`. */
+  contentUrl: string | null;
+}
+
+/** One entry of the citation's own history. */
+export interface CitationEvent {
+  id: string;
+  action: CitationAction;
+  actionLabelKey: string;
+  fromStatus: CitationStatus | null;
+  toStatus: CitationStatus | null;
+  actorUserId: string | null;
+  actorPortal: Portal | null;
+  reason: string | null;
+  occurredAt: string;
+}
+
+/** The citation with everything a defence is entitled to read. */
+export interface CitationDetail {
+  citation: Citation;
+  evidence: CitationEvidence[];
+  history: CitationEvent[];
+}
+
+/** What `POST /inspector/citations` reports back — including whether it created anything. */
+export interface CitationCaptureResult extends CitationDetail {
+  /**
+   * True when this call created the act (201), false when the server recognised the resend by its
+   * `deviceCitationId` and handed back the citation that already existed (200). A queue flushing
+   * twice needs to be able to tell those apart; a silent 201 would tell it the opposite.
+   */
+  created: boolean;
+}
+
+export interface AdminCitationsQuery {
+  status?: CitationStatus;
+  zoneId?: string;
+  inspectorUserId?: string;
+  /** Matched on the normalised form, so `sjp-123` finds `SJP123`. */
+  plate?: string;
+  from?: string;
+  to?: string;
+}
+
+/**
+ * A fine as the citizen sees it: deliberately narrower than the officer's view — no officer
+ * identifier, no device clock skew, no internal session reference.
+ */
+export interface Fine {
+  id: string;
+  number: string | null;
+  status: CitationStatus;
+  statusLabelKey: string;
+  plate: string;
+  infractionCode: string;
+  infractionName: string;
+  zoneName: string | null;
+  spaceCode: string | null;
+  addressText: string | null;
+  fineMinor: number;
+  amountPayableMinor: number;
+  currencyCode: string;
+  discountUntil: string | null;
+  dueAt: string | null;
+  occurredAt: string;
+  issuedAt: string | null;
+  appealable: boolean;
+  /** Zero in listings by design, like {@link Citation.evidenceCount}; read it from the detail. */
+  evidenceCount: number;
+}
+
+export interface FineDetail {
+  fine: Fine;
+  evidence: CitationEvidence[];
+  history: CitationEvent[];
 }

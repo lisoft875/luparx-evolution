@@ -11,7 +11,11 @@ import { RegisterPage } from './pages/RegisterPage';
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import { TenantSelectPage } from './pages/TenantSelectPage';
-import { HomePage } from './pages/HomePage';
+import { PlateLookupPage } from './pages/PlateLookupPage';
+import { NewCitationPage } from './pages/NewCitationPage';
+import { MyCitationsPage } from './pages/MyCitationsPage';
+import { CitationDetailPage } from './pages/CitationDetailPage';
+import { QueuePage } from './pages/QueuePage';
 import { ProfilePage } from './pages/ProfilePage';
 
 const queryClient = new QueryClient({
@@ -40,12 +44,54 @@ export function App(): React.JSX.Element {
               <Route path="/forgot-password" element={<ForgotPasswordPage />} />
               <Route path="/reset-password" element={<ResetPasswordPage />} />
               <Route path="/select-tenant" element={<TenantSelectPage />} />
+              {/* Everything an officer does needs a municipality: a citation belongs to one, and a
+                  plate lookup is answered inside one. Hence RequireTenant around all of it. */}
               <Route
                 path="/"
                 element={
                   <RequireAuth loginPath="/login">
                     <RequireTenant selectTenantPath="/select-tenant">
-                      <HomePage />
+                      <PlateLookupPage />
+                    </RequireTenant>
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/cite"
+                element={
+                  <RequireAuth loginPath="/login">
+                    <RequireTenant selectTenantPath="/select-tenant">
+                      <NewCitationPage />
+                    </RequireTenant>
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/citations"
+                element={
+                  <RequireAuth loginPath="/login">
+                    <RequireTenant selectTenantPath="/select-tenant">
+                      <MyCitationsPage />
+                    </RequireTenant>
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/citations/:id"
+                element={
+                  <RequireAuth loginPath="/login">
+                    <RequireTenant selectTenantPath="/select-tenant">
+                      <CitationDetailPage />
+                    </RequireTenant>
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/queue"
+                element={
+                  <RequireAuth loginPath="/login">
+                    <RequireTenant selectTenantPath="/select-tenant">
+                      <QueuePage />
                     </RequireTenant>
                   </RequireAuth>
                 }

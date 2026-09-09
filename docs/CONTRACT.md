@@ -648,3 +648,175 @@ pregunta "¿por qué desapareció una hora?". Si la municipalidad tiene la exten
 endpoint entero responde `EXTENSION_DISABLED` (409), igual que extender. La respuesta **no se
 cachea**: depende del horario que la sesión está por cruzar y de un crédito que puede gastarse en
 otra parte un segundo después.
+
+---
+
+# v0.7 — Fiscalización (normativo)
+
+Una boleta es un **acto administrativo**, no un registro de cobro: alguien la va a impugnar meses
+después. Vive en su propio contexto (`module-enforcement`, ADR 0014) porque su ciclo legal dura
+órdenes de magnitud más que una sesión de parqueo y porque, en el caso normal, existe **precisamente
+porque no hay sesión**.
+
+## Consulta de placa
+
+```
+GET /api/v1/inspector/plates/{plate}/status?zoneId=&spaceCode=
+-> {plate, plateNormalized, verdict, verdictLabelKey, requiresBay, bay,
+    coveringStay, otherStays[], checkedAt}
+```
+
+Resuelve el `TODO(domain)` que dejó el módulo de parqueo sobre las placas repetidas. La placa es
+única **por ciudadano**, nunca globalmente (v0.2, regla 2), así que dos personas pueden tener sesión
+vigente para `SJP123` en la misma municipalidad. **La bahía es el discriminador**:
+
+| Situación | `verdict` |
+|---|---|
+| Sesión vigente para esa placa **en esa bahía** | `COVERED` |
+| Sesiones vigentes, pero todas en otras bahías | `BAY_MISMATCH` (con `otherStays`) |
+| Ninguna sesión vigente | `NOT_COVERED` |
+| Hay coincidencias y **no se envió la bahía** | `AMBIGUOUS` con `requiresBay: true` |
+
+El servidor **nunca** responde `COVERED` sin bahía. Devolver la primera coincidencia dejaría que el
+pago de una persona excuse la infracción de otra — un error invisible, porque nadie se queja de una
+multa que no se puso. `zoneId` y `spaceCode` viajan juntos o no viajan; medio par es
+`VALIDATION_FAILED`. `otherStays` dice dónde y hasta cuándo, nunca de quién. La respuesta no se
+cachea: quien paga mientras el fiscalizador se acerca debe estar cubierto cuando éste consulte.
+
+## Catálogo de infracciones
+
+```
+GET  /api/v1/inspector/enforcement/infraction-types     (las vigentes; PERM_CITATION_ISSUE)
+GET  /api/v1/admin/enforcement/infraction-types         (todas; PERM_CITATION_READ)
+PUT  /api/v1/admin/enforcement/infraction-types         (PERM_ENFORCEMENT_MANAGE)
+```
+
+Configuración de cada municipalidad, nunca código: `code`, `name`, `description`, monto en unidades
+menores, si exige fotografía, si admite descargo, plazo con descuento (`discountDays` +
+`discountPercent`, ambos o ninguno) y `dueDays`. La **moneda es la de la municipalidad**, no un campo
+de la petición: un catálogo con dos monedas es un reporte que suma mal. El `PUT` reemplaza el
+catálogo completo — entradas con `id` se actualizan, sin `id` se crean, y **las ausentes se
+desactivan, nunca se borran**, porque hay boletas de años anteriores que las referencian.
+
+## Boleta
+
+Estados y transiciones, explícitas y en un solo lugar:
+
+```
+DRAFT ──> ISSUED ──> PAID
+  │         ├──────> APPEALED ──> UPHELD ──> PAID | CANCELLED | EXPIRED
+  │         │                  └─> DISMISSED (fin)
+  │         ├──────> CANCELLED (fin)
+  │         └──────> EXPIRED ──> PAID | CANCELLED
+  └──────> CANCELLED (fin)
+```
+
+* **`DRAFT` no tiene número.** El consecutivo se toma al emitir, para que una captura abandonada no
+  queme un número de la serie: la municipalidad tiene que poder defender su numeración como completa.
+* **Una boleta emitida no se edita ni se borra.** Se anula con motivo (`POST …/cancel`), y eso queda
+  en el historial. No existe `PUT` ni `DELETE` sobre una boleta en toda la API.
+* **Número legible por municipalidad y año**: `PREFIJO-AAAA-NNNNNN` (por ejemplo
+  `SANJOS-2026-000041`). El año se calcula en la **zona horaria de la municipalidad**; el prefijo se
+  deriva de su nombre corto y se **copia** a la boleta, así que renombrarla no reescribe números ya
+  emitidos. Sin huecos y sin duplicados con varias instancias: fila de contador bloqueada
+  (`SELECT … FOR UPDATE`) dentro de la misma transacción que inserta la boleta (ADR 0014).
+* **Dos relojes**: `occurredAt` lo declara el dispositivo del funcionario y **nunca** se sobrescribe;
+  `issuedAt` lo pone el servidor. Si difieren, la diferencia queda en `deviceClockSkewSeconds` — un
+  descargo se construye exactamente con ese dato. Se rechaza una hora futura (más de 15 minutos) o
+  con más de 7 días de atraso.
+* **El monto lo fija el servidor** copiando el catálogo al emitir (código, nombre y monto quedan
+  snapshotted). `amountPayable` es el monto con descuento mientras la ventana esté abierta y el monto
+  completo después.
+* Coordenadas completas o ausentes (`latitude` + `longitude`, con `locationAccuracyM` opcional), más
+  `addressText` escrito.
+
+### API del fiscalizador
+
+```
+POST /api/v1/inspector/citations                       (PERM_CITATION_ISSUE, Idempotency-Key)
+POST /api/v1/inspector/citations/{id}/issue            (cierra el borrador)
+POST /api/v1/inspector/citations/{id}/evidence         (multipart: foto | JSON: nota)
+GET  /api/v1/inspector/citations                       (las mías, paginadas)
+GET  /api/v1/inspector/citations/{id}                  (con evidencia e historial)
+GET  /api/v1/inspector/citations/{id}/evidence/{evidenceId}
+```
+
+**Trabajo sin conexión: dos idempotencias distintas.** El header `Idempotency-Key` protege la
+*petición* (repetirlo devuelve la respuesta guardada con `Idempotent-Replay: true`).
+`deviceCitationId` —generado en el dispositivo, único por municipalidad— protege el *acto*: un
+reenvío desde una app reinstalada, con clave nueva, responde **200** con la boleta original en vez de
+201 con una segunda. El cliente distingue así si creó algo o no.
+
+Cuando el tipo de infracción exige fotografía, `POST /citations` responde `DRAFT` sin número y
+emitir sin foto es `CITATION_EVIDENCE_REQUIRED` (409); cuando no la exige, la boleta nace `ISSUED`.
+
+### API de administración
+
+```
+GET  /api/v1/admin/enforcement/citations?status=&zoneId=&inspectorUserId=&plate=&from=&to=&page=&size=
+GET  /api/v1/admin/enforcement/citations/{id}
+POST /api/v1/admin/enforcement/citations/{id}/cancel    (PERM_CITATION_VOID, motivo obligatorio)
+POST /api/v1/admin/enforcement/citations/{id}/appeal    (PERM_CITATION_READ)
+POST /api/v1/admin/enforcement/citations/{id}/uphold    (PERM_CITATION_VOID)
+POST /api/v1/admin/enforcement/citations/{id}/dismiss   (PERM_CITATION_VOID)
+POST /api/v1/admin/enforcement/citations/{id}/paid      (PERM_ENFORCEMENT_MANAGE; pago en caja)
+```
+
+`plate` se busca por su forma normalizada, así que `sjp-123` encuentra `SJP123`. Los permisos están
+separados a propósito: el fiscalizador **emite y lee**, no anula. Quien emite un acto no es quien
+debe poder borrarlo.
+
+## Evidencia
+
+Fotografías y notas viven en la misma tabla porque legalmente son lo mismo: lo que la municipalidad
+ofrece como prueba. De cada fotografía se guardan la clave opaca de almacenamiento, el tipo
+**verificado leyendo la cabecera del archivo** (nunca el nombre ni el `Content-Type` que declaró el
+cliente), el tamaño, el **SHA-256 del contenido**, el momento de captura y las coordenadas si vienen.
+El digest es lo que meses después distingue "ésta es la foto que tomó el funcionario" de "ésta es una
+foto que alguien puso después".
+
+Límites por despliegue (`luparx.enforcement.*`): 10 MB por archivo, tipos `image/jpeg`, `image/png`,
+`image/webp`, `image/heic`, 6 fotos por boleta. Un archivo que no sea imagen es
+`EVIDENCE_TYPE_NOT_ALLOWED` (422) aunque se llame `.jpg`. El almacén es un **puerto**
+(`EvidenceStorage`): sistema de archivos en desarrollo, object store en producción — con una sola
+instancia el disco alcanza; con dos, no.
+
+## Historial y trazabilidad
+
+Cada acción sobre la boleta escribe un `citation_events` con acción, estado anterior y nuevo,
+funcionario, portal, motivo, IP (hasheada con la misma pimienta que `audit_events`) y momento. **El
+historial es parte de la boleta**, no un log aparte: viaja en la misma respuesta que el detalle y lo
+ve también el ciudadano multado. Además, toda acción hecha por un portal queda en `audit_events`
+(`CITATION_DRAFTED`, `CITATION_ISSUED`, `CITATION_EVIDENCE_ATTACHED`, `CITATION_STATUS_CHANGED`,
+`CITATION_CANCELLED`, `INFRACTION_TYPES_UPDATED`).
+
+## Multas del ciudadano
+
+```
+GET  /api/v1/citizen/fines?status=&page=&size=
+GET  /api/v1/citizen/fines/{id}
+GET  /api/v1/citizen/fines/{id}/evidence/{evidenceId}
+POST /api/v1/citizen/fines/{id}/payments        -> 501 NOT_IMPLEMENTED (contrato reservado)
+```
+
+**Se listan por vehículo propio, jamás por placa.** Cualquiera puede registrar cualquier placa —eso
+es lo que hace funcionar el carro familiar— así que listar "toda boleta cuya placa coincida con una
+que escribí en mi garaje" le mostraría a una persona las multas de otra. La boleta se enlaza a un
+vehículo sólo cuando la placa resuelve a **exactamente uno** registrado en la plataforma; si dos
+ciudadanos registraron la misma placa no se enlaza a ninguno y ninguno la ve en la app (la
+municipalidad la entrega como siempre lo hizo, y la administración puede vincularla). La vista del
+ciudadano es deliberadamente más angosta que la del funcionario: sin identificador del fiscalizador,
+sin desfase de reloj, sin referencia interna de sesión.
+
+**Pago (reservado, no implementado).** `POST /api/v1/citizen/fines/{id}/payments` con
+`Idempotency-Key`, cuerpo con el método de pago y respuesta con la boleta en su nuevo estado. El
+modelo ya está: `PAID` está en la tabla de transiciones y el servidor ya calcula el monto exigible
+(con descuento mientras la ventana esté abierta) en cada lectura. La tanda de pagos agrega el
+proveedor, el recibo y la conciliación, no un concepto nuevo.
+
+## Códigos de error
+
+`CITATION_NOT_FOUND` (404), `CITATION_INVALID_TRANSITION` (409), `CITATION_EVIDENCE_REQUIRED` (409),
+`CITATION_NOT_EDITABLE` (409), `CITATION_APPEAL_NOT_ALLOWED` (409), `INFRACTION_TYPE_NOT_FOUND`
+(404), `INFRACTION_TYPE_INACTIVE` (422), `EVIDENCE_NOT_FOUND` (404), `EVIDENCE_TOO_LARGE` (422),
+`EVIDENCE_TYPE_NOT_ALLOWED` (422), `EVIDENCE_LIMIT_REACHED` (409).

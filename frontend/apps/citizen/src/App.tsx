@@ -17,6 +17,7 @@ import { AccountPersonalDataPage } from './pages/AccountPersonalDataPage';
 import { ParkingPage } from './pages/ParkingPage';
 import { VehiclesPage } from './pages/VehiclesPage';
 import { FinesPage } from './pages/FinesPage';
+import { FineDetailPage } from './pages/FineDetailPage';
 import { WalletPage } from './pages/WalletPage';
 import { MovementsPage } from './pages/MovementsPage';
 
@@ -104,6 +105,16 @@ export function App(): React.JSX.Element {
                   <RequireAuth loginPath="/login">
                     <RequireTenant selectTenantPath="/select-tenant">
                       <FinesPage />
+                    </RequireTenant>
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/fines/:id"
+                element={
+                  <RequireAuth loginPath="/login">
+                    <RequireTenant selectTenantPath="/select-tenant">
+                      <FineDetailPage />
                     </RequireTenant>
                   </RequireAuth>
                 }

@@ -44,6 +44,14 @@ spring:
           auth: ${SMTP_AUTH:false}
           starttls:
             enable: ${SMTP_STARTTLS_ENABLED:false}
+  servlet:
+    multipart:
+      # Evidence photographs (CONTRACT.md v0.7). Kept just above the domain's own limit
+      # (luparx.enforcement.max-evidence-bytes) so an oversized upload is refused by the domain with
+      # EVIDENCE_TOO_LARGE — a message a client can act on — instead of by the container with a raw
+      # 500. The request cap leaves room for the small text parts that travel beside the file.
+      max-file-size: ${EVIDENCE_MAX_FILE_SIZE:12MB}
+      max-request-size: ${EVIDENCE_MAX_REQUEST_SIZE:14MB}
   jackson:
     default-property-inclusion: non_null
   messages:
@@ -221,3 +229,15 @@ luparx:
       admin: ${APP_BASE_URL_ADMIN:http://localhost:5184}
       inspector: ${APP_BASE_URL_INSPECTOR:http://localhost:5185}
       platform: ${APP_BASE_URL_PLATFORM:http://localhost:5186}
+  enforcement:
+    # Where the development evidence store writes. A directory works for one instance; a deployment
+    # that runs more than one must swap the EvidenceStorage bean for an object store, because two
+    # backends behind a load balancer do not share a disk (see FilesystemEvidenceStorage).
+    evidence-root: ${EVIDENCE_ROOT:./data/evidence}
+    # 10 MB: a phone photograph with room to spare. Enforced in the domain, before any storage
+    # implementation sees the bytes.
+    max-evidence-bytes: ${EVIDENCE_MAX_BYTES:10485760}
+    # Verified from each file's own header, never from its name or the type the device declared.
+    allowed-image-types: ${EVIDENCE_ALLOWED_TYPES:image/jpeg,image/png,image/webp,image/heic}
+    max-photos-per-citation: ${EVIDENCE_MAX_PHOTOS:6}
+    max-note-length: ${EVIDENCE_MAX_NOTE_LENGTH:2000}

@@ -64,4 +64,13 @@ public final class AuditAction {
     public static final String TENANT_BRANDING_UPDATED = "TENANT_BRANDING_UPDATED";
     public static final String PARKING_SPACE_FORMAT_UPDATED = "PARKING_SPACE_FORMAT_UPDATED";
     public static final String PARKING_SCHEDULE_UPDATED = "PARKING_SCHEDULE_UPDATED";
+
+    // --- enforcement (CONTRACT.md "v0.7"): every act on a citation is traceable, and the citation
+    // also keeps its own history in citation_events, which is part of the act and not a log -------
+    public static final String CITATION_DRAFTED = "CITATION_DRAFTED";
+    public static final String CITATION_ISSUED = "CITATION_ISSUED";
+    public static final String CITATION_EVIDENCE_ATTACHED = "CITATION_EVIDENCE_ATTACHED";
+    public static final String CITATION_STATUS_CHANGED = "CITATION_STATUS_CHANGED";
+    public static final String CITATION_CANCELLED = "CITATION_CANCELLED";
+    public static final String INFRACTION_TYPES_UPDATED = "INFRACTION_TYPES_UPDATED";
 }

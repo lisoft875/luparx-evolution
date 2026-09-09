@@ -253,10 +253,6 @@ export const esCR = {
   'home.citizen.parkingStub.description':
     'Próximamente podrás iniciar y pagar sesiones de estacionamiento desde aquí.',
 
-  'home.inspector.title': 'Inicio',
-  'home.inspector.patrolStub.title': 'Patrullaje',
-  'home.inspector.patrolStub.description':
-    'Próximamente verás tus rutas de patrullaje y podrás emitir citaciones desde aquí.',
 
   'nav.home': 'Inicio',
   'nav.profile': 'Perfil',
@@ -417,8 +413,6 @@ export const esCR = {
   'citizen.fines.empty.title': '¡Todo en orden!',
   'citizen.fines.empty.description': 'No tienes multas pendientes en esta municipalidad.',
   'citizen.fines.dueLabel': 'Vence el',
-  'citizen.fines.reason.unpaid': 'Estacionamiento sin pago',
-  'citizen.fines.reason.overtime': 'Tiempo excedido',
 
   'citizen.wallet.title': 'Billetera',
   'citizen.wallet.balanceLabel': 'Saldo disponible',
@@ -468,7 +462,6 @@ export const esCR = {
 
   'inspector.home.offline': 'Sin conexión — datos guardados localmente',
   'inspector.home.online': 'En línea',
-  'inspector.home.patrol.title': 'Patrullaje de hoy',
 
   // ---- Platform back-office (CONTRACT.md §4 `/api/v1/platform/**`) -----------------------------
 
@@ -743,6 +736,273 @@ export const esCR = {
   'vehicle.color.gold': 'Dorado',
   'vehicle.color.purple': 'Morado',
   'vehicle.color.other': 'Otro',
+
+
+  // ---- Fiscalización (CONTRACT.md v0.7) -------------------------------------------------------
+  // El servidor manda `statusLabelKey` / `actionLabelKey` / `verdictLabelKey`; el cliente guarda su
+  // propia copia de la tabla porque una clave que el servidor conoce y el diccionario no debe
+  // fallar el typecheck, no aparecer en pantalla como texto crudo.
+
+  'citation.status.draft': 'Borrador',
+  'citation.status.issued': 'Emitida',
+  'citation.status.paid': 'Pagada',
+  'citation.status.appealed': 'Con descargo',
+  'citation.status.upheld': 'Descargo rechazado',
+  'citation.status.dismissed': 'Descargo aceptado',
+  'citation.status.cancelled': 'Anulada',
+  'citation.status.expired': 'Vencida',
+
+  'citation.action.drafted': 'Capturada',
+  'citation.action.issued': 'Emitida',
+  'citation.action.evidence_attached': 'Prueba adjuntada',
+  'citation.action.paid': 'Pagada',
+  'citation.action.appealed': 'Descargo presentado',
+  'citation.action.appeal_upheld': 'Descargo rechazado',
+  'citation.action.appeal_dismissed': 'Descargo aceptado',
+  'citation.action.cancelled': 'Anulada',
+  'citation.action.expired': 'Vencida',
+
+  'citation.evidence.photo': 'Fotografía',
+  'citation.evidence.note': 'Nota',
+  'citation.evidence.title': 'Pruebas',
+  'citation.evidence.empty': 'Esta boleta no tiene pruebas adjuntas.',
+  'citation.evidence.digest': 'Huella SHA-256',
+  'citation.evidence.capturedAt': 'Capturada',
+  'citation.evidence.size': 'Tamaño',
+  'citation.evidence.open': 'Ver fotografía',
+  'citation.evidence.loadError': 'No se pudo cargar la fotografía.',
+  'citation.history.title': 'Historial',
+  'citation.history.reason': 'Motivo',
+  'citation.history.portal.citizen': 'Portal ciudadano',
+  'citation.history.portal.admin': 'Administración',
+  'citation.history.portal.inspector': 'Fiscalización',
+  'citation.history.portal.platform': 'Plataforma',
+
+  'citation.field.number': 'Número',
+  'citation.field.plate': 'Placa',
+  'citation.field.infraction': 'Infracción',
+  'citation.field.zone': 'Zona',
+  'citation.field.bay': 'Bahía',
+  'citation.field.address': 'Dirección',
+  'citation.field.coordinates': 'Coordenadas',
+  'citation.field.accuracy': 'Precisión',
+  'citation.field.occurredAt': 'Hora declarada',
+  'citation.field.issuedAt': 'Hora de emisión',
+  'citation.field.clockSkew': 'Desfase del reloj del dispositivo',
+  'citation.field.fine': 'Monto',
+  'citation.field.amountPayable': 'Monto exigible hoy',
+  'citation.field.discountUntil': 'Descuento hasta',
+  'citation.field.dueAt': 'Vence',
+  'citation.field.notes': 'Notas',
+  'citation.field.inspector': 'Funcionario',
+  'citation.field.statusReason': 'Motivo del estado',
+  'citation.field.noNumber': 'Sin número (borrador)',
+  'citation.field.noCoordinates': 'Sin coordenadas',
+  'citation.field.noCoordinates.hint':
+    'La boleta se emitió sin ubicación GPS. Queda constancia de que no hubo coordenadas.',
+  'citation.clockSkew.seconds': '{{seconds}} s',
+
+  'plate.verdict.covered': 'Pago vigente en esta bahía',
+  'plate.verdict.bay_mismatch': 'Pagó por otra bahía',
+  'plate.verdict.not_covered': 'Sin pago vigente',
+  'plate.verdict.ambiguous': 'Falta la bahía para responder',
+
+  // ---- App de fiscalización -------------------------------------------------------------------
+
+  'inspector.nav.lookup': 'Consulta',
+  'inspector.nav.cite': 'Boleta',
+  'inspector.nav.citations': 'Mis boletas',
+  'inspector.nav.queue': 'Pendientes',
+  'inspector.nav.more': 'Más',
+
+  'inspector.lookup.title': 'Consulta de placa',
+  'inspector.lookup.plateLabel': 'Placa',
+  'inspector.lookup.platePlaceholder': 'SJP123',
+  'inspector.lookup.zoneLabel': 'Zona',
+  'inspector.lookup.bayLabel': 'Bahía',
+  'inspector.lookup.bayPlaceholder': '0042',
+  'inspector.lookup.submit': 'Consultar',
+  'inspector.lookup.bayHint':
+    'Sin la bahía el sistema nunca dice que está cubierta: la bahía es lo que distingue el carro que pagó del que no.',
+  'inspector.lookup.bayIncomplete': 'Indicá la zona y la bahía juntas, o ninguna de las dos.',
+  'inspector.lookup.checkedAt': 'Consultado a las {{time}}',
+  'inspector.lookup.coveringStay': 'Sesión vigente hasta {{time}}',
+  'inspector.lookup.otherStays': 'Sesiones vigentes de esta placa en otras bahías',
+  'inspector.lookup.stayRow': '{{zone}} · bahía {{bay}} · hasta {{time}}',
+  'inspector.lookup.useThisBay': 'Consultar con esta bahía',
+  'inspector.lookup.verdict.covered.detail':
+    'Esta placa tiene una sesión de parqueo vigente en la bahía {{bay}}. No corresponde boleta por falta de pago.',
+  'inspector.lookup.verdict.bay_mismatch.detail':
+    'Pagó por la bahía {{other}}, no por ésta ({{bay}}). Es una infracción distinta de no pagar: revisá el tipo antes de emitir.',
+  'inspector.lookup.verdict.not_covered.detail':
+    'No hay ninguna sesión de parqueo vigente para esta placa en esta municipalidad.',
+  'inspector.lookup.verdict.ambiguous.detail':
+    'Hay sesiones vigentes para esta placa, pero sin la bahía no se puede saber si son de este carro. Indicá la bahía.',
+  'inspector.lookup.cite': 'Emitir boleta',
+  'inspector.lookup.error.PARKING_SPACE_NOT_FOUND': 'Esa bahía no existe en la zona seleccionada.',
+  'inspector.lookup.error.VALIDATION_FAILED': 'Revisá la placa y la bahía: la zona y la bahía viajan juntas.',
+
+  'inspector.zones.title': 'Zonas conocidas',
+  'inspector.zones.empty': 'Todavía no hay zonas conocidas en este dispositivo.',
+  'inspector.zones.emptyHint':
+    'El portal de fiscalización aún no publica el catálogo de zonas de la municipalidad. Las zonas se aprenden de tus boletas y de las consultas de placa, y quedan guardadas en este dispositivo.',
+
+  'inspector.cite.title': 'Emitir boleta',
+  'inspector.cite.step.type': 'Tipo de infracción',
+  'inspector.cite.step.where': 'Placa y ubicación',
+  'inspector.cite.typeLabel': 'Tipo de infracción',
+  'inspector.cite.typePlaceholder': 'Elegí el tipo',
+  'inspector.cite.typeDetail': '{{amount}} · vence en {{days}} días',
+  'inspector.cite.typeRequiresPhoto': 'Este tipo exige fotografía: no se puede emitir sin al menos una.',
+  'inspector.cite.typeAllowsAppeal': 'Admite descargo',
+  'inspector.cite.typeNoAppeal': 'No admite descargo',
+  'inspector.cite.typeDiscount': 'Descuento del {{percent}}% durante {{days}} días',
+  'inspector.cite.addressLabel': 'Dirección escrita',
+  'inspector.cite.addressPlaceholder': 'Costado sur del mercado',
+  'inspector.cite.notesLabel': 'Notas',
+  'inspector.cite.notesPlaceholder': 'Lo que un descargo tendría que poder leer.',
+  'inspector.cite.photos': 'Fotografías',
+  'inspector.cite.photosCount': '{{count}} de {{max}}',
+  'inspector.cite.addPhoto': 'Tomar fotografía',
+  'inspector.cite.removePhoto': 'Quitar fotografía',
+  'inspector.cite.photoRequired': 'Falta la fotografía que exige este tipo de infracción.',
+  'inspector.cite.photoUnchanged':
+    'Las fotografías se envían tal cual se tomaron: no se recortan ni se recomprimen.',
+  'inspector.cite.photoResized':
+    'Esta fotografía pesa {{size}} y supera el límite de subida ({{max}}). Se envía reducida; queda dicho aquí y en la boleta.',
+  'inspector.cite.photoTooLarge': 'La fotografía pesa {{size}} y supera el límite de {{max}}.',
+  'inspector.cite.location': 'Ubicación',
+  'inspector.cite.locationCapture': 'Tomar coordenadas',
+  'inspector.cite.locationCaptured': '{{lat}}, {{lon}} (±{{accuracy}} m)',
+  'inspector.cite.locationNone': 'Sin coordenadas',
+  'inspector.cite.locationNoneHint':
+    'La boleta se puede emitir igual. Queda constancia de que no hubo coordenadas — nunca se inventa una posición.',
+  'inspector.cite.submit': 'Emitir boleta',
+  'inspector.cite.submitting': 'Emitiendo…',
+  'inspector.cite.queued': 'Guardada para enviar',
+  'inspector.cite.queuedHint': 'Se envía sola en cuanto vuelva la señal.',
+  'inspector.cite.issued': 'Boleta {{number}} emitida',
+  'inspector.cite.draft': 'Boleta capturada como borrador',
+  'inspector.cite.reset': 'Emitir otra',
+  'inspector.cite.viewCitation': 'Ver la boleta',
+
+  'inspector.permission.title': 'Permiso necesario',
+  'inspector.permission.camera.why':
+    'La cámara se usa únicamente para adjuntar la fotografía de la infracción a la boleta.',
+  'inspector.permission.camera.denied':
+    'Sin acceso a la cámara no se puede adjuntar la fotografía. Habilitalo en los ajustes del dispositivo.',
+  'inspector.permission.location.why':
+    'La ubicación se adjunta a la boleta como parte de la prueba. Se toma una sola vez, al emitir.',
+  'inspector.permission.location.denied':
+    'Sin acceso a la ubicación la boleta se emite igual, sin coordenadas.',
+  'inspector.permission.allow': 'Continuar',
+  'inspector.permission.skip': 'Continuar sin esto',
+
+  'inspector.queue.title': 'Pendientes de enviar',
+  // Plurales por familia de claves (`.one` / `.other`), resueltos con las reglas CLDR del locale.
+  // "1 boleta(s)" es la forma de no traducir: la barra que ve el fiscalizador todo el día no puede
+  // ser la única línea de la aplicación escrita con paréntesis.
+  'inspector.queue.count.one': '1 boleta pendiente',
+  'inspector.queue.count.other': '{{count}} boletas pendientes',
+  'inspector.queue.empty': 'No hay boletas pendientes de enviar.',
+  'inspector.queue.retryAll': 'Reintentar el envío',
+  'inspector.queue.sending': 'Enviando…',
+  'inspector.queue.discard': 'Descartar',
+  'inspector.queue.discardConfirm': 'Se pierde la captura y no se emite ninguna boleta. ¿Descartarla?',
+  'inspector.queue.state.pending': 'Esperando señal',
+  'inspector.queue.state.sending': 'Enviando',
+  'inspector.queue.state.failed': 'Falló el envío',
+  'inspector.queue.state.sent': 'Enviada',
+  'inspector.queue.attempts.one': '1 intento',
+  'inspector.queue.attempts.other': '{{count}} intentos',
+  'inspector.queue.deviceId': 'Identificador del dispositivo',
+  'inspector.queue.duplicateSafe':
+    'Reenviar no duplica: la boleta lleva un identificador propio del dispositivo, generado una sola vez.',
+  'inspector.queue.photosPending.one': '1 fotografía por subir',
+  'inspector.queue.photosPending.other': '{{count}} fotografías por subir',
+
+  'inspector.citations.title': 'Mis boletas',
+  'inspector.citations.empty': 'Todavía no emitiste boletas en esta municipalidad.',
+  'inspector.citations.detail.title': 'Boleta',
+
+  'inspector.offline.badge': 'Sin conexión',
+  'inspector.offline.queued.one': 'Sin conexión · 1 pendiente',
+  'inspector.offline.queued.other': 'Sin conexión · {{count}} pendientes',
+
+  // ---- Administración: fiscalización -----------------------------------------------------------
+
+  'admin.enforcement.citations.title': 'Boletas',
+  'admin.enforcement.citations.description':
+    'Todo lo que emitieron los funcionarios de esta municipalidad. Una boleta no se edita ni se borra: se anula con motivo.',
+  'admin.enforcement.citations.filter.status': 'Estado',
+  'admin.enforcement.citations.filter.zone': 'Zona',
+  'admin.enforcement.citations.filter.inspector': 'Funcionario',
+  'admin.enforcement.citations.filter.plate': 'Placa',
+  'admin.enforcement.citations.filter.from': 'Desde',
+  'admin.enforcement.citations.filter.to': 'Hasta',
+  'admin.enforcement.citations.filter.all': 'Todos',
+  'admin.enforcement.citations.filter.apply': 'Aplicar',
+  'admin.enforcement.citations.filter.clear': 'Limpiar',
+  'admin.enforcement.citations.column.number': 'Número',
+  'admin.enforcement.citations.column.plate': 'Placa',
+  'admin.enforcement.citations.column.infraction': 'Infracción',
+  'admin.enforcement.citations.column.zone': 'Zona y bahía',
+  'admin.enforcement.citations.column.issuedAt': 'Emitida',
+  'admin.enforcement.citations.column.status': 'Estado',
+  'admin.enforcement.citations.column.amount': 'Monto',
+  'admin.enforcement.citations.empty': 'Ninguna boleta coincide con estos filtros.',
+  'admin.enforcement.citations.open': 'Ver',
+  'admin.enforcement.citation.title': 'Boleta {{number}}',
+  'admin.enforcement.citation.back': 'Volver a boletas',
+  'admin.enforcement.citation.cancel': 'Anular boleta',
+  'admin.enforcement.citation.cancel.title': 'Anular la boleta',
+  'admin.enforcement.citation.cancel.reason': 'Motivo de la anulación',
+  'admin.enforcement.citation.cancel.reasonHint':
+    'El motivo queda en la boleta y en su historial, y lo lee también la persona multada.',
+  'admin.enforcement.citation.cancel.confirm': 'Anular',
+  'admin.enforcement.citation.cancel.required': 'El motivo es obligatorio.',
+  'admin.enforcement.citation.cancel.done': 'Boleta anulada.',
+  'admin.enforcement.citation.notCancellable': 'Esta boleta ya no admite anulación.',
+  'admin.enforcement.citation.noVoidPermission': 'Tu rol no puede anular boletas.',
+
+  'admin.enforcement.types.title': 'Catálogo de infracciones',
+  'admin.enforcement.types.description':
+    'Lo que esta municipalidad multa, y por cuánto. Se guarda el catálogo completo: una fila quitada se desactiva, nunca se borra, porque hay boletas de años anteriores que la referencian.',
+  'admin.enforcement.types.column.code': 'Código',
+  'admin.enforcement.types.column.name': 'Nombre',
+  'admin.enforcement.types.column.amount': 'Monto',
+  'admin.enforcement.types.column.photo': 'Exige foto',
+  'admin.enforcement.types.column.appeal': 'Admite descargo',
+  'admin.enforcement.types.add': 'Agregar tipo',
+  'admin.enforcement.types.remove': 'Desactivar',
+  'admin.enforcement.types.restore': 'Reactivar',
+  'admin.enforcement.types.save': 'Guardar catálogo',
+  'admin.enforcement.types.saved': 'Catálogo guardado.',
+  'admin.enforcement.types.currencyNote': 'La moneda es la de la municipalidad: {{currency}}.',
+  'admin.enforcement.types.dueDays': 'Días de plazo',
+  'admin.enforcement.types.discountDays': 'Días de descuento',
+  'admin.enforcement.types.discountPercent': '% de descuento',
+  'admin.enforcement.types.discountBoth': 'Los días y el porcentaje del descuento van juntos, o ninguno.',
+  'admin.enforcement.types.amountLabel': 'Monto ({{currency}})',
+  'admin.enforcement.types.error.required': 'Completá el código, el nombre, el monto y el plazo de cada fila.',
+  'admin.enforcement.types.inactive': 'Desactivada',
+
+  'nav.enforcement': 'Fiscalización',
+  'nav.enforcement.citations': 'Boletas',
+  'nav.enforcement.types': 'Catálogo de infracciones',
+
+  // ---- Ciudadano: multas -----------------------------------------------------------------------
+
+  'citizen.fines.detail.title': 'Multa',
+  'citizen.fines.amountPayable': 'Monto exigible hoy',
+  'citizen.fines.discountUntil': 'Con descuento hasta el {{date}}',
+  'citizen.fines.pay': 'Pagar multa',
+  'citizen.fines.payUnavailable':
+    'El pago en línea todavía no está disponible: el contrato está fijado y la implementación llega con la tanda de pagos. Mientras tanto se paga en la municipalidad.',
+  'citizen.fines.appealable': 'Admite descargo',
+  'citizen.fines.notAppealable': 'No admite descargo',
+  'citizen.fines.empty.history': 'No hay multas en el historial de esta municipalidad.',
+  'citizen.fines.open': 'Ver detalle',
 
   'geo.level.CR.1': 'Provincia',
   'geo.level.CR.2': 'Cantón',

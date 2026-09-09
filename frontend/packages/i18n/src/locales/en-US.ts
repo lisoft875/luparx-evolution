@@ -241,10 +241,6 @@ export const enUS: Record<TranslationKey, string> = {
   'home.citizen.parkingStub.description':
     'Soon you will be able to start and pay for parking sessions here.',
 
-  'home.inspector.title': 'Home',
-  'home.inspector.patrolStub.title': 'Patrols',
-  'home.inspector.patrolStub.description':
-    'Soon you will see your patrol routes and be able to issue citations here.',
 
   'nav.home': 'Home',
   'nav.profile': 'Profile',
@@ -405,8 +401,6 @@ export const enUS: Record<TranslationKey, string> = {
   'citizen.fines.empty.title': 'All clear!',
   'citizen.fines.empty.description': "You don't have any pending fines in this municipality.",
   'citizen.fines.dueLabel': 'Due on',
-  'citizen.fines.reason.unpaid': 'Parking without payment',
-  'citizen.fines.reason.overtime': 'Overtime',
 
   'citizen.wallet.title': 'Wallet',
   'citizen.wallet.balanceLabel': 'Available balance',
@@ -456,7 +450,6 @@ export const enUS: Record<TranslationKey, string> = {
 
   'inspector.home.offline': 'Offline — data saved locally',
   'inspector.home.online': 'Online',
-  'inspector.home.patrol.title': "Today's patrol",
 
   // ---- Platform back-office (CONTRACT.md §4 `/api/v1/platform/**`) -----------------------------
 
@@ -727,6 +720,267 @@ export const enUS: Record<TranslationKey, string> = {
   'vehicle.color.gold': 'Gold',
   'vehicle.color.purple': 'Purple',
   'vehicle.color.other': 'Other',
+
+
+  // ---- Enforcement (CONTRACT.md v0.7) ---------------------------------------------------------
+
+  'citation.status.draft': 'Draft',
+  'citation.status.issued': 'Issued',
+  'citation.status.paid': 'Paid',
+  'citation.status.appealed': 'Under appeal',
+  'citation.status.upheld': 'Appeal rejected',
+  'citation.status.dismissed': 'Appeal upheld',
+  'citation.status.cancelled': 'Annulled',
+  'citation.status.expired': 'Expired',
+
+  'citation.action.drafted': 'Captured',
+  'citation.action.issued': 'Issued',
+  'citation.action.evidence_attached': 'Evidence attached',
+  'citation.action.paid': 'Paid',
+  'citation.action.appealed': 'Appeal filed',
+  'citation.action.appeal_upheld': 'Appeal rejected',
+  'citation.action.appeal_dismissed': 'Appeal upheld',
+  'citation.action.cancelled': 'Annulled',
+  'citation.action.expired': 'Expired',
+
+  'citation.evidence.photo': 'Photograph',
+  'citation.evidence.note': 'Note',
+  'citation.evidence.title': 'Evidence',
+  'citation.evidence.empty': 'No evidence is attached to this citation.',
+  'citation.evidence.digest': 'SHA-256 digest',
+  'citation.evidence.capturedAt': 'Captured',
+  'citation.evidence.size': 'Size',
+  'citation.evidence.open': 'View photograph',
+  'citation.evidence.loadError': 'The photograph could not be loaded.',
+  'citation.history.title': 'History',
+  'citation.history.reason': 'Reason',
+  'citation.history.portal.citizen': 'Citizen portal',
+  'citation.history.portal.admin': 'Administration',
+  'citation.history.portal.inspector': 'Enforcement',
+  'citation.history.portal.platform': 'Platform',
+
+  'citation.field.number': 'Number',
+  'citation.field.plate': 'Plate',
+  'citation.field.infraction': 'Infraction',
+  'citation.field.zone': 'Zone',
+  'citation.field.bay': 'Bay',
+  'citation.field.address': 'Address',
+  'citation.field.coordinates': 'Coordinates',
+  'citation.field.accuracy': 'Accuracy',
+  'citation.field.occurredAt': 'Declared time',
+  'citation.field.issuedAt': 'Issued at',
+  'citation.field.clockSkew': 'Device clock offset',
+  'citation.field.fine': 'Amount',
+  'citation.field.amountPayable': 'Amount payable today',
+  'citation.field.discountUntil': 'Discount until',
+  'citation.field.dueAt': 'Due',
+  'citation.field.notes': 'Notes',
+  'citation.field.inspector': 'Officer',
+  'citation.field.statusReason': 'Reason for the status',
+  'citation.field.noNumber': 'No number (draft)',
+  'citation.field.noCoordinates': 'No coordinates',
+  'citation.field.noCoordinates.hint':
+    'The citation was issued without GPS. It is recorded that no coordinates were taken.',
+  'citation.clockSkew.seconds': '{{seconds}} s',
+
+  'plate.verdict.covered': 'Paid for this bay',
+  'plate.verdict.bay_mismatch': 'Paid for a different bay',
+  'plate.verdict.not_covered': 'No running session',
+  'plate.verdict.ambiguous': 'The bay is missing',
+
+  // ---- Enforcement app -------------------------------------------------------------------------
+
+  'inspector.nav.lookup': 'Lookup',
+  'inspector.nav.cite': 'Citation',
+  'inspector.nav.citations': 'My citations',
+  'inspector.nav.queue': 'Pending',
+  'inspector.nav.more': 'More',
+
+  'inspector.lookup.title': 'Plate lookup',
+  'inspector.lookup.plateLabel': 'Plate',
+  'inspector.lookup.platePlaceholder': 'SJP123',
+  'inspector.lookup.zoneLabel': 'Zone',
+  'inspector.lookup.bayLabel': 'Bay',
+  'inspector.lookup.bayPlaceholder': '0042',
+  'inspector.lookup.submit': 'Look up',
+  'inspector.lookup.bayHint':
+    'Without the bay the platform never says a plate is covered: the bay is what tells the car that paid from the one that did not.',
+  'inspector.lookup.bayIncomplete': 'Give the zone and the bay together, or neither of them.',
+  'inspector.lookup.checkedAt': 'Checked at {{time}}',
+  'inspector.lookup.coveringStay': 'Session running until {{time}}',
+  'inspector.lookup.otherStays': 'Running sessions for this plate on other bays',
+  'inspector.lookup.stayRow': '{{zone}} · bay {{bay}} · until {{time}}',
+  'inspector.lookup.useThisBay': 'Look up with this bay',
+  'inspector.lookup.verdict.covered.detail':
+    'This plate has a running parking session on bay {{bay}}. No citation is due for non-payment.',
+  'inspector.lookup.verdict.bay_mismatch.detail':
+    'It paid for bay {{other}}, not for this one ({{bay}}). That is a different infraction from not paying: check the type before issuing.',
+  'inspector.lookup.verdict.not_covered.detail':
+    'There is no running parking session for this plate anywhere in this municipality.',
+  'inspector.lookup.verdict.ambiguous.detail':
+    'Sessions are running for this plate, but without the bay there is no way to tell whether they belong to this car. Give the bay.',
+  'inspector.lookup.cite': 'Write a citation',
+  'inspector.lookup.error.PARKING_SPACE_NOT_FOUND': 'That bay does not exist in the selected zone.',
+  'inspector.lookup.error.VALIDATION_FAILED': 'Check the plate and the bay: the zone and the bay travel together.',
+
+  'inspector.zones.title': 'Known zones',
+  'inspector.zones.empty': 'No zones are known on this device yet.',
+  'inspector.zones.emptyHint':
+    'The enforcement portal does not publish the municipality’s zone catalogue yet. Zones are learned from your citations and from plate lookups, and are kept on this device.',
+
+  'inspector.cite.title': 'Write a citation',
+  'inspector.cite.step.type': 'Infraction type',
+  'inspector.cite.step.where': 'Plate and location',
+  'inspector.cite.typeLabel': 'Infraction type',
+  'inspector.cite.typePlaceholder': 'Choose the type',
+  'inspector.cite.typeDetail': '{{amount}} · due in {{days}} days',
+  'inspector.cite.typeRequiresPhoto': 'This type demands a photograph: it cannot be issued without one.',
+  'inspector.cite.typeAllowsAppeal': 'Admits an appeal',
+  'inspector.cite.typeNoAppeal': 'Admits no appeal',
+  'inspector.cite.typeDiscount': '{{percent}}% discount for {{days}} days',
+  'inspector.cite.addressLabel': 'Written address',
+  'inspector.cite.addressPlaceholder': 'South side of the market',
+  'inspector.cite.notesLabel': 'Notes',
+  'inspector.cite.notesPlaceholder': 'What an appeal would need to be able to read.',
+  'inspector.cite.photos': 'Photographs',
+  'inspector.cite.photosCount': '{{count}} of {{max}}',
+  'inspector.cite.addPhoto': 'Take a photograph',
+  'inspector.cite.removePhoto': 'Remove photograph',
+  'inspector.cite.photoRequired': 'The photograph this infraction type demands is missing.',
+  'inspector.cite.photoUnchanged':
+    'Photographs are sent exactly as taken: never cropped, never recompressed.',
+  'inspector.cite.photoResized':
+    'This photograph is {{size}} and exceeds the upload limit ({{max}}). It is sent scaled down; that is stated here and on the citation.',
+  'inspector.cite.photoTooLarge': 'The photograph is {{size}} and exceeds the {{max}} limit.',
+  'inspector.cite.location': 'Location',
+  'inspector.cite.locationCapture': 'Take coordinates',
+  'inspector.cite.locationCaptured': '{{lat}}, {{lon}} (±{{accuracy}} m)',
+  'inspector.cite.locationNone': 'No coordinates',
+  'inspector.cite.locationNoneHint':
+    'The citation can still be issued. It is recorded that no coordinates were taken — a position is never invented.',
+  'inspector.cite.submit': 'Issue the citation',
+  'inspector.cite.submitting': 'Issuing…',
+  'inspector.cite.queued': 'Saved to send',
+  'inspector.cite.queuedHint': 'It sends itself as soon as the signal is back.',
+  'inspector.cite.issued': 'Citation {{number}} issued',
+  'inspector.cite.draft': 'Citation captured as a draft',
+  'inspector.cite.reset': 'Write another',
+  'inspector.cite.viewCitation': 'View the citation',
+
+  'inspector.permission.title': 'Permission needed',
+  'inspector.permission.camera.why':
+    'The camera is used only to attach the photograph of the infraction to the citation.',
+  'inspector.permission.camera.denied':
+    'Without camera access the photograph cannot be attached. Enable it in the device settings.',
+  'inspector.permission.location.why':
+    'The location is attached to the citation as part of the evidence. It is taken once, at issue time.',
+  'inspector.permission.location.denied':
+    'Without location access the citation is still issued, without coordinates.',
+  'inspector.permission.allow': 'Continue',
+  'inspector.permission.skip': 'Continue without it',
+
+  'inspector.queue.title': 'Waiting to be sent',
+  'inspector.queue.count.one': '1 citation pending',
+  'inspector.queue.count.other': '{{count}} citations pending',
+  'inspector.queue.empty': 'No citations are waiting to be sent.',
+  'inspector.queue.retryAll': 'Retry sending',
+  'inspector.queue.sending': 'Sending…',
+  'inspector.queue.discard': 'Discard',
+  'inspector.queue.discardConfirm': 'The capture is lost and no citation is issued. Discard it?',
+  'inspector.queue.state.pending': 'Waiting for signal',
+  'inspector.queue.state.sending': 'Sending',
+  'inspector.queue.state.failed': 'Sending failed',
+  'inspector.queue.state.sent': 'Sent',
+  'inspector.queue.attempts.one': '1 attempt',
+  'inspector.queue.attempts.other': '{{count}} attempts',
+  'inspector.queue.deviceId': 'Device identifier',
+  'inspector.queue.duplicateSafe':
+    'Resending never duplicates: the citation carries its own device identifier, generated exactly once.',
+  'inspector.queue.photosPending.one': '1 photograph left to upload',
+  'inspector.queue.photosPending.other': '{{count}} photographs left to upload',
+
+  'inspector.citations.title': 'My citations',
+  'inspector.citations.empty': 'You have not issued any citation in this municipality yet.',
+  'inspector.citations.detail.title': 'Citation',
+
+  'inspector.offline.badge': 'Offline',
+  'inspector.offline.queued.one': 'Offline · 1 pending',
+  'inspector.offline.queued.other': 'Offline · {{count}} pending',
+
+  // ---- Administration: enforcement -------------------------------------------------------------
+
+  'admin.enforcement.citations.title': 'Citations',
+  'admin.enforcement.citations.description':
+    'Everything this municipality’s officers issued. A citation is never edited and never deleted: it is annulled with a reason.',
+  'admin.enforcement.citations.filter.status': 'Status',
+  'admin.enforcement.citations.filter.zone': 'Zone',
+  'admin.enforcement.citations.filter.inspector': 'Officer',
+  'admin.enforcement.citations.filter.plate': 'Plate',
+  'admin.enforcement.citations.filter.from': 'From',
+  'admin.enforcement.citations.filter.to': 'To',
+  'admin.enforcement.citations.filter.all': 'All',
+  'admin.enforcement.citations.filter.apply': 'Apply',
+  'admin.enforcement.citations.filter.clear': 'Clear',
+  'admin.enforcement.citations.column.number': 'Number',
+  'admin.enforcement.citations.column.plate': 'Plate',
+  'admin.enforcement.citations.column.infraction': 'Infraction',
+  'admin.enforcement.citations.column.zone': 'Zone and bay',
+  'admin.enforcement.citations.column.issuedAt': 'Issued',
+  'admin.enforcement.citations.column.status': 'Status',
+  'admin.enforcement.citations.column.amount': 'Amount',
+  'admin.enforcement.citations.empty': 'No citation matches these filters.',
+  'admin.enforcement.citations.open': 'Open',
+  'admin.enforcement.citation.title': 'Citation {{number}}',
+  'admin.enforcement.citation.back': 'Back to citations',
+  'admin.enforcement.citation.cancel': 'Annul citation',
+  'admin.enforcement.citation.cancel.title': 'Annul the citation',
+  'admin.enforcement.citation.cancel.reason': 'Reason for the annulment',
+  'admin.enforcement.citation.cancel.reasonHint':
+    'The reason stays on the citation and in its history, and the fined person reads it too.',
+  'admin.enforcement.citation.cancel.confirm': 'Annul',
+  'admin.enforcement.citation.cancel.required': 'The reason is mandatory.',
+  'admin.enforcement.citation.cancel.done': 'Citation annulled.',
+  'admin.enforcement.citation.notCancellable': 'This citation can no longer be annulled.',
+  'admin.enforcement.citation.noVoidPermission': 'Your role cannot annul citations.',
+
+  'admin.enforcement.types.title': 'Infraction catalogue',
+  'admin.enforcement.types.description':
+    'What this municipality fines, and for how much. The whole catalogue is saved at once: a row taken out is deactivated, never deleted, because citations years old reference it.',
+  'admin.enforcement.types.column.code': 'Code',
+  'admin.enforcement.types.column.name': 'Name',
+  'admin.enforcement.types.column.amount': 'Amount',
+  'admin.enforcement.types.column.photo': 'Photo required',
+  'admin.enforcement.types.column.appeal': 'Appealable',
+  'admin.enforcement.types.add': 'Add a type',
+  'admin.enforcement.types.remove': 'Deactivate',
+  'admin.enforcement.types.restore': 'Reactivate',
+  'admin.enforcement.types.save': 'Save the catalogue',
+  'admin.enforcement.types.saved': 'Catalogue saved.',
+  'admin.enforcement.types.currencyNote': 'The currency is the municipality’s: {{currency}}.',
+  'admin.enforcement.types.dueDays': 'Days to pay',
+  'admin.enforcement.types.discountDays': 'Discount days',
+  'admin.enforcement.types.discountPercent': 'Discount %',
+  'admin.enforcement.types.discountBoth': 'The discount days and percentage travel together, or neither.',
+  'admin.enforcement.types.amountLabel': 'Amount ({{currency}})',
+  'admin.enforcement.types.error.required': 'Fill in the code, name, amount and due days of every row.',
+  'admin.enforcement.types.inactive': 'Deactivated',
+
+  'nav.enforcement': 'Enforcement',
+  'nav.enforcement.citations': 'Citations',
+  'nav.enforcement.types': 'Infraction catalogue',
+
+  // ---- Citizen: fines --------------------------------------------------------------------------
+
+  'citizen.fines.detail.title': 'Fine',
+  'citizen.fines.amountPayable': 'Amount payable today',
+  'citizen.fines.discountUntil': 'Discounted until {{date}}',
+  'citizen.fines.pay': 'Pay the fine',
+  'citizen.fines.payUnavailable':
+    'Paying online is not available yet: the contract is fixed and the implementation arrives with the payments batch. For now it is paid at the municipality.',
+  'citizen.fines.appealable': 'Admits an appeal',
+  'citizen.fines.notAppealable': 'Admits no appeal',
+  'citizen.fines.empty.history': 'There are no fines in this municipality’s history.',
+  'citizen.fines.open': 'Open',
 
   'geo.level.CR.1': 'Province',
   'geo.level.CR.2': 'Canton',

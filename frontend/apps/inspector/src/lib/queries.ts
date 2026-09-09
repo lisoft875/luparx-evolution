@@ -1,0 +1,206 @@
+import { useCallback, useEffect, useMemo, useSyncExternalStore } from 'react';
+import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
+import { useAuth } from '@luparx/auth';
+import type { CitationDetail, InfractionType, PagedResponse, PlateStatus, Citation } from '@luparx/api-client';
+import {
+  flushQueue,
+  pendingCount,
+  queueSnapshot,
+  retryAllNow,
+  subscribeToQueue,
+  type QueuedCitation,
+} from './citationQueue';
+import { knownZones, rememberZones, subscribeToZones, type KnownZone } from './zoneDirectory';
+
+/**
+ * TanStack Query hooks over the inspector's v0.7 surface (CONTRACT.md §"API del fiscalizador").
+ * Screens talk to these and never to `apiClient.inspectorEnforcement` directly, so cache keys,
+ * invalidation and the "what did the server just teach us about zones" side effect all live in one
+ * file.
+ */
+const KEYS = {
+  infractionTypes: ['inspector', 'infraction-types'] as const,
+  citations: (page: number, size: number) => ['inspector', 'citations', page, size] as const,
+  citation: (id: string) => ['inspector', 'citation', id] as const,
+};
+
+/**
+ * The catalogue an officer writes under. Cached for the length of a shift rather than re-fetched
+ * per screen: the server itself allows five minutes of private caching, and a device in and out of
+ * coverage should not lose its picker every time a request fails.
+ */
+export function useInfractionTypes(): UseQueryResult<InfractionType[]> {
+  const { apiClient } = useAuth();
+  return useQuery({
+    queryKey: KEYS.infractionTypes,
+    queryFn: () => apiClient.inspectorEnforcement.infractionTypes(),
+    staleTime: 5 * 60 * 1000,
+    gcTime: 12 * 60 * 60 * 1000,
+  });
+}
+
+export function useMyCitations(page: number, size: number): UseQueryResult<PagedResponse<Citation>> {
+  const { apiClient, activeTenant } = useAuth();
+  const tenantId = activeTenant?.id ?? null;
+  const query = useQuery({
+    queryKey: KEYS.citations(page, size),
+    queryFn: () => apiClient.inspectorEnforcement.list({ page, size }),
+  });
+  // Every citation names the zone it was written in, and the enforcement portal publishes no zone
+  // catalogue of its own (see ./zoneDirectory). This is one of the two places the app learns them.
+  useEffect(() => {
+    rememberZones(tenantId, query.data?.items ?? []);
+  }, [tenantId, query.data]);
+  return query;
+}
+
+export function useCitation(id: string | undefined): UseQueryResult<CitationDetail> {
+  const { apiClient } = useAuth();
+  return useQuery({
+    queryKey: KEYS.citation(id ?? ''),
+    queryFn: () => apiClient.inspectorEnforcement.get(id as string),
+    enabled: Boolean(id),
+  });
+}
+
+export interface PlateLookupInput {
+  plate: string;
+  zoneId?: string;
+  spaceCode?: string;
+}
+
+/**
+ * The plate lookup, as a mutation rather than a query.
+ *
+ * It is an action the officer takes, once, standing in front of a car, and its answer must never be
+ * served from a cache: someone who pays while the officer walks up has to be covered by the time
+ * the officer looks. The server says so too (`Cache-Control: no-store`); modelling it as a query
+ * with a key would invite exactly the staleness both sides are trying to avoid.
+ */
+export function usePlateLookup() {
+  const { apiClient, activeTenant } = useAuth();
+  const tenantId = activeTenant?.id ?? null;
+  return useMutation({
+    mutationFn: (input: PlateLookupInput): Promise<PlateStatus> =>
+      apiClient.inspectorEnforcement.plateStatus(input.plate, {
+        zoneId: input.zoneId,
+        spaceCode: input.spaceCode,
+      }),
+    onSuccess: (status) => {
+      rememberZones(tenantId, [
+        ...(status.bay ? [status.bay] : []),
+        ...(status.coveringStay ? [status.coveringStay] : []),
+        ...status.otherStays,
+      ]);
+    },
+  });
+}
+
+/**
+ * Seeds the zone directory at app start.
+ *
+ * The plate lookup is the landing screen and needs a zone before it can ask a conclusive question,
+ * but the enforcement portal publishes no zone catalogue (see ./zoneDirectory), so the app learns
+ * them from the officer's own citations. Reading one page of those on start is what turns "no zones
+ * on this device" into a usable picker for anyone who has worked a shift before. A long `staleTime`
+ * keeps it to one request per session; failures are ignored on purpose, because a device with no
+ * signal must still open its lookup screen with whatever it learned last time.
+ */
+export function useZoneDirectorySeed(): void {
+  const { apiClient, activeTenant } = useAuth();
+  const tenantId = activeTenant?.id ?? null;
+  const query = useQuery({
+    queryKey: ['inspector', 'zone-seed', tenantId],
+    queryFn: () => apiClient.inspectorEnforcement.list({ page: 0, size: 50 }),
+    enabled: Boolean(tenantId),
+    staleTime: 60 * 60 * 1000,
+    retry: false,
+  });
+  useEffect(() => {
+    rememberZones(tenantId, query.data?.items ?? []);
+  }, [tenantId, query.data]);
+}
+
+/** The zones this device has learned, and a way to re-render when it learns another. */
+export function useKnownZones(): KnownZone[] {
+  const { activeTenant } = useAuth();
+  const tenantId = activeTenant?.id ?? null;
+  const subscribe = useCallback((listener: () => void) => subscribeToZones(listener), []);
+  const getSnapshot = useCallback(() => knownZones(tenantId), [tenantId]);
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+}
+
+export interface QueueApi {
+  rows: QueuedCitation[];
+  pending: number;
+  /** Sends everything that is due. Safe to call from anywhere: concurrent flushes collapse into one. */
+  flush: () => Promise<void>;
+  retryAll: () => void;
+}
+
+/**
+ * The offline queue as a screen sees it, plus the two triggers that make it feel automatic: the
+ * browser's `online` event, and a slow sweep for the case where the connection came back without
+ * the event firing (which happens: `navigator.onLine` reports a link, not reachability).
+ */
+export function useCitationQueue(): QueueApi {
+  const { apiClient, activeTenant } = useAuth();
+  const queryClient = useQueryClient();
+  const tenantId = activeTenant?.id ?? null;
+
+  const subscribe = useCallback((listener: () => void) => subscribeToQueue(listener), []);
+  const getSnapshot = useCallback(() => queueSnapshot(tenantId), [tenantId]);
+  const rows = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+
+  const flush = useCallback(async () => {
+    await flushQueue(apiClient, tenantId);
+    // A citation that just landed belongs in "my citations" without a manual refresh.
+    await queryClient.invalidateQueries({ queryKey: ['inspector', 'citations'] });
+  }, [apiClient, queryClient, tenantId]);
+
+  useEffect(() => {
+    if (!tenantId) return;
+    void flush();
+    const onOnline = (): void => {
+      void flush();
+    };
+    window.addEventListener('online', onOnline);
+    const timer = window.setInterval(() => {
+      void flush();
+    }, 20_000);
+    return () => {
+      window.removeEventListener('online', onOnline);
+      window.clearInterval(timer);
+    };
+  }, [flush, tenantId]);
+
+  return useMemo(
+    () => ({
+      rows,
+      pending: pendingCount(rows),
+      flush,
+      retryAll: () => {
+        retryAllNow(tenantId);
+        void flush();
+      },
+    }),
+    [flush, rows, tenantId],
+  );
+}
+
+/** `navigator.onLine`, watched — the offline state is always visible in the app bar (DESIGN_SYSTEM §5). */
+export function useIsOnline(): boolean {
+  const subscribe = useCallback((listener: () => void) => {
+    window.addEventListener('online', listener);
+    window.addEventListener('offline', listener);
+    return () => {
+      window.removeEventListener('online', listener);
+      window.removeEventListener('offline', listener);
+    };
+  }, []);
+  return useSyncExternalStore(
+    subscribe,
+    () => (typeof navigator === 'undefined' ? true : navigator.onLine),
+    () => true,
+  );
+}

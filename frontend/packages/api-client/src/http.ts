@@ -30,6 +30,17 @@ export interface RequestOptions {
   body?: unknown;
   /** Marks a mutating write as safe to retry verbatim; a fresh UUID is generated per logical operation, not per network attempt. */
   idempotent?: boolean;
+  /**
+   * An explicit `Idempotency-Key`, when the caller owns the key rather than the transport.
+   *
+   * The offline citation queue is the case this exists for: the key has to be minted once, when
+   * the officer captures the citation, and stay identical across every later flush — including one
+   * after the app was closed and reopened. A key generated per network attempt (what `idempotent`
+   * does) protects a double tap and nothing else.
+   */
+  idempotencyKey?: string;
+  /** Set by {@link HttpClient.upload}; never JSON-encoded and never given a Content-Type. */
+  formData?: FormData;
   /** Skip Authorization header (public catalog / auth endpoints before login). */
   auth?: boolean;
   headers?: Record<string, string>;
@@ -110,6 +121,53 @@ export class HttpClient {
     return (await response.json()) as T;
   }
 
+  /**
+   * Like {@link request}, but the caller also needs the HTTP status.
+   *
+   * `POST /inspector/citations` answers 201 when it created the act and 200 when it recognised a
+   * resend by its `deviceCitationId` and returned the citation that already existed. That
+   * difference is the whole point of the device identifier — a queue flushing twice has to know it
+   * did not write a second ticket — and it is invisible to a caller that only ever sees the body.
+   */
+  async requestWithStatus<T>(
+    method: HttpMethod,
+    path: string,
+    options: RequestOptions = {},
+  ): Promise<{ data: T; status: number }> {
+    const response = await this.execute(method, path, options, /* isRetry */ false);
+    if (response.status === 204) {
+      return { data: undefined as T, status: 204 };
+    }
+    return { data: (await response.json()) as T, status: response.status };
+  }
+
+  /**
+   * A `multipart/form-data` upload — evidence photographs, and nothing else so far.
+   *
+   * The body is a `FormData` and the `Content-Type` header is deliberately never set: the boundary
+   * is part of that header and only the browser knows it, so writing the header by hand produces a
+   * request the server cannot parse. Everything else (bearer token, refresh-and-retry, Problem
+   * Details on failure) is the same path a JSON request takes.
+   */
+  async upload<T>(path: string, form: FormData, options: RequestOptions = {}): Promise<T> {
+    const response = await this.execute('POST', path, { ...options, formData: form }, false);
+    if (response.status === 204) return undefined as T;
+    return (await response.json()) as T;
+  }
+
+  /**
+   * The raw bytes behind an authenticated URL, as a `Blob`.
+   *
+   * Evidence is served with `Cache-Control: no-store` and requires a bearer token, so it can never
+   * be the `src` of a plain `<img>`: the browser would send that request without the Authorization
+   * header and render a broken image. The bytes are fetched here and handed to the screen as an
+   * object URL, which the screen is responsible for revoking.
+   */
+  async blob(path: string, options: RequestOptions = {}): Promise<Blob> {
+    const response = await this.execute('GET', path, options, false);
+    return response.blob();
+  }
+
   private async execute(
     method: HttpMethod,
     path: string,
@@ -124,7 +182,10 @@ export class HttpClient {
     if (options.body !== undefined) {
       headers['Content-Type'] = 'application/json';
     }
-    if (options.idempotent) {
+    // A caller-owned key wins over a per-attempt one: it is the stronger promise of the two.
+    if (options.idempotencyKey) {
+      headers['Idempotency-Key'] = options.idempotencyKey;
+    } else if (options.idempotent) {
       headers['Idempotency-Key'] = generateIdempotencyKey();
     }
     if (options.auth !== false && this.tokenProvider) {
@@ -137,7 +198,7 @@ export class HttpClient {
       response = await this.fetchImpl(`${this.baseUrl}${path}${buildQuery(options.query)}`, {
         method,
         headers,
-        body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+        body: options.formData ?? (options.body !== undefined ? JSON.stringify(options.body) : undefined),
         signal: options.signal,
         // An authenticated GET answers "…for this user, in this municipality", but the browser's
         // HTTP cache is keyed by URL and does not look at `Authorization` unless the response says

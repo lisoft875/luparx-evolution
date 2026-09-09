@@ -137,4 +137,25 @@ public final class ErrorCode {
      * readable from {@code GET /citizen/parking/schedule}.
      */
     public static final String OUTSIDE_CHARGING_HOURS = "OUTSIDE_CHARGING_HOURS";
+
+    // --- enforcement (CONTRACT.md "v0.7 — Fiscalización") ---------------------------------------
+    /** No citation with that identifier in the caller's municipality. Also the answer for one that
+     * exists in another municipality: confirming it would leak that it exists. */
+    public static final String CITATION_NOT_FOUND = "CITATION_NOT_FOUND";
+    /** The citation cannot move from the state it is in to the one asked for (CitationStatus). */
+    public static final String CITATION_INVALID_TRANSITION = "CITATION_INVALID_TRANSITION";
+    /** The infraction type demands a photograph and the citation has none, so it cannot be issued. */
+    public static final String CITATION_EVIDENCE_REQUIRED = "CITATION_EVIDENCE_REQUIRED";
+    /** The citation is closed: nothing may be attached to it or changed on it any more. */
+    public static final String CITATION_NOT_EDITABLE = "CITATION_NOT_EDITABLE";
+    /** This kind of infraction does not admit a defence, by the municipality's own configuration. */
+    public static final String CITATION_APPEAL_NOT_ALLOWED = "CITATION_APPEAL_NOT_ALLOWED";
+    public static final String INFRACTION_TYPE_NOT_FOUND = "INFRACTION_TYPE_NOT_FOUND";
+    /** The kind exists but the municipality retired it, so no new citation may be written under it. */
+    public static final String INFRACTION_TYPE_INACTIVE = "INFRACTION_TYPE_INACTIVE";
+    public static final String EVIDENCE_NOT_FOUND = "EVIDENCE_NOT_FOUND";
+    public static final String EVIDENCE_TOO_LARGE = "EVIDENCE_TOO_LARGE";
+    /** The file is not one of the image types the platform accepts, judged by its own header. */
+    public static final String EVIDENCE_TYPE_NOT_ALLOWED = "EVIDENCE_TYPE_NOT_ALLOWED";
+    public static final String EVIDENCE_LIMIT_REACHED = "EVIDENCE_LIMIT_REACHED";
 }

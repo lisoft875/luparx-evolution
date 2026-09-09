@@ -1272,6 +1272,194 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
     }
   }
 
+
+  // ---- Enforcement (CONTRACT.md v0.7) ---------------------------------------------------------
+  // Enough of the real behaviour for the demo builds to be honest rather than decorative: the four
+  // plate verdicts with the bay as the discriminator, a catalogue, and citations that are
+  // append-only and idempotent by `deviceCitationId`. Everything a screen can reach is here; the
+  // parts a screen never sees (storage of the bytes, the SHA-256, the numbering lock) are not.
+  if (segments[2] === 'inspector' || (segments[2] === 'admin' && segments[3] === 'enforcement')) {
+    const authHeader = new Headers(init?.headers).get('Authorization');
+    const claims = authHeader ? decodeMockClaims(authHeader) : null;
+    if (!claims) return problem(401, 'UNAUTHORIZED', 'Missing or invalid session');
+    const userId = claims.sub;
+    const tenantId = claims.tid ?? '';
+
+    // GET /inspector/plates/{plate}/status?zoneId=&spaceCode=
+    if (segments[2] === 'inspector' && segments[3] === 'plates' && segments[5] === 'status' && method === 'GET') {
+      const plate = normalizeMockPlate(decodeURIComponent(segments[4] ?? ''));
+      const zoneId = url.searchParams.get('zoneId');
+      const spaceCode = url.searchParams.get('spaceCode');
+      // Half a pair identifies no bay — the server's own rule, mirrored so the client is exercised
+      // against it rather than against a mock that is more forgiving than production.
+      if (Boolean(zoneId) !== Boolean(spaceCode)) {
+        return problem(400, 'VALIDATION_FAILED', 'Validation failed', undefined, [
+          { field: zoneId ? 'spaceCode' : 'zoneId', code: 'VALIDATION_FAILED', message: 'Zone and bay travel together' },
+        ]);
+      }
+      const stays = mockParkingSessions
+        .filter((s) => s.tenantId === tenantId && s.status === 'ACTIVE' && normalizeMockPlate(s.plateSnapshot) === plate)
+        .map((s) => ({
+          sessionId: s.id,
+          zoneId: s.zoneId,
+          zoneCode: s.zoneId,
+          zoneName: s.zoneName,
+          spaceId: s.spaceId,
+          spaceCode: s.spaceCode,
+          startedAt: s.startedAt,
+          expiresAt: s.expiresAt,
+        }));
+      const bay = zoneId && spaceCode
+        ? { spaceId: `${zoneId}:${spaceCode}`, spaceCode, zoneId, zoneCode: zoneId, zoneName: zoneNameForId(zoneId) }
+        : null;
+      type MockStay = (typeof stays)[number];
+      let verdict: string;
+      let covering: MockStay | null = null;
+      let others: MockStay[] = stays;
+      if (stays.length === 0) {
+        verdict = 'NOT_COVERED';
+      } else if (!bay) {
+        verdict = 'AMBIGUOUS';
+      } else {
+        covering = stays.find((s) => s.zoneId === zoneId && s.spaceCode === spaceCode) ?? null;
+        others = stays.filter((s) => s !== covering);
+        verdict = covering ? 'COVERED' : 'BAY_MISMATCH';
+      }
+      return json({
+        plate,
+        plateNormalized: plate,
+        verdict,
+        verdictLabelKey: `plate.verdict.${verdict.toLowerCase()}`,
+        requiresBay: verdict === 'AMBIGUOUS',
+        bay: verdict === 'AMBIGUOUS' ? null : bay,
+        coveringStay: covering,
+        otherStays: others,
+        checkedAt: new Date().toISOString(),
+      });
+    }
+
+    // GET /inspector/enforcement/infraction-types | GET|PUT /admin/enforcement/infraction-types
+    if (segments[segments.length - 1] === 'infraction-types') {
+      const types = mockInfractionTypes(tenantId);
+      if (method === 'GET') {
+        return json(segments[2] === 'inspector' ? types.filter((type) => type.active) : types);
+      }
+      if (method === 'PUT') {
+        const payload = await readBody<{ infractionTypes: Record<string, unknown>[] }>(init);
+        return json(replaceMockInfractionTypes(tenantId, payload.infractionTypes ?? []));
+      }
+    }
+
+    // Citations, for both portals.
+    const citationsRoot = segments[2] === 'inspector' ? 4 : 5;
+    if (segments[citationsRoot - 1] === 'citations') {
+      const id = segments[citationsRoot];
+      const action = segments[citationsRoot + 1];
+
+      if (method === 'GET' && !id) {
+        const mine = segments[2] === 'inspector';
+        const rows = mockCitations
+          .filter((c) => c.tenantId === tenantId && (!mine || c.inspectorUserId === userId))
+          .filter((c) => {
+            const status = url.searchParams.get('status');
+            const plate = url.searchParams.get('plate');
+            return (!status || c.status === status) && (!plate || c.plate.includes(normalizeMockPlate(plate)));
+          })
+          .sort((a, b) => b.occurredAt.localeCompare(a.occurredAt));
+        const page = Number(url.searchParams.get('page') ?? 0);
+        const size = Number(url.searchParams.get('size') ?? 20);
+        const paged = paginate(rows, page, size);
+        return json({ ...paged, items: paged.items.map((c) => toWireCitation(c, 0)) });
+      }
+
+      if (method === 'POST' && !id) {
+        const payload = await readBody<Record<string, string | number | undefined>>(init);
+        const type = mockInfractionTypes(tenantId).find((candidate) => candidate.id === payload.infractionTypeId);
+        if (!type) return problem(404, 'INFRACTION_TYPE_NOT_FOUND', 'Infraction type not found');
+        // `deviceCitationId` protects the act: a resend resolves to the citation that already
+        // exists and answers 200, exactly as the real server does.
+        const existing = mockCitations.find(
+          (c) => c.tenantId === tenantId && payload.deviceCitationId && c.deviceCitationId === payload.deviceCitationId,
+        );
+        if (existing) return json(toWireDetail(existing), 200);
+        const record = createMockCitation(tenantId, userId, payload, type);
+        return json(toWireDetail(record), 201);
+      }
+
+      const record = mockCitations.find((c) => c.id === id && c.tenantId === tenantId);
+      if (!record) return problem(404, 'CITATION_NOT_FOUND', 'Citation not found');
+
+      if (method === 'GET' && !action) return json(toWireDetail(record));
+
+      if (method === 'POST' && action === 'issue') {
+        if (record.evidence.filter((e) => e.kind === 'PHOTO').length === 0 && record.requiresPhoto) {
+          return problem(409, 'CITATION_EVIDENCE_REQUIRED', 'A photograph is required');
+        }
+        issueMockCitation(record);
+        return json(toWireDetail(record));
+      }
+
+      if (method === 'POST' && action === 'evidence') {
+        const note = init?.body instanceof FormData ? null : (await readBody<{ note?: string }>(init)).note ?? null;
+        const evidence = {
+          id: `evidence-${record.evidence.length + 1}-${record.id}`,
+          kind: note ? ('NOTE' as const) : ('PHOTO' as const),
+          contentType: note ? null : 'image/jpeg',
+          byteSize: note ? null : 0,
+          sha256: note ? null : 'mock-digest-not-computed',
+          note,
+          capturedAt: new Date().toISOString(),
+          latitude: null,
+          longitude: null,
+          createdAt: new Date().toISOString(),
+        };
+        record.evidence.push(evidence);
+        record.events.push(mockEvent(record, 'EVIDENCE_ATTACHED', record.status, record.status, null));
+        return json({ ...evidence, contentUrl: null });
+      }
+
+      if (method === 'POST' && action === 'cancel') {
+        const { reason } = await readBody<{ reason: string }>(init);
+        record.events.push(mockEvent(record, 'CANCELLED', record.status, 'CANCELLED', reason));
+        record.status = 'CANCELLED';
+        record.statusReason = reason;
+        return json(toWireDetail(record));
+      }
+    }
+  }
+
+  // ---- Citizen fines (CONTRACT.md v0.7) --------------------------------------------------------
+  if (segments[2] === 'citizen' && segments[3] === 'fines') {
+    const authHeader = new Headers(init?.headers).get('Authorization');
+    const claims = authHeader ? decodeMockClaims(authHeader) : null;
+    if (!claims) return problem(401, 'UNAUTHORIZED', 'Missing or invalid session');
+    const tenantId = claims.tid ?? '';
+    // Matched by the caller's own vehicles, never by plate — the leak the real server refuses too.
+    const plates = new Set(mockVehicles.filter((v) => v.userId === claims.sub).map((v) => v.plate));
+    const rows = mockCitations.filter((c) => c.tenantId === tenantId && plates.has(c.plate) && c.status !== 'DRAFT');
+    const id = segments[4];
+    if (method === 'GET' && !id) {
+      const page = Number(url.searchParams.get('page') ?? 0);
+      const size = Number(url.searchParams.get('size') ?? 20);
+      const paged = paginate(rows, page, size);
+      return json({ ...paged, items: paged.items.map(toWireFine) });
+    }
+    const record = rows.find((c) => c.id === id);
+    if (!record) return problem(404, 'CITATION_NOT_FOUND', 'Citation not found');
+    if (method === 'GET' && segments.length === 5) {
+      return json({
+        fine: toWireFine(record),
+        evidence: record.evidence.map((e) => ({ ...e, contentUrl: null })),
+        history: record.events,
+      });
+    }
+    if (method === 'POST' && segments[5] === 'payments') {
+      // Declared, not implemented — the same 501 the real server answers, so the client's honest
+      // disabled button is exercised against the same fact in both transports.
+      return problem(501, 'NOT_IMPLEMENTED', 'Paying a fine online arrives with the payments batch');
+    }
+  }
+
   return problem(404, 'MOCK_ROUTE_NOT_FOUND', `No mock handler for ${method} ${path}`);
 }
 
@@ -1462,3 +1650,318 @@ function decodeMockClaims(authorizationHeader: string): AccessTokenClaims | null
 }
 
 
+
+
+// ---- Enforcement fixtures (CONTRACT.md v0.7) ---------------------------------------------------
+
+interface MockEvidence {
+  id: string;
+  kind: 'PHOTO' | 'NOTE';
+  contentType: string | null;
+  byteSize: number | null;
+  sha256: string | null;
+  note: string | null;
+  capturedAt: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  createdAt: string;
+}
+
+interface MockCitationRecord {
+  id: string;
+  tenantId: string;
+  inspectorUserId: string;
+  deviceCitationId: string | null;
+  number: string | null;
+  seriesYear: number | null;
+  status: string;
+  statusReason: string | null;
+  plate: string;
+  zoneId: string | null;
+  zoneName: string | null;
+  spaceCode: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  locationAccuracyM: number | null;
+  addressText: string | null;
+  infractionTypeId: string;
+  infractionCode: string;
+  infractionName: string;
+  fineMinor: number;
+  discountedFineMinor: number | null;
+  currencyCode: string;
+  discountUntil: string | null;
+  dueAt: string | null;
+  occurredAt: string;
+  issuedAt: string | null;
+  notes: string | null;
+  requiresPhoto: boolean;
+  allowsAppeal: boolean;
+  evidence: MockEvidence[];
+  events: Record<string, unknown>[];
+}
+
+interface MockInfractionType {
+  id: string;
+  code: string;
+  name: string;
+  description: string | null;
+  fineAmountMinor: number;
+  discountDays: number | null;
+  discountPercent: number | null;
+  dueDays: number;
+  requiresPhoto: boolean;
+  allowsAppeal: boolean;
+  active: boolean;
+}
+
+const mockCitations: MockCitationRecord[] = [];
+const mockInfractionTypesByTenant = new Map<string, MockInfractionType[]>();
+let mockCitationSequence = 0;
+
+/** The default catalogue a municipality starts with in the demo build. */
+function mockInfractionTypes(tenantId: string): MockInfractionType[] {
+  const existing = mockInfractionTypesByTenant.get(tenantId);
+  if (existing) return existing;
+  const seeded: MockInfractionType[] = [
+    {
+      id: `${tenantId}-inf-nopago`,
+      code: 'NOPAGO',
+      name: 'Estacionar sin pago vigente',
+      description: 'El vehículo ocupa una bahía de cobro sin sesión de parqueo vigente.',
+      fineAmountMinor: 150000,
+      discountDays: 8,
+      discountPercent: 50,
+      dueDays: 30,
+      requiresPhoto: true,
+      allowsAppeal: true,
+      active: true,
+    },
+    {
+      id: `${tenantId}-inf-vencida`,
+      code: 'VENCIDA',
+      name: 'Tiempo vencido',
+      description: 'La sesión de parqueo terminó y el vehículo sigue en la bahía.',
+      fineAmountMinor: 100000,
+      discountDays: 8,
+      discountPercent: 50,
+      dueDays: 30,
+      requiresPhoto: false,
+      allowsAppeal: true,
+      active: true,
+    },
+  ];
+  mockInfractionTypesByTenant.set(tenantId, seeded);
+  return seeded;
+}
+
+/** Whole-catalogue replace: absent rows are deactivated, never dropped (CONTRACT.md v0.7). */
+function replaceMockInfractionTypes(tenantId: string, drafts: Record<string, unknown>[]): unknown[] {
+  const current = mockInfractionTypes(tenantId);
+  const kept = new Set<string>();
+  for (const draft of drafts) {
+    const id = (draft.id as string) ?? `${tenantId}-inf-${String(draft.code).toLowerCase()}`;
+    kept.add(id);
+    const row: MockInfractionType = {
+      id,
+      code: String(draft.code),
+      name: String(draft.name),
+      description: (draft.description as string) ?? null,
+      fineAmountMinor: Number(draft.fineAmountMinor),
+      discountDays: (draft.discountDays as number) ?? null,
+      discountPercent: (draft.discountPercent as number) ?? null,
+      dueDays: Number(draft.dueDays),
+      requiresPhoto: draft.requiresPhoto !== false,
+      allowsAppeal: draft.allowsAppeal !== false,
+      active: draft.active !== false,
+    };
+    const index = current.findIndex((candidate) => candidate.id === id);
+    if (index >= 0) current[index] = row;
+    else current.push(row);
+  }
+  for (const row of current) {
+    if (!kept.has(row.id)) row.active = false;
+  }
+  mockInfractionTypesByTenant.set(tenantId, current);
+  return current.map(toWireInfractionType);
+}
+
+function toWireInfractionType(type: MockInfractionType): unknown {
+  const discounted =
+    type.discountPercent != null
+      ? Math.round((type.fineAmountMinor * (100 - type.discountPercent)) / 100)
+      : null;
+  return {
+    id: type.id,
+    code: type.code,
+    name: type.name,
+    description: type.description,
+    fine: { amountMinor: type.fineAmountMinor, currencyCode: 'CRC' },
+    discountedFine: discounted == null ? null : { amountMinor: discounted, currencyCode: 'CRC' },
+    discountDays: type.discountDays,
+    discountPercent: type.discountPercent,
+    dueDays: type.dueDays,
+    requiresPhoto: type.requiresPhoto,
+    allowsAppeal: type.allowsAppeal,
+    active: type.active,
+  };
+}
+
+function mockEvent(
+  record: MockCitationRecord,
+  action: string,
+  fromStatus: string | null,
+  toStatus: string | null,
+  reason: string | null,
+): Record<string, unknown> {
+  return {
+    id: `event-${record.id}-${record.events.length + 1}`,
+    action,
+    actionLabelKey: `citation.action.${action.toLowerCase()}`,
+    fromStatus,
+    toStatus,
+    actorUserId: record.inspectorUserId,
+    actorPortal: 'inspector',
+    reason,
+    occurredAt: new Date().toISOString(),
+  };
+}
+
+function createMockCitation(
+  tenantId: string,
+  userId: string,
+  payload: Record<string, string | number | undefined>,
+  type: MockInfractionType,
+): MockCitationRecord {
+  const now = new Date();
+  const discounted =
+    type.discountPercent != null ? Math.round((type.fineAmountMinor * (100 - type.discountPercent)) / 100) : null;
+  const record: MockCitationRecord = {
+    id: `citation-mock-${++mockCitationSequence}`,
+    tenantId,
+    inspectorUserId: userId,
+    deviceCitationId: (payload.deviceCitationId as string) ?? null,
+    number: null,
+    seriesYear: null,
+    // A type that demands a photograph is captured as a draft and takes no number until it is
+    // issued: an abandoned capture must not burn a consecutive.
+    status: type.requiresPhoto ? 'DRAFT' : 'ISSUED',
+    statusReason: null,
+    plate: normalizeMockPlate(String(payload.plate ?? '')),
+    zoneId: (payload.zoneId as string) ?? null,
+    zoneName: payload.zoneId ? zoneNameForId(String(payload.zoneId)) : null,
+    spaceCode: (payload.spaceCode as string) ?? null,
+    latitude: payload.latitude == null ? null : Number(payload.latitude),
+    longitude: payload.longitude == null ? null : Number(payload.longitude),
+    locationAccuracyM: payload.locationAccuracyM == null ? null : Number(payload.locationAccuracyM),
+    addressText: (payload.addressText as string) ?? null,
+    infractionTypeId: type.id,
+    infractionCode: type.code,
+    infractionName: type.name,
+    fineMinor: type.fineAmountMinor,
+    discountedFineMinor: discounted,
+    currencyCode: 'CRC',
+    discountUntil:
+      type.discountDays == null ? null : new Date(now.getTime() + type.discountDays * 86_400_000).toISOString(),
+    dueAt: new Date(now.getTime() + type.dueDays * 86_400_000).toISOString(),
+    occurredAt: (payload.occurredAt as string) ?? now.toISOString(),
+    issuedAt: null,
+    notes: (payload.notes as string) ?? null,
+    requiresPhoto: type.requiresPhoto,
+    allowsAppeal: type.allowsAppeal,
+    evidence: [],
+    events: [],
+  };
+  record.events.push(mockEvent(record, 'DRAFTED', null, 'DRAFT', null));
+  mockCitations.push(record);
+  if (!type.requiresPhoto) issueMockCitation(record);
+  return record;
+}
+
+function issueMockCitation(record: MockCitationRecord): void {
+  if (record.number) return;
+  const year = new Date().getFullYear();
+  record.number = `MOCK-${year}-${String(mockCitationSequence).padStart(6, '0')}`;
+  record.seriesYear = year;
+  record.events.push(mockEvent(record, 'ISSUED', record.status, 'ISSUED', null));
+  record.status = 'ISSUED';
+  record.issuedAt = new Date().toISOString();
+}
+
+/** The amount actually owed today: the reduced one while the early window is open. */
+function mockAmountPayable(record: MockCitationRecord): number {
+  const open = record.discountUntil ? Date.parse(record.discountUntil) > Date.now() : false;
+  return open && record.discountedFineMinor != null ? record.discountedFineMinor : record.fineMinor;
+}
+
+function toWireCitation(record: MockCitationRecord, evidenceCount: number): unknown {
+  return {
+    id: record.id,
+    number: record.number,
+    seriesYear: record.seriesYear,
+    status: record.status,
+    statusLabelKey: `citation.status.${record.status.toLowerCase()}`,
+    statusReason: record.statusReason,
+    plate: record.plate,
+    vehicleId: null,
+    zoneId: record.zoneId,
+    zoneCode: record.zoneId,
+    zoneName: record.zoneName,
+    spaceId: null,
+    spaceCode: record.spaceCode,
+    latitude: record.latitude,
+    longitude: record.longitude,
+    locationAccuracyM: record.locationAccuracyM,
+    addressText: record.addressText,
+    infractionTypeId: record.infractionTypeId,
+    infractionCode: record.infractionCode,
+    infractionName: record.infractionName,
+    fine: { amountMinor: record.fineMinor, currencyCode: record.currencyCode },
+    amountPayable: { amountMinor: mockAmountPayable(record), currencyCode: record.currencyCode },
+    discountedFine:
+      record.discountedFineMinor == null
+        ? null
+        : { amountMinor: record.discountedFineMinor, currencyCode: record.currencyCode },
+    discountUntil: record.discountUntil,
+    dueAt: record.dueAt,
+    occurredAt: record.occurredAt,
+    issuedAt: record.issuedAt,
+    deviceClockSkewSeconds: 0,
+    inspectorUserId: record.inspectorUserId,
+    parkingSessionId: null,
+    notes: record.notes,
+    evidenceCount,
+  };
+}
+
+function toWireDetail(record: MockCitationRecord): unknown {
+  return {
+    citation: toWireCitation(record, record.evidence.length),
+    evidence: record.evidence.map((item) => ({ ...item, contentUrl: null })),
+    history: record.events,
+  };
+}
+
+/** The citizen's narrower view: no officer, no clock skew, no session reference. */
+function toWireFine(record: MockCitationRecord): unknown {
+  return {
+    id: record.id,
+    number: record.number,
+    status: record.status,
+    statusLabelKey: `citation.status.${record.status.toLowerCase()}`,
+    plate: record.plate,
+    infractionCode: record.infractionCode,
+    infractionName: record.infractionName,
+    zoneName: record.zoneName,
+    spaceCode: record.spaceCode,
+    addressText: record.addressText,
+    fine: { amountMinor: record.fineMinor, currencyCode: record.currencyCode },
+    amountPayable: { amountMinor: mockAmountPayable(record), currencyCode: record.currencyCode },
+    discountUntil: record.discountUntil,
+    dueAt: record.dueAt,
+    occurredAt: record.occurredAt,
+    issuedAt: record.issuedAt,
+    appealable: record.allowsAppeal && ['ISSUED', 'UPHELD', 'EXPIRED'].includes(record.status),
+    evidenceCount: record.evidence.length,
+  };
+}

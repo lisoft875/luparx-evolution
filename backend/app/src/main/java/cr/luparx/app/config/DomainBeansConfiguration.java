@@ -1,6 +1,7 @@
 package cr.luparx.app.config;
 
 import cr.luparx.core.domain.Portal;
+import cr.luparx.enforcement.model.EvidencePolicy;
 import cr.luparx.identity.port.JwtKeySource;
 import cr.luparx.identity.repository.UserMfaRecoveryCodeRepository;
 import cr.luparx.identity.repository.UserMfaTotpRepository;
@@ -183,6 +184,20 @@ public class DomainBeansConfiguration {
                                                          TenantService tenantService,
                                                          PlatformDefaultsProperties defaults) {
         return new EffectiveLocaleService(tenantLocaleService, tenantService, defaults.locale());
+    }
+
+    /**
+     * The limits every evidence upload is held to, assembled here because they are deployment
+     * configuration and {@code module-enforcement} must not read YAML. Enforcing them in the domain,
+     * before any storage implementation sees the bytes, is what keeps a filesystem store and an
+     * object store from ever disagreeing about what is acceptable.
+     */
+    @Bean
+    public EvidencePolicy evidencePolicy(EnforcementProperties properties) {
+        return new EvidencePolicy(properties.maxEvidenceBytes(),
+                Set.copyOf(properties.allowedImageTypes()),
+                properties.maxPhotosPerCitation(),
+                properties.maxNoteLength());
     }
 
     @Bean

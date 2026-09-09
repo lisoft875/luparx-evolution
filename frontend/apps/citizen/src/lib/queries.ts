@@ -8,6 +8,9 @@ import type {
   ChangePasswordRequest,
   CreateVehicleRequest,
   ExtendParkingSessionRequest,
+  Fine,
+  FineDetail,
+  PagedResponse,
   ParkingExtensionOption,
   ParkingPolicy,
   ParkingQuoteResponse,
@@ -354,4 +357,32 @@ export function useTenantTimeZone(): string | undefined {
   const { me } = useAuth();
   const { data: schedule } = useParkingSchedule();
   return schedule?.timeZone ?? me?.user.timeZone ?? undefined;
+}
+
+// ---- Fines (CONTRACT.md v0.7) ------------------------------------------------------------------
+// Matched by vehicle and never by plate: anybody may register any plate — that is what makes a
+// shared family car work — so listing "every citation whose plate matches one I typed into my
+// garage" would hand one person another person's fines. The narrowing happens server-side; the
+// client only reads what comes back.
+
+const FINE_KEYS = {
+  list: (page: number, size: number) => ['citizen', 'fines', page, size] as const,
+  detail: (id: string) => ['citizen', 'fine', id] as const,
+};
+
+export function useFines(page: number, size: number): UseQueryResult<PagedResponse<Fine>> {
+  const { apiClient } = useAuth();
+  return useQuery({
+    queryKey: FINE_KEYS.list(page, size),
+    queryFn: () => apiClient.citizenFines.list({ page, size }),
+  });
+}
+
+export function useFine(id: string | undefined): UseQueryResult<FineDetail> {
+  const { apiClient } = useAuth();
+  return useQuery({
+    queryKey: FINE_KEYS.detail(id ?? ''),
+    queryFn: () => apiClient.citizenFines.get(id as string),
+    enabled: Boolean(id),
+  });
 }

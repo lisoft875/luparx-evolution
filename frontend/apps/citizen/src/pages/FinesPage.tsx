@@ -1,22 +1,46 @@
 import * as React from 'react';
 import { useMemo, useState } from 'react';
-import { useTranslation, formatDate, type TranslationKey } from '@luparx/i18n';
-import { AmountText, Card, ChipGroup, EmptyState, IconCheck, IconFine, ListRow } from '@luparx/ui';
+import { useNavigate } from 'react-router-dom';
+import { citationStatusKey, citationStatusTone } from '@luparx/features';
+import { formatDate, useTranslation } from '@luparx/i18n';
+import { AmountText, Badge, Card, ChipGroup, EmptyState, IconCheck, IconFine, ListRow, Pagination } from '@luparx/ui';
 import { CitizenShell } from '../components/CitizenShell';
-import { MOCK_FINES } from '../mocks/parkingDomain';
+import { QueryBoundary } from '../components/QueryBoundary';
+import { useFines } from '../lib/queries';
 
 type FinesTab = 'pending' | 'history';
 
-export function FinesPage(): React.JSX.Element {
-  const { t, locale } = useTranslation();
-  const [tab, setTab] = useState<FinesTab>('pending');
+const PAGE_SIZE = 20;
 
-  // TODO(domain): `MOCK_FINES` stands in for the citations/fines side of `module-parking` once it
-  // ships a citizen-facing read endpoint (CONTRACT.md §4 "Dominio parquímetros").
-  const fines = useMemo(
-    () => MOCK_FINES.filter((fine) => (tab === 'pending' ? fine.status === 'PENDING' : fine.status === 'PAID')),
-    [tab],
-  );
+/**
+ * The citizen's fines, as the server actually holds them.
+ *
+ * The two tabs split on **whether money is still owed**, which is the server's own `isPayable`
+ * notion (`ISSUED`, `UPHELD`, `EXPIRED`) rather than a list of statuses invented here. Splitting on
+ * anything else would put an annulled fine under "pending" or a fine under appeal under "history",
+ * and both are wrong in a way the person reading would notice before we did.
+ *
+ * The filtering is done on the page the server returned rather than by asking for two filtered
+ * pages: `GET /citizen/fines` takes one `status`, not a set, and paging two lists that must agree
+ * on a total is a worse problem than a short client-side partition of twenty rows.
+ */
+const PAYABLE_STATUSES = new Set(['ISSUED', 'UPHELD', 'EXPIRED']);
+
+export function FinesPage(): React.JSX.Element {
+  const { t, tPlural, locale } = useTranslation();
+  const navigate = useNavigate();
+  const [tab, setTab] = useState<FinesTab>('pending');
+  const [page, setPage] = useState(0);
+  const query = useFines(page, PAGE_SIZE);
+  const totalPages = query.data?.totalPages ?? 1;
+  const total = query.data?.totalElements ?? 0;
+
+  const rows = useMemo(() => {
+    const items = query.data?.items ?? [];
+    return items.filter((fine) =>
+      tab === 'pending' ? PAYABLE_STATUSES.has(fine.status) : !PAYABLE_STATUSES.has(fine.status),
+    );
+  }, [query.data, tab]);
 
   return (
     <CitizenShell bare>
@@ -31,28 +55,74 @@ export function FinesPage(): React.JSX.Element {
           { value: 'history', label: t('citizen.fines.tab.history') },
         ]}
       />
-      {fines.length === 0 ? (
-        <Card>
-          <EmptyState
-            icon={<IconCheck size={28} />}
-            tone="success"
-            title={t('citizen.fines.empty.title')}
-            description={t('citizen.fines.empty.description')}
-          />
-        </Card>
-      ) : (
-        <Card>
-          {fines.map((fine) => (
-            <ListRow
-              key={fine.id}
-              icon={<IconFine size={18} />}
-              title={t(fine.reasonKey as TranslationKey)}
-              meta={`${fine.plate} · ${t('citizen.fines.dueLabel')} ${formatDate(fine.dueAt, locale)}`}
-              value={<AmountText amountMinor={-fine.amountMinor} currencyCode={fine.currencyCode} locale={locale} showSignPrefix={false} />}
-            />
-          ))}
-        </Card>
-      )}
+      <QueryBoundary query={query} errorTitle={t('citizen.fines.title')}>
+        {() =>
+          rows.length === 0 ? (
+            <Card>
+              <EmptyState
+                icon={<IconCheck size={28} />}
+                tone="success"
+                title={t('citizen.fines.empty.title')}
+                description={
+                  tab === 'pending' ? t('citizen.fines.empty.description') : t('citizen.fines.empty.history')
+                }
+              />
+            </Card>
+          ) : (
+            <>
+              <Card>
+                {rows.map((fine) => (
+                  <ListRow
+                    key={fine.id}
+                    icon={<IconFine size={18} />}
+                    title={
+                      <span
+                        style={{ display: 'flex', alignItems: 'center', gap: 'var(--lx-space-2)', flexWrap: 'wrap' }}
+                      >
+                        <span>{fine.infractionName}</span>
+                        <Badge tone={citationStatusTone(fine.status)}>{t(citationStatusKey(fine.status))}</Badge>
+                      </span>
+                    }
+                    meta={[
+                      fine.plate,
+                      fine.zoneName,
+                      fine.spaceCode,
+                      fine.dueAt ? `${t('citizen.fines.dueLabel')} ${formatDate(fine.dueAt, locale)}` : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
+                    value={
+                      <AmountText
+                        amountMinor={-fine.amountPayableMinor}
+                        currencyCode={fine.currencyCode}
+                        locale={locale}
+                        showSignPrefix={false}
+                      />
+                    }
+                    onClick={() => navigate(`/fines/${fine.id}`)}
+                  />
+                ))}
+              </Card>
+              {/* A control that can only be pressed to no effect is noise; on a phone it is noise
+                  that costs a whole row of screen. */}
+              {totalPages > 1 ? (
+              <Pagination
+                page={page}
+                size={PAGE_SIZE}
+                totalPages={totalPages}
+                totalElements={total}
+                onPageChange={setPage}
+                previousLabel={t('pagination.previous')}
+                nextLabel={t('pagination.next')}
+                pageLabel={t('pagination.page')}
+                ofLabel={t('pagination.of')}
+                resultCountLabel={tPlural('pagination.resultCount', total)}
+              />
+              ) : null}
+            </>
+          )
+        }
+      </QueryBoundary>
     </CitizenShell>
   );
 }
