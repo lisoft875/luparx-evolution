@@ -21,6 +21,7 @@ import { StaffPage } from './pages/StaffPage';
 import { ZonesPage } from './pages/ZonesPage';
 import { SpacesPage } from './pages/SpacesPage';
 import { TariffsPage } from './pages/TariffsPage';
+import { ParkingPolicyPage } from './pages/ParkingPolicyPage';
 import { UserDetailPage } from './pages/UserDetailPage';
 import { AuditPage } from './pages/AuditPage';
 import { ReportsPage } from './pages/ReportsPage';
@@ -108,6 +109,18 @@ export function App(): React.JSX.Element {
                   <RequireAuth loginPath="/login">
                     <RequireTenant selectTenantPath="/select-tenant">
                       <SpacesPage />
+                    </RequireTenant>
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/parking-policy"
+                element={
+                  <RequireAuth loginPath="/login">
+                    <RequireTenant selectTenantPath="/select-tenant">
+                      <RequirePermission permission="TENANT_MANAGE" fallback={<Navigate to="/" replace />}>
+                        <ParkingPolicyPage />
+                      </RequirePermission>
                     </RequireTenant>
                   </RequireAuth>
                 }

@@ -8,6 +8,7 @@ import type {
   ExtendParkingSessionRequest,
   LoginRequest,
   MembershipSummary,
+  ParkingPolicy,
   ParkingQuoteRequest,
   ParkingQuoteResponse,
   ParkingSessionStatus,
@@ -78,6 +79,21 @@ const mockSeededZones: MockAdminZone[] = [
 ];
 function mockAdminZones(tenantId: string | null): MockAdminZone[] {
   return [...mockSeededZones, ...mockExtraZones].filter((z) => !tenantId || z.tenantId === tenantId);
+}
+
+/**
+ * The policy a municipality has edited in this demo build, keyed by tenant.
+ *
+ * <p>Not seeded: an absent entry means "this municipality has not configured anything yet", and the
+ * answer is the deployment's defaults — the server's own behaviour, where the first read
+ * materialises the row from `platform.defaults.parking.*` rather than from a constant.</p>
+ */
+const mockAdminPolicies = new Map<string, ParkingPolicy & { updatedAt: string }>();
+
+function mockAdminPolicy(tenantId: string | null): ParkingPolicy & { updatedAt: string } {
+  const edited = mockAdminPolicies.get(tenantId ?? '');
+  if (edited) return edited;
+  return { ...mockParkingPolicyForTenant(tenantId), updatedAt: '2026-01-15T10:00:00.000Z' };
 }
 
 const mockAdminSpaces: { id: string; zoneId: string; code: string; status: 'AVAILABLE' | 'OUT_OF_SERVICE' }[] = [
@@ -581,6 +597,48 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
       if (method === 'PUT') {
         const payload = await readBody<Record<string, unknown>>(init);
         return json({ ...(mockChargingSchedule() as Record<string, unknown>), ...payload, updatedAt: new Date().toISOString() });
+      }
+    }
+
+    // --- the parking policy, read and replaced whole (CONTRACT.md v0.18) -----------------------
+    if (resource === 'parking' && segments[4] === 'policy') {
+      if (method === 'GET') return json(mockAdminPolicy(tenantId));
+      if (method === 'PUT') {
+        const payload = await readBody<Record<string, unknown>>(init);
+        // The coherence rules the server enforces, mirrored so the screen is exercised against the
+        // refusals and not against a mock that says yes to everything.
+        const problems: { field: string; code: string; message: string }[] = [];
+        const increments = (payload.sessionIncrementsMinutes as number[]) ?? [];
+        const extensionIncrements = (payload.extensionIncrementsMinutes as number[]) ?? [];
+        const min = Number(payload.sessionMinMinutes);
+        const max = Number(payload.sessionMaxMinutes);
+        if (increments.length === 0) {
+          problems.push({ field: 'sessionIncrementsMinutes', code: 'VALIDATION_FAILED', message: 'Required' });
+        }
+        if (!(min > 0)) problems.push({ field: 'sessionMinMinutes', code: 'VALIDATION_FAILED', message: 'Invalid' });
+        if (max < min) problems.push({ field: 'sessionMaxMinutes', code: 'VALIDATION_FAILED', message: 'Invalid' });
+        if (payload.extensionEnabled === true && extensionIncrements.length === 0) {
+          problems.push({ field: 'extensionIncrementsMinutes', code: 'VALIDATION_FAILED', message: 'Required' });
+        }
+        if (Number(payload.extensionMaxTotalMinutes) < max) {
+          problems.push({ field: 'extensionMaxTotalMinutes', code: 'VALIDATION_FAILED', message: 'Invalid' });
+        }
+        if (payload.creditOnEarlyFinishEnabled === true && payload.earlyFinishEnabled !== true) {
+          problems.push({ field: 'creditOnEarlyFinishEnabled', code: 'VALIDATION_FAILED', message: 'Invalid' });
+        }
+        if (problems.length > 0) return problem(400, 'VALIDATION_FAILED', 'Validation failed', undefined, problems);
+        // Canonicalised on write exactly as `MinuteIncrements` does: sorted, positive, unique.
+        const canonical = (values: number[]) =>
+          [...new Set(values.filter((value) => Number.isInteger(value) && value > 0))].sort((a, b) => a - b);
+        const stored = {
+          ...mockAdminPolicy(tenantId),
+          ...payload,
+          sessionIncrementsMinutes: canonical(increments),
+          extensionIncrementsMinutes: canonical(extensionIncrements),
+          updatedAt: new Date().toISOString(),
+        };
+        mockAdminPolicies.set(tenantId ?? '', stored as ParkingPolicy & { updatedAt: string });
+        return json(stored);
       }
     }
 
@@ -1328,7 +1386,10 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
       const sub = segments[4];
 
       if (sub === 'policy' && method === 'GET') {
-        return json(mockParkingPolicyForTenant(tenantId));
+        // The same row the administrator edits, not a second copy: in a build where both portals
+        // are mocked, a citizen reading different rules than the municipality just set would be the
+        // mock inventing a bug that production does not have.
+        return json(mockAdminPolicy(tenantId));
       }
 
       if (sub === 'quote' && method === 'POST') {

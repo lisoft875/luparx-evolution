@@ -8,10 +8,12 @@ import type {
   InfractionTypeDraft,
   PagedResponse,
   PageParams,
+  ParkingPolicy,
   ParkingSchedule,
   ParkingZone,
   ParkingSpaceFormat,
   TenantLocaleSettings,
+  UpdateParkingPolicyRequest,
   UpdateParkingScheduleRequest,
   UpdateParkingSpaceFormatRequest,
   UpdateTenantLocalesRequest,
@@ -27,7 +29,34 @@ const KEYS = {
   locales: ['admin', 'settings', 'locales'] as const,
   spaceFormat: ['admin', 'parking', 'space-format'] as const,
   schedule: ['admin', 'parking', 'schedule'] as const,
+  policy: ['admin', 'parking', 'policy'] as const,
 };
+
+/**
+ * The parking policy of this municipality (CONTRACT.md v0.18).
+ *
+ * <p>Read and written whole. `PUT` takes every field because a policy is coherent as a whole — the
+ * extension ceiling has to clear the session maximum, credit needs early finish — and saving one
+ * field at a time would walk through combinations the server has to refuse.</p>
+ */
+export function useParkingPolicy(): UseQueryResult<ParkingPolicy> {
+  const { apiClient } = useAuth();
+  return useQuery({ queryKey: KEYS.policy, queryFn: () => apiClient.adminParking.policy() });
+}
+
+export function useUpdateParkingPolicy() {
+  const { apiClient } = useAuth();
+  const queryClient = useQueryClient();
+  return useMutation<ParkingPolicy, unknown, UpdateParkingPolicyRequest>({
+    mutationFn: (payload) => apiClient.adminParking.updatePolicy(payload),
+    onSuccess: (data) => {
+      queryClient.setQueryData(KEYS.policy, data);
+      // The citizen app reads the same policy through its own endpoint; anything cached against it
+      // in this browser is now describing the municipality as it was a moment ago.
+      void queryClient.invalidateQueries({ queryKey: ['citizen', 'parking', 'policy'] });
+    },
+  });
+}
 
 export function useTenantLocaleSettings(): UseQueryResult<TenantLocaleSettings> {
   const { apiClient } = useAuth();

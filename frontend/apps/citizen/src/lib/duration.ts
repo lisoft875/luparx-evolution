@@ -1,16 +1,6 @@
-import type { TranslationParams } from '@luparx/i18n';
-
 /**
- * Formats a minute count from `ParkingPolicy`/`extensionIncrementsMinutes` for display — never a
- * fixed string in code (CONTRACT.md v0.2 §"Política de parqueo"). Whole hours read as "1 hora" /
- * "2 horas"; anything else falls back to a plain minute count, both fully plural-aware.
+ * Kept as a re-export so the citizen app's own imports stay put: the implementation moved to
+ * `@luparx/features` in v0.18, when the administrator's policy screen started previewing the same
+ * ladder and two copies of the rule became a way for the preview to lie.
  */
-export function formatDurationLabel(
-  minutes: number,
-  tPlural: (baseKey: string, count: number, params?: TranslationParams) => string,
-): string {
-  if (minutes > 0 && minutes % 60 === 0) {
-    return tPlural('citizen.parking.durationHours', minutes / 60);
-  }
-  return tPlural('citizen.parking.durationMinutes', minutes);
-}
+export { formatDurationLabel } from '@luparx/features';

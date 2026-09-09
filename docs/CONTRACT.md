@@ -1522,3 +1522,56 @@ El **aviso legal se publica** (`PUT /admin/enforcement/appeal-notice`) pero toda
 para hacerlo: la municipalidad hereda el texto por defecto del país hasta que su abogado escriba el
 suyo. Es lo primero de la próxima tanda de configuración, y necesita revisión legal del cliente antes
 que código.
+
+# v0.18 — Política de parqueo: lo que la municipalidad vende (normativo)
+
+`GET/PUT /api/v1/admin/parking/policy` (`PERM_TENANT_MANAGE`) existía desde v0.2 sin pantalla. Es la
+configuración con el radio de alcance más grande del portal: decide qué duraciones puede comprar un
+ciudadano, si puede extender, si le devuelven lo que no usó y cuánto se le tolera después del
+vencimiento. Todo eso se editaba a mano contra la base o no se editaba.
+
+## Se reemplaza entera, no campo por campo
+
+`PUT` lleva los once campos porque una política es coherente **como conjunto** —el techo con
+extensiones tiene que superar el máximo de la estadía, los minutos guardados necesitan que se pueda
+terminar antes—. Guardar campo por campo pasearía por combinaciones que el servidor tiene que
+rechazar. Un formulario, un guardado.
+
+## La pantalla previsualiza el selector del ciudadano
+
+La escalera no es una lista de números, es el desplegable que alguien va a abrir en la calle. La
+vista previa se dibuja con **el mismo formateador que usa la app del ciudadano**
+(`formatDurationLabel`, movido de `apps/citizen/src/lib` a `@luparx/features` en esta versión): una
+vista previa con su propia copia de la regla es una vista previa que puede contradecir a lo que
+previsualiza.
+
+## Nombra las opciones que el resto de la política mata
+
+El servidor valida cada campo y la coherencia entre campos, pero **acepta** una política que ofrece
+15 minutos con un mínimo de 30: la opción está en la lista, el mínimo la rechaza, y el ciudadano que
+la escoge recibe `INVALID_INCREMENT` de un selector que llenó su propia municipalidad.
+
+Eso no es un error de validación, es un error de configuración que nadie ve hasta que alguien en la
+calle no puede parquear. La pantalla lo dice —qué opciones quedaron inalcanzables y entre qué límites
+se acepta hoy— **sin bloquear el guardado**: la municipalidad puede estar a medio editar, y negarse a
+guardar una política coherente pero rara sería esta pantalla decidiendo política en lugar de la
+municipalidad.
+
+## Apagar «terminar antes» apaga los minutos guardados
+
+No es una comodidad de la interfaz: los minutos se ganan terminando antes, así que acreditarlos sin
+eso es un estado que el servidor rechaza (`error.parking.policy.creditRequiresEarlyFinish`) y una
+promesa que el ciudadano nunca podría cobrar. La casilla se apaga con la otra y queda bloqueada.
+
+## Las listas de minutos se editan como opciones, no como texto
+
+La columna guarda `"15,30,60"` y eso es un detalle de serialización. Pedirle a un funcionario que
+escriba esa cadena es pedirle que cometa un error de sintaxis que vuelve como código de validación.
+Se editan como fichas, y el cliente **canonicaliza igual que `MinuteIncrements`** —positivos,
+ordenados, sin repetidos— para que lo que se ve sea la fila que se va a guardar.
+
+## Lo que no está todavía
+
+`updatedAt` viaja en la respuesta y la pantalla no lo muestra: la pregunta útil no es cuándo cambió
+sino **quién lo cambió**, y eso ya está en auditoría (`PARKING_POLICY_UPDATED`). Enlazar la política
+con su rastro de auditoría es de la tanda de reportes.

@@ -43,6 +43,7 @@ export function AdminShell({ children }: AdminShellProps): React.JSX.Element {
               <Link to="/zones">{t('nav.zones')}</Link>
               <Link to="/spaces">{t('nav.spaces')}</Link>
               <Link to="/tariffs">{t('nav.tariffs')}</Link>
+              <Link to="/parking-policy">{t('nav.parkingPolicy')}</Link>
             </>
           ) : null}
           <Link to="/users">{t('nav.users')}</Link>
