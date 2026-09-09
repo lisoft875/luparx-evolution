@@ -16,6 +16,7 @@
 import type {
   ParkingExtensionOption,
   ParkingQuoteResponse,
+  ParkingRate,
   ParkingSession,
   ParkingSessionStatus,
   TimeCreditsResponse,
@@ -119,6 +120,37 @@ export function toParkingSession(wire: WireParkingSession): ParkingSession {
     startedAt: wire.startedAt,
     expiresAt: wire.expiresAt,
     endedAt: wire.endedAt ?? null,
+  };
+}
+
+/**
+ * A tariff window as the server sends it.
+ *
+ * <p>The money arrives WRAPPED — `amount: {amountMinor, currencyCode}` — like every other amount on
+ * this API. It had no adapter until v0.22, so `ParkingRate` was read straight off the wire and its
+ * `amountMinor` and `currencyCode` were both `undefined` at runtime. That is not a cosmetic gap:
+ * `formatCurrencyMinor` hands `currency: undefined` to `Intl.NumberFormat`, which throws, and the
+ * throw unmounts the tree — the administrator sees a blank Tarifas screen with no error anywhere.
+ * Every wrapped amount goes through an adapter for exactly this reason; this one was the omission.</p>
+ */
+export interface WireParkingRate {
+  id: string;
+  zoneId: string;
+  amount: WireMoney;
+  minutes: number;
+  validFrom: string;
+  validTo?: string | null;
+}
+
+export function toParkingRate(wire: WireParkingRate): ParkingRate {
+  return {
+    id: wire.id,
+    zoneId: wire.zoneId,
+    amountMinor: wire.amount.amountMinor,
+    currencyCode: wire.amount.currencyCode,
+    minutes: wire.minutes,
+    validFrom: wire.validFrom,
+    validTo: wire.validTo ?? null,
   };
 }
 

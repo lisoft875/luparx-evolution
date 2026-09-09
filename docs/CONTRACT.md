@@ -1737,3 +1737,48 @@ alcanza el estado defectuoso no puede mostrarlo. San José pasa a tener tres sec
 del sembrador real (`DevMunicipalities.SAN_JOSE`): Centro a ₡550/60 min, Barrio Escalante a ₡400/**30**
 min —para que se vea que dos precios no se comparan sólo por el monto— y La Sabana **sin tarifa**, a
 propósito.
+
+# v0.22 — El monto de una tarifa venía envuelto y nadie lo desenvolvía (normativo)
+
+Sin cambios de API. Un defecto de cliente que dejaba la pantalla de Tarifas **en blanco** contra un
+backend real, y que las vistas previas no podían encontrar.
+
+`ParkingRateResponse` manda el dinero **envuelto**, como todo monto de esta API:
+
+```json
+{ "id": "…", "zoneId": "…", "amount": { "amountMinor": 55000, "currencyCode": "CRC" }, "minutes": 60 }
+```
+
+`ParkingRate` en el cliente lo declara **plano** (`amountMinor`, `currencyCode`), y a diferencia de
+sesiones, cotizaciones, billetera, boletas y multas —que todas pasan por un adaptador en `wire.ts` o
+`wireEnforcement.ts` justamente para esto— las tarifas **no tenían uno**. Se leían directo del cable
+y se casteaban, así que en tiempo de ejecución los dos campos eran `undefined`.
+
+Eso no queda feo: `formatCurrencyMinor` le pasa `currency: undefined` a `Intl.NumberFormat`, que
+**lanza**, y una excepción dentro de un render desmonta el árbol. La pantalla queda vacía, sin nada
+que explique por qué. Estaba así desde v0.16.
+
+## Tres arreglos, y el segundo es el que importa
+
+1. **El adaptador que faltaba**: `WireParkingRate` + `toParkingRate`, aplicado a `GET` y a la
+   respuesta del `PUT` —que devuelve la misma forma envuelta—.
+
+2. **El transporte simulado dejó de mentir.** Respondía con la forma plana que declara el tipo del
+   cliente, o sea que la vista previa validaba el cliente contra sí mismo. **Un mock más amable que
+   producción no verifica nada**: es la razón de que un adaptador ausente sobreviviera seis versiones
+   y sólo apareciera cuando alguien abrió la pantalla contra un servidor de verdad. Ahora envuelve el
+   monto igual que el servidor.
+
+3. **Un piso debajo del formateador.** `formatCurrencyMinor` con una moneda que ICU no acepta ahora
+   registra un `console.error` y devuelve el número sin símbolo, en vez de lanzar. El adaptador es el
+   arreglo; esto es lo que evita que el próximo desajuste entre respuesta y tipo se manifieste como
+   una pantalla en blanco. Un monto que se ve raro es algo que un funcionario puede ver, cuestionar y
+   reportar. Una pantalla vacía no.
+
+## La regla, escrita para que no vuelva a pasar
+
+**Todo monto que el servidor envuelve pasa por un adaptador, y el mock responde exactamente lo que
+responde el servidor.** Se revisaron los demás: sesiones, cotizaciones, opciones de extensión,
+billetera y sus movimientos, tipos de infracción, boletas y multas ya lo hacían. `CitizenParkingZoneResponse.rate`
+también viaja envuelto y no se rompe porque el tipo del cliente no lo declara: la app del ciudadano
+no lo lee.

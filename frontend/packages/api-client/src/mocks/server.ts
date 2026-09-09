@@ -117,6 +117,18 @@ const mockAdminRates: { id: string; zoneId: string; amountMinor: number; currenc
   // `zone-sabana` has none, on purpose: see the note on mockSeededZones.
 ];
 
+/** The stored row as the server sends it: the amount wrapped in a `MoneyDto`. */
+function toWireRate(rate: (typeof mockAdminRates)[number]): unknown {
+  return {
+    id: rate.id,
+    zoneId: rate.zoneId,
+    amount: { amountMinor: rate.amountMinor, currencyCode: rate.currencyCode },
+    minutes: rate.minutes,
+    validFrom: rate.validFrom,
+    validTo: rate.validTo,
+  };
+}
+
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
     status,
@@ -669,7 +681,11 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
     if (resource === 'parking' && segments[4] === 'rates') {
       if (method === 'GET') {
         const zoneFilter = url.searchParams.get('zoneId');
-        return json(mockAdminRates.filter((r) => !zoneFilter || r.zoneId === zoneFilter));
+        // Wrapped, like the real server (`ParkingRateResponse.amount` is a `MoneyDto`). The mock used
+        // to answer with the flat shape the client type declares, which is precisely why a missing
+        // adapter went unnoticed until the Tarifas screen blanked against a real backend. A mock that
+        // is friendlier than production does not verify anything.
+        return json(mockAdminRates.filter((r) => !zoneFilter || r.zoneId === zoneFilter).map(toWireRate));
       }
       if (method === 'PUT') {
         const payload = await readBody<{ zoneId: string; amountMinor: number; minutes: number }>(init);
@@ -689,7 +705,7 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
           validTo: null as string | null,
         };
         mockAdminRates.unshift(rate);
-        return json(rate);
+        return json(toWireRate(rate));
       }
     }
 

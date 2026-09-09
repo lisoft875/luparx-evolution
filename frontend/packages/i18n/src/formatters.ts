@@ -77,6 +77,23 @@ export function formatCurrencyMinor(
   currencyCode: string,
   locale: SupportedLocale,
 ): string {
+  // A currency ICU cannot use makes `Intl.NumberFormat` THROW, and a throw inside a render unmounts
+  // the tree: the whole screen goes blank with nothing on it to explain why. That is exactly how the
+  // municipal Tarifas screen failed in v0.21 — the server sends the amount wrapped and the adapter
+  // that unwraps it was missing, so both numbers arrived `undefined`.
+  //
+  // The adapter is the fix (see WireParkingRate); this is the floor under it. A wrong-looking amount
+  // is something an administrator can see, question and report. A blank page is not. The console line
+  // is deliberate and unconditional: this can only happen when a response does not match its type, and
+  // that has to be loud for whoever is looking at it.
+  if (typeof currencyCode !== 'string' || !/^[A-Za-z]{3}$/.test(currencyCode)) {
+    // eslint-disable-next-line no-console
+    console.error(
+      `formatCurrencyMinor: currency code ${JSON.stringify(currencyCode)} is not an ISO 4217 code.` +
+        ' The amount is rendered without a symbol; the response almost certainly does not match its type.',
+    );
+    return Number.isFinite(amountMinor) ? formatNumber(amountMinor, locale) : '—';
+  }
   const major = minorToMajor(amountMinor, currencyCode);
   const fractionDigits = currencyDisplayFractionDigits(currencyCode);
   const parts = new Intl.NumberFormat(locale, {

@@ -1,12 +1,14 @@
 import { HttpClient, type HttpClientOptions } from './http';
 import {
   toExtensionOption,
+  toParkingRate,
   toParkingSession,
   toParkingSessions,
   toQuote,
   toTimeCredits,
   toWallet,
   type WireExtensionOption,
+  type WireParkingRate,
   type WireParkingSession,
   type WireQuote,
   type WireTimeCredits,
@@ -497,10 +499,16 @@ export class ApiClient {
       this.http.request('POST', '/api/v1/admin/parking/spaces', { body: payload, idempotent: true }),
     updateSpace: (id: string, payload: UpdateParkingSpaceRequest): Promise<ParkingSpace> =>
       this.http.request('PUT', `/api/v1/admin/parking/spaces/${id}`, { body: payload }),
-    rates: (query: { zoneId?: string } = {}): Promise<ParkingRate[]> =>
-      this.http.request('GET', '/api/v1/admin/parking/rates', { query }),
-    setRate: (payload: SetParkingRateRequest): Promise<ParkingRate> =>
-      this.http.request('PUT', '/api/v1/admin/parking/rates', { body: payload }),
+    /** Read through the adapter: the server wraps the amount, this type is flat (see WireParkingRate). */
+    rates: async (query: { zoneId?: string } = {}): Promise<ParkingRate[]> =>
+      (
+        await this.http.request<WireParkingRate[]>('GET', '/api/v1/admin/parking/rates', { query })
+      ).map(toParkingRate),
+    /** The request carries `amountMinor` flat; the RESPONSE is a wrapped rate, like every read. */
+    setRate: async (payload: SetParkingRateRequest): Promise<ParkingRate> =>
+      toParkingRate(
+        await this.http.request<WireParkingRate>('PUT', '/api/v1/admin/parking/rates', { body: payload }),
+      ),
   };
 
   // ---- Platform back-office (CONTRACT.md §4 `/api/v1/platform/**`) ---------------------------
