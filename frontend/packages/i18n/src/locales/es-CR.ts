@@ -401,6 +401,10 @@ export const esCR = {
 
 
   'nav.home': 'Inicio',
+  'nav.portal.admin': 'Municipalidad',
+  'nav.group.operation': 'Operación',
+  'nav.group.people': 'Personas',
+  'nav.group.oversight': 'Control',
   'nav.profile': 'Perfil',
   'nav.users': 'Usuarios',
   'nav.staff': 'Funcionarios',
@@ -1210,7 +1214,7 @@ export const esCR = {
 
   'nav.enforcement': 'Fiscalización',
   'nav.enforcement.citations': 'Boletas',
-  'nav.enforcement.types': 'Catálogo de infracciones',
+  'nav.enforcement.types': 'Infracciones',
   'nav.appeals': 'Descargos',
 
   // ---- Municipalidad: descargos ----------------------------------------------------------------

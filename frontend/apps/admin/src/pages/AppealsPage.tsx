@@ -120,11 +120,11 @@ export function AppealsPage(): React.JSX.Element {
             key: 'body',
             header: t('admin.appeals.column.body'),
             // Truncated here and read whole in the dialog: a queue is for triage, and a cell holding
-            // a thousand characters is a queue nobody can scan.
+            // a thousand characters is a queue nobody can scan. Two lines and a hard width, because
+            // a single 140-character line is wider than the table and pushes the status and the
+            // actions — the two columns triage actually needs — off the right edge.
             render: (appeal) => (
-              <span className="lx-text-body">
-                {appeal.body.length > 140 ? `${appeal.body.slice(0, 140)}…` : appeal.body}
-              </span>
+              <span className="lx-text-body lx-table-cell-clamp">{appeal.body}</span>
             ),
           },
           {

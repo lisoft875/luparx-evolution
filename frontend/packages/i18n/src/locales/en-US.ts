@@ -389,6 +389,10 @@ export const enUS: Record<TranslationKey, string> = {
 
 
   'nav.home': 'Home',
+  'nav.portal.admin': 'Municipality',
+  'nav.group.operation': 'Operation',
+  'nav.group.people': 'People',
+  'nav.group.oversight': 'Oversight',
   'nav.profile': 'Profile',
   'nav.users': 'Users',
   'nav.staff': 'Staff',
@@ -1188,7 +1192,7 @@ export const enUS: Record<TranslationKey, string> = {
 
   'nav.enforcement': 'Enforcement',
   'nav.enforcement.citations': 'Citations',
-  'nav.enforcement.types': 'Infraction catalogue',
+  'nav.enforcement.types': 'Infractions',
   'nav.appeals': 'Appeals',
 
   // ---- Municipality: appeals -------------------------------------------------------------------

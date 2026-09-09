@@ -31,6 +31,16 @@
   --lx-surface-2: rgba(15, 39, 82, 0.72);
   /* Level 2 glass — floating surfaces only (modal, popover, drawer, pill). */
   --lx-surface-raised: rgba(10, 23, 52, 0.82);
+  /* Hover and selected grounds, and the one surface that sits BELOW its container.
+     An input lighter than the card it lives on reads as a raised block, which is the
+     opposite of "type here" — the source site's own note, and the thing we had backwards. */
+  --lx-surface-hover: rgba(15, 39, 82, 0.72);
+  --lx-surface-active: rgba(19, 51, 106, 0.82);
+  --lx-surface-input: rgba(3, 9, 24, 0.66);
+  /* What actually reads as glass: two stops across the panel, not a flat wash. A single
+     rgba fill with a border is a flat panel with a border. */
+  --lx-glass-gradient: linear-gradient(145deg, rgba(12, 29, 64, 0.76), rgba(3, 9, 25, 0.7));
+  --lx-glass-gradient-raised: linear-gradient(145deg, rgba(17, 38, 80, 0.9), rgba(4, 11, 30, 0.88));
   --lx-border: rgba(40, 130, 255, 0.24);
   --lx-border-strong: rgba(45, 190, 255, 0.62);
   --lx-text: #f5f9ff;
@@ -126,6 +136,14 @@
   --lx-text: #0b1220;
   --lx-text-muted: #4b5872;
   --lx-text-subtle: #7b879e;
+
+  /* On a light canvas the relationship inverts: the card is the brightest thing, so an
+     input sits below it by being faintly tinted rather than by being darker. */
+  --lx-surface-hover: #e8ecf6;
+  --lx-surface-active: #dbe4fb;
+  --lx-surface-input: #fbfcff;
+  --lx-glass-gradient: none;
+  --lx-glass-gradient-raised: none;
 
   --lx-primary: #0a4dff;
   --lx-primary-strong: #0839c7;
@@ -281,10 +299,18 @@ body {
   outline: 2px solid var(--lx-focus-ring);
   outline-offset: 2px;
 }
+/* The glow is a hover affordance, not the resting state: a page of permanently glowing
+   buttons is the "gaming interface" the brand brief rules out. */
 .lx-btn--primary {
   background: var(--lx-gradient-primary);
+  border-color: rgba(65, 183, 255, 0.55);
   color: var(--lx-primary-contrast);
+  box-shadow: none;
+}
+.lx-btn--primary:hover:not(:disabled) {
+  border-color: var(--lx-border-strong);
   box-shadow: var(--lx-glow-primary);
+  filter: brightness(1.06);
 }
 .lx-btn--secondary {
   background: var(--lx-surface-2);
@@ -292,15 +318,28 @@ body {
   color: var(--lx-text);
   box-shadow: none;
 }
+.lx-btn--secondary:hover:not(:disabled) {
+  border-color: var(--lx-border-strong);
+  background: var(--lx-surface-hover);
+}
 .lx-btn--ghost {
   background: transparent;
   color: var(--lx-primary);
   box-shadow: none;
 }
+.lx-btn--ghost:hover:not(:disabled) {
+  background: var(--lx-surface-hover);
+}
+/* Dark text on the light-on-dark danger tone, which is what clears AA here — white on
+   #ff7d8a does not. Never blue: a destructive action must not be confusable with the
+   brand accent. */
 .lx-btn--danger {
   background: var(--lx-danger);
-  color: #fff;
+  color: #2a0409;
   box-shadow: none;
+}
+.lx-btn--danger:hover:not(:disabled) {
+  filter: brightness(1.08);
 }
 .lx-btn--full {
   width: 100%;
@@ -322,20 +361,41 @@ body {
   width: 100%;
   border: 1px solid var(--lx-border);
   border-radius: var(--lx-radius-sm);
-  background: var(--lx-surface-2);
+  /* Below its container, never above it (see --lx-surface-input). */
+  background: var(--lx-surface-input);
   color: var(--lx-text);
   padding: 0 var(--lx-space-3);
   min-height: var(--lx-control-height);
   font-size: var(--lx-text-body-size);
   font-family: inherit;
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 .lx-input::placeholder {
+  /* Firefox dims placeholders further by default and AA is tight enough already. */
   color: var(--lx-text-subtle);
+  opacity: 1;
 }
+.lx-input:hover:not(:disabled):not(:read-only),
+.lx-select:hover {
+  border-color: var(--lx-border-strong);
+}
+/* A filled control reads slightly brighter than an empty one, so a long form shows its
+   own progress without needing a second colour. */
+.lx-input:not(:placeholder-shown) {
+  background: var(--lx-surface);
+}
+/* A real outline plus the ring: the outline survives forced-colors mode and an
+   `overflow: hidden` ancestor, the ring is the brand. Never the ring alone. */
 .lx-input:focus,
+.lx-input:focus-visible,
 .lx-select:focus {
   outline: 2px solid var(--lx-focus-ring);
   outline-offset: 1px;
+  border-color: var(--lx-border-strong);
+  box-shadow: 0 0 0 3px rgba(56, 210, 255, 0.18);
 }
 .lx-input--invalid,
 .lx-select--invalid {
@@ -571,7 +631,9 @@ body {
   overflow-x: auto;
   border: 1px solid var(--lx-border);
   border-radius: var(--lx-radius-md);
-  background: var(--lx-surface);
+  background-color: var(--lx-surface);
+  background-image: var(--lx-glass-gradient);
+  box-shadow: var(--lx-shadow-card);
 }
 .lx-table {
   width: 100%;
@@ -593,6 +655,19 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.03em;
 }
+/* Prose inside a table. Cells are `nowrap` by default — right for dates, codes and amounts,
+   which must never break — but a column of sentences on one unbreakable line is wider than any
+   layout and pushes the columns after it off the right edge. This clamps to two lines and caps
+   the width, so the sentence is a preview and the columns that follow stay reachable. */
+.lx-table-cell-clamp {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  white-space: normal;
+  max-width: 42ch;
+}
+
 .lx-table tbody tr:last-child td {
   border-bottom: none;
 }
@@ -628,7 +703,8 @@ body {
 }
 .lx-modal {
   /* Level 2 — floating surface. */
-  background: var(--lx-surface-raised);
+  background-color: var(--lx-surface-raised);
+  background-image: var(--lx-glass-gradient-raised);
   border: 1px solid var(--lx-border-strong);
   border-radius: var(--lx-radius-lg);
   box-shadow: var(--lx-shadow-md), var(--lx-inset-highlight);
@@ -753,31 +829,160 @@ body {
   background: transparent;
   color: var(--lx-text);
 }
+/* One source of truth for the sticky bar's height. The sidebar sticks directly beneath it
+   and sizes itself to the remaining viewport, so a hardcoded number in either place would
+   drift the moment the bar's padding changed — leaving either a sliver of content showing
+   through on scroll, or a gap. */
+.lx-page-layout {
+  --lx-topbar-height: 60px;
+}
 .lx-page-layout__header {
-  /* Level 1 glass — nav chrome, same as the source site's classification. */
+  /* The brand band, not glass: it is the one strip that says which product and which
+     municipality you are in, and it reads as chrome only if it is opaque. */
+  display: flex;
+  align-items: center;
+  min-height: var(--lx-topbar-height);
   border-bottom: 1px solid var(--lx-border);
-  background: var(--lx-surface);
-  padding: var(--lx-space-3) var(--lx-space-5);
+  background: var(--lx-bg);
+  padding: 0 var(--lx-space-5);
+  position: sticky;
+  top: 0;
+  z-index: 30;
+}
+.lx-page-layout__header > * {
+  width: 100%;
 }
 .lx-page-layout__body {
   display: flex;
   flex: 1;
   min-height: 0;
+  align-items: flex-start;
 }
 .lx-page-layout__sidebar {
-  width: 240px;
-  flex-shrink: 0;
+  /* Fixed rather than fluid: a width that tracked its content would jump every time the
+     active language changed the longest label. */
+  width: 248px;
+  flex: 0 0 248px;
   border-right: 1px solid var(--lx-border);
   background: var(--lx-surface);
   padding: var(--lx-space-4);
+  position: sticky;
+  /* Exactly the viewport minus the sticky bar, so the sidebar's own scroll starts where
+     the page's ends instead of the two fighting each other. */
+  top: var(--lx-topbar-height);
+  height: calc(100vh - var(--lx-topbar-height));
+  overflow-y: auto;
 }
 .lx-page-layout__content {
   flex: 1;
-  padding: var(--lx-space-5);
+  /* Matches the sidebar's own rhythm so the first heading lines up with the first nav
+     item rather than floating unmoored from the navigation. */
+  padding: var(--lx-space-6);
   min-width: 0;
-  max-width: 1440px;
+  /* 1200, not 1440: a settings form stretched across a wide monitor puts its label and
+     its field a hand's width apart, and the eye stops connecting them. */
+  max-width: 1200px;
   width: 100%;
   margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--lx-space-4);
+}
+/* The page's own title block, so a screen does not have to invent its own spacing. */
+.lx-page-layout__content > h1 {
+  font-size: var(--lx-text-screen-title-size);
+  font-weight: var(--lx-text-screen-title-weight);
+  margin: 0;
+}
+.lx-page-layout__content > h1 + .lx-text-meta {
+  margin: calc(var(--lx-space-3) * -1) 0 0;
+  max-width: 72ch;
+}
+
+@media (max-width: 900px) {
+  .lx-page-layout__body {
+    flex-direction: column;
+  }
+  .lx-page-layout__sidebar {
+    width: 100%;
+    flex: none;
+    position: static;
+    height: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--lx-border);
+  }
+  .lx-page-layout__content {
+    padding: var(--lx-space-4);
+  }
+}
+
+/* ---- Side navigation (the shells' own nav, DESIGN_SYSTEM.md §3) -----------
+   A column of bare anchors is not navigation, it is a list of links: without a
+   resting shape there is nothing for the active state to fill, and without an
+   active state the nav never answers "where am I". */
+.lx-nav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lx-space-1);
+}
+.lx-nav-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lx-space-1);
+}
+.lx-nav-heading {
+  font-size: var(--lx-text-meta-size);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--lx-text-subtle);
+  margin: var(--lx-space-4) 0 var(--lx-space-1);
+}
+.lx-nav-link {
+  display: block;
+  padding: var(--lx-space-2) var(--lx-space-3);
+  border-radius: var(--lx-radius-sm);
+  font-size: var(--lx-text-body-size);
+  font-weight: 600;
+  color: var(--lx-text);
+  text-decoration: none;
+  /* A label that wraps makes neighbouring items sit at different heights and the whole
+     column reads as ragged. The long Spanish admin labels reach this at 248px. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lx-nav-link:hover {
+  background: var(--lx-surface-hover);
+  text-decoration: none;
+}
+.lx-nav-link--active {
+  background: var(--lx-surface-active);
+  color: var(--lx-primary-strong);
+}
+/* The role suffix beside the wordmark: which of the three consoles this is. Cyan because it
+   is the one piece of the bar that is not the product's own name. */
+.lx-brand-suffix {
+  font-size: var(--lx-text-meta-size);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--lx-primary-strong);
+  white-space: nowrap;
+}
+/* The wordmark plus the role plus the municipality plus "sign out" do not fit on a phone-width
+   row. The suffix is the redundant piece there — the console is already obvious from the
+   navigation — so it is the piece that goes, rather than overflowing under the switcher. */
+@media (max-width: 560px) {
+  .lx-brand-suffix {
+    display: none;
+  }
+}
+
+.lx-nav-footer {
+  margin-top: auto;
+  padding-top: var(--lx-space-4);
+  border-top: 1px solid var(--lx-border);
 }
 
 .lx-centered-layout {
@@ -823,7 +1028,8 @@ body {
 
 .lx-card {
   /* Level 1 glass. */
-  background: var(--lx-surface);
+  background-color: var(--lx-surface);
+  background-image: var(--lx-glass-gradient);
   border: 1px solid var(--lx-border);
   border-radius: var(--lx-radius-lg);
   box-shadow: var(--lx-shadow-card);
@@ -831,7 +1037,10 @@ body {
   min-width: 0;
 }
 .lx-card--nested {
-  background: var(--lx-surface-2);
+  /* Inside a card the gradient would be a second, competing sheet of glass; a nested
+     card is a tint of its parent, which is why it only takes the flat surface. */
+  background-image: none;
+  background-color: var(--lx-surface-2);
   border-radius: var(--lx-radius-md);
 }
 .lx-card--tone-success {
@@ -1909,6 +2118,13 @@ button.lx-list-row {
     --lx-surface: #0a1428;
     --lx-surface-2: #10203f;
     --lx-surface-raised: #16305f;
+    /* Solid, like every other surface here: a translucent selected state is exactly what
+       somebody asking for more contrast is asking to be rid of. */
+    --lx-surface-hover: #10203f;
+    --lx-surface-active: #16305f;
+    --lx-surface-input: #050d1f;
+    --lx-glass-gradient: none;
+    --lx-glass-gradient-raised: none;
     --lx-border: rgba(90, 165, 255, 0.5);
     --lx-text-muted: #c2d3ea;
     --lx-text-subtle: #b0c3dd;

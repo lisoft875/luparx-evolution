@@ -1575,3 +1575,69 @@ ordenados, sin repetidos— para que lo que se ve sea la fila que se va a guarda
 `updatedAt` viaja en la respuesta y la pantalla no lo muestra: la pregunta útil no es cuándo cambió
 sino **quién lo cambió**, y eso ya está en auditoría (`PARKING_POLICY_UPDATED`). Enlazar la política
 con su rastro de auditoría es de la tanda de reportes.
+
+# v0.19 — El portal municipal se ve como LuParX (normativo)
+
+Los tokens de color ya eran los de la producción (`luparx-frontend`, capa «neon glass»). Lo que no
+estaba era **la aplicación de esos tokens**: la paleta correcta puesta de forma que el portal
+municipal se veía plano y ajeno. Esto lo corrige contra la fuente, sin inventar nada.
+
+## El vidrio es un degradado, no un relleno
+
+`.lx-card`, `.lx-table-wrapper` y `.lx-modal` usaban un `rgba` plano. La fuente usa
+`linear-gradient(145deg, rgba(12,29,64,.76), rgba(3,9,25,.7))` más el `inset 0 1px 0
+rgba(150,200,255,.09)`. **Esa hairline de luz en el borde superior es lo que realmente se lee como
+vidrio**; un relleno plano con borde es un panel plano con borde. Se agregan como tokens
+(`--lx-glass-gradient`, `--lx-glass-gradient-raised`) y no como literales, porque los consume más de
+una superficie. Una tarjeta anidada se queda sin degradado a propósito: dos hojas de vidrio
+superpuestas no son profundidad, son suciedad.
+
+## Los campos van por debajo de su tarjeta, no por encima
+
+`.lx-input` usaba `--lx-surface-2`, que es **más claro** que la tarjeta. Un control más claro que su
+contenedor se lee como un bloque en relieve, que es exactamente lo contrario de «escriba aquí» —la
+nota es de la fuente y la teníamos al revés—. Ahora existe `--lx-surface-input`
+(`rgba(3,9,24,.66)`), más oscuro, con el aro de foco de la fuente (contorno real **más** anillo: el
+contorno sobrevive a `forced-colors` y a un ancestro con `overflow:hidden`) y el detalle de que un
+campo lleno se aclara un punto, para que un formulario largo muestre su propio avance.
+
+## El resplandor es del hover, no del reposo
+
+`.lx-btn--primary` traía `box-shadow: var(--lx-glow-primary)` permanente. Una página de botones que
+brillan todo el tiempo es la «interfaz de videojuego» que el brief de marca descarta. El resplandor
+pasa a `:hover`.
+
+Y `.lx-btn--danger` era **texto blanco sobre `#ff7d8a`**, que no pasa AA. La fuente pone texto oscuro
+(`#2a0409`) sobre ese tono claro, que es lo que sí lo pasa.
+
+## La navegación es navegación, no una lista de enlaces
+
+La barra lateral era una columna de anclas desnudas: sin forma en reposo no hay nada que el estado
+activo pueda rellenar, y sin estado activo la navegación nunca responde «dónde estoy». Ahora hay
+`.lx-nav-link` (forma, hover, y activo sobre `--lx-surface-active` con la etiqueta en cian) y
+`NavLink` en lugar de `Link` para que el activo sea real.
+
+Catorce destinos en una columna plana tampoco se leen hasta el final. Se agrupan por la pregunta que
+responde cada grupo —**Operación, Fiscalización, Personas, Control, Configuración**—, con la
+operación de primera porque es lo que un municipal abre todos los días.
+
+## Proporciones del shell
+
+Barra superior de 60px **pegajosa y opaca**: es la única franja que dice de qué producto y de qué
+municipalidad se trata, y sólo se lee como chrome si no es translúcida. Lleva el sufijo del rol
+(«MUNICIPALIDAD») en cian, que se esconde bajo 560px porque ahí sobra.
+
+Barra lateral de 248px fija —un ancho que siguiera a su contenido saltaría cada vez que el idioma
+cambiara la etiqueta más larga—, pegajosa bajo la barra superior y con altura exactamente
+`100vh - 60px`, para que su scroll empiece donde termina el de la página en lugar de pelearse con él.
+
+Contenido a **1200px**, no 1440: un formulario de configuración estirado en un monitor ancho deja la
+etiqueta y su campo a un palmo de distancia y el ojo deja de conectarlos.
+
+## Prosa dentro de una tabla
+
+Las celdas son `nowrap` por defecto —correcto para fechas, códigos y montos, que nunca deben
+partirse—, pero una columna de oraciones en una sola línea irrompible es más ancha que cualquier
+layout y empuja fuera de pantalla las columnas que vienen después. `.lx-table-cell-clamp` recorta a
+dos líneas con un ancho tope, que es lo que la cola de descargos necesitaba para no perder «Estado» y
+«Acciones» por el borde derecho.
