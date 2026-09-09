@@ -147,6 +147,11 @@ public final class ErrorCode {
     // --- enforcement (CONTRACT.md "v0.7 — Fiscalización") ---------------------------------------
     /** No citation with that identifier in the caller's municipality. Also the answer for one that
      * exists in another municipality: confirming it would leak that it exists. */
+    /**
+     * The officer's post does not cover the sector the act was raised in (CONTRACT.md v0.15). An
+     * officer with no sectors assigned covers the whole municipality and never sees this.
+     */
+    public static final String ZONE_NOT_ASSIGNED = "ZONE_NOT_ASSIGNED";
     public static final String CITATION_NOT_FOUND = "CITATION_NOT_FOUND";
     /** The citation cannot move from the state it is in to the one asked for (CitationStatus). */
     public static final String CITATION_INVALID_TRANSITION = "CITATION_INVALID_TRANSITION";

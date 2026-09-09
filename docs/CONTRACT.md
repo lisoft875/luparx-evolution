@@ -1300,3 +1300,73 @@ con un correo o una identificación que ya existen responde `EMAIL_ALREADY_REGIS
 `USER_CREATED` es distinto de `USER_REGISTERED` a propósito. La pregunta que un auditor hace sobre una
 cuenta de personal es quién la creó, y un solo nombre de acción para las dos cosas la dejaría sin
 respuesta.
+
+# v0.15 — Panel de administración de funcionarios (normativo)
+
+`GET /api/v1/admin/memberships/staff` es el panel: **una fila por puesto**, no por persona. La misma
+persona puede tener dos, y de cada puesto se pregunta lo mismo —quién lo tiene, qué le permite, qué
+sectores cubre y si la cuenta se sigue usando—.
+
+Los puestos suspendidos y revocados **aparecen en la lista**. Ahí es donde se levanta una suspensión y
+donde alguien averigua, meses después, quién tenía ese puesto en marzo; una lista que los escondiera
+no contestaría ninguna de las dos cosas.
+
+## Desactivar es del puesto, no de la persona
+
+| Acción | Qué hace | Reversible |
+|---|---|---|
+| **Desactivar** (`POST /admin/memberships/{id}/suspend`) | El estado pasa a `SUSPENDED`: pierde el acceso al portal de **esta** municipalidad | Sí, con `/reactivate` |
+| **Revocar** (`DELETE /admin/memberships/{id}`) | `REVOKED`: se acabó el vínculo. La fila se conserva | No; volver es un nombramiento nuevo |
+| **Bloquear** (`POST /admin/users/{id}/block`) | La cuenta queda bloqueada en toda la plataforma | Sí, y es un acto de otra gravedad |
+
+La persona desactivada **sigue teniendo cuenta y sigue estacionando como ciudadana** en cualquier
+cantón. Una municipalidad termina un puesto, no una vida, y dejarla sin poder parquear en otro cantón
+sería usar una herramienta que no le corresponde.
+
+Surte efecto **de inmediato**, sin revocar un solo token: `AccessResolver` vuelve a leer la membresía
+de la base en cada petición, así que la siguiente que haga esa persona ya no encuentra un puesto
+activo.
+
+## Nunca se borra el historial de actuaciones
+
+Desactivar o revocar a un funcionario **no toca ni una boleta**. No se borra, no se oculta, no se
+reasigna. Y para que el registro siga siendo legible sin depender de nada:
+
+`citations.inspector_name_snapshot` guarda el **nombre del funcionario tal como era al levantar el
+acto**, igual que ya se guardaban la placa, el código y el nombre de la infracción y el monto. El id
+sólo contesta «quién» a quien pueda consultarlo, y una boleta la lee gente que no puede; además un
+funcionario puede casarse y cambiar de apellido, y la boleta de 2026 tiene que seguir diciendo quién
+la firmó en 2026.
+
+## Sectores asignados, exigidos por el servidor
+
+`PUT /admin/memberships/{id}/zones` reemplaza **todo** el conjunto (`PERM_ZONE_ASSIGN`). Reemplazar y
+no sumar/restar: quien marca casillas está declarando cómo debe quedar, y expresarlo como diferencia
+es como dos personas editando al mismo funcionario terminan con la unión de ambas intenciones.
+
+Un fiscalizador **sólo puede consultar placas y levantar boletas en sus sectores**. Fuera de ellos el
+servidor responde `403 ZONE_NOT_ASSIGNED`, y `GET /inspector/zones` le muestra únicamente los suyos:
+un selector que ofrece una zona que el servidor va a rechazar es una trampa con cara amable.
+
+**Sin sectores asignados = todos.** Es la decisión más importante de esta versión y la otra lectura
+está disponible y es errónea dos veces: dejaría sin trabajar a todos los fiscalizadores que ya existen
+el día que esto se despliega, y convertiría el descuido de un administrador en alguien que no puede
+hacer su trabajo y no sabe por qué. Restringir a una persona es un acto: debería exigir haberlo
+realizado.
+
+Una boleta **sin zona resuelta** no se rechaza: no hay sector contra el cual comparar, y negarla haría
+que una bahía sin mapear pareciera un problema de permisos. Lo que a esa boleta le falta es una bahía,
+y eso es otra conversación.
+
+## Último acceso
+
+`users.last_login_at` y `last_login_portal` se escriben en cada ingreso exitoso. Van en la persona y
+no en la membresía porque es lo que el acto sabe: se ingresa a un portal y la municipalidad se elige
+después. Para el panel alcanza —la pregunta es si la cuenta se usa— y el portal al lado evita
+confundir a un fiscalizador que entra todos los días con alguien que sólo abre la app de ciudadano.
+
+## Lo que ya existía y no cambia
+
+Crear un funcionario (v0.14), asignarle el rol —dentro del techo de `grantableByTenantAdmin()`— y
+restablecerle el acceso con el correo de contraseña. La invitación por correo sigue pendiente: hoy el
+administrador escribe los datos del expediente.

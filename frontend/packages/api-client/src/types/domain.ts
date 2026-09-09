@@ -39,7 +39,7 @@ export type Permission =
   | 'CITATION_VOID'
   | 'ENFORCEMENT_MANAGE';
 
-export type MembershipStatus = 'ACTIVE' | 'PENDING_APPROVAL' | 'REJECTED' | 'REVOKED';
+export type MembershipStatus = 'ACTIVE' | 'PENDING_APPROVAL' | 'REJECTED' | 'REVOKED' | 'SUSPENDED';
 
 export type SelfRegistrationPolicy = 'OPEN' | 'APPROVAL_REQUIRED' | 'INVITE_ONLY';
 
@@ -284,6 +284,9 @@ export interface UserProfile {
   status: UserStatus;
   mfaRequired: boolean;
   mfaEnabled: boolean;
+  /** When this account was last signed into, and through which portal (CONTRACT.md v0.15). */
+  lastLoginAt?: string | null;
+  lastLoginPortal?: string | null;
 }
 
 export interface MembershipSummary {
@@ -307,6 +310,9 @@ export interface MembershipSummary {
   portal: Portal;
   role: Role;
   status: MembershipStatus;
+  /** Why the post is suspended or revoked, when somebody gave a reason (CONTRACT.md v0.15). */
+  statusReason?: string | null;
+  suspendedAt?: string | null;
 }
 
 export interface MeResponse {
@@ -402,6 +408,45 @@ export const TENANT_GRANTABLE_ROLES: readonly Role[] = [
   'TENANT_FINANCE',
   'TENANT_SUPPORT',
 ];
+
+/**
+ * One member of staff as the administration panel reads them (CONTRACT.md v0.15).
+ *
+ * The unit is the post, not the person: the same person can hold two, and each answers the same
+ * four questions — who, what may they do, where, and are they still around.
+ */
+export interface StaffMember {
+  membershipId: string;
+  userId: string;
+  fullName: string | null;
+  email: string | null;
+  portal: Portal;
+  role: Role;
+  status: MembershipStatus;
+  statusReason?: string | null;
+  suspendedAt?: string | null;
+  revokedAt?: string | null;
+  /** Empty means every zone of this municipality, never none (CONTRACT.md v0.15). */
+  zones: ZoneAssignment[];
+  lastLoginAt?: string | null;
+  lastLoginPortal?: string | null;
+  accountStatus: UserStatus | null;
+}
+
+export interface ZoneAssignment {
+  zoneId: string;
+  code: string;
+  name: string;
+}
+
+export interface SuspendMembershipRequest {
+  reason?: string;
+}
+
+/** The whole assignment, replaced. An empty list clears every restriction. */
+export interface AssignZonesRequest {
+  zoneIds: string[];
+}
 
 export interface BlockUserRequest {
   reason: string;

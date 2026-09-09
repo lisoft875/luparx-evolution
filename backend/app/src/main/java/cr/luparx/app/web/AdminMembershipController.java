@@ -17,7 +17,12 @@ import cr.luparx.core.tenant.TenantContext;
 import cr.luparx.core.tenant.TenantContextHolder;
 import cr.luparx.tenancy.entity.TenantMembership;
 import cr.luparx.tenancy.model.MembershipStatus;
+import cr.luparx.identity.entity.User;
+import cr.luparx.identity.service.UserDirectoryService;
+import cr.luparx.parking.entity.ParkingZone;
+import cr.luparx.parking.service.ParkingCatalogService;
 import cr.luparx.tenancy.service.MembershipService;
+import cr.luparx.tenancy.service.MembershipZoneService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -33,8 +38,11 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Membership administration inside the active municipality (CONTRACT.md §4).
@@ -49,15 +57,24 @@ import java.util.UUID;
 public class AdminMembershipController {
 
     private final MembershipService membershipService;
+    private final MembershipZoneService zoneService;
+    private final ParkingCatalogService catalogService;
+    private final UserDirectoryService userDirectoryService;
     private final AuditRecorder auditRecorder;
     private final OutboxRecorder outboxRecorder;
     private final ResponseMapper mapper;
 
     public AdminMembershipController(MembershipService membershipService,
+                                     MembershipZoneService zoneService,
+                                     ParkingCatalogService catalogService,
+                                     UserDirectoryService userDirectoryService,
                                      AuditRecorder auditRecorder,
                                      OutboxRecorder outboxRecorder,
                                      ResponseMapper mapper) {
         this.membershipService = membershipService;
+        this.zoneService = zoneService;
+        this.catalogService = catalogService;
+        this.userDirectoryService = userDirectoryService;
         this.auditRecorder = auditRecorder;
         this.outboxRecorder = outboxRecorder;
         this.mapper = mapper;
@@ -124,6 +141,147 @@ public class AdminMembershipController {
         auditRecorder.record(AuditAction.MEMBERSHIP_ROLE_CHANGED, "membership", id.toString(),
                 Map.of("role", String.valueOf(request.role()), "status", String.valueOf(request.status())));
         return mapper.toMembership(membership);
+    }
+
+    /**
+     * Pauses a member of staff's access to this municipality — "desactivar" in the panel
+     * (CONTRACT.md v0.15).
+     *
+     * <p>It is the membership that stops, not the person: their account is untouched and they go on
+     * using the citizen app in any canton, because a municipality ends a post and not a life.
+     * Blocking the person outright is {@code POST /admin/users/{id}/block} and is a different act
+     * with a different permission.</p>
+     *
+     * <p>Nothing they did is touched either. Not one citation is deleted, hidden or reassigned: the
+     * record of an officer's acts outlives the officer's access, which is the whole point of it
+     * being a record.</p>
+     */
+    /**
+     * The staff of this municipality, as the administration panel reads it (CONTRACT.md v0.15).
+     *
+     * <p>One row per post, not per person: name, role, status, the sectors it covers and when the
+     * account was last used. Suspended and revoked posts are in it — the panel is where a suspension
+     * is lifted, and where somebody asks months later who held a post in March.</p>
+     *
+     * <p>Three queries for a page, never one per row: the memberships, then their people, then their
+     * zones.</p>
+     */
+    @GetMapping("/staff")
+    @PreAuthorize("hasAuthority('PERM_USER_READ')")
+    @Operation(summary = "The staff of the active municipality, with role, sectors and last access")
+    public PageResponse<AdminDtos.StaffMemberResponse> staff(
+            @RequestParam(required = false) MembershipStatus status,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size) {
+        TenantId tenantId = TenantContextHolder.requireTenantId();
+        PageRequest request = PageRequest.parse(page, size, null);
+        PageResponse<TenantMembership> memberships = membershipService.listStaff(tenantId, status, request);
+
+        List<UUID> membershipIds = memberships.items().stream().map(TenantMembership::getId).toList();
+        List<UUID> userIds = memberships.items().stream().map(TenantMembership::getUserId).distinct().toList();
+        Map<UUID, User> people = userIds.isEmpty()
+                ? Map.of()
+                : userDirectoryService.findAllById(userIds).stream()
+                        .collect(Collectors.toMap(User::getId, user -> user));
+        Map<UUID, List<UUID>> zonesByMembership = zoneService.zonesOf(membershipIds);
+        Map<UUID, ParkingZone> zonesOfTenant = catalogService.listActiveZones(tenantId).stream()
+                .collect(Collectors.toMap(ParkingZone::getId, zone -> zone));
+
+        List<AdminDtos.StaffMemberResponse> items = new ArrayList<>(memberships.items().size());
+        for (TenantMembership membership : memberships.items()) {
+            User person = people.get(membership.getUserId());
+            List<AdminDtos.ZoneAssignmentResponse> zones = zonesByMembership
+                    .getOrDefault(membership.getId(), List.of()).stream()
+                    .map(zonesOfTenant::get)
+                    // A zone that was retired after being assigned is dropped from the display
+                    // rather than shown as a blank: the assignment row stays, and reassigning is
+                    // what removes it for good.
+                    .filter(zone -> zone != null)
+                    .map(zone -> new AdminDtos.ZoneAssignmentResponse(zone.getId(), zone.getCode(), zone.getName()))
+                    .toList();
+            items.add(new AdminDtos.StaffMemberResponse(
+                    membership.getId(),
+                    membership.getUserId(),
+                    person == null ? null : person.displayName(),
+                    person == null ? null : person.getEmail(),
+                    membership.getPortal(),
+                    membership.getRole(),
+                    membership.getStatus(),
+                    membership.getStatusReason(),
+                    membership.getSuspendedAt(),
+                    membership.getRevokedAt(),
+                    zones,
+                    person == null ? null : person.getLastLoginAt(),
+                    person == null ? null : person.getLastLoginPortal(),
+                    person == null ? null : person.getStatus()));
+        }
+        return PageResponse.of(items, request.page(), request.size(), memberships.totalElements());
+    }
+
+    @PostMapping("/{id}/suspend")
+    @PreAuthorize("hasAuthority('PERM_ROLE_ASSIGN')")
+    @Operation(summary = "Pause a member of staff's access to this municipality")
+    public AdminDtos.MembershipResponse suspend(@PathVariable UUID id,
+                                                @Valid @RequestBody AdminDtos.SuspendMembershipRequest request) {
+        TenantId tenantId = TenantContextHolder.requireTenantId();
+        TenantMembership membership = membershipService.suspend(id, tenantId, request.reason());
+        auditRecorder.record(AuditAction.MEMBERSHIP_SUSPENDED, "membership", id.toString(),
+                Map.of("userId", membership.getUserId().toString(),
+                        "reason", String.valueOf(request.reason())));
+        return mapper.toMembership(membership);
+    }
+
+    /** Lifts a suspension. Only from SUSPENDED — bringing back a revoked post is a new grant. */
+    @PostMapping("/{id}/reactivate")
+    @PreAuthorize("hasAuthority('PERM_ROLE_ASSIGN')")
+    @Operation(summary = "Lift a suspension")
+    public AdminDtos.MembershipResponse reactivate(@PathVariable UUID id) {
+        TenantId tenantId = TenantContextHolder.requireTenantId();
+        TenantMembership membership = membershipService.reactivate(id, tenantId);
+        auditRecorder.record(AuditAction.MEMBERSHIP_REACTIVATED, "membership", id.toString(),
+                Map.of("userId", membership.getUserId().toString()));
+        return mapper.toMembership(membership);
+    }
+
+    /**
+     * The sectors this member of staff covers — and, for an inspector, where they may act at all
+     * (CONTRACT.md v0.15).
+     *
+     * <p>The whole set is replaced in one call: an administrator ticking boxes is stating what the
+     * assignment should be, and a diff is how two people editing the same officer end up with the
+     * union of both their intentions.</p>
+     *
+     * <p>Every zone is resolved against <em>this</em> municipality before anything is written. That
+     * is the only place the invariant can be enforced — the database cannot state it across two
+     * tables — and it is also what stops an id from another municipality being stored as if it
+     * meant something here.</p>
+     *
+     * <p>An empty list is a real instruction: it clears the restriction and the officer covers the
+     * whole municipality again.</p>
+     */
+    @PutMapping("/{id}/zones")
+    @PreAuthorize("hasAuthority('PERM_ZONE_ASSIGN')")
+    @Operation(summary = "Replace the sectors assigned to a member of staff")
+    public List<AdminDtos.ZoneAssignmentResponse> assignZones(@PathVariable UUID id,
+                                                              @Valid @RequestBody AdminDtos.AssignZonesRequest request) {
+        TenantId tenantId = TenantContextHolder.requireTenantId();
+        TenantMembership membership = membershipService.requireInScope(id, tenantId);
+        Map<UUID, ParkingZone> zonesOfTenant = catalogService.listActiveZones(tenantId).stream()
+                .collect(Collectors.toMap(ParkingZone::getId, zone -> zone));
+        for (UUID zoneId : request.zoneIds()) {
+            if (!zonesOfTenant.containsKey(zoneId)) {
+                throw new ValidationException("zoneIds", ErrorCode.PARKING_ZONE_NOT_FOUND,
+                        "error.parking.zone.notFound");
+            }
+        }
+        List<UUID> assigned = zoneService.replaceZones(membership.getId(), request.zoneIds());
+        auditRecorder.record(AuditAction.MEMBERSHIP_ZONES_ASSIGNED, "membership", id.toString(),
+                Map.of("userId", membership.getUserId().toString(),
+                        "zoneCount", String.valueOf(assigned.size())));
+        return assigned.stream()
+                .map(zonesOfTenant::get)
+                .map(zone -> new AdminDtos.ZoneAssignmentResponse(zone.getId(), zone.getCode(), zone.getName()))
+                .toList();
     }
 
     @PostMapping("/{id}/approve")

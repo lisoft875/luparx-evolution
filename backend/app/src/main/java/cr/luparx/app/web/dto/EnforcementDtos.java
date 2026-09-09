@@ -173,6 +173,15 @@ public final class EnforcementDtos {
                                    Instant issuedAt,
                                    Long deviceClockSkewSeconds,
                                    UUID inspectorUserId,
+                                   /**
+                                    * The officer's name as it was when the act was raised
+                                    * (CONTRACT.md v0.15). Travels beside the id because the id
+                                    * answers "who" only to somebody who can look it up, and a
+                                    * citation is read by people who cannot — and because it must
+                                    * keep reading the same years later, whatever happens to the
+                                    * officer's post or their surname.
+                                    */
+                                   String inspectorName,
                                    UUID parkingSessionId,
                                    String notes,
                                    int evidenceCount) {

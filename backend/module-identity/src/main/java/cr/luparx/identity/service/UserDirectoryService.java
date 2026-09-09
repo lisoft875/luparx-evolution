@@ -67,6 +67,18 @@ public class UserDirectoryService {
                 .orElseThrow(() -> NotFoundException.of(ErrorCode.USER_NOT_FOUND, "error.user.notFound"));
     }
 
+    /**
+     * The people behind a set of ids, in one query.
+     *
+     * <p>{@code ids} must already be restricted to what the caller may see — this method does not
+     * know about tenants and does not pretend to. The staff panel gets them from the memberships of
+     * its own municipality, which is the scoping.</p>
+     */
+    @Transactional(readOnly = true)
+    public List<User> findAllById(Collection<UUID> ids) {
+        return ids == null || ids.isEmpty() ? List.of() : userRepository.findByIdIn(ids);
+    }
+
     /** Tenant-scoped listing. {@code ids} must already be restricted to the active tenant. */
     @Transactional(readOnly = true)
     public PageResponse<User> searchWithin(Collection<UUID> ids, String query, UserStatus status,

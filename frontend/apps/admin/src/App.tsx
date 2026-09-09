@@ -17,6 +17,7 @@ import { SettingsSpaceFormatPage } from './pages/SettingsSpaceFormatPage';
 import { SettingsSchedulePage } from './pages/SettingsSchedulePage';
 import { UsersListPage } from './pages/UsersListPage';
 import { UserCreatePage } from './pages/UserCreatePage';
+import { StaffPage } from './pages/StaffPage';
 import { UserDetailPage } from './pages/UserDetailPage';
 import { AuditPage } from './pages/AuditPage';
 import { ReportsPage } from './pages/ReportsPage';
@@ -86,6 +87,16 @@ export function App(): React.JSX.Element {
               {/* Creating staff is two capabilities at once — a person exists (USER_WRITE) and a
                   role is granted (ROLE_ASSIGN) — and the server checks both again. This only keeps
                   the screen off a menu where pressing it could produce nothing but a 403. */}
+              <Route
+                path="/staff"
+                element={
+                  <RequireAuth loginPath="/login">
+                    <RequireTenant selectTenantPath="/select-tenant">
+                      <StaffPage />
+                    </RequireTenant>
+                  </RequireAuth>
+                }
+              />
               <Route
                 path="/users/new"
                 element={

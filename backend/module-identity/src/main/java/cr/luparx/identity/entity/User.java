@@ -129,6 +129,20 @@ public class User {
     @Column(name = "credentials_version", nullable = false)
     private int credentialsVersion;
 
+    /**
+     * When this account was last signed into, and through which portal (CONTRACT.md v0.15).
+     *
+     * <p>On the person and not on the membership because that is what the act knows: you sign in to
+     * a portal, and the municipality is chosen afterwards. It answers the first question of any
+     * access review — is this account still being used — and the portal beside it keeps an inspector
+     * who works every day from reading like somebody who only ever opens the citizen app.</p>
+     */
+    @Column(name = "last_login_at")
+    private Instant lastLoginAt;
+
+    @Column(name = "last_login_portal", length = 16)
+    private String lastLoginPortal;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -313,6 +327,37 @@ public class User {
     }
 
     // --- behaviour -------------------------------------------------------------------------------
+
+    /**
+     * The person's name as one string.
+     *
+     * <p>On the entity because two very different callers need the same answer: the API, which
+     * renders it, and the enforcement flow, which <em>copies</em> it onto a citation and must copy
+     * exactly what the API would have shown. The order of the parts is Costa Rican convention and a
+     * locale concern the client may still re-order for display; what must not vary is which parts
+     * are in it.</p>
+     */
+    public String displayName() {
+        StringBuilder builder = new StringBuilder(givenName).append(' ').append(familyName);
+        if (secondFamilyName != null && !secondFamilyName.isBlank()) {
+            builder.append(' ').append(secondFamilyName);
+        }
+        return builder.toString();
+    }
+
+    /** Recorded on every successful sign-in, whichever portal it was. */
+    public void recordLogin(String portalSlug, Instant now) {
+        this.lastLoginAt = now;
+        this.lastLoginPortal = portalSlug;
+    }
+
+    public Instant getLastLoginAt() {
+        return lastLoginAt;
+    }
+
+    public String getLastLoginPortal() {
+        return lastLoginPortal;
+    }
 
     public void markEmailVerified(Instant now) {
         this.emailVerifiedAt = now;

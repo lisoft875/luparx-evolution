@@ -2,6 +2,7 @@ package cr.luparx.enforcement.service;
 
 import cr.luparx.core.error.ConflictException;
 import cr.luparx.core.error.ErrorCode;
+import cr.luparx.core.error.ForbiddenException;
 import cr.luparx.core.error.NotFoundException;
 import cr.luparx.core.error.ValidationException;
 import cr.luparx.core.id.TenantId;
@@ -147,6 +148,13 @@ public class CitationService {
         UUID zoneId = bay != null ? bay.zoneId() : command.zoneId();
         String spaceCode = bay != null ? bay.code() : trimToNull(command.spaceCode());
 
+        // The officer's post covers certain sectors, and a citation outside them is refused
+        // (CONTRACT.md v0.15). Checked before anything is written, so a refusal leaves no draft
+        // behind. An officer with no sectors assigned covers the whole municipality.
+        if (!actor.mayActIn(zoneId)) {
+            throw ForbiddenException.of(ErrorCode.ZONE_NOT_ASSIGNED, "error.enforcement.zone.notAssigned");
+        }
+
         // The vehicle in the register, only when the plate resolves to exactly one. A reference, and
         // never a copy of the owner's data: the citation is against the vehicle, not against a person.
         UUID vehicleId = parkingStatus.findUniqueVehicleByPlate(plateNormalized)
@@ -161,7 +169,8 @@ public class CitationService {
         Citation citation = new Citation(Uuid7.generate(), tenantId.value(), command.plate().trim(), plateNormalized,
                 vehicleId, zoneId, bay != null ? bay.spaceId() : null, spaceCode, command.latitude(),
                 command.longitude(), command.locationAccuracyM(), trimToNull(command.addressText()), type, occurredAt,
-                actor.userIdValue(), command.deviceCitationId(), parkingSessionId, trimToNull(command.notes()),
+                actor.userIdValue(), actor.displayName(), command.deviceCitationId(), parkingSessionId,
+                trimToNull(command.notes()),
                 CitationStatus.DRAFT, now);
 
         try {

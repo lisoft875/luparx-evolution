@@ -38,6 +38,10 @@ export function AdminShell({ children }: AdminShellProps): React.JSX.Element {
         <nav style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <Link to="/">{t('nav.home')}</Link>
           <Link to="/users">{t('nav.users')}</Link>
+          {/* The staff panel is its own destination and not a filter of Usuarios: the questions are
+              different — that list is about the people of the municipality, this one is about the
+              posts it has granted. */}
+          {permissions.has('USER_READ') ? <Link to="/staff">{t('nav.staff')}</Link> : null}
           <Link to="/audit">{t('nav.audit')}</Link>
           <Link to="/reports">{t('nav.reports')}</Link>
           <hr />

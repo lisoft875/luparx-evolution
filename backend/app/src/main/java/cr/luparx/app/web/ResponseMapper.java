@@ -170,13 +170,14 @@ public class ResponseMapper {
                 locale.getSortOrder());
     }
 
-    /** Display name; the presentation order is a locale concern the client resolves. */
+    /**
+     * Display name; the presentation order is a locale concern the client resolves.
+     *
+     * <p>Delegates to the entity so that the name a citation copies (CONTRACT.md v0.15) and the name
+     * the API renders can never be two different strings.</p>
+     */
     public String fullName(User user) {
-        StringBuilder builder = new StringBuilder(user.getGivenName()).append(' ').append(user.getFamilyName());
-        if (user.getSecondFamilyName() != null && !user.getSecondFamilyName().isBlank()) {
-            builder.append(' ').append(user.getSecondFamilyName());
-        }
-        return builder.toString();
+        return user.displayName();
     }
 
     /** List projection: no identity document, no birth date (SECURITY.md §11 data minimisation). */

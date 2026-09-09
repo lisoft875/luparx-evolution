@@ -97,6 +97,9 @@ public class AuthenticationService {
         }
 
         rateLimiter.record(normalizedEmail, portal, ip, true);
+        // Recorded on the password step rather than after any second factor, because the question
+        // it answers is "was this account used", and an attempt that got this far was.
+        user.recordLogin(portal.slug(), clock.instant());
 
         boolean totpActive = mfaService.isActive(UserId.of(user.getId()));
         // The portal side of the decision is configuration (luparx.security.mfa-enforced-portals);

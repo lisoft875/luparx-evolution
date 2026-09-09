@@ -4,7 +4,11 @@ import cr.luparx.app.audit.AuditRecorder;
 import cr.luparx.app.idempotency.IdempotencyFilter;
 import cr.luparx.app.web.dto.EnforcementDtos;
 import cr.luparx.core.audit.AuditAction;
+import cr.luparx.core.domain.Portal;
+import cr.luparx.core.error.ErrorCode;
+import cr.luparx.core.error.ForbiddenException;
 import cr.luparx.core.id.TenantId;
+import cr.luparx.core.id.UserId;
 import cr.luparx.core.page.PageRequest;
 import cr.luparx.core.page.PageResponse;
 import cr.luparx.core.tenant.TenantContextHolder;
@@ -21,7 +25,9 @@ import cr.luparx.enforcement.service.PlateStatusService;
 import cr.luparx.app.web.dto.ParkingDtos;
 import cr.luparx.parking.entity.ParkingZone;
 import cr.luparx.parking.model.ParkingSpaceRange;
+import cr.luparx.identity.service.UserDirectoryService;
 import cr.luparx.parking.service.ParkingCatalogService;
+import cr.luparx.tenancy.service.MembershipZoneService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -88,6 +94,8 @@ public class InspectorEnforcementController {
     private final EvidenceService evidenceService;
     private final InfractionTypeService infractionTypeService;
     private final ParkingCatalogService catalogService;
+    private final UserDirectoryService userDirectoryService;
+    private final MembershipZoneService membershipZoneService;
     private final EnforcementMapper mapper;
     private final AuditRecorder auditRecorder;
 
@@ -96,6 +104,8 @@ public class InspectorEnforcementController {
                                           EvidenceService evidenceService,
                                           InfractionTypeService infractionTypeService,
                                           ParkingCatalogService catalogService,
+                                          UserDirectoryService userDirectoryService,
+                                          MembershipZoneService membershipZoneService,
                                           EnforcementMapper mapper,
                                           AuditRecorder auditRecorder) {
         this.plateStatusService = plateStatusService;
@@ -103,6 +113,8 @@ public class InspectorEnforcementController {
         this.evidenceService = evidenceService;
         this.infractionTypeService = infractionTypeService;
         this.catalogService = catalogService;
+        this.userDirectoryService = userDirectoryService;
+        this.membershipZoneService = membershipZoneService;
         this.mapper = mapper;
         this.auditRecorder = auditRecorder;
     }
@@ -127,6 +139,10 @@ public class InspectorEnforcementController {
             @RequestParam(required = false) UUID zoneId,
             @RequestParam(required = false) String spaceCode) {
         TenantId tenantId = TenantContextHolder.requireTenantId();
+        List<UUID> assigned = assignedZones(tenantId);
+        if (zoneId != null && !assigned.isEmpty() && !assigned.contains(zoneId)) {
+            throw ForbiddenException.of(ErrorCode.ZONE_NOT_ASSIGNED, "error.enforcement.zone.notAssigned");
+        }
         PlateStatus status = plateStatusService.lookup(tenantId, plate, zoneId, spaceCode);
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.noStore())
@@ -156,7 +172,14 @@ public class InspectorEnforcementController {
     @Operation(summary = "Zones of this municipality, with the bay codes each one has")
     public ResponseEntity<List<EnforcementDtos.InspectorZoneResponse>> zones() {
         TenantId tenantId = TenantContextHolder.requireTenantId();
-        List<ParkingZone> zones = catalogService.listActiveZones(tenantId);
+        // Only the sectors this officer covers. An empty assignment means the whole municipality
+        // (CONTRACT.md v0.15), so the filter is applied only when there is one — the list an officer
+        // sees is the list they can act on, and a picker offering a zone the server will refuse is
+        // a trap with a friendly face.
+        List<UUID> assigned = assignedZones(tenantId);
+        List<ParkingZone> zones = catalogService.listActiveZones(tenantId).stream()
+                .filter(zone -> assigned.isEmpty() || assigned.contains(zone.getId()))
+                .toList();
         Map<UUID, ParkingSpaceRange> ranges = catalogService.spaceRangesByZone(tenantId);
         List<EnforcementDtos.InspectorZoneResponse> body = new ArrayList<>(zones.size());
         for (ParkingZone zone : zones) {
@@ -328,9 +351,31 @@ public class InspectorEnforcementController {
      * same value the audit trail stores, so the citation's own history and the security trail can be
      * correlated without either keeping a raw address.
      */
+    /**
+     * Who is acting, with the two facts the enforcement domain cannot look up for itself: the
+     * officer's name, copied onto the act, and the sectors their post covers (CONTRACT.md v0.15).
+     *
+     * <p>Both are read here, per request, from the same rows authorization is resolved from — never
+     * from the token. An officer suspended a minute ago has already stopped being able to reach this
+     * method at all; one whose sectors changed a minute ago is judged by the new ones.</p>
+     */
     private EnforcementActor actor() {
-        return EnforcementActor.of(TenantContextHolder.requireUserId(),
-                TenantContextHolder.require().portal(), auditRecorder.currentIpHash());
+        TenantId tenantId = TenantContextHolder.requireTenantId();
+        UserId userId = TenantContextHolder.requireUserId();
+        Portal portal = TenantContextHolder.require().portal();
+        return EnforcementActor.of(userId, portal, auditRecorder.currentIpHash(),
+                userDirectoryService.require(userId).displayName(),
+                membershipZoneService.activeZonesFor(tenantId, userId, portal));
+    }
+
+    /**
+     * The sectors this officer covers, or empty when their post covers the whole municipality.
+     * Read once per request that needs it, because both the answer and the reason it matters are
+     * the same for the zone list and for the plate lookup.
+     */
+    private List<UUID> assignedZones(TenantId tenantId) {
+        UserId userId = TenantContextHolder.requireUserId();
+        return membershipZoneService.activeZonesFor(tenantId, userId, TenantContextHolder.require().portal());
     }
 
     private void audit(String action, Citation citation, Map<String, Object> metadata) {

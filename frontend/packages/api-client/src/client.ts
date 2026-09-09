@@ -37,7 +37,12 @@ import {
 import type { PagedResponse, PageParams } from './types/http';
 import type {
   AdminUserDetail,
+  AssignZonesRequest,
   CreateAdminUserRequest,
+  MembershipStatus,
+  StaffMember,
+  SuspendMembershipRequest,
+  ZoneAssignment,
   AdminUserListItem,
   AdminCitationsQuery,
   AdminUsersQuery,
@@ -303,6 +308,21 @@ export class ApiClient {
       this.http.request('POST', `/api/v1/admin/users/${id}/password-reset`, { idempotent: true }),
     requireMfa: (id: string, payload: RequireMfaRequest): Promise<void> =>
       this.http.request('POST', `/api/v1/admin/users/${id}/mfa/require`, { body: payload }),
+  };
+
+  readonly adminStaff = {
+    /** The municipality's staff, suspended and revoked posts included (CONTRACT.md v0.15). */
+    list: (query: { status?: MembershipStatus } & PageParams = {}): Promise<PagedResponse<StaffMember>> =>
+      this.http.request('GET', '/api/v1/admin/memberships/staff', { query }),
+    suspend: (membershipId: string, payload: SuspendMembershipRequest): Promise<void> =>
+      this.http.request('POST', `/api/v1/admin/memberships/${membershipId}/suspend`, {
+        body: payload,
+        idempotent: true,
+      }),
+    reactivate: (membershipId: string): Promise<void> =>
+      this.http.request('POST', `/api/v1/admin/memberships/${membershipId}/reactivate`, { idempotent: true }),
+    assignZones: (membershipId: string, payload: AssignZonesRequest): Promise<ZoneAssignment[]> =>
+      this.http.request('PUT', `/api/v1/admin/memberships/${membershipId}/zones`, { body: payload }),
   };
 
   readonly adminMemberships = {

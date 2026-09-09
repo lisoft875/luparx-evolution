@@ -146,6 +146,17 @@ public class Citation {
     private UUID inspectorUserId;
 
     /**
+     * The officer's name as it was when the act was raised (V22_0 — CONTRACT.md v0.15).
+     *
+     * <p>A copy for the same reason as the plate and the infraction's own name beside it: a citation
+     * is an administrative act, and what matters years later when somebody challenges it is who
+     * signed it <em>then</em>. An officer can marry and change their surname; the 2026 citation has
+     * to keep saying who raised it in 2026.</p>
+     */
+    @Column(name = "inspector_name_snapshot", length = 200)
+    private String inspectorNameSnapshot;
+
+    /**
      * Identifier generated on the officer's device. Unique per municipality, which is what makes a
      * resend after a lost connection resolve to the same citation even when the client is a new
      * install with a new {@code Idempotency-Key}.
@@ -184,7 +195,8 @@ public class Citation {
     public Citation(UUID id, UUID tenantId, String plate, String plateNormalized, UUID vehicleId, UUID zoneId,
                     UUID spaceId, String spaceCode, BigDecimal latitude, BigDecimal longitude,
                     BigDecimal locationAccuracyM, String addressText, InfractionType type, Instant occurredAt,
-                    UUID inspectorUserId, String deviceCitationId, UUID parkingSessionId, String notes,
+                    UUID inspectorUserId, String inspectorNameSnapshot, String deviceCitationId,
+                    UUID parkingSessionId, String notes,
                     CitationStatus initialStatus, Instant now) {
         this.id = id;
         this.tenantId = tenantId;
@@ -205,6 +217,7 @@ public class Citation {
         this.currencyCode = type.getCurrencyCode();
         this.occurredAt = occurredAt;
         this.inspectorUserId = inspectorUserId;
+        this.inspectorNameSnapshot = inspectorNameSnapshot;
         this.deviceCitationId = deviceCitationId;
         this.parkingSessionId = parkingSessionId;
         this.notes = notes;
@@ -362,6 +375,11 @@ public class Citation {
 
     public UUID getInspectorUserId() {
         return inspectorUserId;
+    }
+
+    /** Null only on citations raised before V22_0 that no name could be recovered for. */
+    public String getInspectorNameSnapshot() {
+        return inspectorNameSnapshot;
     }
 
     public String getDeviceCitationId() {

@@ -54,6 +54,13 @@ import {
 } from './data';
 import { mintMockTokenPair } from './token';
 
+/**
+ * Which sectors each post covers (CONTRACT.md v0.15). Absent, or empty, means the whole
+ * municipality — the same rule the server keeps, so a preview cannot show a behaviour production
+ * does not have.
+ */
+const mockMembershipZones = new Map<string, string[]>();
+
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
     status,
@@ -673,7 +680,44 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
     if (resource === 'memberships' && method === 'POST' && segments.length === 4) {
       return noContent();
     }
-    // /api/v1/admin/memberships/{id}[/approve|/reject], addressed by MembershipSummary.id.
+    // GET /api/v1/admin/memberships/staff — the administration panel (CONTRACT.md v0.15). One row
+    // per post, suspended and revoked included, with the sectors it covers and the last sign-in.
+    if (resource === 'memberships' && segments[4] === 'staff' && method === 'GET') {
+      const statusFilter = url.searchParams.get('status');
+      const rows = [];
+      for (const person of mockUsersById.values()) {
+        for (const membership of person.memberships) {
+          if (membership.portal === 'citizen') continue;
+          if (tenantId && membership.tenantId !== tenantId) continue;
+          if (statusFilter && membership.status !== statusFilter) continue;
+          rows.push({
+            membershipId: membership.id,
+            userId: person.profile.id,
+            fullName: `${person.profile.givenName} ${person.profile.familyName}`.trim(),
+            email: person.profile.email,
+            portal: membership.portal,
+            role: membership.role,
+            status: membership.status,
+            statusReason: membership.statusReason ?? null,
+            suspendedAt: membership.suspendedAt ?? null,
+            revokedAt: null,
+            zones: (mockMembershipZones.get(membership.id ?? '') ?? []).map((zoneId) => {
+              const zone = (mockCitizenZones(membership.tenantId) as { id: string; code: string; name: string }[])
+                .find((z) => z.id === zoneId);
+              return { zoneId, code: zone?.code ?? zoneId, name: zone?.name ?? zoneId };
+            }),
+            lastLoginAt: person.profile.lastLoginAt ?? null,
+            lastLoginPortal: person.profile.lastLoginPortal ?? null,
+            accountStatus: person.profile.status,
+          });
+        }
+      }
+      const page = Number(url.searchParams.get('page') ?? '0');
+      const size = Number(url.searchParams.get('size') ?? '20');
+      return json(paginate(rows, page, size));
+    }
+
+    // /api/v1/admin/memberships/{id}[/approve|/reject|/suspend|/reactivate|/zones].
     if (resource === 'memberships' && segments.length >= 5) {
       const membershipId = segments[4];
       const subAction = segments[5];
@@ -698,6 +742,41 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
       if (subAction === 'reject' && method === 'POST') {
         membership.status = 'REJECTED';
         return noContent();
+      }
+      if (subAction === 'suspend' && method === 'POST') {
+        if (membership.status !== 'ACTIVE' && membership.status !== 'SUSPENDED') {
+          return problem(409, 'MEMBERSHIP_INVALID_TRANSITION', 'Only an active membership can be suspended');
+        }
+        const payload = await readBody<{ reason?: string }>(init);
+        membership.status = 'SUSPENDED';
+        membership.statusReason = payload.reason ?? null;
+        membership.suspendedAt = new Date().toISOString();
+        return noContent();
+      }
+      if (subAction === 'reactivate' && method === 'POST') {
+        if (membership.status !== 'SUSPENDED' && membership.status !== 'ACTIVE') {
+          return problem(409, 'MEMBERSHIP_INVALID_TRANSITION', 'Only a suspended membership can be reactivated');
+        }
+        membership.status = 'ACTIVE';
+        membership.statusReason = null;
+        membership.suspendedAt = null;
+        return noContent();
+      }
+      if (subAction === 'zones' && method === 'PUT') {
+        const payload = await readBody<{ zoneIds: string[] }>(init);
+        const zonesOfTenant = mockCitizenZones(membership.tenantId) as { id: string; code: string; name: string }[];
+        for (const zoneId of payload.zoneIds) {
+          if (!zonesOfTenant.some((z) => z.id === zoneId)) {
+            return problem(422, 'PARKING_ZONE_NOT_FOUND', 'That zone is not this municipality\'s');
+          }
+        }
+        mockMembershipZones.set(membershipId ?? '', [...payload.zoneIds]);
+        return json(
+          payload.zoneIds.map((zoneId) => {
+            const zone = zonesOfTenant.find((z) => z.id === zoneId);
+            return { zoneId, code: zone?.code ?? zoneId, name: zone?.name ?? zoneId };
+          }),
+        );
       }
       if (!subAction && method === 'PUT') {
         const payload = await readBody<{ role: string; status: string }>(init);

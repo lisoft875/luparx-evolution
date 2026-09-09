@@ -39,6 +39,11 @@ public final class AuditAction {
     public static final String MEMBERSHIP_APPROVED = "MEMBERSHIP_APPROVED";
     public static final String MEMBERSHIP_REJECTED = "MEMBERSHIP_REJECTED";
     public static final String MEMBERSHIP_REVOKED = "MEMBERSHIP_REVOKED";
+    /** An access paused reversibly, and lifted again (CONTRACT.md v0.15). */
+    public static final String MEMBERSHIP_SUSPENDED = "MEMBERSHIP_SUSPENDED";
+    public static final String MEMBERSHIP_REACTIVATED = "MEMBERSHIP_REACTIVATED";
+    /** The sectors a member of staff covers were replaced. */
+    public static final String MEMBERSHIP_ZONES_ASSIGNED = "MEMBERSHIP_ZONES_ASSIGNED";
     public static final String MEMBERSHIP_ROLE_CHANGED = "MEMBERSHIP_ROLE_CHANGED";
 
     public static final String TENANT_CREATED = "TENANT_CREATED";

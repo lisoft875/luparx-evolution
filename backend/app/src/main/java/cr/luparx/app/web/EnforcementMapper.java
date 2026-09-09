@@ -138,6 +138,7 @@ public class EnforcementMapper {
                 citation.getIssuedAt(),
                 citation.getDeviceClockSkewSeconds(),
                 citation.getInspectorUserId(),
+                citation.getInspectorNameSnapshot(),
                 citation.getParkingSessionId(),
                 citation.getNotes(),
                 evidenceCount);

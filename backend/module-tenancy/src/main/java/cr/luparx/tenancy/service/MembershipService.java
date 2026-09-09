@@ -257,6 +257,48 @@ public class MembershipService {
         return membership;
     }
 
+    /**
+     * Pauses a member of staff's access to this municipality (CONTRACT.md v0.15).
+     *
+     * <p>Only an ACTIVE membership can be suspended: suspending a request that is still waiting for
+     * approval, or one already revoked, would produce a state whose way back nobody has defined.
+     * Suspending is idempotent — asking twice is the same as asking once — because an administrator
+     * pressing a button again after a slow response must not get an error for it.</p>
+     *
+     * <p>Nothing about the person changes and nothing they did is touched. The next request they
+     * make simply finds no ACTIVE membership: {@code AccessResolver} re-reads the row on every
+     * call, so a suspension takes effect immediately without revoking a single token.</p>
+     */
+    @Transactional
+    public TenantMembership suspend(UUID membershipId, TenantId scope, String reason) {
+        TenantMembership membership = requireInScope(membershipId, scope);
+        if (membership.getStatus() == MembershipStatus.SUSPENDED) {
+            return membership;
+        }
+        if (membership.getStatus() != MembershipStatus.ACTIVE) {
+            throw ConflictException.of(ErrorCode.MEMBERSHIP_INVALID_TRANSITION, "error.membership.transition");
+        }
+        membership.suspend(clock.instant(), reason);
+        return membership;
+    }
+
+    /**
+     * Lifts a suspension. Only from SUSPENDED: bringing back somebody who was revoked is a new
+     * appointment and goes through the grant, where a person decides the role again.
+     */
+    @Transactional
+    public TenantMembership reactivate(UUID membershipId, TenantId scope) {
+        TenantMembership membership = requireInScope(membershipId, scope);
+        if (membership.getStatus() == MembershipStatus.ACTIVE) {
+            return membership;
+        }
+        if (!membership.getStatus().isReactivatable()) {
+            throw ConflictException.of(ErrorCode.MEMBERSHIP_INVALID_TRANSITION, "error.membership.transition");
+        }
+        membership.reactivate(clock.instant());
+        return membership;
+    }
+
     @Transactional
     public TenantMembership update(UUID membershipId, TenantId scope, Role role, MembershipStatus status) {
         TenantMembership membership = requireInScope(membershipId, scope);
@@ -278,6 +320,25 @@ public class MembershipService {
         Page<TenantMembership> page = status == null
                 ? membershipRepository.findByTenantId(tenantId.value(), pageable)
                 : membershipRepository.findByTenantIdAndStatus(tenantId.value(), status, pageable);
+        return PageResponse.of(page.getContent(), request.page(), request.size(), page.getTotalElements());
+    }
+
+    /**
+     * The municipality's staff (CONTRACT.md v0.15): everybody holding a post that is not a citizen's.
+     *
+     * <p>Suspended and revoked posts are included by default and on purpose. The panel is where a
+     * suspension is lifted and where somebody looks up, months later, who held a post in March; a
+     * list that quietly dropped them would answer neither question.</p>
+     */
+    @Transactional(readOnly = true)
+    public PageResponse<TenantMembership> listStaff(TenantId tenantId, MembershipStatus status,
+                                                    PageRequest request) {
+        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(
+                request.page(), request.size(), Sort.by(Sort.Order.desc("requestedAt")));
+        Page<TenantMembership> page = status == null
+                ? membershipRepository.findByTenantIdAndPortalNot(tenantId.value(), Portal.CITIZEN, pageable)
+                : membershipRepository.findByTenantIdAndPortalNotAndStatus(tenantId.value(), Portal.CITIZEN,
+                        status, pageable);
         return PageResponse.of(page.getContent(), request.page(), request.size(), page.getTotalElements());
     }
 

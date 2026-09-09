@@ -114,6 +114,49 @@ public final class AdminDtos {
     public record UpdateMembershipRequest(Role role, MembershipStatus status) {
     }
 
+    /** {@code POST /admin/memberships/{id}/suspend}: pause an access, reversibly. */
+    public record SuspendMembershipRequest(@Size(max = 500) String reason) {
+    }
+
+    /**
+     * {@code PUT /admin/memberships/{id}/zones}: the whole assignment, replaced.
+     *
+     * <p>An empty list is meaningful and is not the same as not calling this: it clears every
+     * restriction, and the officer covers the municipality again.</p>
+     */
+    public record AssignZonesRequest(@NotNull List<UUID> zoneIds) {
+    }
+
+    /**
+     * One member of staff as the administration panel reads them (CONTRACT.md v0.15): the person,
+     * their post, the sectors it covers and whether the account is being used.
+     *
+     * <p>A shape of its own rather than a user plus a membership, because the panel's unit is the
+     * post: the same person can hold two, and the question asked of each — who is this, what may
+     * they do, where, and are they still here — is one row's worth of answer.</p>
+     */
+    public record StaffMemberResponse(
+            UUID membershipId,
+            UUID userId,
+            String fullName,
+            String email,
+            Portal portal,
+            Role role,
+            MembershipStatus status,
+            String statusReason,
+            Instant suspendedAt,
+            Instant revokedAt,
+            /** Empty means every zone of this municipality, never none (CONTRACT.md v0.15). */
+            List<ZoneAssignmentResponse> zones,
+            Instant lastLoginAt,
+            String lastLoginPortal,
+            UserStatus accountStatus) {
+    }
+
+    /** A sector, named, so the panel does not have to resolve ids against another call. */
+    public record ZoneAssignmentResponse(UUID zoneId, String code, String name) {
+    }
+
     public record RejectMembershipRequest(@NotBlank @Size(max = 500) String reason) {
     }
 

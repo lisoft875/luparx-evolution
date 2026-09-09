@@ -40,6 +40,17 @@ public interface TenantMembershipRepository extends JpaRepository<TenantMembersh
 
     Page<TenantMembership> findByTenantId(UUID tenantId, Pageable pageable);
 
+    /**
+     * The municipality's staff: every membership on a portal other than the citizen's
+     * (CONTRACT.md v0.15). Not filtered by status — a suspended or revoked officer has to stay
+     * visible in the panel, which is where they are brought back or looked up months later.
+     */
+    Page<TenantMembership> findByTenantIdAndPortalNot(UUID tenantId, cr.luparx.core.domain.Portal portal,
+                                                      Pageable pageable);
+
+    Page<TenantMembership> findByTenantIdAndPortalNotAndStatus(UUID tenantId, cr.luparx.core.domain.Portal portal,
+                                                               MembershipStatus status, Pageable pageable);
+
     /** Ids of the users that hold a membership in this tenant, used to scope every admin user query. */
     @Query("""
             select m.userId from TenantMembership m

@@ -68,6 +68,9 @@ public class TenantMembership {
     @Column(name = "revoked_at")
     private Instant revokedAt;
 
+    @Column(name = "suspended_at")
+    private Instant suspendedAt;
+
     @Column(name = "status_reason", length = 500)
     private String statusReason;
 
@@ -142,6 +145,10 @@ public class TenantMembership {
         return revokedAt;
     }
 
+    public Instant getSuspendedAt() {
+        return suspendedAt;
+    }
+
     public String getStatusReason() {
         return statusReason;
     }
@@ -175,12 +182,36 @@ public class TenantMembership {
         this.statusReason = reason;
     }
 
+    /**
+     * Pauses the access without ending the post (CONTRACT.md v0.15). Reversible by
+     * {@link #reactivate}; nothing the person did is touched.
+     */
+    public void suspend(Instant now, String reason) {
+        this.status = MembershipStatus.SUSPENDED;
+        this.suspendedAt = now;
+        this.statusReason = reason;
+    }
+
+    /** Back to work. The reason for the pause is cleared with it; the audit trail keeps the story. */
+    public void reactivate(Instant now) {
+        this.status = MembershipStatus.ACTIVE;
+        this.suspendedAt = null;
+        this.revokedAt = null;
+        this.statusReason = null;
+        this.approvedAt = now;
+    }
+
     public void changeRole(Role role) {
         this.role = role;
     }
 
     public void changeStatus(MembershipStatus status, Instant now) {
         this.status = status;
+        if (status == MembershipStatus.SUSPENDED) {
+            this.suspendedAt = now;
+        } else {
+            this.suspendedAt = null;
+        }
         if (status == MembershipStatus.ACTIVE) {
             this.approvedAt = now;
             this.revokedAt = null;
