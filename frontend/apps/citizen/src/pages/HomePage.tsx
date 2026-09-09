@@ -34,7 +34,9 @@ import {
 
 
 function useRemainingSeconds(expiresAt: string): number {
-  const compute = (): number => Math.max(0, Math.round((new Date(expiresAt).getTime() - Date.now()) / 1000));
+  // Floored, like every other countdown in the app: the number on screen must never be ahead of
+  // the time the server will actually honour (see ActiveSessionsBar).
+  const compute = (): number => Math.max(0, Math.floor((new Date(expiresAt).getTime() - Date.now()) / 1000));
   const [remaining, setRemaining] = useState(compute);
   useEffect(() => {
     setRemaining(compute());

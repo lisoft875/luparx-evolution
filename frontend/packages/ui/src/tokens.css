@@ -1292,8 +1292,21 @@ button.lx-list-row {
   font-weight: 600;
 }
 
-/* ---- Sticky timer bar (CONTRACT.md v0.2 rule 3 — fixed above the bottom tab bar on every
-   screen while a parking session is active) -------------------------------------------------- */
+/* ---- Top chrome + sticky timer bar (CONTRACT.md v0.2 rule 3, v0.10 — pinned to the TOP of every
+   screen while a parking session is active) ---------------------------------------------------- */
+
+/* App bar and running-stay bar as one block that stays at the top of the viewport. Sticky, not
+   fixed: at the top the element's static flow position is already where it belongs, so it reserves
+   its own space and can never cover the content below it — no measured offset needed. */
+.lx-top-chrome {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+/* Empty on `bare` screens with no running stay: no border, no blur, no 1px line across the top. */
+.lx-top-chrome:empty {
+  display: none;
+}
 
 .lx-sticky-timer-bar {
   display: flex;
@@ -1301,12 +1314,18 @@ button.lx-list-row {
   gap: var(--lx-space-3);
   padding: var(--lx-space-2) var(--lx-space-4);
   background: var(--lx-success-soft);
-  border-top: 1px solid var(--lx-success);
+  border-bottom: 1px solid var(--lx-success);
   color: var(--lx-text);
+}
+/* Only when it is the top chrome by itself (a `bare` screen, no app bar above it) does the bar owe
+   the notch its inset — otherwise the app bar has already paid it and adding it again would open a
+   gap under the status bar on exactly the phones the design is drawn for. */
+.lx-top-chrome > .lx-sticky-timer-bar:first-child {
+  padding-top: max(var(--lx-space-2), env(safe-area-inset-top));
 }
 .lx-sticky-timer-bar--warning {
   background: var(--lx-warning-soft);
-  border-top-color: var(--lx-warning);
+  border-bottom-color: var(--lx-warning);
 }
 .lx-sticky-timer-bar__icon {
   flex-shrink: 0;

@@ -10,7 +10,9 @@ export interface TimerProps {
 }
 
 function formatDuration(totalSeconds: number): string {
-  const safe = Math.max(0, Math.round(totalSeconds));
+  // Down, never to nearest: a countdown that reads 45:00 with 44:59.6 left is a minute the citizen
+  // does not have. Callers already pass whole seconds; this is the guard for the ones that don't.
+  const safe = Math.max(0, Math.floor(totalSeconds));
   const hours = Math.floor(safe / 3600);
   const minutes = Math.floor((safe % 3600) / 60);
   const seconds = safe % 60;

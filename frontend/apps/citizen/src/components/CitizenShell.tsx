@@ -33,13 +33,15 @@ export function CitizenShell({ children, title, subtitle, onBack, bare = false }
   const navigate = useNavigate();
   const location = useLocation();
 
-  // The footer (timer bar + tab bar) is `position: fixed`, so it never reserves space in normal
-  // flow on its own — measured here and applied as `main`'s bottom padding so it can never cover
-  // page content (CONTRACT.md v0.2 rule 3). A plain `position: sticky` footer looked equivalent
-  // but only "sticks" once its static flow position would scroll past the viewport edge; on a
-  // page taller than one screen it stayed glued to the bottom from scroll position zero and
-  // overlapped whatever content happened to render underneath — fixed + measured padding is what
-  // actually holds on every screen, tall or short.
+  // The footer (the tab bar) is `position: fixed`, so it never reserves space in normal flow on
+  // its own — measured here and applied as `main`'s bottom padding so it can never cover page
+  // content. A plain `position: sticky` footer looked equivalent but only "sticks" once its static
+  // flow position would scroll past the viewport edge; on a page taller than one screen it stayed
+  // glued to the bottom from scroll position zero and overlapped whatever content happened to
+  // render underneath — fixed + measured padding is what actually holds on every screen, tall or
+  // short. The top chrome needs none of that: sticky is exactly right at the top, because the
+  // element's static position *is* where it belongs before any scrolling, so it reserves its own
+  // space in flow and can never cover anything.
   // The municipality sheet is opened from the top-bar badge and closed again in place. It is not a
   // route: the person is in the middle of a screen, and navigating away and back would lose
   // whatever they had scrolled to or typed for the sake of a choice that takes one tap.
@@ -101,7 +103,13 @@ export function CitizenShell({ children, title, subtitle, onBack, bare = false }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: 'transparent' }}>
-      {bare ? null : (
+      {/* Top chrome as one sticky group: the app bar (when the screen has one) and, above every
+          screen while a stay is running, the countdown (CONTRACT.md v0.2 rule 3 / v0.10). Grouping
+          them is what keeps the safe-area inset handled exactly once — the app bar already pays it,
+          and on `bare` screens the timer bar pays it instead as the group's only child (see
+          `.lx-top-chrome > .lx-sticky-timer-bar:first-child` in tokens.css). */}
+      <div className="lx-top-chrome">
+        {bare ? null : (
         <AppBar
           start={
             !onBack ? (
@@ -125,7 +133,9 @@ export function CitizenShell({ children, title, subtitle, onBack, bare = false }
               : []
           }
         />
-      )}
+        )}
+        <ActiveSessionsBar />
+      </div>
       <main
         style={{
           flex: 1,
@@ -144,10 +154,6 @@ export function CitizenShell({ children, title, subtitle, onBack, bare = false }
         {children}
       </main>
       <div ref={footerRef} style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 20 }}>
-        {/* Present on every screen while >=1 session is active (CONTRACT.md v0.2 rule 3) — fixed to
-            the viewport bottom, stacked directly above the tab bar; `main`'s measured padding-bottom
-            above is what keeps it from ever covering page content. */}
-        <ActiveSessionsBar />
         <BottomTabBar tabs={tabs} />
       </div>
       {/* Reopened from the badge. Everything tenant-scoped on the screen behind is dropped and

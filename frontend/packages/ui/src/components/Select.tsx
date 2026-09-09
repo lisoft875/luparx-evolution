@@ -115,13 +115,12 @@ export function Select({
     const viewport = typeof window !== 'undefined' ? window.visualViewport : null;
     const viewTop = viewport?.offsetTop ?? 0;
     const viewHeight = viewport?.height ?? window.innerHeight;
-    // Chrome pinned to the bottom of the app — the tab bar, and the running-stay timer above it —
-    // is measured rather than assumed: the timer is only there while a stay is running, so a fixed
-    // inset would be wrong half the time. Anything that covers the bottom of the viewport marks
-    // itself with `data-lx-bottom-chrome`, and the list stops above it.
-    // Their combined extent, taken as the highest top edge among them rather than as a sum of
-    // heights: the timer bar sits on the tab bar, and adding two heights would double-count the
-    // overlap and cut the list short.
+    // Chrome pinned to an edge of the app — the tab bar at the bottom, the running-stay timer at
+    // the top — is measured rather than assumed: the timer is only there while a stay is running,
+    // so a fixed inset would be wrong half the time. Anything that covers an edge of the viewport
+    // marks itself with `data-lx-bottom-chrome` / `data-lx-top-chrome`, and the list stops short of
+    // it. Each edge is taken as the innermost edge among its nodes rather than as a sum of heights:
+    // stacked bars overlap, and adding heights would double-count and cut the list short.
     const viewportBottom = viewTop + viewHeight;
     const chromeTop = [...document.querySelectorAll<HTMLElement>('[data-lx-bottom-chrome]')].reduce(
       (highest, node) => {
@@ -130,8 +129,15 @@ export function Select({
       },
       viewportBottom,
     );
+    const chromeBottom = [...document.querySelectorAll<HTMLElement>('[data-lx-top-chrome]')].reduce(
+      (lowest, node) => {
+        const box = node.getBoundingClientRect();
+        return box.height > 0 ? Math.max(lowest, box.bottom) : lowest;
+      },
+      viewTop,
+    );
     const below = Math.min(chromeTop, viewportBottom) - rect.bottom - VIEWPORT_MARGIN;
-    const above = rect.top - viewTop - VIEWPORT_MARGIN;
+    const above = rect.top - Math.max(chromeBottom, viewTop) - VIEWPORT_MARGIN;
     const flip = below < MIN_LIST_HEIGHT && above > below;
     const room = Math.max(MIN_LIST_HEIGHT, Math.floor(flip ? above : below));
     setBox({

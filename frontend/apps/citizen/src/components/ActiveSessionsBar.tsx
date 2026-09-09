@@ -7,8 +7,14 @@ import { useActiveParkingSessions } from '../lib/queries';
 
 const WARNING_THRESHOLD_SECONDS = 600;
 
+/**
+ * Always floored, never rounded (CONTRACT.md v0.10). A countdown that rounds to nearest shows
+ * 45:00 while 44:59.6 remain, and the number the citizen is watching has to be one the server would
+ * agree with: the credit granted on an early finish is `Duration.toMinutes()`, which truncates. Any
+ * rounding up here is the app promising a minute that the municipality will not give back.
+ */
 function remainingSecondsOf(session: ParkingSession): number {
-  return Math.max(0, Math.round((new Date(session.expiresAt).getTime() - Date.now()) / 1000));
+  return Math.max(0, Math.floor((new Date(session.expiresAt).getTime() - Date.now()) / 1000));
 }
 
 /**
@@ -51,9 +57,14 @@ function SessionCountdown({
 }
 
 /**
- * Fixed bar shown just above the bottom tab bar on every screen while at least one parking
- * session is active (CONTRACT.md v0.2 rule 3). Shows the plate + countdown of whichever session
- * expires first; a `+N` chip opens the full list when there's more than one.
+ * The running-stay bar: pinned to the **top** of every screen while at least one parking session is
+ * active (CONTRACT.md v0.2 rule 3, moved up in v0.10). Shows the plate + countdown of whichever
+ * session expires first; a `+N` chip opens the full list when there's more than one.
+ *
+ * <p>It used to sit above the bottom tab bar, which put the one number the citizen actually wants
+ * to see in the corner of the screen the thumb rests over, competing with five destinations for
+ * attention. At the top it is the first thing on every screen and reads as the state of the app
+ * rather than as a sixth tab. `CitizenShell` is what makes it stick there.</p>
  */
 export function ActiveSessionsBar(): React.JSX.Element | null {
   const { t } = useTranslation();
@@ -80,8 +91,9 @@ export function ActiveSessionsBar(): React.JSX.Element | null {
     <>
       <div
         className={['lx-sticky-timer-bar', isPrimaryWarning ? 'lx-sticky-timer-bar--warning' : ''].filter(Boolean).join(' ')}
-        // Bottom chrome, like the tab bar under it: a list opening near it must not run beneath it.
-        data-lx-bottom-chrome=""
+        // Top chrome now, not bottom: a dropdown that flips upwards must stop below this bar
+        // instead of running beneath it (see Select's `measure`).
+        data-lx-top-chrome=""
         role="group"
         aria-label={t('citizen.home.activeSession.title')}
       >

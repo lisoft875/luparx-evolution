@@ -301,9 +301,9 @@ clases) no cambian: no vale romper paquetes por una mayúscula.
    usuario no registra dos veces la misma placa, pero dos usuarios sí pueden tener la misma.
    La sesión guarda una copia de la placa (`plate_snapshot`) porque el fiscalizador verifica contra
    lo que estaba pintado en el momento, no contra lo que el usuario editó después.
-3. **Cronómetro siempre visible en móvil**: barra fija sobre la navegación inferior, presente en
-   todas las pantallas mientras haya al menos una sesión activa. Muestra la que vence primero
-   (placa + cuenta regresiva) y, si hay más, un indicador `+N` que abre la lista.
+3. **Cronómetro siempre visible, arriba**: barra pegada al borde superior de la pantalla, presente
+   en todas las pantallas mientras haya al menos una sesión activa (ver v0.10). Muestra la que vence
+   primero (placa + cuenta regresiva) y, si hay más, un indicador `+N` que abre la lista.
 4. **Extensión de tiempo**: el ciudadano elige cuánto extender, entre las opciones que **configura la
    municipalidad**. Cada extensión cobra según la tarifa vigente de la zona.
 5. **Finalizar antes de tiempo**: si la municipalidad lo habilita, el ciudadano cierra la sesión y
@@ -1030,3 +1030,38 @@ la equivocada para el segundo país y no se podría corregir sin desplegar—. E
 opcionales: ausentes significan «dejalo como está»). Marcar un predeterminado **limpia el anterior en
 la misma transacción**, y un tipo inactivo no puede ser el predeterminado: preseleccionar una opción
 que el formulario no ofrece dejaría todo registro abriendo en algo que nadie puede elegir.
+
+# v0.10 — Cronómetro arriba y redondeo hacia abajo (normativo)
+
+## Dónde vive el cronómetro
+
+La barra de la sesión activa va **arriba**, no abajo. Es la primera cosa de cada pantalla del
+ciudadano mientras haya al menos un estacionamiento corriendo, y desaparece sola cuando no hay
+ninguno.
+
+Abajo competía por atención con cinco destinos y quedaba justo donde descansa el pulgar, que es
+donde se tapa; arriba se lee como el estado de la aplicación y no como una sexta pestaña. La barra
+superior de la app (marca, municipalidad activa, campana) y el cronómetro forman **un solo bloque
+`sticky`** pegado a `top: 0`:
+
+- `sticky` y no `fixed`: en el borde superior la posición estática del elemento ya es la correcta,
+  así que reserva su propio espacio en el flujo y no puede tapar contenido. No hace falta medir
+  nada. (Abajo sigue siendo `fixed` + `padding` medido, por la razón contraria: ahí la posición
+  estática está al final del documento.)
+- El *notch* se paga una sola vez: lo paga la barra de la app cuando hay, y el cronómetro cuando es
+  el único elemento del bloque (pantallas sin barra de app).
+- Lo que cubre un borde de la ventana se marca a sí mismo — `data-lx-top-chrome`,
+  `data-lx-bottom-chrome` — y los desplegables miden esas marcas en vez de asumir un alto fijo: el
+  cronómetro sólo está mientras haya sesión, de modo que cualquier constante estaría mal la mitad
+  del tiempo.
+
+## Redondeo: siempre hacia abajo
+
+**Todo tiempo restante que se le muestra al ciudadano se trunca, nunca se redondea al más cercano.**
+El servidor ya lo hacía (`Duration.between(...).toMinutes()` trunca), así que la regla existe para
+que el cliente no prometa de más: con 44:30 restantes, redondear al más cercano ofrecía «45 minutos»
+en el diálogo de finalizar y acreditaba 44. El número que se ve es el que el municipio va a honrar,
+o un segundo de frontera menos —nunca al revés—.
+
+Aplica a la cuenta regresiva de la barra, a la de la tarjeta de sesión activa, al formateo del
+componente `Timer` y a los minutos que anuncia el diálogo de finalizar.

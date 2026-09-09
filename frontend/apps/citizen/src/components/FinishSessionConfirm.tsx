@@ -32,8 +32,12 @@ export function FinishSessionConfirm({ open, onClose, session, policy }: FinishS
   const [error, setError] = useState<string | null>(null);
   const finish = useFinishParkingSession();
 
+  // Floored, because the server floors (`Duration.between(...).toMinutes()` truncates) and this
+  // sentence is a promise about what the citizen gets back. Rounding to nearest offered 45 minutes
+  // for 44:30 and then credited 44 — the one number in the dialog, wrong, in the municipality's
+  // favour. Whatever this says is now always what lands, or one boundary second less.
   const remainingMinutes = useMemo(
-    () => Math.max(0, Math.round((new Date(session.expiresAt).getTime() - Date.now()) / 60_000)),
+    () => Math.max(0, Math.floor((new Date(session.expiresAt).getTime() - Date.now()) / 60_000)),
     // Recomputed each time the dialog opens (open toggling to true), not on every parent re-render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [session.expiresAt, open],
