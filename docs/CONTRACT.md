@@ -1370,3 +1370,68 @@ confundir a un fiscalizador que entra todos los días con alguien que sólo abre
 Crear un funcionario (v0.14), asignarle el rol —dentro del techo de `grantableByTenantAdmin()`— y
 restablecerle el acceso con el correo de contraseña. La invitación por correo sigue pendiente: hoy el
 administrador escribe los datos del expediente.
+
+# v0.16 — Operación municipal: zonas, espacios y tarifas (normativo)
+
+Tomando como referencia el LupaRX en producción (`luparx-frontend` / `luparx-backend`), el portal
+municipal recibe las tres pantallas de operación diaria. El resto del inventario —multas, pagos,
+reembolsos, conciliación— está en el plan del proyecto; esto es lo que ya está.
+
+## Zonas
+
+`GET/POST/PUT /api/v1/admin/parking/zones` (`PERM_TENANT_MANAGE`). La lista incluye las
+**desactivadas**: una zona no se borra nunca, porque toda estadía pagada y toda boleta levantada en
+ella se siguen resolviendo contra la zona. «Ya no se opera» tiene que ser un estado visible y
+reversible, no una fila que desapareció.
+
+**El código no se edita.** Está sólo al crear. Después es por lo que se agrupa cada reporte y lo que
+un operador dice por radio; una zona cuyo código se mueve se lleva consigo el significado de todo
+reporte anterior. Para renombrar está el nombre. `PARKING_ZONE_CODE_TAKEN` (409) rechaza un código
+que ya es de otra zona de esa municipalidad —dos municipalidades con «CENTRO» es lo normal—.
+
+## Espacios
+
+`GET /api/v1/admin/parking/spaces?zoneId=` **paginado**, `POST` y
+`PUT /api/v1/admin/parking/spaces/{id}`.
+
+La asimetría con las zonas es deliberada: las zonas se listan enteras y los espacios por página. Una
+municipalidad opera un puñado de sectores y San José sola tiene cinco mil bahías; pedir «los
+espacios» sin decir qué página es pedir un barrido de tabla que crece cada vez que se pinta una raya.
+
+**El código tampoco se edita**, y por una razón más física: está pintado en el suelo. Una
+municipalidad que renumera pinta bahías nuevas y saca de servicio las viejas —que es exactamente lo
+que pasa en la calle—. `OUT_OF_SERVICE` es la respuesta para una bahía levantada en obra, y mantiene
+legible todo lo que se pagó sobre ella. Un espacio tampoco se borra.
+
+Mover una bahía de zona sí se permite (`zoneId` en el `PUT`): eso pasa cuando se redibuja un sector,
+y la bahía sigue siendo la misma.
+
+## Tarifas
+
+`GET /api/v1/admin/parking/rates?zoneId=` y `PUT /api/v1/admin/parking/rates`.
+
+Una tarifa es **un monto por bloque de minutos**, y se cobra por bloque empezado: los dos números son
+el precio juntos y ninguno significa nada solo.
+
+**No se edita ninguna.** Poner una tarifa cierra la ventana abierta y abre otra desde ahora; las
+cerradas quedan en pantalla porque son las que le pusieron precio a lo que ya se pagó. Un
+administrador que pudiera editar una ventana pasada cambiaría lo que se le cobró a un ciudadano el
+mes anterior, y el comprobante dejaría de coincidir con el libro.
+
+**La moneda la pone el servidor desde la municipalidad**, nunca la petición: un administrador no
+puede tarifar una zona en una moneda que sus ciudadanos no tienen.
+
+**El formulario pide colones y el cable lleva unidades menores.** La conversión ocurre en el cliente
+con el exponente de la moneda (`majorToMinor`), no como un número tal cual se escribió: para CRC las
+dos cifras difieren en cien, así que una tarifa de ₡550 enviada cruda tarifaría la municipalidad
+entera en ₡5,50 y nadie se enteraría hasta cerrar el mes.
+
+## Lo que se copió de la referencia y lo que no
+
+Se copió: el registro incluye lo desactivado, la identidad no se edita, el precio es historia
+versionada y no un campo, y la lista que crece va paginada mientras la que no crece va entera.
+
+No se copió todavía —está en el plan—: las **duraciones vendibles como tarifas de banda exacta**
+(que es como la referencia permite una escalera no lineal, 45 min a ₡400 junto a 60 min a ₡500), los
+**horarios por zona**, y la selección de tarifa por día de la semana y franja horaria con desempate
+por prioridad.

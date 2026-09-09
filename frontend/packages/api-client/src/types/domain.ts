@@ -873,6 +873,95 @@ export interface ParkingZone {
   spaceCodes?: ParkingZoneSpaceCodes;
 }
 
+/**
+ * A zone as the municipal administrator sees it (CONTRACT.md v0.16) — including the deactivated
+ * ones, which the citizen listing never shows.
+ *
+ * `spaceCount` is why this is a different shape from the citizen's: an operator's first question
+ * about a sector is how many bays are in it, and a citizen's is what it costs.
+ */
+export interface AdminParkingZone {
+  id: string;
+  code: string;
+  name: string;
+  description?: string | null;
+  divisionId?: string | null;
+  active: boolean;
+  spaceCount: number;
+}
+
+/** `PUT /admin/parking/policy` — the whole policy, replaced as one form (CONTRACT.md v0.16). */
+export interface UpdateParkingPolicyRequest {
+  sessionIncrementsMinutes: number[];
+  sessionMinMinutes: number;
+  sessionMaxMinutes: number;
+  extensionEnabled: boolean;
+  extensionIncrementsMinutes: number[];
+  extensionMaxTotalMinutes: number;
+  earlyFinishEnabled: boolean;
+  creditOnEarlyFinishEnabled: boolean;
+  creditMinRemainingMinutes: number;
+  creditExpiryDays: number;
+  graceMinutes: number;
+}
+
+export interface CreateParkingZoneRequest {
+  /** The zone's identity for every report and every bay in it. Not editable afterwards. */
+  code: string;
+  name: string;
+  description?: string;
+  divisionId?: string;
+}
+
+export interface UpdateParkingZoneRequest {
+  name: string;
+  description?: string;
+  divisionId?: string;
+  active: boolean;
+}
+
+/** A bay is never deleted: one that is dug up goes `OUT_OF_SERVICE` and keeps its history readable. */
+export type ParkingSpaceStatus = 'AVAILABLE' | 'OUT_OF_SERVICE';
+
+export interface ParkingSpace {
+  id: string;
+  zoneId: string;
+  code: string;
+  status: ParkingSpaceStatus;
+}
+
+export interface CreateParkingSpaceRequest {
+  zoneId: string;
+  code: string;
+}
+
+/** The code is absent on purpose: it is painted on the ground (CONTRACT.md v0.16). */
+export interface UpdateParkingSpaceRequest {
+  status?: ParkingSpaceStatus;
+  zoneId?: string;
+}
+
+/**
+ * One tariff window of a zone. A window with `validTo` set is history and is never edited: setting a
+ * new tariff closes the open one and opens another, so a stay is always priced by what was in force
+ * when it started.
+ */
+export interface ParkingRate {
+  id: string;
+  zoneId: string;
+  amountMinor: number;
+  currencyCode: string;
+  minutes: number;
+  validFrom: string;
+  validTo: string | null;
+}
+
+export interface SetParkingRateRequest {
+  zoneId: string;
+  amountMinor: number;
+  minutes: number;
+}
+
 /** Summary of one zone's bay codes: the lowest, the highest, and how many there are. */
 export interface ParkingZoneSpaceCodes {
   first: string;

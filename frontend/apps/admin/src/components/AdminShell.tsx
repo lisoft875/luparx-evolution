@@ -37,6 +37,14 @@ export function AdminShell({ children }: AdminShellProps): React.JSX.Element {
       sidebar={
         <nav style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <Link to="/">{t('nav.home')}</Link>
+          {/* Operación, antes que las personas: es lo que un municipal abre todos los días. */}
+          {permissions.has('TENANT_MANAGE') ? (
+            <>
+              <Link to="/zones">{t('nav.zones')}</Link>
+              <Link to="/spaces">{t('nav.spaces')}</Link>
+              <Link to="/tariffs">{t('nav.tariffs')}</Link>
+            </>
+          ) : null}
           <Link to="/users">{t('nav.users')}</Link>
           {/* The staff panel is its own destination and not a filter of Usuarios: the questions are
               different — that list is about the people of the municipality, this one is about the

@@ -61,6 +61,36 @@ import { mintMockTokenPair } from './token';
  */
 const mockMembershipZones = new Map<string, string[]>();
 
+/** Zones an administrator created in this session, on top of the fixture's own (CONTRACT.md v0.16). */
+interface MockAdminZone {
+  id: string;
+  tenantId: string;
+  code: string;
+  name: string;
+  description: string | null;
+  divisionId: string | null;
+  active: boolean;
+}
+const mockExtraZones: MockAdminZone[] = [];
+const mockSeededZones: MockAdminZone[] = [
+  { id: 'zone-centro', tenantId: 'tenant-sanjose', code: 'SJ-CENTRO', name: 'Centro', description: null, divisionId: null, active: true },
+  { id: 'zone-escazu-centro', tenantId: 'tenant-escazu', code: 'ESC-CENTRO', name: 'Centro', description: null, divisionId: null, active: true },
+];
+function mockAdminZones(tenantId: string | null): MockAdminZone[] {
+  return [...mockSeededZones, ...mockExtraZones].filter((z) => !tenantId || z.tenantId === tenantId);
+}
+
+const mockAdminSpaces: { id: string; zoneId: string; code: string; status: 'AVAILABLE' | 'OUT_OF_SERVICE' }[] = [
+  { id: 'space-lup-0001', zoneId: 'zone-centro', code: 'LUP-0001', status: 'AVAILABLE' },
+  { id: 'space-lup-0002', zoneId: 'zone-centro', code: 'LUP-0002', status: 'AVAILABLE' },
+  { id: 'space-lup-0003', zoneId: 'zone-centro', code: 'LUP-0003', status: 'OUT_OF_SERVICE' },
+];
+
+const mockAdminRates: { id: string; zoneId: string; amountMinor: number; currencyCode: string; minutes: number; validFrom: string; validTo: string | null }[] = [
+  { id: 'rate-1', zoneId: 'zone-centro', amountMinor: 55000, currencyCode: 'CRC', minutes: 60, validFrom: new Date(Date.now() - 90 * 864e5).toISOString(), validTo: null },
+  { id: 'rate-0', zoneId: 'zone-centro', amountMinor: 40000, currencyCode: 'CRC', minutes: 60, validFrom: new Date(Date.now() - 400 * 864e5).toISOString(), validTo: new Date(Date.now() - 90 * 864e5).toISOString() },
+];
+
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
     status,
@@ -554,10 +584,100 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
       }
     }
 
-    if (resource === 'parking' && segments[4] === 'zones' && method === 'GET') {
-      const authHeader = new Headers(init?.headers).get('Authorization');
-      const claims = authHeader ? decodeMockClaims(authHeader) : null;
-      return json(mockCitizenZones(claims?.tid ?? null));
+    // --- zones, bays and tariffs, as the administrator sees them (CONTRACT.md v0.16) ------------
+    if (resource === 'parking' && segments[4] === 'zones') {
+      if (method === 'GET' && segments.length === 5) {
+        return json(mockAdminZones(tenantId).map((zone) => ({
+          ...zone,
+          spaceCount: mockAdminSpaces.filter((s) => s.zoneId === zone.id).length,
+        })));
+      }
+      if (method === 'POST' && segments.length === 5) {
+        const payload = await readBody<{ code: string; name: string; description?: string }>(init);
+        const code = payload.code.trim().toUpperCase();
+        const zones = mockAdminZones(tenantId);
+        if (zones.some((z) => z.code === code)) {
+          return problem(409, 'PARKING_ZONE_CODE_TAKEN', 'That code is already in use here');
+        }
+        const zone = {
+          id: `zone-${crypto.randomUUID()}`,
+          tenantId: tenantId ?? '',
+          code,
+          name: payload.name.trim(),
+          description: payload.description ?? null,
+          divisionId: null,
+          active: true,
+        };
+        mockExtraZones.push(zone);
+        return json({ ...zone, spaceCount: 0 }, 201);
+      }
+      if (method === 'PUT' && segments.length === 6) {
+        const payload = await readBody<{ name: string; description?: string; active: boolean }>(init);
+        const zone = mockAdminZones(tenantId).find((z) => z.id === segments[5]);
+        if (!zone) return problem(404, 'PARKING_ZONE_NOT_FOUND', 'Zone not found');
+        zone.name = payload.name;
+        zone.description = payload.description ?? null;
+        zone.active = payload.active;
+        return json({ ...zone, spaceCount: mockAdminSpaces.filter((s) => s.zoneId === zone.id).length });
+      }
+    }
+
+    if (resource === 'parking' && segments[4] === 'spaces') {
+      if (method === 'GET') {
+        const zoneFilter = url.searchParams.get('zoneId');
+        const rows = mockAdminSpaces.filter((s) => !zoneFilter || s.zoneId === zoneFilter);
+        return json(paginate(rows, Number(url.searchParams.get('page') ?? '0'),
+          Number(url.searchParams.get('size') ?? '50')));
+      }
+      if (method === 'POST') {
+        const payload = await readBody<{ zoneId: string; code: string }>(init);
+        const code = payload.code.trim().toUpperCase();
+        // The same two refusals the server has, so the screen's copy is exercised here.
+        if (mockAdminSpaces.some((s) => s.code === code)) {
+          return problem(409, 'PARKING_SPACE_CODE_TAKEN', 'That bay code is taken');
+        }
+        if (!/^LUP-\d{4}$/.test(code)) {
+          return problem(422, 'PARKING_SPACE_CODE_INVALID', "That code doesn't match the format");
+        }
+        const space = { id: `space-${crypto.randomUUID()}`, zoneId: payload.zoneId, code, status: 'AVAILABLE' as const };
+        mockAdminSpaces.push(space);
+        return json(space, 201);
+      }
+      if (method === 'PUT' && segments.length === 6) {
+        const payload = await readBody<{ status?: 'AVAILABLE' | 'OUT_OF_SERVICE'; zoneId?: string }>(init);
+        const space = mockAdminSpaces.find((s) => s.id === segments[5]);
+        if (!space) return problem(404, 'PARKING_SPACE_NOT_FOUND', 'Bay not found');
+        if (payload.status) space.status = payload.status;
+        if (payload.zoneId) space.zoneId = payload.zoneId;
+        return json(space);
+      }
+    }
+
+    if (resource === 'parking' && segments[4] === 'rates') {
+      if (method === 'GET') {
+        const zoneFilter = url.searchParams.get('zoneId');
+        return json(mockAdminRates.filter((r) => !zoneFilter || r.zoneId === zoneFilter));
+      }
+      if (method === 'PUT') {
+        const payload = await readBody<{ zoneId: string; amountMinor: number; minutes: number }>(init);
+        const now = new Date().toISOString();
+        // Closing the open window and opening a new one is the whole behaviour worth mocking: it is
+        // what makes the history on screen real rather than decorative.
+        for (const rate of mockAdminRates) {
+          if (rate.zoneId === payload.zoneId && rate.validTo === null) rate.validTo = now;
+        }
+        const rate = {
+          id: `rate-${crypto.randomUUID()}`,
+          zoneId: payload.zoneId,
+          amountMinor: payload.amountMinor,
+          currencyCode: 'CRC',
+          minutes: payload.minutes,
+          validFrom: now,
+          validTo: null as string | null,
+        };
+        mockAdminRates.unshift(rate);
+        return json(rate);
+      }
     }
 
     if (resource === 'users') {

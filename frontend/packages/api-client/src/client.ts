@@ -36,8 +36,17 @@ import {
 } from './tenantBranding';
 import type { PagedResponse, PageParams } from './types/http';
 import type {
+  AdminParkingZone,
   AdminUserDetail,
   AssignZonesRequest,
+  CreateParkingSpaceRequest,
+  CreateParkingZoneRequest,
+  ParkingRate,
+  ParkingSpace,
+  SetParkingRateRequest,
+  UpdateParkingPolicyRequest,
+  UpdateParkingSpaceRequest,
+  UpdateParkingZoneRequest,
   CreateAdminUserRequest,
   MembershipStatus,
   StaffMember,
@@ -481,7 +490,24 @@ export class ApiClient {
     schedule: (): Promise<ParkingSchedule> => this.http.request('GET', '/api/v1/admin/parking/schedule'),
     updateSchedule: (payload: UpdateParkingScheduleRequest): Promise<ParkingSchedule> =>
       this.http.request('PUT', '/api/v1/admin/parking/schedule', { body: payload }),
-    zones: (): Promise<ParkingZone[]> => this.http.request('GET', '/api/v1/admin/parking/zones'),
+    policy: (): Promise<ParkingPolicy> => this.http.request('GET', '/api/v1/admin/parking/policy'),
+    updatePolicy: (payload: UpdateParkingPolicyRequest): Promise<ParkingPolicy> =>
+      this.http.request('PUT', '/api/v1/admin/parking/policy', { body: payload }),
+    zones: (): Promise<AdminParkingZone[]> => this.http.request('GET', '/api/v1/admin/parking/zones'),
+    createZone: (payload: CreateParkingZoneRequest): Promise<AdminParkingZone> =>
+      this.http.request('POST', '/api/v1/admin/parking/zones', { body: payload, idempotent: true }),
+    updateZone: (id: string, payload: UpdateParkingZoneRequest): Promise<AdminParkingZone> =>
+      this.http.request('PUT', `/api/v1/admin/parking/zones/${id}`, { body: payload }),
+    spaces: (query: { zoneId?: string } & PageParams = {}): Promise<PagedResponse<ParkingSpace>> =>
+      this.http.request('GET', '/api/v1/admin/parking/spaces', { query }),
+    createSpace: (payload: CreateParkingSpaceRequest): Promise<ParkingSpace> =>
+      this.http.request('POST', '/api/v1/admin/parking/spaces', { body: payload, idempotent: true }),
+    updateSpace: (id: string, payload: UpdateParkingSpaceRequest): Promise<ParkingSpace> =>
+      this.http.request('PUT', `/api/v1/admin/parking/spaces/${id}`, { body: payload }),
+    rates: (query: { zoneId?: string } = {}): Promise<ParkingRate[]> =>
+      this.http.request('GET', '/api/v1/admin/parking/rates', { query }),
+    setRate: (payload: SetParkingRateRequest): Promise<ParkingRate> =>
+      this.http.request('PUT', '/api/v1/admin/parking/rates', { body: payload }),
   };
 
   // ---- Platform back-office (CONTRACT.md §4 `/api/v1/platform/**`) ---------------------------

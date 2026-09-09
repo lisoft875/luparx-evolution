@@ -389,6 +389,26 @@ public final class ParkingDtos {
     }
 
     /** {@code PUT /admin/parking/zones/{id}}. */
+    /**
+     * {@code POST /admin/parking/zones} — a new sector of the municipality (CONTRACT.md v0.16).
+     *
+     * <p>The code is here and absent from the update request, and that asymmetry is deliberate: it is
+     * the zone's identity for every report, every radio call and every bay that belongs to it.</p>
+     */
+    public record CreateParkingZoneRequest(
+            @NotBlank @Size(max = 32) String code,
+            @NotBlank @Size(max = 120) String name,
+            @Size(max = 500) String description,
+            UUID divisionId) {
+    }
+
+    /**
+     * {@code PUT /admin/parking/spaces/{id}} — take a bay out of service, put it back, or move it to
+     * another zone. The code is not here: it is painted on the ground (CONTRACT.md v0.16).
+     */
+    public record UpdateParkingSpaceRequest(ParkingSpaceStatus status, UUID zoneId) {
+    }
+
     public record UpdateParkingZoneRequest(
             @NotBlank @Size(max = 160) String name,
             @Size(max = 400) String description,

@@ -138,6 +138,8 @@ public final class ErrorCode {
     public static final String PARKING_SPACE_CODE_INVALID = "PARKING_SPACE_CODE_INVALID";
     /** A bay with that code already exists in this municipality. */
     public static final String PARKING_SPACE_CODE_TAKEN = "PARKING_SPACE_CODE_TAKEN";
+    /** Another zone of this municipality already answers to that code (CONTRACT.md v0.16). */
+    public static final String PARKING_ZONE_CODE_TAKEN = "PARKING_ZONE_CODE_TAKEN";
     /**
      * The whole requested stay falls outside the municipality's charging hours. The next band is
      * readable from {@code GET /citizen/parking/schedule}.

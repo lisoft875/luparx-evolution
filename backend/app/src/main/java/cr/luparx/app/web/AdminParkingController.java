@@ -4,6 +4,8 @@ import cr.luparx.app.audit.AuditRecorder;
 import cr.luparx.app.web.dto.ParkingDtos;
 import cr.luparx.core.audit.AuditAction;
 import cr.luparx.core.id.TenantId;
+import cr.luparx.core.page.PageRequest;
+import cr.luparx.core.page.PageResponse;
 import cr.luparx.core.tenant.TenantContextHolder;
 import cr.luparx.parking.entity.ParkingPolicy;
 import cr.luparx.parking.entity.ParkingRate;
@@ -18,6 +20,8 @@ import cr.luparx.parking.service.ParkingSpaceFormatService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -122,6 +126,26 @@ public class AdminParkingController {
         return response;
     }
 
+    /**
+     * Opens a new sector.
+     *
+     * <p>There is no delete. A zone that a municipality stops operating is deactivated, and every
+     * stay ever paid in it goes on resolving to a zone with a name.</p>
+     */
+    @PostMapping("/zones")
+    @PreAuthorize("hasAuthority('PERM_TENANT_MANAGE')")
+    @Operation(summary = "Open a new zone in this municipality")
+    public ResponseEntity<ParkingDtos.ParkingZoneResponse> createZone(
+            @Valid @RequestBody ParkingDtos.CreateParkingZoneRequest request) {
+        TenantId tenantId = TenantContextHolder.requireTenantId();
+        ParkingZone zone = catalogService.createZone(tenantId, request.code(), request.name(),
+                request.description(), request.divisionId());
+        auditRecorder.record(AuditAction.PARKING_ZONE_UPDATED, "parking-zone", zone.getId().toString(),
+                Map.of("code", zone.getCode(), "created", "true"));
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(mapper.toZone(zone, 0L));
+    }
+
     @PutMapping("/zones/{id}")
     @PreAuthorize("hasAuthority('PERM_TENANT_MANAGE')")
     @Operation(summary = "Rename, re-describe or deactivate a zone. A zone is never deleted.")
@@ -206,6 +230,40 @@ public class AdminParkingController {
         ParkingSpace space = catalogService.createSpace(tenantId, request.zoneId(), request.code());
         auditRecorder.record(AuditAction.PARKING_SPACE_CREATED, "parking-space", space.getId().toString(),
                 Map.of("code", space.getCode(), "zoneId", space.getZoneId().toString()));
+        return mapper.toSpace(space);
+    }
+
+    /**
+     * The bays, by page — of one zone or of the whole municipality.
+     *
+     * <p>Paginated where the zone list is not: a municipality has a handful of zones and San José
+     * alone has five thousand bays.</p>
+     */
+    @GetMapping("/spaces")
+    @PreAuthorize("hasAuthority('PERM_TENANT_MANAGE')")
+    @Operation(summary = "Bays of this municipality, optionally of one zone (paginated)")
+    public PageResponse<ParkingDtos.ParkingSpaceResponse> spaces(
+            @RequestParam(required = false) UUID zoneId,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size) {
+        TenantId tenantId = TenantContextHolder.requireTenantId();
+        PageRequest request = PageRequest.parse(page, size, null);
+        PageResponse<ParkingSpace> spaces = catalogService.listSpaces(tenantId, zoneId, request);
+        return PageResponse.of(spaces.items().stream().map(mapper::toSpace).toList(),
+                request.page(), request.size(), spaces.totalElements());
+    }
+
+    @PutMapping("/spaces/{id}")
+    @PreAuthorize("hasAuthority('PERM_TENANT_MANAGE')")
+    @Operation(summary = "Take a bay out of service, put it back, or move it to another zone")
+    public ParkingDtos.ParkingSpaceResponse updateSpace(
+            @PathVariable UUID id,
+            @Valid @RequestBody ParkingDtos.UpdateParkingSpaceRequest request) {
+        TenantId tenantId = TenantContextHolder.requireTenantId();
+        ParkingSpace space = catalogService.updateSpace(tenantId, id, request.status(), request.zoneId());
+        auditRecorder.record(AuditAction.PARKING_SPACE_UPDATED, "parking-space", id.toString(),
+                Map.of("code", space.getCode(), "status", space.getStatus().name(),
+                        "zoneId", space.getZoneId().toString()));
         return mapper.toSpace(space);
     }
 

@@ -5,6 +5,8 @@ import cr.luparx.core.error.NotFoundException;
 import cr.luparx.core.error.ValidationException;
 import cr.luparx.core.id.TenantId;
 import cr.luparx.core.id.Uuid7;
+import cr.luparx.core.page.PageRequest;
+import cr.luparx.core.page.PageResponse;
 import cr.luparx.core.error.ConflictException;
 import cr.luparx.core.money.Money;
 import cr.luparx.parking.entity.ParkingRate;
@@ -89,6 +91,36 @@ public class ParkingCatalogService {
                 ParkingSpaceStatus.AVAILABLE, now));
     }
 
+    /**
+     * Opens a new sector of the municipality (CONTRACT.md v0.16).
+     *
+     * <p>The code is the zone's identity for everybody who is not a database: it is what an operator
+     * says on the radio and what a report is grouped by. It is unique per municipality — two
+     * municipalities both having a "CENTRO" is the normal case — and it is never changed afterwards,
+     * because a zone whose code moves takes every report that ever named it with it. Renaming is
+     * what {@link #updateZone} is for; the code is not part of it.</p>
+     */
+    @Transactional
+    public ParkingZone createZone(TenantId tenantId, String code, String name, String description,
+                                  UUID divisionId) {
+        tenantService.requireActive(tenantId);
+        if (code == null || code.isBlank()) {
+            throw new ValidationException("code", ErrorCode.VALIDATION_FAILED, "error.parking.zone.code.required");
+        }
+        if (name == null || name.isBlank()) {
+            throw new ValidationException("name", ErrorCode.VALIDATION_FAILED, "error.parking.zone.name.required");
+        }
+        String normalized = code.trim().toUpperCase(java.util.Locale.ROOT);
+        if (zoneRepository.findByTenantIdAndCode(tenantId.value(), normalized).isPresent()) {
+            throw ConflictException.of(ErrorCode.PARKING_ZONE_CODE_TAKEN, "error.parking.zone.code.taken",
+                    normalized);
+        }
+        Instant now = clock.instant();
+        ParkingZone zone = new ParkingZone(Uuid7.generate(), tenantId.value(), normalized, name.trim(),
+                description == null || description.isBlank() ? null : description.trim(), divisionId, true, now);
+        return zoneRepository.save(zone);
+    }
+
     @Transactional(readOnly = true)
     public List<ParkingZone> listZones(TenantId tenantId) {
         return zoneRepository.findByTenantIdOrderByCodeAsc(tenantId.value());
@@ -142,6 +174,54 @@ public class ParkingCatalogService {
             byZone.putIfAbsent(rate.getZoneId(), rate);
         }
         return byZone;
+    }
+
+    /**
+     * The bays of a zone, or of the whole municipality, by page.
+     *
+     * <p>Paginated where the zone listing is not, and the asymmetry is the point: a municipality
+     * operates a handful of zones and tens of thousands of bays. San José alone has five thousand.
+     * A screen that asks for "the bays" without saying which page is asking for a table scan that
+     * grows every time the municipality paints a line.</p>
+     */
+    @Transactional(readOnly = true)
+    public PageResponse<ParkingSpace> listSpaces(TenantId tenantId, UUID zoneId, PageRequest request) {
+        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(
+                request.page(), request.size());
+        org.springframework.data.domain.Page<ParkingSpace> page = zoneId == null
+                ? spaceRepository.findByTenantIdOrderByCodeAsc(tenantId.value(), pageable)
+                : spaceRepository.findByTenantIdAndZoneIdOrderByCodeAsc(tenantId.value(), zoneId, pageable);
+        return PageResponse.of(page.getContent(), request.page(), request.size(), page.getTotalElements());
+    }
+
+    /**
+     * Takes a bay out of service, puts it back, or moves it to another zone.
+     *
+     * <p>The <b>code is not editable</b>, for the same reason the zone's is not: it is painted on
+     * the ground, and a row whose code changes silently rewrites every session and every citation
+     * that ever named that bay. A municipality that renumbers paints new bays and retires the old
+     * ones — which is exactly what happens on the street, and exactly what these two operations
+     * express.</p>
+     *
+     * <p>A bay is never deleted either. {@code OUT_OF_SERVICE} is the answer for a bay that is dug
+     * up, and it keeps every stay that was ever paid on it readable.</p>
+     */
+    @Transactional
+    public ParkingSpace updateSpace(TenantId tenantId, UUID spaceId, ParkingSpaceStatus status, UUID zoneId) {
+        ParkingSpace space = spaceRepository.findByTenantIdAndId(tenantId.value(), spaceId)
+                .orElseThrow(() -> NotFoundException.of(ErrorCode.PARKING_SPACE_NOT_FOUND,
+                        "error.parking.space.notFound"));
+        if (zoneId != null && !zoneId.equals(space.getZoneId())) {
+            requireZone(tenantId, zoneId);
+            space.reassign(zoneId);
+        }
+        if (status != null) {
+            // Both members of the enum are operator decisions — there is no OCCUPIED to guard
+            // against, because occupancy is a consequence of a running stay and is never declared.
+            space.changeStatus(status);
+        }
+        space.touch(clock.instant());
+        return spaceRepository.save(space);
     }
 
     @Transactional(readOnly = true)

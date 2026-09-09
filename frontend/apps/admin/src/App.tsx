@@ -18,6 +18,9 @@ import { SettingsSchedulePage } from './pages/SettingsSchedulePage';
 import { UsersListPage } from './pages/UsersListPage';
 import { UserCreatePage } from './pages/UserCreatePage';
 import { StaffPage } from './pages/StaffPage';
+import { ZonesPage } from './pages/ZonesPage';
+import { SpacesPage } from './pages/SpacesPage';
+import { TariffsPage } from './pages/TariffsPage';
 import { UserDetailPage } from './pages/UserDetailPage';
 import { AuditPage } from './pages/AuditPage';
 import { ReportsPage } from './pages/ReportsPage';
@@ -87,6 +90,37 @@ export function App(): React.JSX.Element {
               {/* Creating staff is two capabilities at once — a person exists (USER_WRITE) and a
                   role is granted (ROLE_ASSIGN) — and the server checks both again. This only keeps
                   the screen off a menu where pressing it could produce nothing but a 403. */}
+              {/* Operación: los sectores, sus bahías y su precio. */}
+              <Route
+                path="/zones"
+                element={
+                  <RequireAuth loginPath="/login">
+                    <RequireTenant selectTenantPath="/select-tenant">
+                      <ZonesPage />
+                    </RequireTenant>
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/spaces"
+                element={
+                  <RequireAuth loginPath="/login">
+                    <RequireTenant selectTenantPath="/select-tenant">
+                      <SpacesPage />
+                    </RequireTenant>
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/tariffs"
+                element={
+                  <RequireAuth loginPath="/login">
+                    <RequireTenant selectTenantPath="/select-tenant">
+                      <TariffsPage />
+                    </RequireTenant>
+                  </RequireAuth>
+                }
+              />
               <Route
                 path="/staff"
                 element={

@@ -68,6 +68,8 @@ public final class AuditAction {
     public static final String PARKING_ZONE_UPDATED = "PARKING_ZONE_UPDATED";
     public static final String PARKING_RATE_UPDATED = "PARKING_RATE_UPDATED";
     public static final String PARKING_SPACE_CREATED = "PARKING_SPACE_CREATED";
+    /** A bay taken out of service, put back, or moved to another zone (CONTRACT.md v0.16). */
+    public static final String PARKING_SPACE_UPDATED = "PARKING_SPACE_UPDATED";
 
     // --- account, locales and municipal operation (CONTRACT.md "v0.3") --------------------------
     public static final String USER_EMAIL_CHANGE_REQUESTED = "USER_EMAIL_CHANGE_REQUESTED";
