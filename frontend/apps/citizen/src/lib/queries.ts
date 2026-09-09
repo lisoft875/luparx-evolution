@@ -365,7 +365,9 @@ export function useTenantTimeZone(): string | undefined {
 // garage" would hand one person another person's fines. The narrowing happens server-side; the
 // client only reads what comes back.
 
-const FINE_KEYS = {
+export const FINE_KEYS = {
+  /** Every fines listing, whatever its page — what a filed defence invalidates. */
+  all: ['citizen', 'fines'] as const,
   list: (page: number, size: number) => ['citizen', 'fines', page, size] as const,
   detail: (id: string) => ['citizen', 'fine', id] as const,
 };

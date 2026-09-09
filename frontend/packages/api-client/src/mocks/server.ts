@@ -1604,6 +1604,7 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
     if (!claims) return problem(401, 'UNAUTHORIZED', 'Missing or invalid session');
     const userId = claims.sub;
     const tenantId = claims.tid ?? '';
+    seedMockAppeals();
 
     // GET /inspector/plates/{plate}/status?zoneId=&spaceCode=
     if (segments[2] === 'inspector' && segments[3] === 'plates' && segments[5] === 'status' && method === 'GET') {
@@ -1667,6 +1668,42 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
       if (method === 'PUT') {
         const payload = await readBody<{ infractionTypes: Record<string, unknown>[] }>(init);
         return json(replaceMockInfractionTypes(tenantId, payload.infractionTypes ?? []));
+      }
+    }
+
+    // GET /admin/enforcement/appeals — the moderation queue, oldest first.
+    if (segments[2] === 'admin' && segments[4] === 'appeals' && method === 'GET') {
+      const filter = url.searchParams.get('status') ?? 'SUBMITTED';
+      const rows = mockCitations
+        .filter((c) => c.tenantId === tenantId && c.appeal !== null)
+        .map((c) => c.appeal!)
+        .filter((a) => filter === 'ALL' || a.status === filter)
+        // Oldest first, and not as a preference: newest-first is the order in which the oldest case
+        // is never reached.
+        .sort((a, b) => a.submittedAt.localeCompare(b.submittedAt));
+      const paged = paginate(rows, Number(url.searchParams.get('page') ?? 0), Number(url.searchParams.get('size') ?? 20));
+      const maxImages = mockAppealMaxImages(tenantId);
+      return json({ ...paged, items: paged.items.map((a) => toWireAppeal(a, maxImages)) });
+    }
+
+    // GET|PUT /admin/enforcement/appeal-notice[/versions]
+    if (segments[2] === 'admin' && segments[4] === 'appeal-notice') {
+      if (method === 'GET' && segments[5] === 'versions') return json(mockNoticesFor(tenantId));
+      if (method === 'GET') return json(mockNoticeInForce(tenantId));
+      if (method === 'PUT') {
+        const payload = await readBody<{ locale?: string; body: string; effectiveFrom?: string }>(init);
+        const notices = mockNoticesFor(tenantId);
+        // Inserts, never edits: every defence already filed points at the text its author read.
+        const notice: MockAppealNotice = {
+          id: `${tenantId}-notice-${notices.length + 1}`,
+          version: notices.length + 1,
+          locale: payload.locale ?? 'es-CR',
+          body: payload.body,
+          effectiveFrom: payload.effectiveFrom ?? new Date().toISOString(),
+          countryDefault: false,
+        };
+        notices.push(notice);
+        return json(notice);
       }
     }
 
@@ -1738,6 +1775,24 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
         return json({ ...evidence, contentUrl: null });
       }
 
+      // POST /admin/enforcement/citations/{id}/appeal/resolve
+      if (method === 'POST' && action === 'appeal' && segments[citationsRoot + 2] === 'resolve') {
+        const { accept, reason } = await readBody<{ accept: boolean; reason: string }>(init);
+        if (!record.appeal) return problem(404, 'APPEAL_NOT_FOUND', 'No defence was filed against this citation');
+        // Once, and only once: a decision that could be taken twice is a decision the citizen can
+        // watch change after they were told the outcome.
+        if (record.appeal.status !== 'SUBMITTED') {
+          return problem(409, 'APPEAL_ALREADY_RESOLVED', 'This defence was already decided');
+        }
+        if (!reason || !reason.trim()) {
+          return problem(400, 'VALIDATION_FAILED', 'Validation failed', undefined, [
+            { field: 'reason', code: 'VALIDATION_FAILED', message: 'A reason is required in both directions' },
+          ]);
+        }
+        resolveMockAppeal(record, Boolean(accept), reason);
+        return json(toWireDetail(record));
+      }
+
       if (method === 'POST' && action === 'cancel') {
         const { reason } = await readBody<{ reason: string }>(init);
         record.events.push(mockEvent(record, 'CANCELLED', record.status, 'CANCELLED', reason));
@@ -1754,10 +1809,13 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
     const claims = authHeader ? decodeMockClaims(authHeader) : null;
     if (!claims) return problem(401, 'UNAUTHORIZED', 'Missing or invalid session');
     const tenantId = claims.tid ?? '';
+    seedMockAppeals();
     // Matched by the caller's own vehicles, never by plate — the leak the real server refuses too.
     const plates = new Set(mockVehicles.filter((v) => v.userId === claims.sub).map((v) => v.plate));
     const rows = mockCitations.filter((c) => c.tenantId === tenantId && plates.has(c.plate) && c.status !== 'DRAFT');
     const id = segments[4];
+    // Before the citation lookup: `appeal-notice` sits where an id would and is not one.
+    if (method === 'GET' && id === 'appeal-notice') return json(mockNoticeInForce(tenantId));
     if (method === 'GET' && !id) {
       const page = Number(url.searchParams.get('page') ?? 0);
       const size = Number(url.searchParams.get('size') ?? 20);
@@ -1766,13 +1824,69 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
     }
     const record = rows.find((c) => c.id === id);
     if (!record) return problem(404, 'CITATION_NOT_FOUND', 'Citation not found');
+    const maxImages = mockAppealMaxImages(tenantId);
     if (method === 'GET' && segments.length === 5) {
       return json({
         fine: toWireFine(record),
         evidence: record.evidence.map((e) => ({ ...e, contentUrl: null })),
         history: record.events,
+        // The defence travels with the detail: the answer is what decides whether the screen offers
+        // to write one or shows the one already filed.
+        appeal: record.appeal ? toWireAppeal(record.appeal, maxImages) : null,
       });
     }
+
+    // POST /citizen/fines/{id}/appeals — the text and the notice that was on screen.
+    if (method === 'POST' && segments[5] === 'appeals') {
+      const payload = await readBody<{ body: string; acceptedNoticeId: string }>(init);
+      if (!record.allowsAppeal || !['ISSUED', 'UPHELD', 'EXPIRED'].includes(record.status)) {
+        return problem(409, 'CITATION_NOT_APPEALABLE', 'This citation cannot be appealed');
+      }
+      if (record.appeal) return problem(409, 'APPEAL_ALREADY_FILED', 'A defence was already filed');
+      const notice = mockNoticeInForce(tenantId);
+      // The stale-tab refusal, mirrored: filing against wording nobody is showing any more would
+      // make `noticeVersion` a lie.
+      if (payload.acceptedNoticeId !== notice.id) {
+        return problem(409, 'APPEAL_NOTICE_OUTDATED', 'The notice changed while you were writing');
+      }
+      if (!payload.body || payload.body.trim().length === 0) {
+        return problem(400, 'VALIDATION_FAILED', 'Validation failed', undefined, [
+          { field: 'body', code: 'VALIDATION_FAILED', message: 'A defence needs a body' },
+        ]);
+      }
+      return json(toWireAppeal(fileMockAppeal(record, claims.sub, payload.body.trim(), notice), maxImages), 201);
+    }
+
+    if (method === 'GET' && segments[5] === 'appeal') {
+      if (!record.appeal) return problem(404, 'APPEAL_NOT_FOUND', 'No defence was filed against this citation');
+      return json(toWireAppeal(record.appeal, maxImages));
+    }
+
+    // POST /citizen/fines/{id}/appeal/images
+    if (method === 'POST' && segments[5] === 'appeal' && segments[6] === 'images') {
+      if (!record.appeal) return problem(404, 'APPEAL_NOT_FOUND', 'No defence was filed against this citation');
+      if (record.appeal.status !== 'SUBMITTED') {
+        return problem(409, 'APPEAL_ALREADY_RESOLVED', 'Adding evidence to a decided case would be editing history');
+      }
+      if (record.appeal.images.length >= maxImages) {
+        return problem(409, 'APPEAL_IMAGE_LIMIT', 'This municipality allows no more images on a defence');
+      }
+      const image = {
+        id: `appeal-image-${record.appeal.images.length + 1}-${record.appeal.id}`,
+        kind: 'PHOTO' as const,
+        contentType: 'image/jpeg',
+        byteSize: 0,
+        sha256: 'mock-digest-not-computed',
+        note: null,
+        capturedAt: new Date().toISOString(),
+        latitude: null,
+        longitude: null,
+        createdAt: new Date().toISOString(),
+      };
+      record.appeal.images.push(image);
+      return json({ ...image, contentUrl: null }, 201);
+    }
+
     if (method === 'POST' && segments[5] === 'payments') {
       // Declared, not implemented — the same 501 the real server answers, so the client's honest
       // disabled button is exercised against the same fact in both transports.
@@ -2021,6 +2135,21 @@ interface MockCitationRecord {
   allowsAppeal: boolean;
   evidence: MockEvidence[];
   events: Record<string, unknown>[];
+  /** The defence filed against this citation, if one was. One per citation, as on the server. */
+  appeal: MockAppeal | null;
+}
+
+interface MockAppeal {
+  id: string;
+  citationId: string;
+  authorUserId: string;
+  status: 'SUBMITTED' | 'ACCEPTED' | 'REJECTED';
+  body: string;
+  submittedAt: string;
+  resolvedAt: string | null;
+  resolutionReason: string | null;
+  noticeVersion: number;
+  images: MockEvidence[];
 }
 
 interface MockInfractionType {
@@ -2193,6 +2322,7 @@ function createMockCitation(
     allowsAppeal: type.allowsAppeal,
     evidence: [],
     events: [],
+    appeal: null,
   };
   record.events.push(mockEvent(record, 'DRAFTED', null, 'DRAFT', null));
   mockCitations.push(record);
@@ -2262,6 +2392,180 @@ function toWireDetail(record: MockCitationRecord): unknown {
     evidence: record.evidence.map((item) => ({ ...item, contentUrl: null })),
     history: record.events,
   };
+}
+
+// ---- Defences (CONTRACT.md v0.8, moderated in v0.17) -------------------------------------------
+// The notice is versioned and append-only here as it is on the server, because the whole mechanism
+// is `noticeVersion` on a defence pointing at the exact wording its author read. A mock that let a
+// notice be edited in place would make the client's most important guarantee untestable.
+
+interface MockAppealNotice {
+  id: string;
+  version: number;
+  locale: string;
+  body: string;
+  effectiveFrom: string;
+  countryDefault: boolean;
+}
+
+const mockAppealNotices = new Map<string, MockAppealNotice[]>();
+let mockAppealSequence = 0;
+
+const MOCK_COUNTRY_NOTICE =
+  'Al presentar su descargo usted declara que lo expuesto es cierto. La municipalidad resolverá y ' +
+  'le comunicará la decisión con su motivo. Mientras el descargo esté en trámite la multa no se ' +
+  'cobra; si se rechaza, vuelve a ser exigible desde la fecha de la resolución.';
+
+function mockNoticesFor(tenantId: string): MockAppealNotice[] {
+  const existing = mockAppealNotices.get(tenantId);
+  if (existing) return existing;
+  // Version 1 is the country default — the wording a municipality inherits until it publishes its
+  // own. `countryDefault` is what the admin screen uses to say "esto no lo escribió usted".
+  const seeded: MockAppealNotice[] = [
+    {
+      id: `${tenantId}-notice-1`,
+      version: 1,
+      locale: 'es-CR',
+      body: MOCK_COUNTRY_NOTICE,
+      effectiveFrom: '2026-01-01T00:00:00.000Z',
+      countryDefault: true,
+    },
+  ];
+  mockAppealNotices.set(tenantId, seeded);
+  return seeded;
+}
+
+/** The one in force: the newest whose `effectiveFrom` has already passed. */
+function mockNoticeInForce(tenantId: string): MockAppealNotice {
+  const now = Date.now();
+  const live = mockNoticesFor(tenantId).filter((notice) => Date.parse(notice.effectiveFrom) <= now);
+  return live[live.length - 1] ?? mockNoticesFor(tenantId)[0]!;
+}
+
+function mockAppealMaxImages(tenantId: string): number {
+  const configured = mockTenantSettings.get(tenantId)?.['enforcement.appealMaxImages'];
+  return typeof configured === 'number' ? configured : 3;
+}
+
+function toWireAppeal(appeal: MockAppeal, maxImages: number): unknown {
+  return {
+    id: appeal.id,
+    citationId: appeal.citationId,
+    status: appeal.status,
+    statusLabelKey: `appeal.status.${appeal.status.toLowerCase()}`,
+    body: appeal.body,
+    submittedAt: appeal.submittedAt,
+    resolvedAt: appeal.resolvedAt,
+    resolutionReason: appeal.resolutionReason,
+    noticeVersion: appeal.noticeVersion,
+    maxImages,
+    images: appeal.images.map((image) => ({ ...image, contentUrl: null })),
+  };
+}
+
+/**
+ * A defence already waiting when the demo build opens.
+ *
+ * <p>Without this the moderation queue is an empty table and the screen proves nothing: the admin
+ * preview and the citizen preview are separate builds with separate mock state, so a defence filed
+ * in one is invisible in the other. Two are seeded — one waiting and one already rejected — because
+ * the two rows exercise different halves of the screen: the decision buttons, and the reason the
+ * citizen is owed.</p>
+ */
+function seedMockAppeals(): void {
+  if (mockCitations.length > 0) return;
+  const tenantId = 'tenant-sanjose';
+  const type = mockInfractionTypes(tenantId)[0]!;
+  const day = 86_400_000;
+  const cases: {
+    plate: string;
+    ago: number;
+    body: string | null;
+    resolve: null | { accept: boolean; reason: string };
+  }[] = [
+    // No defence at all: the third row is what makes the *writing* path reachable in a demo build,
+    // and a build where only the already-filed screens can be opened proves half the feature.
+    { plate: 'TEST01', ago: 3, body: null, resolve: null },
+    {
+      plate: 'BHL019',
+      ago: 9,
+      body:
+        'La boleta dice que el carro estaba sin pago, pero yo había pagado desde la app a las 9:12 y ' +
+        'me quedaba tiempo. Adjunto el comprobante que me llegó al correo. Le pido que revisen la hora ' +
+        'de la boleta contra la de mi pago.',
+      resolve: null,
+    },
+    {
+      plate: 'BNY963',
+      ago: 21,
+      body: 'No era mi carro el que estaba en esa bahía, la placa está mal anotada.',
+      resolve: {
+        accept: false,
+        reason: 'La fotografía de la boleta muestra la placa BNY963 en la bahía SJ-CENTRO-014. La multa se mantiene.',
+      },
+    },
+  ];
+  for (const seed of cases) {
+    const record = createMockCitation(
+      tenantId,
+      'user-inspector-1',
+      { plate: seed.plate, zoneId: 'zone-centro', spaceCode: 'SJ-CENTRO-014', infractionTypeId: type.id,
+        occurredAt: new Date(Date.now() - seed.ago * day).toISOString() },
+      type,
+    );
+    issueMockCitation(record);
+    record.occurredAt = new Date(Date.now() - seed.ago * day).toISOString();
+    record.issuedAt = record.occurredAt;
+    if (seed.body === null) continue;
+    const appeal = fileMockAppeal(record, 'user-citizen-1', seed.body, mockNoticeInForce(tenantId));
+    appeal.submittedAt = new Date(Date.now() - (seed.ago - 1) * day).toISOString();
+    if (seed.resolve) resolveMockAppeal(record, seed.resolve.accept, seed.resolve.reason);
+  }
+}
+
+function fileMockAppeal(
+  record: MockCitationRecord,
+  userId: string,
+  body: string,
+  notice: MockAppealNotice,
+): MockAppeal {
+  const appeal: MockAppeal = {
+    id: `appeal-mock-${++mockAppealSequence}`,
+    citationId: record.id,
+    authorUserId: userId,
+    status: 'SUBMITTED',
+    body,
+    submittedAt: new Date().toISOString(),
+    resolvedAt: null,
+    resolutionReason: null,
+    noticeVersion: notice.version,
+    images: [],
+  };
+  record.appeal = appeal;
+  // The citation moves in the same breath: the municipality sees the case and the citizen sees the
+  // state at the same moment, which is the server's own guarantee.
+  record.events.push(mockEvent(record, 'APPEALED', record.status, 'APPEALED', null));
+  record.status = 'APPEALED';
+  return appeal;
+}
+
+/** Accept and the citation is void; reject and it stands. Once, and with a reason either way. */
+function resolveMockAppeal(record: MockCitationRecord, accept: boolean, reason: string): MockAppeal {
+  const appeal = record.appeal!;
+  const toStatus = accept ? 'DISMISSED' : 'UPHELD';
+  appeal.status = accept ? 'ACCEPTED' : 'REJECTED';
+  appeal.resolvedAt = new Date().toISOString();
+  appeal.resolutionReason = reason;
+  // The action names read backwards on purpose: they are the *citation's* outcome, not the
+  // defence's. Accepting the defence dismisses the citation (`APPEAL_DISMISSED`), rejecting it
+  // upholds the citation (`APPEAL_UPHELD`). Matching the server here rather than picking the
+  // intuitive name is the whole point of the mock.
+  record.events.push(
+    mockEvent(record, accept ? 'APPEAL_DISMISSED' : 'APPEAL_UPHELD', record.status, toStatus, reason),
+  );
+  record.status = toStatus;
+  record.statusReason = reason;
+  return appeal;
 }
 
 /** The citizen's narrower view: no officer, no clock skew, no session reference. */

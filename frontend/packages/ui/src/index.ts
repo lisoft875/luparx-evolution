@@ -3,6 +3,8 @@ export { Button } from './components/Button';
 export type { ButtonProps, ButtonVariant } from './components/Button';
 export { Input } from './components/Input';
 export type { InputProps } from './components/Input';
+export { Textarea } from './components/Textarea';
+export type { TextareaProps } from './components/Textarea';
 export { Checkbox } from './components/Checkbox';
 export type { CheckboxProps } from './components/Checkbox';
 export { Select } from './components/Select';

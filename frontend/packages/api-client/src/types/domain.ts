@@ -1251,6 +1251,71 @@ export interface CitationReasonRequest {
 }
 
 /** The citation as the officer and the administration read it. */
+/**
+ * A defence filed against a citation (CONTRACT.md v0.8, and its moderation queue in v0.17).
+ *
+ * `SUBMITTED` is waiting for a decision; `ACCEPTED` means the citation was dismissed and `REJECTED`
+ * that it stands. There is no fourth state and no way back: resolving is once, and the reason is
+ * mandatory in both directions — a citizen whose defence is rejected is entitled to read why, and a
+ * municipality that voids its own citation owes its auditor the same sentence.
+ */
+export type AppealStatus = 'SUBMITTED' | 'ACCEPTED' | 'REJECTED';
+
+export interface CitationAppeal {
+  id: string;
+  citationId: string;
+  status: AppealStatus;
+  statusLabelKey: string;
+  body: string;
+  submittedAt: string;
+  resolvedAt: string | null;
+  resolutionReason: string | null;
+  /** The exact version of the legal notice this citizen read before writing. */
+  noticeVersion: number;
+  maxImages: number;
+  images: CitationEvidence[];
+}
+
+/**
+ * The legal notice a citizen reads before writing a defence.
+ *
+ * Versioned and append-only: publishing inserts, never edits, because `noticeVersion` on every
+ * defence points at the exact text its author accepted. `countryDefault` marks the wording a
+ * municipality inherited rather than wrote.
+ */
+export interface AppealNotice {
+  id: string;
+  version: number;
+  locale: string;
+  body: string;
+  effectiveFrom: string;
+  countryDefault: boolean;
+}
+
+/**
+ * `POST /citizen/fines/{id}/appeals`.
+ *
+ * `acceptedNoticeId` is the id of the notice the citizen actually had on screen, not a boolean
+ * "accepted": a checkbox proves nothing months later, and the server refuses any id but the version
+ * in force so a stale tab cannot file against wording nobody is showing any more.
+ */
+export interface FileAppealRequest {
+  body: string;
+  acceptedNoticeId: string;
+}
+
+export interface ResolveAppealRequest {
+  accept: boolean;
+  reason: string;
+}
+
+export interface PublishAppealNoticeRequest {
+  locale: string;
+  body: string;
+  /** A date in the future prepares a change without it appearing on screens today. */
+  effectiveFrom?: string;
+}
+
 export interface Citation {
   id: string;
   /** Absent while DRAFT: an abandoned capture must not burn a number of the municipality's series. */
@@ -1382,4 +1447,11 @@ export interface FineDetail {
   fine: Fine;
   evidence: CitationEvidence[];
   history: CitationEvent[];
+  /**
+   * The defence filed against this fine, or `null` when none was. It travels with the detail rather
+   * than on its own request because the answer decides what the screen offers — writing a defence,
+   * or reading the one already filed — and two requests would let the screen render the wrong one
+   * for as long as the second was in flight.
+   */
+  appeal: CitationAppeal | null;
 }

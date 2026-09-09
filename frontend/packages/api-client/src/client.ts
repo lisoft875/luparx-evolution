@@ -14,6 +14,7 @@ import {
 } from './wire';
 import {
   toCitation,
+  toAppeal,
   toCitationDetail,
   toEvidence,
   toFine,
@@ -21,6 +22,7 @@ import {
   toInfractionType,
   toPlateStatus,
   type WireCitation,
+  type WireAppeal,
   type WireCitationDetail,
   type WireEvidence,
   type WireFine,
@@ -38,6 +40,12 @@ import type { PagedResponse, PageParams } from './types/http';
 import type {
   AdminParkingZone,
   AdminUserDetail,
+  AppealNotice,
+  AppealStatus,
+  CitationAppeal,
+  FileAppealRequest,
+  PublishAppealNoticeRequest,
+  ResolveAppealRequest,
   AssignZonesRequest,
   CreateParkingSpaceRequest,
   CreateParkingZoneRequest,
@@ -722,6 +730,37 @@ export class ApiClient {
       ),
     evidenceContent: (citationId: string, evidenceId: string): Promise<Blob> =>
       this.http.blob(`/api/v1/admin/enforcement/citations/${citationId}/evidence/${evidenceId}`),
+    /**
+     * The moderation queue: defences waiting for a decision, oldest first.
+     *
+     * <p>Oldest first is the server's order and it matters — a queue sorted newest-first is one
+     * where the oldest case is never reached.</p>
+     */
+    appeals: async (query: { status?: AppealStatus | 'ALL' } & PageParams = {}): Promise<PagedResponse<CitationAppeal>> => {
+      const page = await this.http.request<PagedResponse<WireAppeal>>('GET', '/api/v1/admin/enforcement/appeals', {
+        query: { status: query.status, page: query.page, size: query.size },
+      });
+      return { ...page, items: (page.items ?? []).map(toAppeal) };
+    },
+    /** Accept and the citation is void; reject and it stands. The reason is mandatory either way. */
+    resolveAppeal: async (citationId: string, payload: ResolveAppealRequest): Promise<CitationDetail> =>
+      toCitationDetail(
+        await this.http.request<WireCitationDetail>(
+          'POST',
+          `/api/v1/admin/enforcement/citations/${citationId}/appeal/resolve`,
+          { body: payload, idempotent: true },
+        ),
+      ),
+    appealEvidenceContent: (citationId: string, evidenceId: string): Promise<Blob> =>
+      this.http.blob(`/api/v1/admin/enforcement/citations/${citationId}/evidence/${evidenceId}`),
+    /** The notice in force, falling back to the country default a municipality has not replaced. */
+    appealNotice: (locale?: string): Promise<AppealNotice> =>
+      this.http.request('GET', '/api/v1/admin/enforcement/appeal-notice', { query: { locale } }),
+    appealNoticeVersions: (locale?: string): Promise<AppealNotice[]> =>
+      this.http.request('GET', '/api/v1/admin/enforcement/appeal-notice/versions', { query: { locale } }),
+    /** Publishes a new version. It inserts, never edits: past defences point at the text they read. */
+    publishAppealNotice: (payload: PublishAppealNoticeRequest): Promise<AppealNotice> =>
+      this.http.request('PUT', '/api/v1/admin/enforcement/appeal-notice', { body: payload }),
     /** The whole catalogue, retired kinds included — the administrator edits what exists, not what is live. */
     infractionTypes: async (): Promise<InfractionType[]> =>
       (
@@ -752,6 +791,42 @@ export class ApiClient {
       toFineDetail(await this.http.request<WireFineDetail>('GET', `/api/v1/citizen/fines/${id}`)),
     evidenceContent: (fineId: string, evidenceId: string): Promise<Blob> =>
       this.http.blob(`/api/v1/citizen/fines/${fineId}/evidence/${evidenceId}`),
+    /**
+     * The legal notice to read before writing a defence, resolved for my own locale.
+     *
+     * Never cached — not by the server and not here: a municipality whose lawyer corrects the
+     * wording must not have citizens accepting yesterday's text. `id` is sent back on filing and
+     * the server refuses anything but the version in force, which is what turns "we warned them"
+     * from a claim into a record.
+     */
+    appealNotice: (): Promise<AppealNotice> =>
+      this.http.request('GET', '/api/v1/citizen/fines/appeal-notice'),
+    /**
+     * Files the defence: the text and the id of the notice that was on screen.
+     *
+     * Text first and images afterwards on their own call, because what makes the defence exist is
+     * what the person wrote — losing it to a failed upload on a bad connection would be losing the
+     * case, not the photograph.
+     */
+    fileAppeal: async (fineId: string, payload: FileAppealRequest): Promise<CitationAppeal> =>
+      toAppeal(
+        await this.http.request<WireAppeal>('POST', `/api/v1/citizen/fines/${fineId}/appeals`, {
+          body: payload,
+          idempotent: true,
+        }),
+      ),
+    /** My defence and where it stands, including the municipality's reason once it is decided. */
+    appeal: async (fineId: string): Promise<CitationAppeal> =>
+      toAppeal(await this.http.request<WireAppeal>('GET', `/api/v1/citizen/fines/${fineId}/appeal`)),
+    /**
+     * Attaches one photograph to my defence. The app compresses before sending; the limit that
+     * counts is the server's (1 MB, type read from the file's own header, count per municipality).
+     */
+    attachAppealImage: async (fineId: string, photo: Blob, fileName?: string): Promise<CitationEvidence> => {
+      const form = new FormData();
+      form.append('file', photo, fileName ?? 'appeal.jpg');
+      return toEvidence(await this.http.upload<WireEvidence>(`/api/v1/citizen/fines/${fineId}/appeal/images`, form));
+    },
     // Paying a fine online is declared and not implemented: the server answers 501 NOT_IMPLEMENTED
     // on `POST /citizen/fines/{id}/payments` so a client can tell "not built yet" from "wrong URL".
     // No method is exposed here, deliberately — a call that can only fail is worse than none, and

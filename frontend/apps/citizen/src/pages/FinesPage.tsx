@@ -15,16 +15,18 @@ const PAGE_SIZE = 20;
 /**
  * The citizen's fines, as the server actually holds them.
  *
- * The two tabs split on **whether money is still owed**, which is the server's own `isPayable`
- * notion (`ISSUED`, `UPHELD`, `EXPIRED`) rather than a list of statuses invented here. Splitting on
- * anything else would put an annulled fine under "pending" or a fine under appeal under "history",
- * and both are wrong in a way the person reading would notice before we did.
+ * The two tabs split on **whether the matter is still open for this person** — the server's payable
+ * set (`ISSUED`, `UPHELD`, `EXPIRED`) plus `APPEALED`. The addition is not a widening of "owed": a
+ * fine under appeal owes nothing today. It is there because "Historial" is where a person stops
+ * looking, and a defence waiting for an answer is the one thing on this screen they will come back
+ * to check (CONTRACT.md v0.17). An annulled fine, which needs nothing from anybody, stays in
+ * history where it belongs.
  *
  * The filtering is done on the page the server returned rather than by asking for two filtered
  * pages: `GET /citizen/fines` takes one `status`, not a set, and paging two lists that must agree
  * on a total is a worse problem than a short client-side partition of twenty rows.
  */
-const PAYABLE_STATUSES = new Set(['ISSUED', 'UPHELD', 'EXPIRED']);
+const OPEN_STATUSES = new Set(['ISSUED', 'UPHELD', 'EXPIRED', 'APPEALED']);
 
 export function FinesPage(): React.JSX.Element {
   const { t, tPlural, locale } = useTranslation();
@@ -38,7 +40,7 @@ export function FinesPage(): React.JSX.Element {
   const rows = useMemo(() => {
     const items = query.data?.items ?? [];
     return items.filter((fine) =>
-      tab === 'pending' ? PAYABLE_STATUSES.has(fine.status) : !PAYABLE_STATUSES.has(fine.status),
+      tab === 'pending' ? OPEN_STATUSES.has(fine.status) : !OPEN_STATUSES.has(fine.status),
     );
   }, [query.data, tab]);
 

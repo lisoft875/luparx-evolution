@@ -18,6 +18,7 @@ import { ParkingPage } from './pages/ParkingPage';
 import { VehiclesPage } from './pages/VehiclesPage';
 import { FinesPage } from './pages/FinesPage';
 import { FineDetailPage } from './pages/FineDetailPage';
+import { FineAppealPage } from './pages/FineAppealPage';
 import { WalletPage } from './pages/WalletPage';
 import { MovementsPage } from './pages/MovementsPage';
 
@@ -117,6 +118,17 @@ export function App(): React.JSX.Element {
                   <RequireAuth loginPath="/login">
                     <RequireTenant selectTenantPath="/select-tenant">
                       <FineDetailPage />
+                    </RequireTenant>
+                  </RequireAuth>
+                }
+              />
+              {/* Writing the defence, and afterwards reading it and the municipality's answer. */}
+              <Route
+                path="/fines/:id/appeal"
+                element={
+                  <RequireAuth loginPath="/login">
+                    <RequireTenant selectTenantPath="/select-tenant">
+                      <FineAppealPage />
                     </RequireTenant>
                   </RequireAuth>
                 }

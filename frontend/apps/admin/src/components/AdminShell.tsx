@@ -61,6 +61,7 @@ export function AdminShell({ children }: AdminShellProps): React.JSX.Element {
             <>
               <strong className="lx-text-meta">{t('nav.enforcement')}</strong>
               <Link to="/enforcement/citations">{t('nav.enforcement.citations')}</Link>
+              <Link to="/appeals">{t('nav.appeals')}</Link>
               {permissions.has('ENFORCEMENT_MANAGE') ? (
                 <Link to="/settings/infraction-types">{t('nav.enforcement.types')}</Link>
               ) : null}

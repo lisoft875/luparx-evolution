@@ -1435,3 +1435,90 @@ No se copió todavía —está en el plan—: las **duraciones vendibles como ta
 (que es como la referencia permite una escalera no lineal, 45 min a ₡400 junto a 60 min a ₡500), los
 **horarios por zona**, y la selección de tarifa por día de la semana y franja horaria con desempate
 por prioridad.
+
+# v0.17 — Descargos: presentarlos y resolverlos (normativo)
+
+El servidor sabía resolver descargos desde v0.8 y **ninguna de las dos pantallas existía**: el
+ciudadano no tenía dónde escribir uno y la municipalidad no tenía dónde leerlo. Un derecho de
+defensa que sólo existe en el `OpenAPI` no es un derecho de defensa. Esta versión cierra el circuito
+completo, de los dos lados, sin tocar el backend.
+
+## El texto legal es una versión, no una casilla
+
+`GET /api/v1/citizen/fines/appeal-notice` devuelve el aviso vigente resuelto para el idioma efectivo
+del ciudadano, y `POST /api/v1/citizen/fines/{id}/appeals` lleva `acceptedNoticeId`: **el id del
+aviso que estaba en pantalla**, no un booleano «aceptó». Una casilla marcada no prueba nada meses
+después; un `noticeVersion` que apunta al texto exacto sí.
+
+Por eso la pantalla **muestra el aviso entero** antes del campo de escritura, y por eso no se cachea
+en el cliente —`gcTime: 0`, igual que el `no-store` del servidor—: una municipalidad cuyo abogado
+corrige la redacción no puede tener ciudadanos aceptando la de ayer.
+
+`APPEAL_NOTICE_OUTDATED` (409) es la pestaña vieja. La respuesta del cliente no es un error genérico:
+vuelve a pedir el aviso, lo muestra y dice explícitamente **que el texto escrito no se perdió**.
+
+## Primero el texto, después las fotos
+
+El descargo existe en el momento en que se guardan las palabras. Las imágenes se adjuntan después,
+una llamada cada una (`POST /citizen/fines/{id}/appeal/images`), y un fallo ahí pierde una fotografía
+y no el caso —que es el único modo de fallar aceptable para alguien que presenta desde un teléfono
+en el wifi de la municipalidad—.
+
+Sólo mientras el caso está abierto. Adjuntar prueba a algo ya resuelto sería editar la historia, y el
+servidor lo rechaza; la pantalla ni siquiera ofrece el botón.
+
+## Una multa con descargo está *abierta*, no archivada
+
+`FinesPage` partía en pagable / no pagable. Ahora parte en **abierto para esta persona**: el conjunto
+pagable (`ISSUED`, `UPHELD`, `EXPIRED`) **más `APPEALED`**.
+
+No es un ensanchamiento de «lo que se debe» —una multa con descargo no se cobra hoy—. Es que
+«Historial» es donde una persona deja de mirar, y un descargo esperando respuesta es exactamente lo
+único de esa pantalla a lo que va a volver. Una multa anulada, que no espera nada de nadie, se queda
+en historial.
+
+## La cola de moderación
+
+`GET /api/v1/admin/enforcement/appeals` (`PERM_CITATION_READ`), **del más viejo al más reciente**.
+Ese orden es del servidor y no es una preferencia: una cola ordenada por lo más nuevo es una cola
+donde el caso más viejo no se alcanza nunca.
+
+**Decidir vive dentro de la lectura.** Los botones de aceptar y rechazar están en el diálogo que
+muestra el descargo entero, no en la fila de la tabla: una fila de botones invita exactamente a
+resolver sin haber leído. La celda de la tabla trunca a 140 caracteres porque una cola es para
+triar, y una celda con mil caracteres es una cola que nadie puede recorrer.
+
+`POST /admin/enforcement/citations/{id}/appeal/resolve` (`PERM_CITATION_VOID`) es **una decisión con
+dos salidas**, así que es un diálogo con dos botones y no dos flujos. El motivo es obligatorio en las
+dos direcciones y el diálogo dice a dónde va: al ciudadano, y al historial de la boleta.
+
+Se resuelve **una sola vez**: `APPEAL_ALREADY_RESOLVED` (409). Una decisión que se puede tomar dos
+veces es una decisión que el ciudadano puede ver cambiar después de que se le comunicó.
+
+## Una trampa de nombres que se respeta a propósito
+
+`CitationAction.APPEAL_UPHELD` significa **descargo rechazado** y `APPEAL_DISMISSED` significa
+**descargo aceptado**: los nombres describen la suerte de la *boleta* (`UPHELD` se mantiene,
+`DISMISSED` queda sin efecto), no la del descargo. Se leen al revés y no se cambian —son datos
+persistidos—, pero cualquier cosa que los mapee tiene que hacerlo mirando esta línea. El mock los
+respeta por eso mismo: un mock más intuitivo que el servidor no verifica nada.
+
+`AppealStatus` sí se lee derecho (`SUBMITTED`, `ACCEPTED`, `REJECTED`) y son tres valores, no los
+ocho de la boleta: el descargo es un documento que alguien presentó y la boleta es el acto que
+impugna. Mantener los dos vocabularios separados es lo que evita que «rechazado» signifique lo
+contrario según qué fila se esté leyendo.
+
+## `Textarea` en el sistema de diseño
+
+No había. Los dos lugares que la necesitaban —el descargo de 4000 caracteres y el motivo de la
+municipalidad— iban a escribirse en un `Input` de una línea, y el inspector ya tenía un `<textarea
+className="lx-input">` a mano. Ahora es un componente: comparte `.lx-input` con `Input` porque son el
+mismo campo, uno más alto, y trae contador opcional (`aria-live="off"`: un contador que se anuncia en
+cada tecla hace el campo inservible con lector de pantalla). El inspector se migró a él.
+
+## Lo que queda pendiente de esta tanda
+
+El **aviso legal se publica** (`PUT /admin/enforcement/appeal-notice`) pero todavía no hay pantalla
+para hacerlo: la municipalidad hereda el texto por defecto del país hasta que su abogado escriba el
+suyo. Es lo primero de la próxima tanda de configuración, y necesita revisión legal del cliente antes
+que código.

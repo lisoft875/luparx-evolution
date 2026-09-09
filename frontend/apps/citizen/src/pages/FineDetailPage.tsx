@@ -107,6 +107,23 @@ export function FineDetailPage(): React.JSX.Element {
                 </SummaryList>
               </Card>
 
+              {/* The defence (CONTRACT.md v0.17). One button, two meanings, and the label says
+                  which: write one, or read the one already filed and the answer to it. It is not
+                  hidden once resolved — the reason the municipality gave is the part that matters
+                  most, and burying it would be the second injustice. */}
+              {detail.appeal || fine.appealable ? (
+                <Card>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    fullWidth
+                    onClick={() => navigate(`/fines/${fine.id}/appeal`)}
+                  >
+                    {t(detail.appeal ? 'citizen.fines.viewAppeal' : 'citizen.fines.appeal')}
+                  </Button>
+                </Card>
+              ) : null}
+
               <Card>
                 {/* Prepared, disabled, and honest about why. Deliberately not the primary style:
                     the glow marks the one live action on a screen, and a glowing button that does

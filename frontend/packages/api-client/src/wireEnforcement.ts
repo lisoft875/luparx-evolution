@@ -14,7 +14,9 @@
  */
 
 import type {
+  AppealStatus,
   Citation,
+  CitationAppeal,
   CitationDetail,
   CitationEvent,
   CitationEvidence,
@@ -163,6 +165,7 @@ export interface WireFineDetail {
   fine: WireFine;
   evidence?: WireEvidence[] | null;
   history?: WireCitationEvent[] | null;
+  appeal?: WireAppeal | null;
 }
 
 export function toInfractionType(wire: WireInfractionType): InfractionType {
@@ -251,6 +254,36 @@ export function toEvidence(wire: WireEvidence): CitationEvidence {
   };
 }
 
+export interface WireAppeal {
+  id: string;
+  citationId: string;
+  status: AppealStatus;
+  statusLabelKey: string;
+  body: string;
+  submittedAt: string;
+  resolvedAt?: string | null;
+  resolutionReason?: string | null;
+  noticeVersion: number;
+  maxImages: number;
+  images?: WireEvidence[] | null;
+}
+
+export function toAppeal(wire: WireAppeal): CitationAppeal {
+  return {
+    id: wire.id,
+    citationId: wire.citationId,
+    status: wire.status,
+    statusLabelKey: wire.statusLabelKey,
+    body: wire.body,
+    submittedAt: wire.submittedAt,
+    resolvedAt: wire.resolvedAt ?? null,
+    resolutionReason: wire.resolutionReason ?? null,
+    noticeVersion: wire.noticeVersion,
+    maxImages: wire.maxImages,
+    images: (wire.images ?? []).map(toEvidence),
+  };
+}
+
 export function toCitationEvent(wire: WireCitationEvent): CitationEvent {
   return {
     id: wire.id,
@@ -302,5 +335,6 @@ export function toFineDetail(wire: WireFineDetail): FineDetail {
     fine: toFine(wire.fine),
     evidence: (wire.evidence ?? []).map(toEvidence),
     history: (wire.history ?? []).map(toCitationEvent),
+    appeal: wire.appeal ? toAppeal(wire.appeal) : null,
   };
 }

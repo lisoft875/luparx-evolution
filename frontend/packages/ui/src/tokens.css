@@ -342,6 +342,25 @@ body {
   border-color: var(--lx-danger);
 }
 
+/* Multi-line text (components/Textarea.tsx). The same field as `.lx-input`, taller: only the
+   things a one-line control has no equivalent of are set here. `min-height: auto` undoes the
+   control height so `rows` decides, and the vertical padding has to be restated because a
+   single-line input centres its text without any. */
+.lx-textarea {
+  min-height: auto;
+  padding: var(--lx-space-3);
+  line-height: 1.5;
+  /* Horizontal drag would break the layout it sits in; vertical is the reader's own business. */
+  resize: vertical;
+}
+.lx-textarea-count {
+  margin-top: var(--lx-space-1);
+  text-align: right;
+  font-size: var(--lx-text-meta-size);
+  color: var(--lx-text-subtle);
+  font-variant-numeric: tabular-nums;
+}
+
 /* ---- The platform's own dropdown (components/Select.tsx) ----
    The closed field is the field: same surface, border, radius and type scale as `.lx-input`
    above, which is why it shares that rule rather than restating it. Everything below is the

@@ -18,6 +18,7 @@ import {
   Modal,
   SectionHeader,
   Select,
+  Textarea,
 } from '@luparx/ui';
 import { InspectorShell } from '../components/InspectorShell';
 import { useCitationQueue, useInfractionTypes, useKnownZones } from '../lib/queries';
@@ -522,15 +523,13 @@ export function NewCitationPage(): React.JSX.Element {
         <Card>
           <FormField label={t('inspector.cite.notesLabel')} optionalLabel={t('common.optional')}>
             {({ inputId }) => (
-              <textarea
+              <Textarea
                 id={inputId}
-                className="lx-input"
                 value={notes}
                 onChange={(event) => setNotes(event.target.value)}
                 placeholder={t('inspector.cite.notesPlaceholder')}
                 maxLength={2000}
                 rows={3}
-                style={{ resize: 'vertical', minHeight: 88 }}
               />
             )}
           </FormField>

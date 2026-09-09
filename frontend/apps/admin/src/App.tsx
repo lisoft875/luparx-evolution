@@ -26,6 +26,7 @@ import { AuditPage } from './pages/AuditPage';
 import { ReportsPage } from './pages/ReportsPage';
 import { EnforcementCitationsPage } from './pages/EnforcementCitationsPage';
 import { EnforcementCitationDetailPage } from './pages/EnforcementCitationDetailPage';
+import { AppealsPage } from './pages/AppealsPage';
 import { SettingsInfractionTypesPage } from './pages/SettingsInfractionTypesPage';
 
 const queryClient = new QueryClient({
@@ -225,6 +226,21 @@ export function App(): React.JSX.Element {
                     <RequireTenant selectTenantPath="/select-tenant">
                       <RequirePermission permission="CITATION_READ" fallback={<Navigate to="/" replace />}>
                         <EnforcementCitationDetailPage />
+                      </RequirePermission>
+                    </RequireTenant>
+                  </RequireAuth>
+                }
+              />
+              {/* The moderation queue reads defences, so `CITATION_READ` is what opens it; deciding
+                  is `CITATION_VOID` and is checked on the decision itself, because a queue is
+                  legitimately readable by people who may not resolve. */}
+              <Route
+                path="/appeals"
+                element={
+                  <RequireAuth loginPath="/login">
+                    <RequireTenant selectTenantPath="/select-tenant">
+                      <RequirePermission permission="CITATION_READ" fallback={<Navigate to="/" replace />}>
+                        <AppealsPage />
                       </RequirePermission>
                     </RequireTenant>
                   </RequireAuth>
