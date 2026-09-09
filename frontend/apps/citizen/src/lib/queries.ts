@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 import { useAuth } from '@luparx/auth';
+import { useVehicleColors, useVehicleTypes } from '@luparx/features';
 import { ApiError } from '@luparx/api-client';
 import type {
   AdministrativeDivision,
@@ -12,12 +13,14 @@ import type {
   ParkingQuoteResponse,
   ParkingSchedule,
   ParkingSession,
+  ParkingSpaceFormat,
   ParkingZone,
   StartParkingSessionRequest,
   TimeCreditsResponse,
   UpdateProfileRequest,
   UpdateVehicleRequest,
   Vehicle,
+  VehicleAttributeCatalogEntry,
   WalletResponse,
 } from '@luparx/api-client';
 
@@ -36,6 +39,7 @@ const KEYS = {
   timeCredits: ['citizen', 'time-credits'] as const,
   schedule: ['citizen', 'parking', 'schedule'] as const,
   zones: ['citizen', 'parking', 'zones'] as const,
+  spaceFormat: ['citizen', 'parking', 'space-format'] as const,
 };
 
 export function useVehicles(): UseQueryResult<Vehicle[]> {
@@ -202,6 +206,34 @@ export function useParkingZones(): UseQueryResult<ParkingZone[]> {
       }
     },
   });
+}
+
+/**
+ * The municipality's bay-code format (CONTRACT.md v0.3 §"Formato del código de espacio").
+ *
+ * The citizen's field uses it for two things the server would otherwise have to be asked about: the
+ * example it shows ("0001" in San José, "E-0001" in Escazú) and the regex it checks a typed code
+ * against before spending a round trip on a code that cannot exist. It is configuration, not state:
+ * long `staleTime`, and dropped wholesale when the municipality changes (TenantCacheReset).
+ */
+export function useParkingSpaceFormat(): UseQueryResult<ParkingSpaceFormat> {
+  const { apiClient } = useAuth();
+  return useQuery({
+    queryKey: KEYS.spaceFormat,
+    queryFn: () => apiClient.citizenParking.spaceFormat(),
+    staleTime: 10 * 60_000,
+  });
+}
+
+/** Vehicle types/colours, from the platform catalog — see `@luparx/features`. */
+export function useVehicleTypeCatalog(): UseQueryResult<VehicleAttributeCatalogEntry[]> {
+  const { apiClient } = useAuth();
+  return useVehicleTypes(apiClient);
+}
+
+export function useVehicleColorCatalog(): UseQueryResult<VehicleAttributeCatalogEntry[]> {
+  const { apiClient } = useAuth();
+  return useVehicleColors(apiClient);
 }
 
 /**

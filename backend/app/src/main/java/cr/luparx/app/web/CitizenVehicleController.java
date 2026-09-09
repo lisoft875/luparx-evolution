@@ -71,7 +71,7 @@ public class CitizenVehicleController {
     public ParkingDtos.VehicleResponse create(@Valid @RequestBody ParkingDtos.CreateVehicleRequest request) {
         UserId userId = TenantContextHolder.requireUserId();
         Vehicle vehicle = vehicleService.register(userId, request.plate(), request.name(), request.brand(),
-                request.model(), request.year(),
+                request.model(), request.year(), request.type(), request.color(),
                 request.isOwner() == null || request.isOwner().booleanValue(),
                 request.isPrimary() != null && request.isPrimary().booleanValue());
         // The plate is the citizen's own datum and identifies the resource; the audit row needs it to
@@ -88,7 +88,7 @@ public class CitizenVehicleController {
                                               @Valid @RequestBody ParkingDtos.UpdateVehicleRequest request) {
         UserId userId = TenantContextHolder.requireUserId();
         Vehicle vehicle = vehicleService.update(userId, id, request.plate(), request.name(), request.brand(),
-                request.model(), request.year(),
+                request.model(), request.year(), request.type(), request.color(),
                 request.isOwner() == null || request.isOwner().booleanValue());
         auditRecorder.record(AuditAction.VEHICLE_UPDATED, "vehicle", id.toString(),
                 Map.of("plate", vehicle.getPlateNormalized()));

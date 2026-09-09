@@ -18,6 +18,7 @@ import cr.luparx.parking.entity.WalletTransaction;
 import cr.luparx.parking.model.ChargingBand;
 import cr.luparx.parking.model.ChargingSchedule;
 import cr.luparx.parking.model.ParkingQuote;
+import cr.luparx.parking.model.ParkingSpaceRange;
 import cr.luparx.parking.repository.ParkingSpaceRepository;
 import cr.luparx.parking.repository.ParkingZoneRepository;
 import org.springframework.stereotype.Component;
@@ -72,6 +73,10 @@ public class ParkingMapper {
                 vehicle.getBrand(),
                 vehicle.getModel(),
                 vehicle.getYear(),
+                vehicle.getType().name(),
+                vehicle.getType().labelKey(),
+                vehicle.getColor() == null ? null : vehicle.getColor().name(),
+                vehicle.getColor() == null ? null : vehicle.getColor().labelKey(),
                 vehicle.isOwner(),
                 vehicle.isPrimary(),
                 vehicle.getCreatedAt());
@@ -99,14 +104,17 @@ public class ParkingMapper {
      * A zone as a citizen sees it, with the tariff in force. The rate is passed in rather than looked
      * up here so that a list of zones resolves its prices in one query instead of one per row.
      */
-    public ParkingDtos.CitizenParkingZoneResponse toCitizenZone(ParkingZone zone, ParkingRate rate) {
+    public ParkingDtos.CitizenParkingZoneResponse toCitizenZone(ParkingZone zone, ParkingRate rate,
+                                                                ParkingSpaceRange range) {
         return new ParkingDtos.CitizenParkingZoneResponse(
                 zone.getId(),
                 zone.getCode(),
                 zone.getName(),
                 zone.getDescription(),
                 rate == null ? null : new ParkingDtos.ParkingRateSummary(toMoney(rate.getAmount()),
-                        rate.getMinutes()));
+                        rate.getMinutes()),
+                range == null ? null : new ParkingDtos.SpaceCodeRange(range.firstCode(), range.lastCode(),
+                        range.count()));
     }
 
     public ParkingDtos.QuoteResponse toQuote(ParkingQuote quote) {

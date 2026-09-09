@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from '@luparx/i18n';
 import {
   Alert,
@@ -15,18 +15,22 @@ import {
   IconPlus,
   Input,
   Modal,
+  Select,
 } from '@luparx/ui';
 import type { CreateVehicleRequest, Vehicle } from '@luparx/api-client';
 import { CitizenShell } from '../components/CitizenShell';
 import { QueryBoundary } from '../components/QueryBoundary';
 import { vehicleDeleteErrorMessage, vehiclePlateError, vehicleSaveErrorMessage } from '../lib/apiErrors';
 import { normalizePlate } from '../lib/plate';
+import { catalogLabeller, vehicleDescriptor } from '../lib/vehiclePresentation';
 import {
   useActiveParkingSessions,
   useCreateVehicle,
   useDeleteVehicle,
   useSetPrimaryVehicle,
   useUpdateVehicle,
+  useVehicleColorCatalog,
+  useVehicleTypeCatalog,
   useVehicles,
 } from '../lib/queries';
 
@@ -36,10 +40,29 @@ interface VehicleFormState {
   brand: string;
   model: string;
   year: string;
+  /** Catalog key. Never a literal in this file — see `DEFAULT_VEHICLE_TYPE`. */
+  type: string;
+  color: string;
   isOwner: boolean;
 }
 
-const EMPTY_FORM: VehicleFormState = { plate: '', name: '', brand: '', model: '', year: '', isOwner: false };
+/**
+ * The type the server itself defaults to when a client omits it. Written down once, here, because
+ * a form has to preselect *something* before the catalog answers; the moment the catalog arrives,
+ * this is only used if it actually lists this key.
+ */
+const DEFAULT_VEHICLE_TYPE = 'CAR';
+
+const EMPTY_FORM: VehicleFormState = {
+  plate: '',
+  name: '',
+  brand: '',
+  model: '',
+  year: '',
+  type: DEFAULT_VEHICLE_TYPE,
+  color: '',
+  isOwner: false,
+};
 
 function formFromVehicle(vehicle: Vehicle): VehicleFormState {
   return {
@@ -48,6 +71,8 @@ function formFromVehicle(vehicle: Vehicle): VehicleFormState {
     brand: vehicle.brand ?? '',
     model: vehicle.model ?? '',
     year: vehicle.year ? String(vehicle.year) : '',
+    type: vehicle.type || DEFAULT_VEHICLE_TYPE,
+    color: vehicle.color ?? '',
     isOwner: vehicle.isOwner,
   };
 }
@@ -59,6 +84,9 @@ function toCreateRequest(form: VehicleFormState): CreateVehicleRequest {
     brand: form.brand.trim() || undefined,
     model: form.model.trim() || undefined,
     year: form.year.trim() ? Number(form.year) : undefined,
+    type: form.type,
+    // An empty pick means "did not say", which is a value the server accepts — not the string "".
+    color: form.color || undefined,
     isOwner: form.isOwner,
   };
 }
@@ -70,7 +98,12 @@ function toCreateRequest(form: VehicleFormState): CreateVehicleRequest {
  */
 export function VehiclesPage(): React.JSX.Element {
   const { t } = useTranslation();
+  const tKey = (key: string): string => t(key as Parameters<typeof t>[0]);
   const vehiclesQuery = useVehicles();
+  const typeCatalogQuery = useVehicleTypeCatalog();
+  const colorCatalogQuery = useVehicleColorCatalog();
+  const typeOf = catalogLabeller(typeCatalogQuery.data, tKey);
+  const colorOf = catalogLabeller(colorCatalogQuery.data, tKey);
   const { data: activeSessions } = useActiveParkingSessions();
   const createVehicle = useCreateVehicle();
   const updateVehicle = useUpdateVehicle();
@@ -90,6 +123,20 @@ export function VehiclesPage(): React.JSX.Element {
     () => new Set((activeSessions ?? []).map((session) => session.vehicleId)),
     [activeSessions],
   );
+
+  /**
+   * A new vehicle starts as a car because that is what the server defaults to — but only if this
+   * platform still calls it `CAR`. Once the catalog has answered, an add form holding a key the
+   * catalog does not list falls back to the first type it does, so the form can never submit a
+   * type this deployment would reject. An *edit* form is left alone: the value came from the
+   * server and belongs to the record, whatever the catalog currently lists.
+   */
+  useEffect(() => {
+    const types = typeCatalogQuery.data;
+    if (!types || types.length === 0 || formVehicle !== null) return;
+    if (types.some((entry) => entry.value === form.type)) return;
+    setForm((f) => ({ ...f, type: types[0]!.value }));
+  }, [typeCatalogQuery.data, formVehicle, form.type]);
 
   function openAdd(): void {
     setForm(EMPTY_FORM);
@@ -181,15 +228,18 @@ export function VehiclesPage(): React.JSX.Element {
                 <p className="lx-text-amount-lg" style={{ margin: 0 }}>
                   {vehicle.plate}
                 </p>
-                <div style={{ display: 'flex', gap: 'var(--lx-space-2)' }}>
+                <div style={{ display: 'flex', gap: 'var(--lx-space-2)', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                  {/* What kind of vehicle it is, in words. A motorcycle and a car are charged and
+                      enforced differently, so it belongs where the plate is, not buried in a form. */}
+                  {typeOf(vehicle.type) ? <Badge tone="neutral">{typeOf(vehicle.type)}</Badge> : null}
                   {activeVehicleIds.has(vehicle.id) ? <Badge tone="info">{t('citizen.vehicles.activeSessionBadge')}</Badge> : null}
                   {vehicle.isPrimary ? <Badge tone="success">{t('citizen.vehicles.primaryBadge')}</Badge> : null}
                 </div>
               </div>
+              {/* "Toyota Yaris · Gris · 2015" — the colour is a word in this line and nothing
+                  more; no part of the card is ever painted with the colour of the car. */}
               <p className="lx-text-meta" style={{ margin: 'var(--lx-space-1) 0 var(--lx-space-3) 0' }}>
-                {[vehicle.name, [vehicle.brand, vehicle.model].filter(Boolean).join(' ') || undefined, vehicle.year]
-                  .filter(Boolean)
-                  .join(' · ')}
+                {vehicleDescriptor(vehicle, { includeName: true, colorLabel: colorOf(vehicle.color) })}
               </p>
               <div style={{ display: 'flex', gap: 'var(--lx-space-2)' }}>
                 <Button type="button" variant="secondary" onClick={() => openEdit(vehicle)}>
@@ -230,6 +280,40 @@ export function VehiclesPage(): React.JSX.Element {
               />
             )}
           </FormField>
+          {/* Both lists are the server's (`/catalog/vehicle-types`, `/catalog/vehicle-colors`),
+              translated from the `labelKey` each entry carries. Neither is written down here, so a
+              type the platform adds tomorrow appears without a release of this app. */}
+          <QueryBoundary query={typeCatalogQuery} errorTitle={t('citizen.vehicles.form.typeLabel')}>
+            {(types) => (
+              <FormField label={t('citizen.vehicles.form.typeLabel')}>
+                {({ inputId }) => (
+                  <Select
+                    id={inputId}
+                    value={form.type}
+                    onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}
+                    options={types.map((entry) => ({ value: entry.value, label: tKey(entry.labelKey) }))}
+                  />
+                )}
+              </FormField>
+            )}
+          </QueryBoundary>
+          <QueryBoundary query={colorCatalogQuery} errorTitle={t('citizen.vehicles.form.colorLabel')}>
+            {(colors) => (
+              <FormField label={t('citizen.vehicles.form.colorLabel')} optionalLabel={t('common.optional')}>
+                {({ inputId }) => (
+                  <Select
+                    id={inputId}
+                    value={form.color}
+                    onChange={(e) => setForm((f) => ({ ...f, color: e.target.value }))}
+                    options={[
+                      { value: '', label: t('citizen.vehicles.form.colorUnset') },
+                      ...colors.map((entry) => ({ value: entry.value, label: tKey(entry.labelKey) })),
+                    ]}
+                  />
+                )}
+              </FormField>
+            )}
+          </QueryBoundary>
           <FormField label={t('citizen.vehicles.form.nameLabel')} optionalLabel={t('common.optional')}>
             {({ inputId }) => (
               <Input id={inputId} value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />

@@ -864,6 +864,11 @@ button.lx-list-row {
   border-color: var(--lx-primary);
   color: var(--lx-primary);
 }
+/* Still legible, plainly not choosable — an option the municipality's rules leave no room for. */
+.lx-chip:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
 
 /* ---- ChipGroup "segmented" variant (fixed-width tabs, e.g. Multas Pendientes/Historial) - */
 

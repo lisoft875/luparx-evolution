@@ -11,6 +11,8 @@ import cr.luparx.parking.entity.ParkingZone;
 import cr.luparx.parking.entity.Vehicle;
 import cr.luparx.parking.model.ParkingSessionStatus;
 import cr.luparx.parking.model.TimeCreditSource;
+import cr.luparx.parking.model.VehicleColor;
+import cr.luparx.parking.model.VehicleType;
 import cr.luparx.parking.repository.ParkingRateRepository;
 import cr.luparx.parking.repository.ParkingSessionRepository;
 import cr.luparx.parking.repository.ParkingSpaceRepository;
@@ -91,13 +93,21 @@ public class DevActivitySeeder {
      */
     private static final Map<String, List<VehicleSeed>> VEHICLES = Map.of(
             "ana.morales@luparx.test", List.of(
-                    new VehicleSeed("BCT456", "El carro de la casa", "Toyota", "Yaris", 2019, true),
-                    new VehicleSeed("SJP123", "Carro de trabajo", "Hyundai", "Tucson", 2022, false)),
+                    new VehicleSeed("BCT456", "El carro de la casa", "Toyota", "Yaris", 2019,
+                            VehicleType.CAR, VehicleColor.GRAY, true),
+                    // A motorcycle on purpose: the type that stops being cosmetic the day a
+                    // municipality prices it differently.
+                    new VehicleSeed("SJP123", "La moto", "Honda", "CB125", 2022,
+                            VehicleType.MOTORCYCLE, VehicleColor.RED, false)),
             "bruno.castro@luparx.test", List.of(
-                    // Same plate as Ana's second car, on purpose: uniqueness is per user.
-                    new VehicleSeed("SJP123", "Mi carro", "Hyundai", "Tucson", 2022, true)),
+                    // Same plate as Ana's second vehicle, on purpose: uniqueness is per user. A
+                    // different make, colour and type under the same plate is also what makes an
+                    // inspector's lookup ambiguous in development, which is the point.
+                    new VehicleSeed("SJP123", "Mi pick-up", "Toyota", "Hilux", 2021,
+                            VehicleType.PICKUP, VehicleColor.WHITE, true)),
             "carla.jimenez@luparx.test", List.of(
-                    new VehicleSeed("CTG789", "El de mamá", "Nissan", "March", 2015, true)));
+                    new VehicleSeed("CTG789", "El de mamá", "Nissan", "March", 2015,
+                            VehicleType.CAR, VehicleColor.SILVER, true)));
 
     /** Minutes a past session ran for. Two closed stays per municipality, of different lengths. */
     private static final int[] PAST_SESSION_MINUTES = {60, 120};
@@ -217,7 +227,8 @@ public class DevActivitySeeder {
         List<Vehicle> created = new ArrayList<>();
         for (VehicleSeed seed : VEHICLES.getOrDefault(email, List.of())) {
             created.add(vehicleService.register(userId, seed.plate(), seed.name(), seed.brand(), seed.model(),
-                    Integer.valueOf(seed.year()), Boolean.TRUE, Boolean.valueOf(seed.primary())));
+                    Integer.valueOf(seed.year()), seed.type().name(), seed.color().name(),
+                    true, seed.primary()));
         }
         return created;
     }
@@ -405,9 +416,13 @@ public class DevActivitySeeder {
         return OffsetDateTime.ofInstant(instant, ZoneOffset.UTC);
     }
 
-    /** A car the fixture registers. {@code primary} marks the one offered first when starting a stay. */
+    /**
+     * A vehicle the fixture registers. {@code primary} marks the one offered first when starting a
+     * stay; {@code type} and {@code color} are what makes a card read "Toyota Yaris · Gris · 2019"
+     * instead of leaving the citizen app to render a blank where the reference design has content.
+     */
     private record VehicleSeed(String plate, String name, String brand, String model, int year,
-                               boolean primary) {
+                               VehicleType type, VehicleColor color, boolean primary) {
     }
 
     /** One stay the fixture is about to write, already priced. */

@@ -584,6 +584,18 @@ export interface SystemJob {
 // Uniqueness is `(user_id, plate normalized)` — plates repeat across users, never within one
 // user's own list (CONTRACT.md v0.2 rule 2). Only `plate` is required.
 
+/**
+ * One entry of a server-owned enumeration (`GET /catalog/vehicle-types`, `/catalog/vehicle-colors`).
+ *
+ * `value` is the stable key that travels on the wire and is stored; `labelKey` is what the client
+ * translates. The client never keeps its own list of types or colours: adding "cuadraciclo" or
+ * "verde oliva" is a server change, and a client that hardcoded the list would silently drop it.
+ */
+export interface VehicleAttributeCatalogEntry {
+  value: string;
+  labelKey: string;
+}
+
 export interface Vehicle {
   id: string;
   /** Normalized: uppercase, no spaces or dashes (CONTRACT.md v0.2 §"Vehículos"). */
@@ -592,6 +604,13 @@ export interface Vehicle {
   brand?: string;
   model?: string;
   year?: number;
+  /**
+   * Catalog key from `GET /catalog/vehicle-types` — mandatory server-side, `CAR` by default. Typed
+   * as a plain string, not a union: the catalog is data the server may grow at any time.
+   */
+  type: string;
+  /** Catalog key from `GET /catalog/vehicle-colors`. Optional: not every owner cares to say. */
+  color?: string;
   isOwner: boolean;
   isPrimary: boolean;
 }
@@ -603,6 +622,9 @@ export interface CreateVehicleRequest {
   brand?: string;
   model?: string;
   year?: number;
+  /** Catalog key; required by the server, which defaults it to `CAR` when omitted. */
+  type: string;
+  color?: string;
   isOwner: boolean;
 }
 
@@ -702,6 +724,22 @@ export interface ParkingZone {
   code: string;
   name: string;
   description?: string;
+  /**
+   * The bay codes this zone actually contains, summarised by the server so the citizen's field can
+   * say "espacios 0001–0050 en esta zona" instead of letting them guess and be refused at submit.
+   *
+   * Absent while a zone has no published bays — and absent altogether from servers older than the
+   * change that added it, which is why every reader treats it as optional rather than assuming the
+   * range exists.
+   */
+  spaceCodes?: ParkingZoneSpaceCodes;
+}
+
+/** Summary of one zone's bay codes: the lowest, the highest, and how many there are. */
+export interface ParkingZoneSpaceCodes {
+  first: string;
+  last: string;
+  count: number;
 }
 
 /**

@@ -36,4 +36,6 @@ export {
   useAdminLevels,
   useDocumentTypes,
   useTenants as useCatalogTenants,
+  useVehicleTypes,
+  useVehicleColors,
 } from './catalogHooks';

@@ -5,14 +5,20 @@ export interface ChipProps {
   selected?: boolean;
   onClick?: () => void;
   icon?: React.ReactNode;
+  /**
+   * Offered but not choosable right now. Rendered rather than hidden on purpose: an option that
+   * disappears reads as an option that does not exist, and part of what a row of choices tells
+   * someone is what their municipality has ruled out.
+   */
+  disabled?: boolean;
   className?: string;
 }
 
 /** A single pill filter (DESIGN_SYSTEM.md §3 "Filtros"). Prefer <ChipGroup> for a mutually-exclusive filter row. */
-export function Chip({ label, selected = false, onClick, icon, className }: ChipProps): React.JSX.Element {
+export function Chip({ label, selected = false, onClick, icon, disabled, className }: ChipProps): React.JSX.Element {
   const classes = ['lx-chip', className].filter(Boolean).join(' ');
   return (
-    <button type="button" className={classes} aria-pressed={selected} onClick={onClick}>
+    <button type="button" className={classes} aria-pressed={selected} disabled={disabled} onClick={onClick}>
       {icon}
       {label}
     </button>
@@ -23,6 +29,7 @@ export interface ChipGroupOption<T extends string = string> {
   value: T;
   label: React.ReactNode;
   icon?: React.ReactNode;
+  disabled?: boolean;
 }
 
 export interface ChipGroupProps<T extends string = string> {
@@ -55,6 +62,7 @@ export function ChipGroup<T extends string = string>({
           label={option.label}
           icon={option.icon}
           selected={option.value === value}
+          disabled={option.disabled}
           onClick={() => onChange(option.value)}
         />
       ))}

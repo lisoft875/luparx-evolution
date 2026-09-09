@@ -484,6 +484,49 @@ San José `#1d4ed8` (SJ), Escazú `#047857` (E), Montes de Oca `#b45309` (MO, sh
 La Unión `#7c3aed` (LU), Cartago `#be123c` (C). It repairs a municipality seeded before `V14_0` once,
 and only when it has none — a developer who set a colour or uploaded an emblem keeps it.
 
+## Vehicle catalogues and bay-code guidance (v0.5)
+
+`V15_0` adds `vehicles.type` (NOT NULL, backfilled to `CAR`) and `vehicles.color` (nullable), both as
+**catalogue keys** with a CHECK, and publishes the catalogues:
+
+```
+GET /api/v1/catalog/vehicle-types     [{value, labelKey}]  CAR, MOTORCYCLE, PICKUP, VAN, OTHER
+GET /api/v1/catalog/vehicle-colors    [{value, labelKey}]  WHITE … BEIGE, OTHER
+```
+
+Each type earns its place by being *operationally* different — a motorcycle occupies a fraction of a
+bay and is what a municipality prices differently first; a pickup or a van is longer than the painted
+bay, which is an enforcement question — and `OTHER` means a list can never block a registration. A
+bicycle is deliberately absent: it occupies no paid bay, so offering it would create a vehicle that
+can never legitimately start a session. Colours are a closed set because the inspector's search is
+"the grey one", and free text makes that match five spellings; `GRAY` and `SILVER` stay apart because
+people distinguish them on the street.
+
+The response carries both `type`/`color` (the keys a client filters and stores by) and
+`typeLabelKey`/`colorLabelKey` (what it renders through its own translations) — never a translated
+word chosen by the server, since the citizen and the inspector may read different languages. An
+unknown value is a 422 on that field, never a silent fall back to `CAR`.
+
+**Bay-code guidance.** `GET /citizen/parking/zones` now returns `spaceCodes: {first, last, count}` per
+zone, so the app can show "0001–0500" under the field instead of letting a citizen type `1500` in
+Barrio Amón and learn only that it does not exist. It is **one aggregate query** per municipality
+(`ParkingSpaceRepository.rangesByZone`), not one per zone — an N+1 here would get slower exactly as a
+municipality grows. Lexicographic min/max is exact because every code is zero-padded to the width its
+own format declares, so all the codes of one municipality are the same length. It rides on the
+existing 60-second private cache of that response rather than a cache of its own, which would need
+invalidating whenever a bay is created or retired.
+
+**Time ranges** are the municipal administrator's and already travel whole in
+`GET /citizen/parking/policy`: session increments, minimum and maximum, plus whether extensions are
+allowed, their increments and the total cap. A duration outside the list or over the cap is
+`INVALID_INCREMENT` at quote, start and extend — never rounded to the nearest offered option.
+
+**Headers.** `Cache-Control` is on the CORS allowed list: a browser is entitled to send it and a
+preflight that refuses it fails invisibly, with `fetch` rejecting on a bare "Failed to fetch". Every
+response under `/api/` carries `Vary: Authorization` (added, not set, so the CORS layer's own `Vary`
+survives): almost everything here depends on who asked, and a shared cache that stored one of these
+without knowing that would hand one person what we computed for another.
+
 ## Environment variables
 
 Secrets have **no usable default**: the application fails to start rather than run with a

@@ -2,6 +2,8 @@ package cr.luparx.app.web;
 
 import cr.luparx.app.web.dto.CatalogDtos;
 import cr.luparx.geo.service.AdministrativeDivisionService;
+import cr.luparx.parking.model.VehicleColor;
+import cr.luparx.parking.model.VehicleType;
 import cr.luparx.geo.service.CountryCatalogService;
 import cr.luparx.core.error.ErrorCode;
 import cr.luparx.core.error.NotFoundException;
@@ -19,6 +21,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -124,6 +127,40 @@ public class CatalogController {
         List<CatalogDtos.TenantLocaleResponse> body = tenantLocaleService.listEnabled(tenantId).stream()
                 .map(mapper::toTenantLocale)
                 .toList();
+        return cacheable(body);
+    }
+
+    /**
+     * The kinds of vehicle a citizen may register, with a translation key each.
+     *
+     * <p>Published rather than written into the frontend because four applications have to agree on
+     * this list, and because it stops being cosmetic the day a municipality charges a motorcycle
+     * differently from a car. Public and cacheable: it is the same list for everybody and it changes
+     * when the platform is deployed, not when a request is made.</p>
+     */
+    @GetMapping("/vehicle-types")
+    @Operation(summary = "Kinds of vehicle a citizen may register, with their i18n label keys")
+    public ResponseEntity<List<CatalogDtos.CatalogEntryResponse>> vehicleTypes() {
+        List<CatalogDtos.CatalogEntryResponse> body = new ArrayList<>(VehicleType.values().length);
+        for (VehicleType type : VehicleType.values()) {
+            body.add(new CatalogDtos.CatalogEntryResponse(type.name(), type.labelKey()));
+        }
+        return cacheable(body);
+    }
+
+    /**
+     * The colours a vehicle may be, with a translation key each.
+     *
+     * <p>A closed list because the inspector's search is "the grey one", and free text would make
+     * that match five spellings of the same colour.</p>
+     */
+    @GetMapping("/vehicle-colors")
+    @Operation(summary = "Colours a vehicle may be, with their i18n label keys")
+    public ResponseEntity<List<CatalogDtos.CatalogEntryResponse>> vehicleColors() {
+        List<CatalogDtos.CatalogEntryResponse> body = new ArrayList<>(VehicleColor.values().length);
+        for (VehicleColor color : VehicleColor.values()) {
+            body.add(new CatalogDtos.CatalogEntryResponse(color.name(), color.labelKey()));
+        }
         return cacheable(body);
     }
 

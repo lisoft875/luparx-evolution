@@ -506,3 +506,58 @@ Validación: el color se acepta como `#rrggbb` o `#rgb` (se expande) y se guarda
 filas con `#FFAA00` y `#ffaa00` son el mismo color y compararían distinto; el logo sólo se acepta como
 `generated:monogram` o `https://…`; el nombre corto, hasta 40 caracteres. Nada de aceptar cualquier
 cadena. `TENANT_BRANDING_UPDATED` queda auditado.
+
+---
+
+# v0.5 — Ficha de vehículo y guía de códigos (normativo)
+
+## Tipo y color del vehículo
+
+`vehicles.type` y `vehicles.color` son **claves de catálogo**, no texto libre, y la API publica cada
+catálogo con su clave de traducción:
+
+```
+GET /api/v1/catalog/vehicle-types    -> [{value, labelKey}]
+GET /api/v1/catalog/vehicle-colors   -> [{value, labelKey}]
+```
+
+**Tipo**: `CAR`, `MOTORCYCLE`, `PICKUP`, `VAN`, `OTHER`. Cada uno se gana el lugar por ser distinto
+*operativamente*: la moto ocupa una fracción de bahía y es lo que una municipalidad cobra distinto
+primero; pick-up y van son más largos que la bahía pintada, que es una pregunta de fiscalización;
+`OTHER` para que registrar un vehículo nunca lo bloquee una lista. La bicicleta queda fuera a
+propósito: no ocupa bahía de pago en ninguna municipalidad de este producto, así que ofrecerla
+crearía un vehículo que nunca podría iniciar una sesión.
+
+**Color**: `WHITE`, `BLACK`, `GRAY`, `SILVER`, `RED`, `BLUE`, `GREEN`, `YELLOW`, `ORANGE`, `BROWN`,
+`BEIGE`, `OTHER`. El fiscalizador busca "el gris"; con texto libre esa búsqueda encuentra cinco
+formas de escribir el mismo color y deja de servir. `GRAY` y `SILVER` van separados porque la gente
+los distingue en la calle.
+
+`type` es obligatorio (por defecto `CAR`, y así se rellenaron las filas anteriores a la columna);
+`color` es nullable, porque no hay color "probablemente correcto" e inventarlo sería peor que
+admitir que no se sabe. Un valor fuera del catálogo es `VALIDATION_FAILED` por campo, nunca un
+silencioso `CAR`.
+
+## Guía de códigos de espacio por zona
+
+`GET /api/v1/citizen/parking/zones` devuelve por zona `spaceCodes: {first, last, count}`, para que la
+app diga "0001–0500" debajo del campo en vez de dejar que el ciudadano escriba `1500` en Barrio Amón
+y sólo se entere de que no existe. Se calcula con **una sola consulta agregada** por municipalidad, no
+una por zona. `null` cuando la zona no tiene bahías todavía. `count` no se deduce del rango: una
+bahía retirada del medio deja los extremos intactos.
+
+## Rangos de tiempo
+
+Los define el administrador municipal y ya viajan completos en `GET /api/v1/citizen/parking/policy`:
+`sessionIncrementsMinutes`, `sessionMinMinutes`, `sessionMaxMinutes`, `extensionEnabled`,
+`extensionIncrementsMinutes` y `extensionMaxTotalMinutes`. El servidor rechaza con
+`INVALID_INCREMENT` cualquier duración fuera de la lista o del tope, al cotizar, al iniciar y al
+extender; nunca la redondea a la opción más cercana.
+
+## Cabeceras
+
+`Cache-Control` entra en la lista de cabeceras permitidas por CORS: un navegador tiene derecho a
+enviarla y un preflight que la rechaza falla de forma invisible. Toda respuesta bajo `/api/` lleva
+`Vary: Authorization`: casi todo lo que devuelve esta API depende de quién pregunta, y un caché
+intermedio que guardara una de esas respuestas sin saberlo le serviría a una persona lo que
+calculamos para otra.

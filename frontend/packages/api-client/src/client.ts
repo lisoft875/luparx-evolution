@@ -99,6 +99,7 @@ import type {
   UpsertDivisionRequest,
   UpsertDocumentTypeRequest,
   Vehicle,
+  VehicleAttributeCatalogEntry,
   VerifyEmailRequest,
   WalletResponse,
 } from './types/domain';
@@ -158,6 +159,15 @@ export class ApiClient {
      */
     tenantLocales: (tenantId: string): Promise<TenantLocale[]> =>
       this.http.request('GET', `/api/v1/catalog/tenants/${tenantId}/locales`, { auth: false }),
+    /**
+     * The vehicle enumerations the whole platform shares (`[{value, labelKey}]`). Public and
+     * slow-moving like the rest of `/catalog`, so every portal can read them before authenticating
+     * and cache them for a long time.
+     */
+    vehicleTypes: (): Promise<VehicleAttributeCatalogEntry[]> =>
+      this.http.request('GET', '/api/v1/catalog/vehicle-types', { auth: false }),
+    vehicleColors: (): Promise<VehicleAttributeCatalogEntry[]> =>
+      this.http.request('GET', '/api/v1/catalog/vehicle-colors', { auth: false }),
   };
 
   // ---- Auth (one root per portal) ------------------------------------------------------------
@@ -314,6 +324,14 @@ export class ApiClient {
      * zones the citizen has already parked in (their own session history).
      */
     zones: (): Promise<ParkingZone[]> => this.http.request('GET', '/api/v1/citizen/parking/zones'),
+    /**
+     * The shape of a bay code in this municipality (CONTRACT.md v0.3 §"Formato del código de
+     * espacio"), published to the citizen so their field can show the municipality's own example
+     * and refuse an impossible code before it costs a round trip. The admin endpoint of the same
+     * name writes it; this one only reads, and needs no `TENANT_MANAGE`.
+     */
+    spaceFormat: (): Promise<ParkingSpaceFormat> =>
+      this.http.request('GET', '/api/v1/citizen/parking/space-format'),
     quote: async (payload: ParkingQuoteRequest): Promise<ParkingQuoteResponse> =>
       toQuote(await this.http.request<WireQuote>('POST', '/api/v1/citizen/parking/quote', { body: payload })),
     sessions: async (query: ParkingSessionsQuery = {}): Promise<ParkingSession[]> =>

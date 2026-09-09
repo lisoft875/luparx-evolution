@@ -374,6 +374,9 @@ export const esCR = {
   'citizen.vehicles.form.plateLabel': 'Placa',
   'citizen.vehicles.form.plateHint': 'Se guarda en mayúsculas, sin espacios ni guiones.',
   'citizen.vehicles.form.nameLabel': 'Nombre del vehículo',
+  'citizen.vehicles.form.typeLabel': 'Tipo de vehículo',
+  'citizen.vehicles.form.colorLabel': 'Color',
+  'citizen.vehicles.form.colorUnset': 'Sin especificar',
   'citizen.vehicles.form.brandLabel': 'Marca',
   'citizen.vehicles.form.modelLabel': 'Modelo',
   'citizen.vehicles.form.yearLabel': 'Año',
@@ -651,6 +654,22 @@ export const esCR = {
   'citizen.parking.step4.chargeableMinutesLabel': 'Minutos que se cobran',
   'citizen.parking.step4.chargeableMinutesHint': 'El resto cae fuera del horario de cobro.',
 
+  // ---- Ciudadano: guía del código de espacio (rango real de la zona + formato del municipio) ----
+  'citizen.parking.step1.spaceCodeRange': 'Espacios {{first}}–{{last}} en esta zona ({{count}} en total).',
+  'citizen.parking.step1.spaceCodeRangeSingle': 'Esta zona tiene un solo espacio: {{code}}.',
+  'citizen.parking.step1.spaceCodeFormat': 'Formato: {{example}}.',
+  'citizen.parking.step1.spaceCodeError.format':
+    'Ese código no tiene el formato de esta municipalidad. Por ejemplo: {{example}}.',
+  'citizen.parking.step1.spaceCodeError.range': 'Esta zona solo tiene espacios del {{first}} al {{last}}.',
+
+  // ---- Ciudadano: duración "Otro" dentro de los límites de la municipalidad --------------------
+  'citizen.parking.step3.customCta': 'Otro',
+  'citizen.parking.step3.customLabel': 'Minutos',
+  'citizen.parking.step3.customHint': 'Otros tiempos que ofrece esta municipalidad, hasta {{max}}.',
+  'citizen.parking.step3.customUnavailable':
+    'Esta municipalidad solo ofrece los tiempos de arriba, hasta {{max}} por estacionamiento.',
+  'citizen.parking.step3.maxNotice': 'Esta municipalidad permite hasta {{max}} por estacionamiento.',
+
   // ---- Catálogos (claves que devuelve el servidor: países, documentos, divisiones) --------------
   // El catálogo viaja con claves estables, no con nombres ya escritos: el mismo país se lee en
   // cada idioma que hable la plataforma (CONTRACT.md §5).
@@ -676,6 +695,34 @@ export const esCR = {
   'document.US.NATIONAL_ID': 'Licencia de conducir',
   'document.US.PASSPORT': 'Pasaporte',
   'document.US.TAX_ID': 'SSN',
+
+  // Tipos y colores de vehículo: el servidor manda `{value, labelKey}` y el cliente sólo traduce.
+  // Ninguna pantalla lista estos valores por su cuenta (CONTRACT.md — catálogos de vehículo).
+  'vehicle.type.car': 'Automóvil',
+  'vehicle.type.motorcycle': 'Motocicleta',
+  'vehicle.type.truck': 'Camión',
+  'vehicle.type.pickup': 'Pick-up',
+  'vehicle.type.van': 'Furgoneta',
+  'vehicle.type.bus': 'Autobús',
+  'vehicle.type.bicycle': 'Bicicleta',
+  'vehicle.type.scooter': 'Scooter',
+  'vehicle.type.other': 'Otro',
+
+  'vehicle.color.white': 'Blanco',
+  'vehicle.color.black': 'Negro',
+  'vehicle.color.gray': 'Gris',
+  'vehicle.color.grey': 'Gris',
+  'vehicle.color.silver': 'Plateado',
+  'vehicle.color.red': 'Rojo',
+  'vehicle.color.blue': 'Azul',
+  'vehicle.color.green': 'Verde',
+  'vehicle.color.yellow': 'Amarillo',
+  'vehicle.color.orange': 'Naranja',
+  'vehicle.color.brown': 'Café',
+  'vehicle.color.beige': 'Beige',
+  'vehicle.color.gold': 'Dorado',
+  'vehicle.color.purple': 'Morado',
+  'vehicle.color.other': 'Otro',
 
   'geo.level.CR.1': 'Provincia',
   'geo.level.CR.2': 'Cantón',

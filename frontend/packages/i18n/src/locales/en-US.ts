@@ -366,6 +366,9 @@ export const enUS: Record<TranslationKey, string> = {
   'citizen.vehicles.form.plateLabel': 'Plate',
   'citizen.vehicles.form.plateHint': 'Saved in uppercase, with no spaces or dashes.',
   'citizen.vehicles.form.nameLabel': 'Vehicle name',
+  'citizen.vehicles.form.typeLabel': 'Vehicle type',
+  'citizen.vehicles.form.colorLabel': 'Colour',
+  'citizen.vehicles.form.colorUnset': 'Not specified',
   'citizen.vehicles.form.brandLabel': 'Brand',
   'citizen.vehicles.form.modelLabel': 'Model',
   'citizen.vehicles.form.yearLabel': 'Year',
@@ -642,6 +645,22 @@ export const enUS: Record<TranslationKey, string> = {
   'citizen.parking.step4.chargeableMinutesLabel': 'Chargeable minutes',
   'citizen.parking.step4.chargeableMinutesHint': 'The rest falls outside the charging hours.',
 
+  // ---- Citizen: bay-code guide (the zone's real range + the municipality's format) --------------
+  'citizen.parking.step1.spaceCodeRange': 'Bays {{first}}–{{last}} in this zone ({{count}} in total).',
+  'citizen.parking.step1.spaceCodeRangeSingle': 'This zone has a single bay: {{code}}.',
+  'citizen.parking.step1.spaceCodeFormat': 'Format: {{example}}.',
+  'citizen.parking.step1.spaceCodeError.format':
+    "That code does not match this municipality's format. For example: {{example}}.",
+  'citizen.parking.step1.spaceCodeError.range': 'This zone only has bays from {{first}} to {{last}}.',
+
+  // ---- Citizen: "Other" duration, inside the municipality's own limits --------------------------
+  'citizen.parking.step3.customCta': 'Other',
+  'citizen.parking.step3.customLabel': 'Minutes',
+  'citizen.parking.step3.customHint': 'Other times this municipality offers, up to {{max}}.',
+  'citizen.parking.step3.customUnavailable':
+    'This municipality only offers the times above, up to {{max}} per stay.',
+  'citizen.parking.step3.maxNotice': 'This municipality allows up to {{max}} per stay.',
+
   // ---- Catalogs (server-provided keys: countries, documents, divisions) -------------------------
   'country.CR': 'Costa Rica',
   'country.ES': 'Spain',
@@ -665,6 +684,33 @@ export const enUS: Record<TranslationKey, string> = {
   'document.US.NATIONAL_ID': "Driver's licence",
   'document.US.PASSPORT': 'Passport',
   'document.US.TAX_ID': 'Tax ID (SSN)',
+
+  // Vehicle types and colours: the server sends `{value, labelKey}` and the client only translates.
+  'vehicle.type.car': 'Car',
+  'vehicle.type.motorcycle': 'Motorcycle',
+  'vehicle.type.truck': 'Truck',
+  'vehicle.type.pickup': 'Pickup',
+  'vehicle.type.van': 'Van',
+  'vehicle.type.bus': 'Bus',
+  'vehicle.type.bicycle': 'Bicycle',
+  'vehicle.type.scooter': 'Scooter',
+  'vehicle.type.other': 'Other',
+
+  'vehicle.color.white': 'White',
+  'vehicle.color.black': 'Black',
+  'vehicle.color.gray': 'Grey',
+  'vehicle.color.grey': 'Grey',
+  'vehicle.color.silver': 'Silver',
+  'vehicle.color.red': 'Red',
+  'vehicle.color.blue': 'Blue',
+  'vehicle.color.green': 'Green',
+  'vehicle.color.yellow': 'Yellow',
+  'vehicle.color.orange': 'Orange',
+  'vehicle.color.brown': 'Brown',
+  'vehicle.color.beige': 'Beige',
+  'vehicle.color.gold': 'Gold',
+  'vehicle.color.purple': 'Purple',
+  'vehicle.color.other': 'Other',
 
   'geo.level.CR.1': 'Province',
   'geo.level.CR.2': 'Canton',

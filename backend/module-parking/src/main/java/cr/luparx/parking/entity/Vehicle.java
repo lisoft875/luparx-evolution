@@ -1,8 +1,12 @@
 package cr.luparx.parking.entity;
 
 import cr.luparx.core.id.UserId;
+import cr.luparx.parking.model.VehicleColor;
+import cr.luparx.parking.model.VehicleType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
@@ -53,6 +57,23 @@ public class Vehicle {
     @Column(name = "year")
     private Integer year;
 
+    /**
+     * What kind of vehicle it is. Not decoration: a per-type tariff would be resolved by this, and it
+     * is what an inspector reads. Never null — a row that predates the column was backfilled to
+     * {@link VehicleType#DEFAULT}.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "type", nullable = false, length = 32)
+    private VehicleType type = VehicleType.DEFAULT;
+
+    /**
+     * Colour as a catalogue key, never a word the citizen typed: the inspector searches for "the grey
+     * one". Null means they have not said, which is honest — there is no colour that is probably right.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "color", length = 32)
+    private VehicleColor color;
+
     /** A declaration by the citizen, never a verified fact: no vehicle registry is consulted. */
     @Column(name = "is_owner", nullable = false)
     private boolean owner = true;
@@ -75,7 +96,10 @@ public class Vehicle {
     }
 
     public Vehicle(UUID id, UUID userId, String plate, String plateNormalized, String name, String brand,
-                   String model, Integer year, boolean owner, boolean primary, Instant createdAt) {
+                   String model, Integer year, VehicleType type, VehicleColor color, boolean owner,
+                   boolean primary, Instant createdAt) {
+        this.type = type == null ? VehicleType.DEFAULT : type;
+        this.color = color;
         this.id = id;
         this.userId = userId;
         this.plate = plate;
@@ -122,6 +146,15 @@ public class Vehicle {
         return model;
     }
 
+    public VehicleType getType() {
+        return type;
+    }
+
+    /** Null when the citizen has not said what colour it is. */
+    public VehicleColor getColor() {
+        return color;
+    }
+
     public Integer getYear() {
         return year;
     }
@@ -155,11 +188,19 @@ public class Vehicle {
         this.plateNormalized = plateNormalized;
     }
 
-    public void describe(String name, String brand, String model, Integer year, boolean owner) {
+    /**
+     * Replaces everything the citizen describes about the car. A null colour means "not said" and is
+     * stored as such; a null type falls back to the default, because the column cannot be empty and a
+     * client that omits it means "the ordinary case".
+     */
+    public void describe(String name, String brand, String model, Integer year, VehicleType type,
+                         VehicleColor color, boolean owner) {
         this.name = name;
         this.brand = brand;
         this.model = model;
         this.year = year;
+        this.type = type == null ? VehicleType.DEFAULT : type;
+        this.color = color;
         this.owner = owner;
     }
 

@@ -85,4 +85,20 @@ public final class CatalogDtos {
      */
     public record TenantLocaleResponse(String locale, boolean isDefault, int sortOrder) {
     }
+
+    /**
+     * One entry of a closed catalogue the platform publishes: {@code GET /catalog/vehicle-types} and
+     * {@code GET /catalog/vehicle-colors}.
+     *
+     * <p>Two fields and no third. {@code value} is what a client sends back and stores; {@code
+     * labelKey} is what it renders through its own translations. There is deliberately no translated
+     * word here: the same vehicle is read by a citizen in Spanish and an inspector in English, and a
+     * server that picked one of them would be wrong for the other (CONTRACT.md §7).</p>
+     *
+     * <p>It exists at all so that a list like "car, motorcycle, pickup" lives in one place instead of
+     * being retyped in four applications — the day a municipality prices motorcycles differently, the
+     * list stops being cosmetic and has to already agree everywhere.</p>
+     */
+    public record CatalogEntryResponse(String value, String labelKey) {
+    }
 }

@@ -15,6 +15,7 @@ import type {
   TenantAdmin,
   UserProfile,
   Vehicle,
+  VehicleAttributeCatalogEntry,
 } from '../types/domain';
 
 /**
@@ -361,6 +362,8 @@ export const mockVehicles: MockVehicleRecord[] = [
     brand: 'Toyota',
     model: 'Yaris',
     year: 2015,
+    type: 'CAR',
+    color: 'GRAY',
     isOwner: true,
     isPrimary: true,
   },
@@ -371,6 +374,8 @@ export const mockVehicles: MockVehicleRecord[] = [
     brand: 'Toyota',
     model: 'RAV4',
     year: 2018,
+    type: 'CAR',
+    color: 'WHITE',
     isOwner: true,
     isPrimary: false,
   },
@@ -381,9 +386,34 @@ export const mockVehicles: MockVehicleRecord[] = [
     brand: 'Toyota',
     model: 'Corolla',
     year: 2022,
+    type: 'MOTORCYCLE',
+    color: 'BLACK',
     isOwner: false,
     isPrimary: false,
   },
+];
+
+/**
+ * The platform's vehicle enumerations (`GET /catalog/vehicle-types`, `/catalog/vehicle-colors`).
+ * Keys only — the label text lives in the client dictionaries, one entry per `labelKey`.
+ */
+export const MOCK_VEHICLE_TYPES: VehicleAttributeCatalogEntry[] = [
+  { value: 'CAR', labelKey: 'vehicle.type.car' },
+  { value: 'MOTORCYCLE', labelKey: 'vehicle.type.motorcycle' },
+  { value: 'PICKUP', labelKey: 'vehicle.type.pickup' },
+  { value: 'VAN', labelKey: 'vehicle.type.van' },
+  { value: 'OTHER', labelKey: 'vehicle.type.other' },
+];
+
+export const MOCK_VEHICLE_COLORS: VehicleAttributeCatalogEntry[] = [
+  { value: 'WHITE', labelKey: 'vehicle.color.white' },
+  { value: 'BLACK', labelKey: 'vehicle.color.black' },
+  { value: 'GRAY', labelKey: 'vehicle.color.gray' },
+  { value: 'SILVER', labelKey: 'vehicle.color.silver' },
+  { value: 'RED', labelKey: 'vehicle.color.red' },
+  { value: 'BLUE', labelKey: 'vehicle.color.blue' },
+  { value: 'GREEN', labelKey: 'vehicle.color.green' },
+  { value: 'OTHER', labelKey: 'vehicle.color.other' },
 ];
 
 let mockVehicleSequence = 100;

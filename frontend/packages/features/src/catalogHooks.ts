@@ -34,6 +34,27 @@ export function useDocumentTypes(apiClient: ApiClient, countryCode: string | und
   });
 }
 
+/**
+ * Vehicle types and colours as the server enumerates them (`[{value, labelKey}]`). Neither list is
+ * ever written down in the client — the caller translates `labelKey` and shows whatever arrives.
+ * They are platform-wide, not tenant-scoped, so the cache key carries nothing else.
+ */
+export function useVehicleTypes(apiClient: ApiClient) {
+  return useQuery({
+    queryKey: ['catalog', 'vehicle-types'],
+    queryFn: () => apiClient.catalog.vehicleTypes(),
+    staleTime: CATALOG_STALE_TIME_MS,
+  });
+}
+
+export function useVehicleColors(apiClient: ApiClient) {
+  return useQuery({
+    queryKey: ['catalog', 'vehicle-colors'],
+    queryFn: () => apiClient.catalog.vehicleColors(),
+    staleTime: CATALOG_STALE_TIME_MS,
+  });
+}
+
 export function useTenants(apiClient: ApiClient, countryCode: string | undefined) {
   return useQuery({
     queryKey: ['catalog', 'tenants', countryCode],

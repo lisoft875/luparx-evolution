@@ -49,6 +49,10 @@ public final class ParkingDtos {
             @Size(max = 80) String brand,
             @Size(max = 80) String model,
             @Min(1885) @Max(2200) Integer year,
+            // Keys from the catalogues at GET /catalog/vehicle-types and /catalog/vehicle-colors.
+            // Absent type means the ordinary case (a car); absent colour means "not said".
+            @Size(max = 32) String type,
+            @Size(max = 32) String color,
             Boolean isOwner,
             Boolean isPrimary) {
     }
@@ -60,12 +64,26 @@ public final class ParkingDtos {
             @Size(max = 80) String brand,
             @Size(max = 80) String model,
             @Min(1885) @Max(2200) Integer year,
+            @Size(max = 32) String type,
+            @Size(max = 32) String color,
             Boolean isOwner) {
     }
 
     /**
      * A registered vehicle. {@code plate} is what the citizen typed and {@code plateNormalized} is
      * what the platform matches on; both are returned so the app can show one and compare the other.
+     */
+    /**
+     * A registered vehicle.
+     *
+     * <p>{@code type} and {@code color} are catalogue KEYS and {@code typeLabelKey} /
+     * {@code colorLabelKey} are the i18n keys to render them with. Both travel because they answer
+     * different questions: the key is what a client filters and compares by, the label key is what it
+     * prints — and printing a translated word the server chose would break the moment the citizen and
+     * the inspector read different languages.</p>
+     *
+     * <p>{@code color} is null when the citizen has not said, which is a real answer and not a gap to
+     * paper over.</p>
      */
     public record VehicleResponse(
             UUID id,
@@ -75,6 +93,10 @@ public final class ParkingDtos {
             String brand,
             String model,
             Integer year,
+            String type,
+            String typeLabelKey,
+            String color,
+            String colorLabelKey,
             boolean isOwner,
             boolean isPrimary,
             Instant createdAt) {
@@ -154,7 +176,20 @@ public final class ParkingDtos {
             String code,
             String name,
             String description,
-            ParkingRateSummary rate) {
+            ParkingRateSummary rate,
+            SpaceCodeRange spaceCodes) {
+    }
+
+    /**
+     * Which bay codes a zone actually has, so the app can say "0001–0500" under the field instead of
+     * letting a citizen guess and be told the code does not exist.
+     *
+     * <p>The bays of a zone are dealt in one contiguous block, so first and last describe the range
+     * exactly; {@code count} is there because a range does not say whether anything was retired out of
+     * the middle. Null when the zone has no bays at all — a zone drawn on a map before it was painted,
+     * which is a valid state and not something to render as "0–0".</p>
+     */
+    public record SpaceCodeRange(String first, String last, long count) {
     }
 
     /** The price of a zone as a citizen reads it: an exact amount per block of minutes. */

@@ -24,6 +24,8 @@ import {
   MOCK_COUNTRIES,
   MOCK_DIVISIONS,
   MOCK_DOCUMENT_TYPES,
+  MOCK_VEHICLE_COLORS,
+  MOCK_VEHICLE_TYPES,
   MOCK_FEATURE_FLAGS,
   MOCK_PLATFORM_TENANTS,
   MOCK_SYSTEM_HEALTH,
@@ -234,6 +236,13 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
   if (method === 'GET' && segments[2] === 'catalog' && segments[4] === 'document-types') {
     const code = segments[3]?.toUpperCase() ?? '';
     return json(MOCK_DOCUMENT_TYPES[code] ?? []);
+  }
+  // GET /api/v1/catalog/vehicle-types | /vehicle-colors — platform-wide enumerations, `{value, labelKey}`.
+  if (method === 'GET' && path === '/api/v1/catalog/vehicle-types') {
+    return json(MOCK_VEHICLE_TYPES);
+  }
+  if (method === 'GET' && path === '/api/v1/catalog/vehicle-colors') {
+    return json(MOCK_VEHICLE_COLORS);
   }
   // GET /api/v1/catalog/tenants
   if (method === 'GET' && path === '/api/v1/catalog/tenants') {
@@ -967,6 +976,8 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
             brand: payload.brand,
             model: payload.model,
             year: payload.year,
+            type: payload.type || 'CAR',
+            color: payload.color,
             isOwner: payload.isOwner,
             isPrimary: isFirstVehicle,
           };
@@ -995,6 +1006,8 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
         record.brand = payload.brand;
         record.model = payload.model;
         record.year = payload.year;
+        record.type = payload.type || 'CAR';
+        record.color = payload.color;
         record.isOwner = payload.isOwner;
         const { userId: _userId, ...vehicle } = record;
         return json(vehicle);
@@ -1045,6 +1058,12 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
 
       if (sub === 'zones' && method === 'GET') {
         return json(mockCitizenZones(tenantId));
+      }
+
+      // Published to the citizen too, read-only: their bay-code field needs the municipality's own
+      // example and pattern before it can help rather than only report a refusal.
+      if (sub === 'space-format' && method === 'GET') {
+        return json(mockSpaceFormat());
       }
 
       if (sub === 'sessions' && segments.length === 5 && method === 'GET') {
@@ -1328,9 +1347,25 @@ function mockChargingSchedule(): unknown {
 }
 
 function mockCitizenZones(tenantId: string | null): unknown {
+  // `spaceCodes` summarises the bays the zone actually holds, so the citizen's field can state the
+  // range instead of letting a code be guessed and refused at submit.
   return tenantId === 'tenant-escazu'
-    ? [{ id: 'zone-escazu-centro', code: 'ESC-CENTRO', name: 'Centro' }]
-    : [{ id: 'zone-centro', code: 'SJ-CENTRO', name: 'Centro' }];
+    ? [
+        {
+          id: 'zone-escazu-centro',
+          code: 'ESC-CENTRO',
+          name: 'Centro',
+          spaceCodes: { first: 'LUP-0001', last: 'LUP-0040', count: 40 },
+        },
+      ]
+    : [
+        {
+          id: 'zone-centro',
+          code: 'SJ-CENTRO',
+          name: 'Centro',
+          spaceCodes: { first: 'LUP-0001', last: 'LUP-0050', count: 50 },
+        },
+      ];
 }
 
 /** The bay-code shape of the mock municipality (CONTRACT.md v0.3 §"Formato del código de espacio"). */

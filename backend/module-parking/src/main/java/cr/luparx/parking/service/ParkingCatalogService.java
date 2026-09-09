@@ -10,6 +10,7 @@ import cr.luparx.core.money.Money;
 import cr.luparx.parking.entity.ParkingRate;
 import cr.luparx.parking.entity.ParkingSpace;
 import cr.luparx.parking.entity.ParkingZone;
+import cr.luparx.parking.model.ParkingSpaceRange;
 import cr.luparx.parking.model.ParkingSpaceStatus;
 import cr.luparx.parking.repository.ParkingRateRepository;
 import cr.luparx.parking.repository.ParkingSpaceRepository;
@@ -107,6 +108,22 @@ public class ParkingCatalogService {
     @Transactional(readOnly = true)
     public List<ParkingZone> listActiveZones(TenantId tenantId) {
         return zoneRepository.findByTenantIdAndActiveTrueOrderByCodeAsc(tenantId.value());
+    }
+
+    /**
+     * The bay code range of each zone of a municipality, in one query.
+     *
+     * <p>What the citizen app puts under the bay field as "0001–0500". A zone missing from the map has
+     * no bays at all — drawn on a map before it was painted — and the app shows no hint rather than an
+     * invented one.</p>
+     */
+    @Transactional(readOnly = true)
+    public Map<UUID, ParkingSpaceRange> spaceRangesByZone(TenantId tenantId) {
+        Map<UUID, ParkingSpaceRange> byZone = new HashMap<>();
+        for (ParkingSpaceRange range : spaceRepository.rangesByZone(tenantId.value())) {
+            byZone.put(range.zoneId(), range);
+        }
+        return byZone;
     }
 
     /**

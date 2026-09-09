@@ -8,6 +8,8 @@ import cr.luparx.core.id.UserId;
 import cr.luparx.core.id.Uuid7;
 import cr.luparx.parking.entity.Vehicle;
 import cr.luparx.parking.model.ParkingSessionStatus;
+import cr.luparx.parking.model.VehicleColor;
+import cr.luparx.parking.model.VehicleType;
 import cr.luparx.parking.model.PlateNormalizer;
 import cr.luparx.parking.repository.ParkingSessionRepository;
 import cr.luparx.parking.repository.VehicleRepository;
@@ -61,7 +63,7 @@ public class VehicleService {
 
     @Transactional
     public Vehicle register(UserId userId, String plate, String name, String brand, String model, Integer year,
-                            boolean owner, boolean primary) {
+                            String type, String color, boolean owner, boolean primary) {
         String normalized = requireValidPlate(plate);
         if (vehicleRepository.existsByUserIdAndPlateNormalized(userId.value(), normalized)) {
             // Per user, not globally: another citizen may well have this same plate registered.
@@ -75,13 +77,14 @@ public class VehicleService {
             clearPrimary(userId, null, now);
         }
         Vehicle vehicle = new Vehicle(Uuid7.generate(), userId.value(), plate.trim(), normalized,
-                blankToNull(name), blankToNull(brand), blankToNull(model), year, owner, makePrimary, now);
+                blankToNull(name), blankToNull(brand), blankToNull(model), year,
+                requireValidType(type), requireValidColor(color), owner, makePrimary, now);
         return vehicleRepository.save(vehicle);
     }
 
     @Transactional
     public Vehicle update(UserId userId, UUID vehicleId, String plate, String name, String brand, String model,
-                          Integer year, boolean owner) {
+                          Integer year, String type, String color, boolean owner) {
         Vehicle vehicle = requireOwn(userId, vehicleId);
         String normalized = requireValidPlate(plate);
         if (!normalized.equals(vehicle.getPlateNormalized())
@@ -92,7 +95,8 @@ public class VehicleService {
         // A running session keeps its own plate_snapshot, so correcting a typo here never rewrites
         // what an inspector verified.
         vehicle.changePlate(plate.trim(), normalized);
-        vehicle.describe(blankToNull(name), blankToNull(brand), blankToNull(model), year, owner);
+        vehicle.describe(blankToNull(name), blankToNull(brand), blankToNull(model), year,
+                requireValidType(type), requireValidColor(color), owner);
         vehicle.touch(clock.instant());
         return vehicleRepository.save(vehicle);
     }
@@ -104,6 +108,32 @@ public class VehicleService {
      *         it. The row is referenced by every session it ever had, so deleting it under a running
      *         one would break the inspector's view of a stay that is still being paid for.
      */
+    /**
+     * The kind of vehicle, refused when it is not one this platform knows.
+     *
+     * <p>An unknown value is a validation error and never a silent fall back to {@code CAR}: the
+     * client is choosing from a catalogue the API published, so a value outside it means the two have
+     * drifted, and quietly storing a car where the citizen said motorcycle is how a per-type tariff
+     * ends up charging the wrong person. Absent is different from wrong: sending nothing is the
+     * ordinary case and takes the default.</p>
+     */
+    private VehicleType requireValidType(String value) {
+        if (value == null || value.isBlank()) {
+            return VehicleType.DEFAULT;
+        }
+        return VehicleType.parse(value).orElseThrow(() -> new ValidationException("type",
+                ErrorCode.VALIDATION_FAILED, "error.parking.vehicle.type.invalid"));
+    }
+
+    /** The colour, refused when unknown. Absent stays absent: "not said" is a real answer. */
+    private VehicleColor requireValidColor(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return VehicleColor.parse(value).orElseThrow(() -> new ValidationException("color",
+                ErrorCode.VALIDATION_FAILED, "error.parking.vehicle.color.invalid"));
+    }
+
     @Transactional
     public void delete(UserId userId, UUID vehicleId) {
         Vehicle vehicle = requireOwn(userId, vehicleId);

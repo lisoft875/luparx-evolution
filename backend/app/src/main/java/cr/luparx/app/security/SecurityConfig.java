@@ -280,8 +280,13 @@ public class SecurityConfig {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(origins);
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+        // Cache-Control is on the list because a browser is entitled to send it on a request — a
+        // "reload" does — and a preflight that refuses a header the client had every right to use
+        // fails invisibly: the request never leaves, and fetch rejects with a bare "Failed to fetch"
+        // that says nothing about which header was the problem. The list should admit what is
+        // reasonable rather than break silently.
         configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept", "Accept-Language",
-                "Idempotency-Key", RequestCorrelationFilter.REQUEST_ID_HEADER));
+                "Cache-Control", "Idempotency-Key", RequestCorrelationFilter.REQUEST_ID_HEADER));
         configuration.setExposedHeaders(List.of(RequestCorrelationFilter.REQUEST_ID_HEADER, "Retry-After"));
         configuration.setAllowCredentials(false);
         configuration.setMaxAge(3600L);

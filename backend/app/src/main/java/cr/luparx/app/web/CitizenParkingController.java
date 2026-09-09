@@ -19,6 +19,7 @@ import cr.luparx.parking.entity.ParkingSessionExtension;
 import cr.luparx.parking.entity.ParkingZone;
 import cr.luparx.parking.model.ParkingQuote;
 import cr.luparx.parking.model.ParkingSessionStatus;
+import cr.luparx.parking.model.ParkingSpaceRange;
 import cr.luparx.parking.service.ParkingCatalogService;
 import cr.luparx.parking.service.ParkingPolicyService;
 import cr.luparx.parking.service.ParkingQuoteService;
@@ -138,6 +139,14 @@ public class CitizenParkingController {
      * tenant's price list resolved for an authenticated caller, so it must never land in a shared
      * cache. One minute, because a tariff change has to reach the app quickly enough that a citizen is
      * never quoted yesterday's price.</p>
+     *
+     * <p>Each zone carries the <b>range of bay codes</b> it actually has, so the app can put
+     * "0001–0500" under the field instead of letting a citizen type 1500 in Barrio Amón and be told
+     * only that the code does not exist. The range changes when the municipality paints or retires a
+     * bay — rarely — but it rides on this response rather than in a cache of its own: a second cache
+     * would need invalidating whenever {@code POST /admin/parking/spaces} runs, and the minute this
+     * response already lives for is a cheaper way to be at most a minute stale about a number that
+     * changes a few times a year.</p>
      */
     @GetMapping("/zones")
     @PreAuthorize("hasRole('CITIZEN')")
@@ -147,9 +156,12 @@ public class CitizenParkingController {
         Instant now = clock.instant();
         List<ParkingZone> zones = catalogService.listActiveZones(tenantId);
         Map<UUID, ParkingRate> rates = catalogService.ratesInForce(tenantId, now);
+        // Both in one aggregate query each, never one per zone: this list grows with the
+        // municipality, and an N+1 here would get slower exactly as one succeeds.
+        Map<UUID, ParkingSpaceRange> ranges = catalogService.spaceRangesByZone(tenantId);
         List<ParkingDtos.CitizenParkingZoneResponse> body = new ArrayList<>(zones.size());
         for (ParkingZone zone : zones) {
-            body.add(mapper.toCitizenZone(zone, rates.get(zone.getId())));
+            body.add(mapper.toCitizenZone(zone, rates.get(zone.getId()), ranges.get(zone.getId())));
         }
         return privatelyCacheable(body, ZONES_CACHE_TTL);
     }
