@@ -2,7 +2,7 @@
   "name": "@luparx/features",
   "private": true,
   "version": "0.1.0",
-  "description": "Cross-portal business forms (registration, login, MFA, tenant switch) composed from @luparx/ui, shared identically by all three apps.",
+  "description": "Cross-portal business forms (registration, login, tenant switch) composed from @luparx/ui, shared identically by all three apps.",
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",

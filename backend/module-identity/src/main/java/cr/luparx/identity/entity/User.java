@@ -114,9 +114,6 @@ public class User {
     @Column(name = "blocked_reason", length = 500)
     private String blockedReason;
 
-    /** Forces MFA for this person even on a portal where it is otherwise optional. */
-    @Column(name = "mfa_required", nullable = false)
-    private boolean mfaRequired;
 
     @Column(name = "accepted_terms_version", nullable = false, length = 32)
     private String acceptedTermsVersion;
@@ -191,7 +188,6 @@ public class User {
         this.credentialsVersion = 1;
         this.createdAt = createdAt;
         this.updatedAt = createdAt;
-        this.mfaRequired = false;
     }
 
     public UUID getId() {
@@ -302,9 +298,6 @@ public class User {
         return blockedReason;
     }
 
-    public boolean isMfaRequired() {
-        return mfaRequired;
-    }
 
     public String getAcceptedTermsVersion() {
         return acceptedTermsVersion;
@@ -380,10 +373,6 @@ public class User {
         this.updatedAt = now;
     }
 
-    public void requireMfa(boolean required, Instant now) {
-        this.mfaRequired = required;
-        this.updatedAt = now;
-    }
 
     /** Invalidates every token issued so far (password change, forced reset, admin action). */
     public void bumpCredentialsVersion(Instant now) {

@@ -1,6 +1,8 @@
 # 0007 — MFA TOTP (RFC 6238) con códigos de recuperación; obligatorio para admin e inspector
 
-- **Estado**: Aceptado
+- **Estado**: **Reemplazado por [ADR 0016](0016-remove-mfa.md)** (2026-09-09) — el segundo factor se
+  retiró del producto sin haberse encendido nunca. Este documento se conserva como registro de la
+  decisión original y de por qué se eligió TOTP; nada de lo que describe sigue en el código.
 - **Fecha**: 2026-09-07
 
 ## Contexto

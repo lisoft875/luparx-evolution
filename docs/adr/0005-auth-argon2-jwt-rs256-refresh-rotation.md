@@ -27,7 +27,7 @@ horizontalmente sin estado compartido en memoria (`docs/ARCHITECTURE.md` §7).
   migración de datos porque el hash almacena su propio algoritmo/parámetros — `user_credentials.
   algorithm`).
 - **Access token**: JWT RS256, 15 minutos de vida, claims `iss, sub, aud, exp, iat, jti, portal,
-  tid, roles[], perms[], mfa, locale, ver` (`CONTRACT.md` §3). Verificación pública vía JWKS en
+  tid, roles[], perms[], locale, ver` (`CONTRACT.md` §3). Verificación pública vía JWKS en
   `/.well-known/jwks.json`; las claves privadas de firma nunca salen del backend. Rotación de
   claves: se publican múltiples claves activas en el JWKS (`kid` en el header del JWT) para poder
   rotar sin invalidar tokens ya emitidos hasta su expiración natural (máximo 15 min de solape

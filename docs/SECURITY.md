@@ -7,11 +7,10 @@
 
 | Activo | Amenaza principal | Impacto | Mitigación |
 |---|---|---|---|
-| Credenciales de usuario | Fuerza bruta / credential stuffing | Toma de cuenta | Argon2id, `auth_attempts` + bloqueo por intentos, MFA obligatorio en admin/inspector |
+| Credenciales de usuario | Fuerza bruta / credential stuffing | Toma de cuenta | Argon2id, `auth_attempts` + bloqueo por intentos. **Sin segundo factor** (ADR 0016): riesgo aceptado, mitigado además con restricción por IP en el portal de plataforma |
 | Access/refresh tokens | Robo vía XSS, dispositivo comprometido, red insegura | Suplantación de sesión | Storage aislado por app, refresh opaco con rotación y detección de reuso, `aud` por portal |
 | Datos de otro tenant | IDOR/BOLA, fuga por caché/log/export | Violación de confidencialidad municipal, incumplimiento legal | Defensa en profundidad multi-tenant (ver `docs/ARCHITECTURE.md` §4), RLS como capa adicional (ADR 0002) |
 | Documento de identidad / fecha de nacimiento | Exfiltración de datos personales sensibles | Daño a la persona, incumplimiento de protección de datos | Minimización, cifrado en reposo donde aplique, control de acceso estricto, auditoría de lectura |
-| Secreto TOTP | Lectura de la base de datos | Bypass total de MFA | Cifrado en reposo, nunca en logs/auditoría |
 | Webhooks de pago (v0.3+) | Replay, falsificación de origen | Fraude financiero | Verificación de firma del proveedor, `event_id` persistido antes de procesar (ADR 0012) |
 | Endpoints públicos de catálogo | Scraping / abuso | Costo de infraestructura, exposición de datos de municipalidades no publicadas | Rate limiting básico, sólo tenants con `status` publicable expuestos |
 
@@ -20,8 +19,9 @@
 - Argon2id para contraseñas; nunca almacenar en claro ni con hash reversible (ADR 0005).
 - JWT RS256 con JWKS público; el resource server valida firma, `exp`, `aud` (por portal) y `tid`
   contra la ruta invocada. Rechazo explícito de `alg=none` y de algoritmos no RS256.
-- MFA TOTP obligatorio para `admin`/`inspector`, opcional para `citizen` (ADR 0007); códigos de
-  recuperación de un solo uso, hasheados.
+- **No hay segundo factor** (ADR 0016). Es una decisión del producto, no una configuración
+  pendiente: lo que protege una cuenta es la contraseña, su política, y el limitador de intentos.
+  Antes de exponer el portal de plataforma a internet abierto hay que restringirlo por IP.
 - Rate limiting y bloqueo por intentos vía `auth_attempts` (por `email_hash` + `portal` + `ip_hash`),
   consultado en base de datos — válido con cualquier número de instancias backend.
 - `credentials_version` permite invalidar de inmediato todos los tokens emitidos antes de un
@@ -49,17 +49,14 @@ no puede leer ni escribir recursos de otro, incluso conociendo su ID.
 
 ## 5. Gestión de secretos
 
-- Ningún secreto (contraseña de DB, clave privada JWT, client secret OAuth, credenciales SMTP,
-  clave de cifrado del secreto TOTP) se commitea al repositorio. `infra/.env.example` sólo
+- Ningún secreto (contraseña de DB, clave privada JWT, client secret OAuth, credenciales SMTP) se
+  commitea al repositorio. `infra/.env.example` sólo
   documenta nombres de variable y valores de desarrollo claramente no productivos.
 - En producción, secretos gestionados por el mecanismo del entorno de despliegue (variables de
   entorno inyectadas por la plataforma o un gestor de secretos dedicado) — nunca en archivos de
   configuración versionados.
 - Rotación de la clave de firma JWT (RS256) soportada sin downtime vía múltiples `kid` activos en
   el JWKS (ADR 0005).
-- La clave de cifrado del secreto TOTP (`user_mfa_totp.secret_encrypted`) se gestiona de forma
-  independiente de la base de datos, de forma que un volcado de base de datos por sí solo no
-  compromete los secretos TOTP.
 
 ## 6. Cabeceras de seguridad y CSP
 
@@ -120,8 +117,6 @@ Timeouts explícitos y sin seguir redirecciones a hosts fuera de la lista permit
   expuesto en catálogos públicos ni en autocompletados).
 - **Minimización**: los DTOs de listado (`GET /admin/users`) no incluyen el documento completo por
   defecto; el detalle completo sólo en `GET /admin/users/{id}` con el permiso correspondiente.
-- **Secreto TOTP**: cifrado en reposo (`secret_encrypted`), nunca expuesto de nuevo tras el setup
-  inicial, nunca incluido en logs ni en `audit_events.metadata`.
 - **IP en auditoría**: se almacena hasheada (`ip_hash`) tanto en `audit_events` como en
   `auth_attempts`/`refresh_tokens`, suficiente para detectar patrones de abuso sin retener la IP
   en claro de forma indefinida.
@@ -135,12 +130,12 @@ Timeouts explícitos y sin seguir redirecciones a hosts fuera de la lista permit
 
 - [ ] Claves privadas JWT y secretos fuera del repositorio y del entorno de CI, inyectados por el
       gestor de secretos del entorno de despliegue.
-- [ ] MFA obligatorio verificado end-to-end para `admin` e `inspector`, sin bypass posible.
+- [ ] Portal de plataforma restringido por IP antes de exponerlo a internet abierto — es lo que
+      compensa la ausencia de segundo factor (ADR 0016).
 - [ ] Pruebas de integración de aislamiento multi-tenant pasando para cada módulo con `tenant_id`.
 - [ ] CORS configurado por origen real de cada app (sin wildcard) en el entorno de producción.
 - [ ] CSP sin `unsafe-inline`/`unsafe-eval`, validada contra las tres apps desplegadas.
 - [ ] Rate limiting y bloqueo por intentos activo y probado contra `auth_attempts`.
-- [ ] Cifrado en reposo del secreto TOTP verificado (no en claro en un dump de base de datos).
 - [ ] `ip_hash` (no IP en claro) verificado en `audit_events`, `auth_attempts`, `refresh_tokens`.
 - [ ] Rotación de clave de firma JWT probada sin invalidar sesiones activas.
 - [ ] Política de retención de `audit_events` y de datos personales definida y documentada por

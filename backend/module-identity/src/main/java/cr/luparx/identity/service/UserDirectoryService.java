@@ -116,13 +116,6 @@ public class UserDirectoryService {
         return user;
     }
 
-    @Transactional
-    public User setMfaRequired(UserId userId, boolean required) {
-        User user = require(userId);
-        user.requireMfa(required, clock.instant());
-        return user;
-    }
-
     /**
      * Updates the editable part of a profile (CONTRACT.md §4 {@code PUT /{portal}/me}).
      *

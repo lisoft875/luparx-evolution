@@ -57,8 +57,6 @@ public final class AdminDtos {
             PhoneDto phone,
             IdentityDocumentDto identityDocument,
             AddressDto address,
-            boolean mfaRequired,
-            boolean mfaEnabled,
             String blockedReason) {
     }
 
@@ -99,9 +97,6 @@ public final class AdminDtos {
     }
 
     public record BlockUserRequest(@NotBlank @Size(max = 500) String reason) {
-    }
-
-    public record RequireMfaRequest(@NotNull Boolean required) {
     }
 
     public record CreateMembershipRequest(

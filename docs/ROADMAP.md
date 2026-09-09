@@ -7,9 +7,9 @@
 ## v0.1 — Identidad, membresías, portal de administración de usuarios
 
 **Alcance**: `platform-core`, `module-geo`, `module-identity`, `module-tenancy` completos.
-Auto-registro en los tres portales (§2 del contrato), login local + MFA + federación (Google/
+Auto-registro en los tres portales (§2 del contrato), login local + federación (Google/
 Microsoft/Facebook), cambio de municipalidad activa, portal de administración de usuarios
-(alta/baja, bloqueo, reseteo de contraseña, forzar MFA, roles, aprobación de membresías,
+(alta/baja, bloqueo, reseteo de contraseña, roles, aprobación de membresías,
 auditoría, reporte de registrados), catálogos públicos (países, divisiones, tipos de documento,
 tenants publicables). `module-parking` existe sólo como módulo vacío con su frontera declarada
 (sin lógica de dominio).

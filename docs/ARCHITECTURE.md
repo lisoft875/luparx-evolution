@@ -8,7 +8,7 @@
 | Contexto | Responsabilidad | Módulo backend | Independencia de datos |
 |---|---|---|---|
 | **Geo** | Países, divisiones administrativas (N niveles), tipos de documento por país, formato de teléfono | `module-geo` | Catálogo global, sin `tenant_id` (compartido entre tenants, sólo lectura para el resto) |
-| **Identity** | Usuarios globales, credenciales, MFA, federación OIDC/OAuth2, tokens | `module-identity` | Entidad global (`users`), sin `tenant_id` propio |
+| **Identity** | Usuarios globales, credenciales, federación OIDC/OAuth2, tokens | `module-identity` | Entidad global (`users`), sin `tenant_id` propio |
 | **Tenancy** | Municipalidades, membresías, roles/permisos, aprobación de acceso | `module-tenancy` | Dueño de `tenant_id`; toda pertenencia a un tenant pasa por aquí |
 | **Parking** (stub) | Zonas, tarifas, sesiones de parqueo, patrullas, citaciones, finanzas | `module-parking` | 100% por tenant; frontera declarada desde v0.1 aunque el contenido llegue después |
 | **Platform-core** | Kernel compartido: ids (UUIDv7), errores RFC 9457, tipo `Money`, `TenantContext`, auditoría, outbox | `platform-core` | No es un contexto de dominio: es infraestructura transversal que los demás módulos consumen |
@@ -96,7 +96,6 @@ graph TB
 
   subgraph identity["module-identity"]
     users["Usuarios / credenciales"]
-    mfa["MFA TOTP"]
     federation["Federación OIDC/OAuth2"]
     tokens["Emisión y rotación de tokens"]
   end
@@ -153,14 +152,7 @@ sequenceDiagram
   API->>DB: valida user_credentials (Argon2id) + tenant_memberships
   alt credenciales inválidas
     API-->>App: 401 Problem Details (AUTH_INVALID_CREDENTIALS)
-  else mfa requerido (admin/inspector obligatorio)
-    API-->>App: 200 {mfaRequired:true, mfaToken}
-    App->>U: pedir código TOTP
-    U->>App: código de 6 dígitos
-    App->>API: POST /auth/{portal}/mfa/verify {mfaToken, code}
-    API->>DB: valida user_mfa_totp
-    API-->>App: 200 {accessToken, refreshToken, expiresIn}
-  else sin mfa (citizen)
+  else credenciales válidas
     API-->>App: 200 {accessToken, refreshToken, expiresIn}
   end
   App->>App: guarda tokens en storage aislado de esta app (ver SECURITY.md)
@@ -203,7 +195,7 @@ Cada módulo Maven está diseñado para convertirse en un servicio independiente
 1. **`module-geo`** es el candidato más simple de extraer primero: es de solo lectura para el
    resto del sistema, sin escritura transaccional cruzada con `identity`/`tenancy`. Se convertiría
    en un servicio de catálogo con caché agresiva.
-2. **`module-identity`** requeriría exponer sus casos de uso (autenticación, MFA, federación) por
+2. **`module-identity`** requeriría exponer sus casos de uso (autenticación, federación) por
    una API interna en lugar de llamada a método Java; el JWT y el JWKS ya están diseñados como
    contrato público, así que el resource server de otros módulos no cambia.
 3. **`module-tenancy`** dependería del cliente de `identity` (para `user_id`) vía esa misma API

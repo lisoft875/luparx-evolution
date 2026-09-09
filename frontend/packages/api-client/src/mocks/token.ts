@@ -35,7 +35,6 @@ export function mintMockAccessToken(
     tid: tenantId,
     roles,
     perms: [],
-    mfa: user.mfaEnabled,
     locale: user.profile.locale,
     ver: 1,
   };

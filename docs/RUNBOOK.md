@@ -44,7 +44,7 @@ npm run dev:citizen --prefix frontend
 ```
 
 Usuarios de prueba en `frontend/packages/api-client/src/mocks/data.ts`
-(contraseña `Password123!`, código MFA `123456`). Sirve para trabajar la UI mientras el backend
+(contraseña `Password123!`). Sirve para trabajar la UI mientras el backend
 avanza, y es lo que usan las vistas previas publicadas.
 
 ## Problemas frecuentes
@@ -53,7 +53,6 @@ avanza, y es lo que usan las vistas previas publicadas.
 |---|---|
 | La app arranca y muestra "VITE_API_BASE_URL no está configurado" | Falta el `.env` de esa app. Copiá su `.env.example`, o dejá el `.env.development` que ya trae la URL local. |
 | `Port 5183 is already in use` | Las apps usan `strictPort`: liberá el puerto o cambialo en su `vite.config.ts`. Nunca lo cambies sólo en un lado: el backend valida el origen CORS. |
-| El backend no arranca por falta de `MFA_TOTP_ENCRYPTION_KEY` | Los secretos no tienen default por diseño. `source infra/secrets/dev-env.sh` antes de `mvn`. |
 | `InvalidKeySpecException` al firmar tokens | La llave privada quedó en PKCS#1. Convertila: `openssl pkcs8 -topk8 -nocrypt -in vieja.pem -out nueva.pem`. |
 | `cannot find symbol` de clases de otro modulo | Se compiló `-pl app` sin `-am`, contra los jars viejos de `~/.m2`. Usá siempre `-pl app -am`, o `mvn -DskipTests install` desde `backend/` antes. |
 | Flyway falla con "relation already exists" | Base sucia de un intento anterior: `cd infra && docker compose down -v && docker compose up -d`. |

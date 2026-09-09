@@ -51,7 +51,7 @@ import java.util.UUID;
  * {@code /api/v1/platform/**}).
  *
  * <p>This is the operator's console, not a municipality's. It is the only place where crossing tenant
- * boundaries is legitimate, which is why MFA is mandatory on this portal and every action here
+ * boundaries is legitimate, which is why every action here
  * writes an audit row with a null {@code tenant_id} or the affected tenant's id (SECURITY.md §3).</p>
  */
 @RestController

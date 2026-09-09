@@ -1,5 +1,5 @@
 export { AuthProvider, useAuth } from './context';
-export type { AuthContextValue, AuthStatus, AuthProviderProps, LoginResult } from './context';
+export type { AuthContextValue, AuthStatus, AuthProviderProps } from './context';
 export { usePermissions } from './usePermissions';
 export type { PermissionsApi } from './usePermissions';
 export { RequireAuth, RequirePermission, RequireTenant } from './guards';

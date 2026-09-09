@@ -31,7 +31,7 @@ import java.util.Locale;
  * an email and a PDF is a bug nobody can reproduce. The platform default arrives as a constructor
  * argument ({@code platform.defaults.locale}), so this class stays free of deployment concerns and
  * module-tenancy keeps knowing nothing about YAML. It is assembled once in the application module,
- * exactly like {@code MfaPolicy} and {@code RegistrationPolicy}.</p>
+ * exactly like {@code RegistrationPolicy}.</p>
  */
 public class EffectiveLocaleService {
 

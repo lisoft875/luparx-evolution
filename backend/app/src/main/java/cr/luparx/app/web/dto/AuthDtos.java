@@ -97,17 +97,11 @@ public final class AuthDtos {
         }
     }
 
-    /**
-     * {@code POST /auth/{portal}/login}. Either the tokens are present, or {@code mfaRequired} is
-     * true and {@code mfaToken} carries the short-lived challenge — never both.
-     */
+    /** {@code POST /auth/{portal}/login}. */
     public record LoginResponse(
             String accessToken,
             String refreshToken,
-            Long expiresIn,
-            boolean mfaRequired,
-            String mfaToken,
-            boolean mfaEnrolmentRequired) {
+            Long expiresIn) {
     }
 
     public record TokenPairResponse(String accessToken, String refreshToken, long expiresIn) {
@@ -127,11 +121,6 @@ public final class AuthDtos {
         public TokensEnvelope(TokenPairResponse tokens) {
             this(tokens, null);
         }
-    }
-
-    public record MfaVerifyRequest(
-            @NotBlank String mfaToken,
-            @NotBlank @Size(min = 6, max = 16) String code) {
     }
 
     public record RefreshRequest(@NotBlank String refreshToken) {

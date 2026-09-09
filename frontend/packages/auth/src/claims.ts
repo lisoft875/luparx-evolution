@@ -2,7 +2,7 @@ import type { AccessTokenClaims } from '@luparx/api-client';
 
 /**
  * Decodes the access token's payload for immediate UI hints (active tenant,
- * roles, mfa flag) without a network round-trip. This performs NO signature
+ * roles) without a network round-trip. This performs NO signature
  * verification — it must never be treated as an authorization decision.
  * The server independently validates `aud`/`portal`/signature on every
  * request (CONTRACT.md §3); this is UX only.

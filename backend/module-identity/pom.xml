@@ -11,7 +11,7 @@
 
   <artifactId>luparx-module-identity</artifactId>
   <name>luparx-module-identity</name>
-  <description>Global users, credentials, MFA TOTP, federation, token issuance and rotation.</description>
+  <description>Global users, credentials, federation, token issuance and rotation.</description>
 
   <dependencies>
     <dependency>
@@ -30,10 +30,6 @@
     <dependency>
       <groupId>org.bouncycastle</groupId>
       <artifactId>bcprov-jdk18on</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>commons-codec</groupId>
-      <artifactId>commons-codec</artifactId>
     </dependency>
     <dependency>
       <groupId>com.nimbusds</groupId>

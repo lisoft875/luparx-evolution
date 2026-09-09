@@ -10,7 +10,7 @@ the contract wins.
 |---|---|---|---|
 | `platform-core` | `luparx-platform-core` | — | `TenantId`/`UserId`, UUID v7, `Money`, `Portal`/`Role`/`Permission`/`RolePermissions`, RFC 9457 errors + `ErrorCode`, paging, `TenantContext`, audit & outbox ports |
 | `module-geo` | `luparx-module-geo` | core | countries, N-level administrative divisions, document rules, `PhoneNumberService`, `IdentityDocumentValidator`, `AddressValidator` |
-| `module-identity` | `luparx-module-identity` | core, geo | users, credentials (Argon2id), TOTP MFA, federation linking, JWT issuance, refresh rotation, login rate limiting |
+| `module-identity` | `luparx-module-identity` | core, geo | users, credentials (Argon2id), federation linking, JWT issuance, refresh rotation, login rate limiting |
 | `module-tenancy` | `luparx-module-tenancy` | core | tenants, settings, memberships, `AccessResolver`, per-tenant reports |
 | `module-parking` | `luparx-module-parking` | core, tenancy | zones, tariffs, numbered spaces, vehicles, the per-municipality parking policy, sessions (start/extend/finish), the per-tenant wallet and the minute credits; patrols still deferred |
 | `module-enforcement` | `luparx-module-enforcement` | core, tenancy | the infraction catalogue, citations and their legal life cycle, the citation's own history, evidence metadata, the per-municipality consecutive; talks to parking only through `ParkingStatusPort` (ADR 0014) |
@@ -34,8 +34,7 @@ openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 \
 openssl rsa -in infra/secrets/jwt-private-dev.pem -pubout \
     -out infra/secrets/jwt-public-dev.pem
 
-# 3. AES key protecting TOTP secrets at rest (32 bytes, Base64)
-export MFA_TOTP_ENCRYPTION_KEY="$(openssl rand -base64 32)"
+# 3. Per-deployment pepper mixed into IP hashes
 export IP_HASH_PEPPER="$(openssl rand -hex 16)"
 
 # 4. Build and run
@@ -298,12 +297,12 @@ is mandatory there and a repeated key replays the stored response instead of cha
 `docs/CONTRACT.md` "v0.3 — Cuenta, idiomas y operación de la municipalidad" is the normative source.
 Everything below arrives with migration `V12_0__account_and_tenant_operations.sql`.
 
-### No MFA, and a session that does not expire
+### No second factor, and a session that does not expire
 
-`luparx.security.mfa-enforced-portals` is **empty by default on every profile**. No portal asks for a
-second factor and the application says so with a one-line `INFO` at start (`MFA is enforced on: no
-portal`). The TOTP code is intact behind that list: turning it back on for a portal is adding its slug
-(`MFA_ENFORCED_PORTALS=admin,inspector,platform`), not rewriting the module.
+**There is no second factor at all** since v0.20 (ADR 0016). It was built, never switched on in any
+environment, and left the login able to answer with a challenge no screen could complete — which is
+how the demo builds ended up asking for a two-step code the app did not offer. Bringing one back means
+building it, and it should come back as passkeys/WebAuthn rather than as the TOTP that was removed.
 
 > **Risk accepted in writing by the product.** The platform back-office administers every municipality
 > with an email address and a password alone. What compensates for it today is the password policy,
@@ -858,7 +857,6 @@ placeholder key (`docs/SECURITY.md` §5).
 | `JWT_PRIVATE_KEY_PATH`, `JWT_PUBLIC_KEY_PATH`, `JWT_KEY_ID` | yes | RS256 signing key and its `kid` |
 | `JWT_PREVIOUS_PUBLIC_KEYS` | no | Retired keys still accepted, `kid:path` comma-separated — this is what makes rotation zero-downtime |
 | `JWT_ISSUER` | yes in prod | `iss` claim and expected issuer on verification |
-| `MFA_TOTP_ENCRYPTION_KEY` | yes | Base64 32-byte AES-GCM key protecting TOTP secrets at rest |
 | `IP_HASH_PEPPER` | yes | Mixed into IP hashes so they cannot be reversed with a rainbow table |
 | `LUPARX_DEV_SEED_DEMO_DATA` | no (`dev` only) | `false` keeps the database untouched on start |
 | `LUPARX_DEV_PARKING_SPACES` | no (`dev` only) | Bays for the launch municipality, default `5000`, maximum `9999` — a five-digit code would not match its four-digit bay format |
@@ -885,7 +883,6 @@ placeholder key (`docs/SECURITY.md` §5).
 | `APP_BASE_URL_*` | yes | Front-end base URLs used to build the links inside emails |
 | `PLATFORM_DEFAULT_*` | no | Deployment defaults (country, currency, locale, time zone, dial code, minimum age) |
 | `JWT_REFRESH_TOKEN_TTL` | no | Refresh-token lifetime; **default `0` = never expires** (CONTRACT.md v0.3 §2). Set e.g. `30d` to bring expiry back |
-| `MFA_ENFORCED_PORTALS` | no | Portals requiring a second factor; **default empty** — no portal enforces MFA (CONTRACT.md v0.3 §1). Set `admin,inspector,platform` to turn it back on |
 | `LUPARX_DEV_SEED_DEMO_DATA` | no | `false` disables the `dev`-profile demo seed; the seeder does not exist outside that profile |
 
 ### Rotating the JWT signing key
@@ -911,12 +908,9 @@ placeholder key (`docs/SECURITY.md` §5).
 - **Tenant isolation**: every tenant-owned query takes the tenant from `TenantContext`; a user with
   no membership in the active tenant is reported *not found*, not *forbidden*, because confirming an
   id exists elsewhere is itself a leak.
-- **MFA** is enforced on the portals listed in `luparx.security.mfa-enforced-portals`, which is
-  **empty by default** since CONTRACT.md v0.3 §1: no portal asks for a second factor, and the
-  application states it in one `INFO` line at start. The mechanism is unchanged — a token with
-  `mfa=false` on an enforced portal reaches only the enrolment endpoints — and the same list is read
-  by the login flow, the servlet filter and the endpoint that disables one's own TOTP, so the three
-  cannot drift apart. Adding a slug back to the list is all it takes to require TOTP again.
+- **There is no second factor** (ADR 0016). A password and the attempt limiter are what protect an
+  account; the platform back-office additionally needs an IP restriction before it faces the open
+  internet.
 - **A session does not expire on its own** (`luparx.jwt.refresh-token-ttl: 0`). Logout, a password
   change and an administrative block are what end one; rotation and reuse detection are unchanged.
 - **An account that belongs to no open municipality is told so.** A membership survives its
@@ -936,7 +930,7 @@ placeholder key (`docs/SECURITY.md` §5).
   in before belonging to any municipality. The token is issued, and the refusal arrives on the first
   request that genuinely needs a municipality.
 - **The endpoints of the person stay open without a municipality.** `/{portal}/me` (read and write),
-  `/me/password`, `/me/email`, `/me/memberships`, `/me/mfa*` and `/session/tenant` are exempt from the
+  `/me/password`, `/me/email`, `/me/memberships` and `/session/tenant` are exempt from the
   check above. A name, a phone number and a password belong to the human being, not to the tenant, and
   must stay editable whether or not any municipality currently admits them; the last two are also how
   the caller sees what is wrong and gets out of it.
@@ -951,8 +945,7 @@ mvn test
 ```
 
 `MoneyTest`, `RolePermissionsTest`, `Uuid7Test` (platform-core), `PhoneNumberServiceTest`,
-`IdentityDocumentValidatorTest` (geo), `TotpServiceTest` — verified against the RFC 6238 vectors —
-(identity), `AccessResolverTest` (tenancy), which includes the cross-tenant isolation case
+`IdentityDocumentValidatorTest` (geo), `AccessResolverTest` (tenancy), which includes the cross-tenant isolation case
 `docs/SECURITY.md` §4 requires — including the case that stranded real accounts, an active membership
 in a closed municipality alongside a live one — and `ChargingScheduleTest` (parking), which pins the v0.3 rule that
 only the minutes inside a charging band are charged: exact boundaries, crossing midnight, a weekday

@@ -101,15 +101,7 @@ export function LoginForm({
   async function onSubmit(values: LoginValues): Promise<void> {
     setSubmitError(null);
     try {
-      const result = await login(values);
-      if (result.mfaRequired) {
-        // No portal enforces two-factor verification (CONTRACT.md v0.3 §1) and no app screen
-        // offers to complete one, so a challenge here means a deployment turned MFA back on
-        // server-side without an interface to answer it. Say that, rather than dead-ending on a
-        // step that does not exist.
-        setSubmitError(t('auth.login.error.mfaChallengeUnsupported'));
-        return;
-      }
+      await login(values);
       onSuccess();
     } catch (error) {
       // Every failure used to read "incorrect email or password", which sent people hunting for a

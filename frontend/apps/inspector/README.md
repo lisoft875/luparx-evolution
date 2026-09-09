@@ -2,8 +2,8 @@
 
 React + Vite web app, wrapped by Capacitor 6 for iOS/Android. Enforcement
 portal: self-registration here leaves the membership `PENDING_APPROVAL`
-until a `TENANT_ADMIN`/`PLATFORM_ADMIN` approves it, and MFA is mandatory
-for every login (CONTRACT.md §1/§3). Its login, tokens, and routes are
+until a `TENANT_ADMIN`/`PLATFORM_ADMIN` approves it (CONTRACT.md §1/§3).
+Its login, tokens, and routes are
 isolated from the `citizen` and `admin` apps.
 
 ## Run as a web app
@@ -16,7 +16,7 @@ npm run dev --workspace=@luparx/inspector
 With `VITE_USE_MOCKS=true` (the default in `.env.example`) the app runs
 fully offline against the in-memory mock transport in
 `@luparx/api-client/mocks` — no backend needed. Seeded mock account:
-`inspector@example.com` / `Password123!` (MFA code `123456`).
+`inspector@example.com` / `Password123!`.
 
 ## Build
 

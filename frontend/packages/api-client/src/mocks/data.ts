@@ -168,8 +168,6 @@ export interface MockUserRecord {
    */
   password: string | null;
   memberships: MembershipSummary[];
-  mfaEnabled: boolean;
-  mfaSecret?: string;
   /**
    * PLATFORM_ADMIN/PLATFORM_SUPPORT is a platform-scope grant, not a
    * `tenant_memberships` row (CONTRACT.md §5 scopes that table to a tenant
@@ -209,18 +207,12 @@ seedUser({
     locale: 'es-CR',
     timeZone: 'America/Costa_Rica',
     status: 'ACTIVE',
-    // No account requires a second factor: the product has no MFA at all, and a fixture that asked
-    // for one only produced a login the app cannot complete ("pide verificación en dos pasos, pero
-    // la aplicación no la ofrece") — which is what made the admin and inspector previews unusable.
-    mfaRequired: false,
-    mfaEnabled: false,
   },
   password: 'Password123!',
   memberships: [
     { id: 'membership-1', tenantId: 'tenant-sanjose', tenantName: 'Municipalidad de San José', tenantShortName: 'San José', tenantLogoUrl: null, tenantBrandColor: '#1d4ed8', portal: 'citizen', role: 'CITIZEN', status: 'ACTIVE' },
     { id: 'membership-2', tenantId: 'tenant-escazu', tenantName: 'Municipalidad de Escazú', tenantShortName: 'Escazú', tenantLogoUrl: null, tenantBrandColor: '#047857', portal: 'citizen', role: 'CITIZEN', status: 'ACTIVE' },
   ],
-  mfaEnabled: false,
 });
 
 seedUser({
@@ -238,15 +230,11 @@ seedUser({
     locale: 'es-CR',
     timeZone: 'America/Costa_Rica',
     status: 'ACTIVE',
-    mfaRequired: false,
-    mfaEnabled: false,
   },
   password: 'Password123!',
   memberships: [
     { id: 'membership-3', tenantId: 'tenant-sanjose', tenantName: 'Municipalidad de San José', tenantShortName: 'San José', tenantLogoUrl: null, tenantBrandColor: '#1d4ed8', portal: 'admin', role: 'TENANT_ADMIN', status: 'ACTIVE' },
   ],
-  mfaEnabled: false,
-  mfaSecret: 'JBSWY3DPEHPK3PXP',
 });
 
 seedUser({
@@ -264,15 +252,11 @@ seedUser({
     locale: 'es-CR',
     timeZone: 'America/Costa_Rica',
     status: 'ACTIVE',
-    mfaRequired: false,
-    mfaEnabled: false,
   },
   password: 'Password123!',
   memberships: [
     { id: 'membership-4', tenantId: 'tenant-sanjose', tenantName: 'Municipalidad de San José', tenantShortName: 'San José', tenantLogoUrl: null, tenantBrandColor: '#1d4ed8', portal: 'inspector', role: 'INSPECTOR', status: 'ACTIVE' },
   ],
-  mfaEnabled: false,
-  mfaSecret: 'JBSWY3DPEHPK3PXQ',
 });
 
 seedUser({
@@ -290,14 +274,9 @@ seedUser({
     locale: 'es-CR',
     timeZone: 'America/Costa_Rica',
     status: 'ACTIVE',
-    // `platform` exiges MFA active to complete login (CONTRACT.md §0/§3) — always true for this seed.
-    mfaRequired: false,
-    mfaEnabled: false,
   },
   password: 'Password123!',
   memberships: [],
-  mfaEnabled: false,
-  mfaSecret: 'JBSWY3DPEHPK3PXR',
   platformRole: 'PLATFORM_ADMIN',
 });
 

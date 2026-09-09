@@ -98,10 +98,6 @@ import type {
   LoginResponse,
   MeResponse,
   MembershipSummary,
-  MfaActivateRequest,
-  MfaSetupResponse,
-  MfaVerifyRequest,
-  MfaVerifyResponse,
   OAuthProvider,
   ParkingExtensionOption,
   ParkingPolicy,
@@ -129,7 +125,6 @@ import type {
   RegisteredUsersReportQuery,
   RegisteredUsersReportRow,
   RejectMembershipRequest,
-  RequireMfaRequest,
   ResetPasswordRequest,
   SessionTenantRequest,
   SwitchTenantResponse,
@@ -243,8 +238,6 @@ export class ApiClient {
       }),
     login: (payload: LoginRequest): Promise<LoginResponse> =>
       this.http.request('POST', `/api/v1/auth/${this.portal}/login`, { auth: false, body: payload }),
-    mfaVerify: (payload: MfaVerifyRequest): Promise<MfaVerifyResponse> =>
-      this.http.request('POST', `/api/v1/auth/${this.portal}/mfa/verify`, { auth: false, body: payload }),
     refresh: (payload: RefreshRequest): Promise<RefreshResponse> =>
       this.http.request('POST', `/api/v1/auth/${this.portal}/refresh`, { auth: false, body: payload }),
     logout: (payload: RefreshRequest): Promise<void> =>
@@ -298,12 +291,6 @@ export class ApiClient {
         }),
         this.baseUrl,
       ),
-    mfaSetup: (): Promise<MfaSetupResponse> =>
-      this.http.request('POST', `/api/v1/${this.portal}/me/mfa/setup`),
-    mfaActivate: (payload: MfaActivateRequest): Promise<void> =>
-      this.http.request('POST', `/api/v1/${this.portal}/me/mfa/activate`, { body: payload }),
-    mfaDisable: (payload: MfaActivateRequest): Promise<void> =>
-      this.http.request('DELETE', `/api/v1/${this.portal}/me/mfa`, { body: payload }),
   };
 
   // ---- Admin: users & memberships -------------------------------------------------------------
@@ -323,8 +310,6 @@ export class ApiClient {
       this.http.request('POST', `/api/v1/admin/users/${id}/unblock`, { idempotent: true }),
     forcePasswordReset: (id: string): Promise<void> =>
       this.http.request('POST', `/api/v1/admin/users/${id}/password-reset`, { idempotent: true }),
-    requireMfa: (id: string, payload: RequireMfaRequest): Promise<void> =>
-      this.http.request('POST', `/api/v1/admin/users/${id}/mfa/require`, { body: payload }),
   };
 
   readonly adminStaff = {
@@ -519,7 +504,7 @@ export class ApiClient {
   };
 
   // ---- Platform back-office (CONTRACT.md §4 `/api/v1/platform/**`) ---------------------------
-  // Every route here requires PLATFORM_ADMIN/PLATFORM_SUPPORT + MFA; the resource server checks
+  // Every route here requires PLATFORM_ADMIN/PLATFORM_SUPPORT; the resource server checks
   // this independently of anything the client renders (CONTRACT.md §7). "Preparado, no cerrado":
   // module boundaries below (catalog writes, system) are extension points, not a closed surface.
 
@@ -551,8 +536,6 @@ export class ApiClient {
       this.http.request('POST', `/api/v1/platform/users/${id}/unblock`, { idempotent: true }),
     forcePasswordReset: (id: string): Promise<void> =>
       this.http.request('POST', `/api/v1/platform/users/${id}/password-reset`, { idempotent: true }),
-    requireMfa: (id: string, payload: RequireMfaRequest): Promise<void> =>
-      this.http.request('POST', `/api/v1/platform/users/${id}/mfa/require`, { body: payload }),
   };
 
   readonly platformMemberships = {

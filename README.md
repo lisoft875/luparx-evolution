@@ -1,10 +1,5 @@
 # LupaRX
 
-> **Levantar en local:** `./scripts/dev-setup.sh` y luego lo que imprime — detalle en [`docs/RUNBOOK.md`](docs/RUNBOOK.md).
->
-> **Puertos:** este proyecto usa el puerto por defecto de cada servicio **+ 10** (API `8090`, Postgres `5442`, Vite `5183`–`5186`). Ver [`docs/PORTS.md`](docs/PORTS.md).
-
-
 Plataforma municipal multi-tenant de **fiscalización vial / parquímetros**, diseñada desde el
 inicio para expansión internacional (multi-país, multi-moneda, multi-idioma). Tres portales con
 login separado — ciudadano, administración municipal y fiscalización — sobre una identidad global
@@ -23,7 +18,7 @@ README es la puerta de entrada, no la fuente de verdad.
   API, jobs, caché, exportes, logs).
 - Autenticación local Argon2id + JWT RS256 por portal (audiencias distintas, un token de un
   portal no sirve en otro) + refresh opaco con rotación, más federación (Google, Microsoft Entra
-  ID, Facebook) y MFA TOTP obligatorio en admin/inspector.
+  ID, Facebook).
 - Internacionalización de fondo: catálogos ISO 3166/4217, BCP 47, IANA y un árbol genérico de
   divisiones administrativas de N niveles — Costa Rica es sólo el país configurado por defecto,
   nunca un supuesto de código.
@@ -44,7 +39,7 @@ luparx-evolution/
   backend/                      Maven multi-módulo, Java 21, Spring Boot 3.5
     platform-core/              kernel compartido: ids, errores RFC 9457, dinero, tenant context, auditoría
     module-geo/                 países, divisiones administrativas, documentos, teléfonos
-    module-identity/             usuarios, credenciales, MFA, federación, tokens
+    module-identity/             usuarios, credenciales, federación, tokens
     module-tenancy/             municipalidades, membresías, roles/permisos
     module-parking/             stub del dominio (frontera declarada)
     app/                        arranque Spring Boot, seguridad, controllers, Flyway, OpenAPI
@@ -80,9 +75,9 @@ cd backend && mvn -pl app -am spring-boot:run
 
 # Frontend
 cd frontend && npm ci
-npm run dev:citizen    # http://localhost:5183
-npm run dev:admin      # http://localhost:5184
-npm run dev:inspector  # http://localhost:5185
+npm run dev:citizen    # http://localhost:5173
+npm run dev:admin      # http://localhost:5174
+npm run dev:inspector  # http://localhost:5175
 ```
 
 ## Los tres portales

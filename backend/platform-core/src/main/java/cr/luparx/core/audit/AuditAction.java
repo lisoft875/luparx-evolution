@@ -22,9 +22,6 @@ public final class AuditAction {
     public static final String USER_UNBLOCKED = "USER_UNBLOCKED";
     public static final String USER_PASSWORD_RESET_REQUESTED = "USER_PASSWORD_RESET_REQUESTED";
     public static final String USER_PASSWORD_CHANGED = "USER_PASSWORD_CHANGED";
-    public static final String USER_MFA_REQUIREMENT_CHANGED = "USER_MFA_REQUIREMENT_CHANGED";
-    public static final String USER_MFA_ACTIVATED = "USER_MFA_ACTIVATED";
-    public static final String USER_MFA_DISABLED = "USER_MFA_DISABLED";
     public static final String USER_EMAIL_VERIFIED = "USER_EMAIL_VERIFIED";
 
     public static final String LOGIN_SUCCEEDED = "LOGIN_SUCCEEDED";

@@ -55,7 +55,7 @@ public class SessionService {
      * @param tenantId active municipality, or null to let the resolver pick the only one available
      */
     @Transactional
-    public IssuedTokens issue(User user, Portal portal, TenantId tenantId, boolean mfaSatisfied,
+    public IssuedTokens issue(User user, Portal portal, TenantId tenantId,
                               HttpServletRequest request) {
         TenantId effectiveTenantId = tenantId != null
                 ? tenantId
@@ -68,7 +68,6 @@ public class SessionService {
                 grant.tenantId(),
                 grant.roles(),
                 grant.permissions(),
-                mfaSatisfied,
                 user.getLocale(),
                 user.getCredentialsVersion()));
 
@@ -80,7 +79,7 @@ public class SessionService {
 
     /** Rotates a refresh token and re-issues an access token with freshly resolved authority. */
     @Transactional
-    public IssuedTokens refresh(String rawRefreshToken, Portal portal, User user, boolean mfaSatisfied,
+    public IssuedTokens refresh(String rawRefreshToken, Portal portal, User user,
                                 HttpServletRequest request) {
         RefreshToken current = refreshTokenService.require(rawRefreshToken, portal);
         TenantId tenantId = TenantId.ofNullable(current.getTenantId());
@@ -95,7 +94,6 @@ public class SessionService {
                 grant.tenantId(),
                 grant.roles(),
                 grant.permissions(),
-                mfaSatisfied,
                 user.getLocale(),
                 user.getCredentialsVersion()));
         return new IssuedTokens(accessToken, rotated.rawToken(), tokenService.accessTokenTtlSeconds());
@@ -107,7 +105,7 @@ public class SessionService {
      * is issued.
      */
     @Transactional
-    public IssuedTokens switchTenant(User user, Portal portal, TenantId tenantId, boolean mfaSatisfied,
+    public IssuedTokens switchTenant(User user, Portal portal, TenantId tenantId,
                                      HttpServletRequest request) {
         AccessGrant grant = accessResolver.resolve(user.userId(), portal, tenantId);
         refreshTokenService.revokeAllForUserAndPortal(user.userId(), portal);
@@ -118,7 +116,6 @@ public class SessionService {
                 grant.tenantId(),
                 grant.roles(),
                 grant.permissions(),
-                mfaSatisfied,
                 user.getLocale(),
                 user.getCredentialsVersion()));
         RefreshTokenService.Issued refresh = refreshTokenService.issue(

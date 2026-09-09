@@ -39,9 +39,7 @@ public final class SessionDtos {
             AddressDto address,
             String locale,
             String timeZone,
-            UserStatus status,
-            boolean mfaRequired,
-            boolean mfaEnabled) {
+            UserStatus status) {
     }
 
     /**
@@ -135,9 +133,4 @@ public final class SessionDtos {
     public record SessionTenantRequest(@NotNull UUID tenantId) {
     }
 
-    public record MfaSetupResponse(String secret, String otpauthUri, List<String> recoveryCodes) {
-    }
-
-    public record MfaCodeRequest(@NotBlank @Size(min = 6, max = 16) String code) {
-    }
 }

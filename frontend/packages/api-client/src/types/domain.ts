@@ -64,7 +64,6 @@ export interface AccessTokenClaims {
   tid: string | null;
   roles: Role[];
   perms: Permission[];
-  mfa: boolean;
   locale: string;
   ver: number;
 }
@@ -217,21 +216,14 @@ export interface LoginRequest {
   password: string;
 }
 
+/**
+ * `POST /auth/{portal}/login`. The three fields are always present since v0.20: there is no second
+ * factor, so a successful login is a session and never a challenge to answer first.
+ */
 export interface LoginResponse {
-  accessToken?: string;
-  refreshToken?: string;
-  expiresIn?: number;
-  mfaRequired: boolean;
-  mfaToken?: string;
-}
-
-export interface MfaVerifyRequest {
-  mfaToken: string;
-  code: string;
-}
-
-export interface MfaVerifyResponse {
-  tokens: TokenPair;
+  accessToken: string;
+  refreshToken: string;
+  expiresIn: number;
 }
 
 export interface RefreshRequest {
@@ -255,16 +247,6 @@ export interface VerifyEmailRequest {
   token: string;
 }
 
-export interface MfaSetupResponse {
-  secret: string;
-  otpauthUri: string;
-  recoveryCodes: string[];
-}
-
-export interface MfaActivateRequest {
-  code: string;
-}
-
 // ---- Session / profile ---------------------------------------------------------------------
 
 export interface UserProfile {
@@ -282,8 +264,6 @@ export interface UserProfile {
   locale: string;
   timeZone: string;
   status: UserStatus;
-  mfaRequired: boolean;
-  mfaEnabled: boolean;
   /** When this account was last signed into, and through which portal (CONTRACT.md v0.15). */
   lastLoginAt?: string | null;
   lastLoginPortal?: string | null;
@@ -360,8 +340,6 @@ export interface AdminUserDetail extends AdminUserListItem {
   phone: PhoneInput;
   identityDocument: IdentityDocumentInput;
   address: AddressInput;
-  mfaRequired: boolean;
-  mfaEnabled: boolean;
   blockedReason?: string;
 }
 
@@ -452,10 +430,6 @@ export interface BlockUserRequest {
   reason: string;
 }
 
-export interface RequireMfaRequest {
-  required: boolean;
-}
-
 export interface CreateMembershipRequest {
   userId: string;
   tenantId: string;
@@ -535,7 +509,7 @@ export interface TenantAdmin extends TenantCatalogEntry {
   selfRegistrationPolicy: SelfRegistrationPolicy;
 }
 
-// ---- Platform back-office (CONTRACT.md §4 `/api/v1/platform/**`, PLATFORM_ADMIN/PLATFORM_SUPPORT + MFA) ------
+// ---- Platform back-office (CONTRACT.md §4 `/api/v1/platform/**`, PLATFORM_ADMIN/PLATFORM_SUPPORT) ------
 
 export type TenantStatus = 'ACTIVE' | 'SUSPENDED' | 'CLOSED';
 
@@ -1076,7 +1050,6 @@ export interface ChangeEmailRequest {
   newEmail: string;
 }
 
-
 // ---- Citizen: wallet & time credits (CONTRACT.md v0.2) -----------------------------------------
 // Both scoped to the active tenant — "las finanzas son por tenant; no hay un saldo global"
 // (CONTRACT.md v0.2 rule 6). The server derives the tenant from the access token (`tid` claim);
@@ -1110,7 +1083,6 @@ export interface TimeCreditsResponse {
   /** Earliest expiry among the lots that still have minutes left; `null` when nothing expires. */
   expiresAt: string | null;
 }
-
 
 // ---- Enforcement (CONTRACT.md v0.7, ADR 0014) --------------------------------------------------
 // A citation is an administrative act, not a payment row: it is append-only once issued, it is

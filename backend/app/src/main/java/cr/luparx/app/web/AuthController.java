@@ -19,8 +19,6 @@ import cr.luparx.identity.service.AuthenticationService;
 import cr.luparx.identity.service.EmailChangeService;
 import cr.luparx.identity.service.EmailVerificationService;
 import cr.luparx.identity.service.IssuedTokens;
-import cr.luparx.identity.service.MfaService;
-import cr.luparx.identity.service.PasswordAuthentication;
 import cr.luparx.identity.service.PasswordResetService;
 import cr.luparx.identity.service.RegistrationCommand;
 import cr.luparx.identity.service.RegistrationResult;
@@ -55,14 +53,13 @@ import java.util.Optional;
  */
 @RestController
 @RequestMapping("/api/v1/auth/{portal}")
-@Tag(name = "Authentication", description = "Registration, login, MFA, refresh, logout, password and "
+@Tag(name = "Authentication", description = "Registration, login, refresh, logout, password and "
         + "email verification — separately per portal.")
 public class AuthController {
 
     private final UserRegistrationService registrationService;
     private final AuthenticationService authenticationService;
     private final MembershipService membershipService;
-    private final MfaService mfaService;
     private final SessionService sessionService;
     private final TokenService tokenService;
     private final EmailVerificationService emailVerificationService;
@@ -77,7 +74,6 @@ public class AuthController {
     public AuthController(UserRegistrationService registrationService,
                           AuthenticationService authenticationService,
                           MembershipService membershipService,
-                          MfaService mfaService,
                           SessionService sessionService,
                           TokenService tokenService,
                           EmailVerificationService emailVerificationService,
@@ -91,7 +87,6 @@ public class AuthController {
         this.registrationService = registrationService;
         this.authenticationService = authenticationService;
         this.membershipService = membershipService;
-        this.mfaService = mfaService;
         this.sessionService = sessionService;
         this.tokenService = tokenService;
         this.emailVerificationService = emailVerificationService;
@@ -175,46 +170,18 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    @Operation(summary = "Exchange email and password for tokens, or for an MFA challenge")
+    @Operation(summary = "Exchange email and password for tokens")
     public AuthDtos.LoginResponse login(@PathVariable String portal,
                                         @Valid @RequestBody AuthDtos.LoginRequest request,
                                         HttpServletRequest httpRequest) {
         Portal target = PortalPathVariable.require(portal);
         String ip = AuditRecorder.clientIp(httpRequest);
-        PasswordAuthentication authentication =
-                authenticationService.authenticate(request.email(), request.password(), target, ip);
-        User user = authentication.user();
+        User user = authenticationService.authenticate(request.email(), request.password(), target, ip);
 
-        if (authentication.secondFactorRequired()) {
-            String mfaToken = tokenService.issueMfaChallengeToken(user.userId(), target);
-            auditRecorder.record(AuditAction.LOGIN_SUCCEEDED, "session", user.getId().toString(), null,
-                    user.userId(), target, Map.of("stage", "password", "mfa", "pending"));
-            return new AuthDtos.LoginResponse(null, null, null, true, mfaToken, false);
-        }
-
-        IssuedTokens tokens = sessionService.issue(user, target, null, false, httpRequest);
+        IssuedTokens tokens = sessionService.issue(user, target, null, httpRequest);
         auditRecorder.record(AuditAction.LOGIN_SUCCEEDED, "session", user.getId().toString(), null,
-                user.userId(), target, Map.of("stage", "complete",
-                        "mfaEnrolmentRequired", String.valueOf(authentication.enrolmentRequired())));
-        return new AuthDtos.LoginResponse(tokens.accessToken(), tokens.refreshToken(), tokens.expiresIn(),
-                false, null, authentication.enrolmentRequired());
-    }
-
-    @PostMapping("/mfa/verify")
-    @Operation(summary = "Complete a login by answering the TOTP (or recovery code) challenge")
-    public AuthDtos.TokensEnvelope verifyMfa(@PathVariable String portal,
-                                             @Valid @RequestBody AuthDtos.MfaVerifyRequest request,
-                                             HttpServletRequest httpRequest) {
-        Portal target = PortalPathVariable.require(portal);
-        UserId userId = tokenService.verifyMfaChallengeToken(request.mfaToken(), target);
-        if (!mfaService.verifyCode(userId, request.code())) {
-            throw cr.luparx.core.error.UnauthorizedException.of(ErrorCode.INVALID_MFA_CODE, "error.mfa.code.invalid");
-        }
-        User user = authenticationService.requireUser(userId);
-        IssuedTokens tokens = sessionService.issue(user, target, null, true, httpRequest);
-        auditRecorder.record(AuditAction.LOGIN_SUCCEEDED, "session", user.getId().toString(), null, userId,
-                target, Map.of("stage", "mfa"));
-        return mapper.toTokensEnvelope(tokens);
+                user.userId(), target, Map.of("stage", "complete"));
+        return new AuthDtos.LoginResponse(tokens.accessToken(), tokens.refreshToken(), tokens.expiresIn());
     }
 
     @PostMapping("/refresh")
@@ -228,8 +195,7 @@ public class AuthController {
         if (user.getStatus() == UserStatus.BLOCKED) {
             throw cr.luparx.core.error.UnauthorizedException.of(ErrorCode.ACCOUNT_BLOCKED, "error.auth.blocked");
         }
-        boolean mfaSatisfied = mfaService.isActive(userId);
-        IssuedTokens tokens = sessionService.refresh(request.refreshToken(), target, user, mfaSatisfied, httpRequest);
+        IssuedTokens tokens = sessionService.refresh(request.refreshToken(), target, user, httpRequest);
         return mapper.toTokensEnvelope(tokens);
     }
 

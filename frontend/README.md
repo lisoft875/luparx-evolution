@@ -23,10 +23,10 @@ frontend/
     api-client/     typed client for CONTRACT.md §4, RFC 9457 error handling, mocks
     auth/           per-portal token storage/refresh, AuthProvider, route guards
     ui/              design system: tokens, icons, layout/list/card/chip primitives, form fields
-    features/       shared business forms (registration, login, MFA, tenant switch)
+    features/       shared business forms (registration, login, tenant switch)
   apps/
     citizen/        React + Vite + Capacitor — public self-registration, mocked parking-meter flow
-    inspector/       React + Vite + Capacitor — approval-gated registration, mandatory MFA, outdoor density
+    inspector/       React + Vite + Capacitor — approval-gated registration, outdoor density
     admin/            React + Vite (web) — user management, membership approval, audit, reports
     platform/        React + Vite (web) — municipalities, global user registry, global audit/reports/catalogs
 ```
@@ -54,12 +54,12 @@ With `VITE_USE_MOCKS=true` (the default), every app runs fully offline
 against the hand-rolled mock transport in
 `packages/api-client/src/mocks` — no backend required. Seeded accounts:
 
-| Portal     | Email                    | Password        | MFA code |
-|------------|--------------------------|-----------------|----------|
-| citizen    | citizen@example.com      | Password123!    | —        |
-| admin      | admin@example.com        | Password123!    | 123456   |
-| inspector  | inspector@example.com    | Password123!    | 123456   |
-| platform   | platform@example.com     | Password123!    | 123456   |
+| Portal     | Email                    | Password        |
+|------------|--------------------------|-----------------|
+| citizen    | citizen@example.com      | Password123!    |
+| admin      | admin@example.com        | Password123!    |
+| inspector  | inspector@example.com    | Password123!    |
+| platform   | platform@example.com     | Password123!    |
 
 `platform` has no sign-up screen at all (CONTRACT.md §0: `POST
 /auth/platform/register` doesn't exist, 403 `SELF_REGISTRATION_DISABLED`) —
@@ -152,4 +152,4 @@ Sirve para enseñar la app por chat o subirla a cualquier hosting estático. No 
 `npm run build`, que es el build de producción.
 
 Usuarios de prueba del transporte simulado en `packages/api-client/src/mocks/data.ts`
-(contraseña `Password123!`, código MFA `123456`).
+(contraseña `Password123!`).

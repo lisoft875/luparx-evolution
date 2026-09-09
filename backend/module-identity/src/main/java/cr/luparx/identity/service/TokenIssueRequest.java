@@ -21,7 +21,6 @@ public record TokenIssueRequest(
         TenantId tenantId,
         Set<Role> roles,
         Set<Permission> permissions,
-        boolean mfaSatisfied,
         String locale,
         int credentialsVersion) {
 }

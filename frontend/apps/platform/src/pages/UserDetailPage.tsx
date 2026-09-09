@@ -59,10 +59,6 @@ export function UserDetailPage(): React.JSX.Element {
     mutationFn: () => apiClient.platformUsers.forcePasswordReset(id as string),
     onSuccess: invalidate,
   });
-  const requireMfaMutation = useMutation({
-    mutationFn: (required: boolean) => apiClient.platformUsers.requireMfa(id as string, { required }),
-    onSuccess: invalidate,
-  });
   const grantMembershipMutation = useMutation({
     mutationFn: () =>
       apiClient.platformMemberships.create({ userId: id as string, tenantId: grantTenantId, portal: grantPortal, role: grantRole }),
@@ -121,14 +117,6 @@ export function UserDetailPage(): React.JSX.Element {
           <section style={{ marginTop: 16 }}>
             <Button type="button" variant="secondary" onClick={() => forcePasswordResetMutation.mutate()} loading={forcePasswordResetMutation.isPending}>
               {t('admin.users.detail.actions.forcePasswordReset')}
-            </Button>{' '}
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => requireMfaMutation.mutate(!user.mfaRequired)}
-              loading={requireMfaMutation.isPending}
-            >
-              {t('admin.users.detail.actions.requireMfa')} ({user.mfaRequired ? t('common.yes') : t('common.no')})
             </Button>
           </section>
 

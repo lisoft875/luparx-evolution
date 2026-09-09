@@ -10,20 +10,18 @@ import java.util.Optional;
  */
 public enum Portal {
 
-    CITIZEN("citizen", "luparx:portal:citizen", false, true),
-    ADMIN("admin", "luparx:portal:admin", true, false),
-    INSPECTOR("inspector", "luparx:portal:inspector", true, false),
-    PLATFORM("platform", "luparx:portal:platform", true, false);
+    CITIZEN("citizen", "luparx:portal:citizen", true),
+    ADMIN("admin", "luparx:portal:admin", false),
+    INSPECTOR("inspector", "luparx:portal:inspector", false),
+    PLATFORM("platform", "luparx:portal:platform", false);
 
     private final String slug;
     private final String audience;
-    private final boolean mfaMandatory;
     private final boolean selfRegistrationAllowed;
 
-    Portal(String slug, String audience, boolean mfaMandatory, boolean selfRegistrationAllowed) {
+    Portal(String slug, String audience, boolean selfRegistrationAllowed) {
         this.slug = slug;
         this.audience = audience;
-        this.mfaMandatory = mfaMandatory;
         this.selfRegistrationAllowed = selfRegistrationAllowed;
     }
 
@@ -35,11 +33,6 @@ public enum Portal {
     /** Value of the JWT {@code aud} claim for this portal. */
     public String audience() {
         return audience;
-    }
-
-    /** CONTRACT.md §3: MFA is mandatory for admin, inspector and platform; optional for citizen. */
-    public boolean mfaMandatory() {
-        return mfaMandatory;
     }
 
     /**

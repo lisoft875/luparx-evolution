@@ -19,7 +19,7 @@ export interface StoredTokens {
  * The access token is short-lived (15 min per CONTRACT.md §3), which bounds
  * exposure if it leaks via an XSS vector; the refresh token is opaque,
  * rotated on every use, and reuse is detected server-side. Never store
- * passwords, MFA secrets, or personal data through this abstraction.
+ * passwords or personal data through this abstraction.
  */
 export interface TokenStorage {
   getTokens(): StoredTokens | null;

@@ -1,5 +1,5 @@
-# Local development profile. Never use these values anywhere shared: the pepper and the MFA key below
-# are visible in the repository, which is exactly what a real secret must never be.
+# Local development profile. Never use these values anywhere shared: the pepper below is visible in
+# the repository, which is exactly what a real secret must never be.
 
 spring:
   jpa:
@@ -21,11 +21,6 @@ luparx:
     # Cada reinicio invalida los tokens anteriores: aceptable en una laptop, jamás en un entorno real.
     ephemeral-keys-when-missing: ${JWT_EPHEMERAL_KEYS:true}
   security:
-    # 32 bytes, Base64: "luparx-dev-only-totp-key-32bytes" — replaced per environment in every
-    # deployment that is not a developer laptop. Still configured although no portal enforces MFA
-    # (CONTRACT.md v0.3 §1): the TOTP code is dormant, not deleted, and it needs a key the day a
-    # deployment puts a portal back on luparx.security.mfa-enforced-portals.
-    mfa-encryption-key: ${MFA_TOTP_ENCRYPTION_KEY:bHVwYXJ4LWRldi1vbmx5LXRvdHAta2V5LTMyYnl0ZXM=}
     ip-hash-pepper: ${IP_HASH_PEPPER:luparx-dev-only-ip-pepper}
   dev:
     # Creates five municipalities (San José, Escazú, Montes de Oca, La Unión and Cartago), their

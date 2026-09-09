@@ -7,8 +7,8 @@ import { Card, CardStack, FormField, PageLayout, SectionHeader } from '@luparx/u
 /**
  * "My account" for the inspector portal (CONTRACT.md v0.3 §"Perfil editable"): the same personal
  * fields as registration, the e-mail behind its own verified flow, and the password behind its
- * own. No two-step verification section — no portal enforces MFA (v0.3 §1), and the interface
- * does not offer a setting the platform does not act on.
+ * own. There is no two-step verification section because the product has no second factor at all
+ * (CONTRACT.md v0.20).
  */
 export function ProfilePage(): React.JSX.Element {
   const { t } = useTranslation();

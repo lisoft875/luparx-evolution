@@ -6,7 +6,7 @@ import java.time.ZoneOffset;
 
 /**
  * Every service takes a {@link Clock} as a constructor dependency instead of calling
- * {@code Instant.now()} directly, so that time-dependent behaviour (token expiry, TOTP windows,
+ * {@code Instant.now()} directly, so that time-dependent behaviour (token expiry,
  * lockout windows) is deterministic under test. The application publishes a single UTC clock bean.
  */
 public final class Clocks {

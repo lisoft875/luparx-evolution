@@ -39,12 +39,6 @@ public final class ErrorCode {
     public static final String PORTAL_MISMATCH = "PORTAL_MISMATCH";
     public static final String SELF_REGISTRATION_DISABLED = "SELF_REGISTRATION_DISABLED";
 
-    // --- MFA (ADR 0007) ------------------------------------------------------------------------
-    public static final String MFA_REQUIRED = "MFA_REQUIRED";
-    public static final String MFA_NOT_ENABLED = "MFA_NOT_ENABLED";
-    public static final String MFA_ALREADY_ACTIVE = "MFA_ALREADY_ACTIVE";
-    public static final String INVALID_MFA_CODE = "INVALID_MFA_CODE";
-    public static final String MFA_TOKEN_INVALID = "MFA_TOKEN_INVALID";
 
     // --- federation (ADR 0006) -----------------------------------------------------------------
     public static final String FEDERATION_PROVIDER_UNKNOWN = "FEDERATION_PROVIDER_UNKNOWN";

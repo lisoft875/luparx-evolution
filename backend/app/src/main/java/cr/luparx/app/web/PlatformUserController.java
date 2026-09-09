@@ -48,7 +48,7 @@ import java.util.UUID;
  * Global padrón and cross-tenant user operations (CONTRACT.md §4 {@code /api/v1/platform/users}).
  *
  * <p>This is the deliberate exception to tenant isolation: only a platform-scoped role reaches these
- * routes, MFA is mandatory on this portal, and every call is audited as a platform-scope access
+ * routes, and every call is audited as a platform-scope access
  * (SECURITY.md §3).</p>
  */
 @RestController
@@ -160,17 +160,6 @@ public class PlatformUserController {
                         "link", portalUrls.portalBaseUrl(Portal.PLATFORM.slug())
                                 + "/password/reset?token=" + issued.token()));
         auditPlatformAccess(AuditAction.USER_PASSWORD_RESET_REQUESTED, Map.of("userId", id.toString()));
-        return ResponseEntity.noContent().build();
-    }
-
-    @PostMapping("/users/{id}/mfa/require")
-    @PreAuthorize("hasAuthority('PERM_USER_WRITE')")
-    @Operation(summary = "Force (or stop forcing) MFA for a user")
-    public ResponseEntity<Void> requireMfa(@PathVariable UUID id,
-                                           @Valid @RequestBody AdminDtos.RequireMfaRequest request) {
-        userDirectoryService.setMfaRequired(UserId.of(id), Boolean.TRUE.equals(request.required()));
-        auditPlatformAccess(AuditAction.USER_MFA_REQUIREMENT_CHANGED,
-                Map.of("userId", id.toString(), "required", String.valueOf(request.required())));
         return ResponseEntity.noContent().build();
     }
 

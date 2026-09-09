@@ -19,7 +19,6 @@ import java.util.List;
  * @param previousPublicKeyPaths retired public keys still accepted, as {@code kid:path} pairs
  * @param accessTokenTtl         lifetime of an access token (contract: 15 minutes)
  * @param refreshTokenTtl        lifetime of a refresh token (contract: 30 days)
- * @param mfaChallengeTtl        lifetime of the intermediate MFA token
  * @param oauthStateTtl          lifetime of the signed OAuth state value
  * @param ephemeralKeysWhenMissing generate a throwaway in-memory key pair when the configured PEM
  *                                 files are absent. Development convenience only: every restart
@@ -35,7 +34,6 @@ public record JwtProperties(
         List<String> previousPublicKeyPaths,
         Duration accessTokenTtl,
         Duration refreshTokenTtl,
-        Duration mfaChallengeTtl,
         Duration oauthStateTtl,
         boolean ephemeralKeysWhenMissing) {
 }

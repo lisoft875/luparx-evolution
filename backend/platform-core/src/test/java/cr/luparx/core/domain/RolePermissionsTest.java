@@ -81,12 +81,11 @@ class RolePermissionsTest {
     }
 
     @Test
-    void portalsDeclareTheirOwnAudienceAndMfaRule() {
+    void portalsDeclareTheirOwnAudienceAndRegistrationRule() {
         assertThat(Portal.CITIZEN.audience()).isEqualTo("luparx:portal:citizen");
-        assertThat(Portal.ADMIN.mfaMandatory()).isTrue();
-        assertThat(Portal.INSPECTOR.mfaMandatory()).isTrue();
-        assertThat(Portal.PLATFORM.mfaMandatory()).isTrue();
-        assertThat(Portal.CITIZEN.mfaMandatory()).isFalse();
+        assertThat(Portal.CITIZEN.selfRegistrationAllowed()).isTrue();
+        assertThat(Portal.ADMIN.selfRegistrationAllowed()).isFalse();
+        assertThat(Portal.INSPECTOR.selfRegistrationAllowed()).isFalse();
         assertThat(Portal.PLATFORM.selfRegistrationAllowed()).isFalse();
     }
 }

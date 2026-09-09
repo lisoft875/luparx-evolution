@@ -38,7 +38,6 @@ export const enUS: Record<TranslationKey, string> = {
   'auth.portal.admin.title': 'Municipal administration',
   'auth.portal.inspector.title': 'Enforcement',
   'auth.portal.platform.title': 'Platform back-office',
-  'auth.login.mfaMandatoryNotice': 'Access to this portal requires two-factor verification.',
   'auth.hero.description':
     'Manage your vehicle parking, fines and payments from a single account, at any affiliated municipality.',
 
@@ -61,12 +60,6 @@ export const enUS: Record<TranslationKey, string> = {
   'auth.login.error.tooManyAttempts': 'Too many attempts. Wait a few minutes before trying again.',
   'auth.login.error.server': 'The server could not process the sign-in.',
 
-  'auth.mfa.title': 'Two-factor verification',
-  'auth.mfa.description': 'Enter the 6-digit code from your authenticator app.',
-  'auth.mfa.codeLabel': 'Verification code',
-  'auth.mfa.submit': 'Verify',
-  'auth.mfa.useRecoveryCode': 'Use a recovery code',
-  'auth.mfa.error.invalidCode': 'The code you entered is not valid.',
 
   'auth.forgotPassword.title': 'Recover your password',
   'auth.forgotPassword.description':
@@ -350,7 +343,6 @@ export const enUS: Record<TranslationKey, string> = {
   'admin.users.detail.actions.block': 'Block',
   'admin.users.detail.actions.unblock': 'Unblock',
   'admin.users.detail.actions.forcePasswordReset': 'Force password reset',
-  'admin.users.detail.actions.requireMfa': 'Require MFA',
   'admin.users.detail.actions.assignRole': 'Assign role',
   'admin.users.detail.actions.approveMembership': 'Approve membership',
   'admin.users.detail.actions.rejectMembership': 'Reject membership',
@@ -472,9 +464,6 @@ export const enUS: Record<TranslationKey, string> = {
   'nav.system': 'System',
 
   'profile.title': 'My profile',
-  'profile.mfa.setup': 'Set up MFA',
-  'profile.mfa.enabled': 'MFA enabled',
-  'profile.mfa.disabled': 'MFA disabled',
   'profile.changeTenant': 'Change active municipality',
   'profile.verifiedBadge': 'Verified',
   'profile.activeTenant': 'Active municipality',
@@ -798,8 +787,6 @@ export const enUS: Record<TranslationKey, string> = {
 
   'common.languageSwitcher.unavailable': 'not available in this version',
   'nav.settings': 'Settings',
-  'auth.login.error.mfaChallengeUnsupported':
-    'This account is being asked for two-factor verification, but the app does not offer it. Please contact your administrator.',
 
   // ---- My account (CONTRACT.md v0.3 "Perfil editable") -----------------------------------------
   'account.profile.saved': 'Your details were saved.',

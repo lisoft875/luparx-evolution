@@ -18,7 +18,7 @@ Cuatro portales con **login separado** (no comparten página de entrada ni token
 > El back-office de plataforma es el panel del operador del producto (no de una municipalidad):
 > crea municipalidades, da de alta a sus administradores, revisa el padrón global y opera catálogos.
 > **No accede a la base de datos directamente**: usa la misma API con permisos de alcance plataforma,
-> auditoría obligatoria de cada acción y MFA exigido. Cualquier acceso directo a la base queda
+> auditoría obligatoria de cada acción. Cualquier acceso directo a la base queda
 > reservado a operaciones de mantenimiento fuera de la aplicación.
 
 ## 1. Identidad y tenencia (decisión central)
@@ -90,14 +90,14 @@ Campos de cuenta que acompañan el registro (no parte de los datos personales):
 - **Local**: Argon2id. Access token JWT RS256 (15 min) + refresh token opaco (30 días) con rotación y
   detección de reuso. JWKS público en `/.well-known/jwks.json`.
 - **Claims del access token**: `iss`, `sub` (userId), `aud` (audiencia del portal), `exp`, `iat`, `jti`,
-  `portal`, `tid` (tenant activo, nullable), `roles[]`, `perms[]`, `mfa` (bool), `locale`, `ver` (versión de credenciales).
+  `portal`, `tid` (tenant activo, nullable), `roles[]`, `perms[]`, `locale`, `ver` (versión de credenciales).
 - **Un token de un portal no sirve en otro**: el resource server valida `aud` + `portal` contra el
   portal declarado por la ruta (`/api/v1/citizen/**`, `/api/v1/admin/**`, `/api/v1/inspector/**`).
 - **Federación**: Google (OIDC), Microsoft Entra ID (OIDC), Facebook (OAuth2 + Graph). Vinculación por
   email verificado; tabla `user_federated_identities (provider, subject, user_id)`.
   Si el email existe con contraseña local, se requiere confirmación explícita para vincular.
-- **MFA TOTP** (RFC 6238, compatible con Google Authenticator/Authy): obligatorio para `admin` e
-  `inspector`, opcional para `citizen`. Códigos de recuperación de un solo uso (hash Argon2id).
+- **Sin segundo factor** desde v0.20 (ADR 0016). Nunca estuvo encendido y el cliente no tenía cómo
+  contestar un desafío, así que el login tiene una sola salida: o hay sesión o hay error.
 - **Cambio de municipalidad activa**: `POST /api/v1/{portal}/session/tenant` devuelve un nuevo par de
   tokens con `tid` y roles del tenant destino.
 
@@ -121,8 +121,7 @@ GET  /api/v1/catalog/tenants?country=                -> [{id, slug, name, countr
 ### Autenticación (una raíz por portal)
 ```
 POST /api/v1/auth/{portal}/register            {campos §2}            -> 201 {userId, status, requiresEmailVerification, requiresApproval}
-POST /api/v1/auth/{portal}/login               {email, password}      -> 200 {accessToken, refreshToken, expiresIn, mfaRequired, mfaToken?}
-POST /api/v1/auth/{portal}/mfa/verify          {mfaToken, code}       -> 200 {tokens}
+POST /api/v1/auth/{portal}/login               {email, password}      -> 200 {accessToken, refreshToken, expiresIn}
 POST /api/v1/auth/{portal}/refresh             {refreshToken}         -> 200 {tokens}
 POST /api/v1/auth/{portal}/logout              {refreshToken}         -> 204
 POST /api/v1/auth/{portal}/password/forgot     {email}                -> 202
@@ -133,7 +132,7 @@ GET  /api/v1/auth/{portal}/oauth2/{provider}/callback                 -> 302 (co
 ```
 `{portal}` ∈ `citizen|admin|inspector|platform`; `{provider}` ∈ `google|microsoft|facebook`.
 `POST /register` **no existe para `platform`** (403 `SELF_REGISTRATION_DISABLED`): esas cuentas se crean
-desde el propio back-office. `platform` exige MFA activo para completar el login.
+desde el propio back-office.
 
 La UI de todos los portales sigue `docs/DESIGN_SYSTEM.md` (tema oscuro, tokens `--lx-*`, marca en `docs/brand/`).
 
@@ -143,9 +142,6 @@ GET  /api/v1/{portal}/me                        -> {user, memberships[], activeT
 PUT  /api/v1/{portal}/me                        {campos §2 editables}
 GET  /api/v1/{portal}/me/memberships            -> [{tenantId, tenantName, portal, role, status}]
 POST /api/v1/{portal}/session/tenant            {tenantId} -> {tokens}
-POST /api/v1/{portal}/me/mfa/setup              -> {secret, otpauthUri, recoveryCodes[]}
-POST /api/v1/{portal}/me/mfa/activate           {code} -> 204
-DELETE /api/v1/{portal}/me/mfa                  {code}  -> 204
 ```
 
 ### Portal de administración municipal (`/api/v1/admin/**`) — SIEMPRE acotado al tenant activo
@@ -157,7 +153,6 @@ PUT    /api/v1/admin/users/{id}
 POST   /api/v1/admin/users/{id}/block           {reason}
 POST   /api/v1/admin/users/{id}/unblock
 POST   /api/v1/admin/users/{id}/password-reset  (fuerza reseteo por correo)
-POST   /api/v1/admin/users/{id}/mfa/require     {required:boolean}
 POST   /api/v1/admin/memberships                {userId, tenantId, portal, role}
 PUT    /api/v1/admin/memberships/{id}           {role, status}
 POST   /api/v1/admin/memberships/{id}/approve
@@ -167,10 +162,10 @@ GET    /api/v1/admin/audit-events?actor=&action=&from=&to=
 GET    /api/v1/admin/reports/registered-users?from=&to=&groupBy=portal|month|district
 POST   /api/v1/admin/exports                    {type, filters} -> 202 {exportId}   (extensible; v0.1: CSV síncrono <= 10k filas)
 ```
-> Alcance v0.1: alta/baja, bloqueo, reseteo de contraseña, forzar MFA, roles, aprobación de membresías,
+> Alcance v0.1: alta/baja, bloqueo, reseteo de contraseña, roles, aprobación de membresías,
 > auditoría y reporte de registrados. **Zonas y exportes asíncronos quedan como puntos de extensión marcados.**
 
-### Back-office de plataforma (`/api/v1/platform/**`) — requiere `PLATFORM_ADMIN`/`PLATFORM_SUPPORT` + MFA
+### Back-office de plataforma (`/api/v1/platform/**`) — requiere `PLATFORM_ADMIN`/`PLATFORM_SUPPORT`
 ```
 GET    /api/v1/platform/tenants?q=&status=&country=
 POST   /api/v1/platform/tenants                 {slug, legalName, displayName, countryCode, currencyCode,
@@ -182,7 +177,7 @@ GET    /api/v1/platform/tenants/{id}/settings   / PUT (clave-valor tipado)
 POST   /api/v1/platform/tenants/{id}/admins     {email, ...} -> crea/invita al primer TENANT_ADMIN
 GET    /api/v1/platform/users?q=&country=&status=&tenantId=      (padrón global)
 GET    /api/v1/platform/users/{id}                               (incluye todas sus membresías)
-POST   /api/v1/platform/users/{id}/block | /unblock | /password-reset | /mfa/require
+POST   /api/v1/platform/users/{id}/block | /unblock | /password-reset
 POST   /api/v1/platform/memberships             {userId, tenantId, portal, role}
 GET    /api/v1/platform/audit-events?tenantId=&actor=&action=&from=&to=
 GET    /api/v1/platform/reports/registered-users?groupBy=tenant|country|portal|month
@@ -223,14 +218,12 @@ users(id PK, email citext UNIQUE, email_verified_at, given_name, family_name, se
       document_country_code, document_type, document_number, document_number_normalized,
       address_country_code, address_level1_id, address_level2_id, address_level3_id,
       address_line1, address_line2, address_postal_code,
-      locale, time_zone, status, blocked_reason, mfa_required, accepted_terms_version,
+      locale, time_zone, status, blocked_reason, accepted_terms_version,
       credentials_version int, created_at, updated_at, version,
       UNIQUE(document_country_code, document_type, document_number_normalized))
 
 user_credentials(user_id PK/FK, password_hash, algorithm, updated_at, must_change)
 user_federated_identities(id PK, user_id FK, provider, subject, email, linked_at, UNIQUE(provider, subject))
-user_mfa_totp(user_id PK/FK, secret_encrypted, status, activated_at)
-user_mfa_recovery_codes(id PK, user_id FK, code_hash, used_at)
 refresh_tokens(id PK, user_id FK, portal, tenant_id, token_hash UNIQUE, family_id, expires_at,
                revoked_at, replaced_by, user_agent, ip_hash)
 auth_attempts(id PK, email_hash, portal, ip_hash, success, occurred_at)         -- rate limiting / lockout
@@ -256,7 +249,7 @@ luparx-evolution/
   backend/                      Maven multi-módulo, Java 21, Spring Boot 3.5
     platform-core/              kernel compartido: ids, errores RFC 9457, dinero, tenant context, auditoría
     module-geo/                 países, divisiones administrativas, documentos, teléfonos
-    module-identity/            usuarios, credenciales, MFA, federación, tokens
+    module-identity/            usuarios, credenciales, federación, tokens
     module-tenancy/             municipalidades, membresías, roles/permisos
     module-parking/             stub del dominio (frontera declarada)
     app/                        arranque Spring Boot, seguridad, controllers, Flyway, OpenAPI
@@ -395,13 +388,12 @@ desde v0.3 `PARKING_SPACE_CODE_INVALID` y `OUTSIDE_CHARGING_HOURS`.
 
 ## Autenticación y cuenta
 
-1. **Sin MFA.** Ningún portal exige verificación en dos pasos. `luparx.security.mfa-enforced-portals`
-   queda vacía por defecto en todos los perfiles y la interfaz no ofrece TOTP. El código de TOTP se
-   conserva inactivo detrás de esa configuración: reactivarlo es poner portales en la lista, no
-   reescribir el módulo.
-   > Riesgo aceptado explícitamente por el producto: el back-office de plataforma administra todas
-   > las municipalidades con sólo correo y contraseña. Conviene compensarlo con contraseñas fuertes,
-   > límite de intentos (ya existe) y restricción por IP antes de exponerlo a internet.
+1. **Sin MFA.** Ningún portal exige verificación en dos pasos.
+   > **Superado por v0.20**: lo que aquí quedaba «inactivo detrás de la configuración» se retiró del
+   > producto por completo (ADR 0016). El riesgo aceptado sigue siendo el mismo y sigue vigente: el
+   > back-office de plataforma administra todas las municipalidades con sólo correo y contraseña, y
+   > se compensa con la política de contraseñas, el límite de intentos y restricción por IP antes de
+   > exponerlo a internet.
 2. **La sesión no vence.** El refresh token no expira (`luparx.jwt.refresh-token-ttl: 0` = sin
    vencimiento) y el cliente renueva el access token en silencio. Siguen invalidando la sesión:
    cerrar sesión, cambiar la contraseña, y el bloqueo de la cuenta por un administrador.
@@ -1641,3 +1633,54 @@ partirse—, pero una columna de oraciones en una sola línea irrompible es más
 layout y empuja fuera de pantalla las columnas que vienen después. `.lx-table-cell-clamp` recorta a
 dos líneas con un ancho tope, que es lo que la cola de descargos necesitaba para no perder «Estado» y
 «Acciones» por el borde derecho.
+
+# v0.20 — Se retira el segundo factor (normativo)
+
+Ver **[ADR 0016](adr/0016-remove-mfa.md)**, que reemplaza a ADR 0007.
+
+MFA/TOTP estaba construido entero —enrolamiento, verificación, códigos de recuperación, cifrado del
+secreto, un filtro por portal— y **nunca se encendió**. Lo que quedó fue peor que no tenerlo: el
+login podía devolver un desafío que **ninguna pantalla sabía contestar**. En las compilaciones de
+demostración se manifestó exactamente así, la aplicación pedía verificación en dos pasos y no la
+ofrecía. Un camino de autenticación que existe en el servidor y no en el cliente no es media
+funcionalidad: es una forma de dejar a alguien fuera de su propia cuenta.
+
+## El login tiene una sola salida
+
+`POST /auth/{portal}/login` responde `{accessToken, refreshToken, expiresIn}` y ya. Los tres campos
+son **obligatorios**: antes eran opcionales porque podían faltar los tres a la vez cuando venía un
+desafío en su lugar, y un cliente tenía que ramificar sobre eso.
+
+Desaparecen `POST /auth/{portal}/mfa/verify`, `POST /{portal}/me/mfa/setup`,
+`POST /{portal}/me/mfa/activate`, `DELETE /{portal}/me/mfa`,
+`POST /admin/users/{id}/mfa/require` y `POST /platform/users/{id}/mfa/require`.
+
+El `claim` `mfa` sale del access token. Un token viejo que todavía lo lleve sigue siendo válido: el
+servidor ignora los claims que no conoce, así que esto no invalida sesiones.
+
+`mfaRequired` y `mfaEnabled` salen de `MeResponse` y de `AdminUserDetail`. **Es un cambio incompatible
+de respuesta**, permitido aquí porque ningún cliente fuera de este repositorio consume la API todavía;
+después de la primera integración externa esto exigiría versionar (ADR 0011).
+
+## Lo que se retira por debajo
+
+Las tablas `user_mfa_totp` y `user_mfa_recovery_codes`, la columna `users.mfa_required`
+(`V23_0__drop_mfa.sql`, fase de contracción: va **después** del despliegue del código), las
+propiedades `luparx.jwt.mfa-challenge-ttl` y `luparx.security.mfa-*`, y las variables de entorno
+`JWT_MFA_CHALLENGE_TTL`, `MFA_TOTP_ENCRYPTION_KEY`, `MFA_ISSUER_NAME` y `MFA_ENFORCED_PORTALS`.
+
+`Portal.mfaMandatory()` también se va: lo que distingue a los portales sigue siendo su audiencia y si
+permiten auto-registro, no un factor que ninguno exigía.
+
+`PasswordAuthentication` desaparece con ellos — sin segundo factor el registro degeneraba en un solo
+`User`, y un envoltorio de un campo es ruido.
+
+## El riesgo, ahora como decisión y no como configuración vacía
+
+La cuenta de plataforma administra **todas** las municipalidades con sólo correo y contraseña. Antes
+esto era «una lista de configuración que quedó vacía»; ahora es una decisión del producto escrita en
+un ADR. Lo compensan Argon2id, la política de contraseñas y el limitador de intentos respaldado en
+base de datos — y, como requisito antes de exponer el portal de plataforma a internet abierto,
+**restricción por IP**.
+
+Si el segundo factor vuelve, debería volver como **passkeys/WebAuthn**, no como el TOTP que se retiró.

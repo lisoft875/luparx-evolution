@@ -55,7 +55,6 @@ export JWT_PRIVATE_KEY_PATH="$ROOT/infra/secrets/jwt-private-dev.pem"
 export JWT_PUBLIC_KEY_PATH="$ROOT/infra/secrets/jwt-public-dev.pem"
 export JWT_KEY_ID="dev-$(date +%Y%m%d)"
 export JWT_ISSUER="http://localhost:8090"
-export MFA_TOTP_ENCRYPTION_KEY="$(openssl rand -base64 32)"
 export IP_HASH_PEPPER="$(openssl rand -hex 16)"
 EOF
   chmod 600 infra/secrets/dev-env.sh
@@ -85,7 +84,7 @@ cat <<'EOF'
   npm run dev:platform    # http://localhost:5186
 
 Sin backend: poné VITE_USE_MOCKS=true en el .env de la app para correr contra datos simulados
-(usuarios de prueba en frontend/packages/api-client/src/mocks/data.ts, código MFA 123456).
+(usuarios de prueba en frontend/packages/api-client/src/mocks/data.ts).
 Correo capturado en http://localhost:8035 · Adminer opcional: docker compose --profile tools up -d
 
 EOF

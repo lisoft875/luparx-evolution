@@ -18,9 +18,6 @@ import cr.luparx.identity.entity.User;
 import cr.luparx.identity.port.NotificationSender;
 import cr.luparx.identity.service.EmailChangeService;
 import cr.luparx.identity.service.IssuedTokens;
-import cr.luparx.identity.service.MfaPolicy;
-import cr.luparx.identity.service.MfaService;
-import cr.luparx.identity.service.MfaSetup;
 import cr.luparx.identity.service.PasswordChangeService;
 import cr.luparx.identity.service.ProfileUpdateCommand;
 import cr.luparx.identity.service.UserDirectoryService;
@@ -59,7 +56,7 @@ import java.util.Map;
  */
 @RestController
 @RequestMapping("/api/v1/{portal}")
-@Tag(name = "Session", description = "Own profile, memberships, active municipality and MFA enrolment.")
+@Tag(name = "Session", description = "Own profile, memberships and active municipality.")
 public class MeController {
 
     private final UserDirectoryService userDirectoryService;
@@ -72,8 +69,6 @@ public class MeController {
     private final AccessResolver accessResolver;
     private final MembershipService membershipService;
     private final TenantRepository tenantRepository;
-    private final MfaService mfaService;
-    private final MfaPolicy mfaPolicy;
     private final SessionService sessionService;
     private final AuditRecorder auditRecorder;
     private final ResponseMapper mapper;
@@ -88,8 +83,6 @@ public class MeController {
                         AccessResolver accessResolver,
                         MembershipService membershipService,
                         TenantRepository tenantRepository,
-                        MfaService mfaService,
-                        MfaPolicy mfaPolicy,
                         SessionService sessionService,
                         AuditRecorder auditRecorder,
                         ResponseMapper mapper) {
@@ -103,8 +96,6 @@ public class MeController {
         this.accessResolver = accessResolver;
         this.membershipService = membershipService;
         this.tenantRepository = tenantRepository;
-        this.mfaService = mfaService;
-        this.mfaPolicy = mfaPolicy;
         this.sessionService = sessionService;
         this.auditRecorder = auditRecorder;
         this.mapper = mapper;
@@ -197,8 +188,7 @@ public class MeController {
                 request.newPassword());
         auditRecorder.record(AuditAction.USER_PASSWORD_CHANGED, "user", user.getId().toString(),
                 Map.of("self", "true"));
-        IssuedTokens tokens = sessionService.issue(user, context.portal(), context.tenantId(),
-                mfaService.isActive(context.userId()), httpRequest);
+        IssuedTokens tokens = sessionService.issue(user, context.portal(), context.tenantId(), httpRequest);
         return new SessionDtos.PasswordChangedResponse(mapper.toTokensEnvelope(tokens).tokens());
     }
 
@@ -254,9 +244,8 @@ public class MeController {
         Tenant tenant = tenantRepository.findById(request.tenantId())
                 .orElseThrow(() -> ForbiddenException.of(ErrorCode.TENANT_NOT_FOUND, "error.tenant.notFound"));
         joinIfCitizen(context, tenant);
-        boolean mfaSatisfied = mfaService.isActive(context.userId());
         IssuedTokens tokens = sessionService.switchTenant(user, context.portal(),
-                TenantId.of(tenant.getId()), mfaSatisfied, httpRequest);
+                TenantId.of(tenant.getId()), httpRequest);
         // The municipality that was switched to travels back with the tokens, branding included: the
         // client has to repaint the chip next to the LupaRX logo the moment the switch succeeds, and
         // sending it back to the catalogue to learn what it just chose would be a round trip for
@@ -301,42 +290,6 @@ public class MeController {
                         "role", Role.CITIZEN.name(),
                         "reason", "citizen-self-service",
                         "fromTenantId", context.tenantId() == null ? "-" : context.tenantId().toString()));
-    }
-
-    @PostMapping("/me/mfa/setup")
-    @Operation(summary = "Start TOTP enrolment; the secret and recovery codes are shown only once")
-    public SessionDtos.MfaSetupResponse setupMfa(@PathVariable String portal) {
-        TenantContext context = requireContext(portal);
-        MfaSetup setup = mfaService.startSetup(context.userId());
-        // The secret itself is never audited or logged (SECURITY.md §11).
-        auditRecorder.record(AuditAction.USER_MFA_ACTIVATED, "user", context.userId().toString(),
-                Map.of("stage", "setup"));
-        return new SessionDtos.MfaSetupResponse(setup.secret(), setup.otpauthUri(), setup.recoveryCodes());
-    }
-
-    @PostMapping("/me/mfa/activate")
-    @Operation(summary = "Confirm TOTP enrolment with a current code")
-    public ResponseEntity<Void> activateMfa(@PathVariable String portal,
-                                            @Valid @RequestBody SessionDtos.MfaCodeRequest request) {
-        TenantContext context = requireContext(portal);
-        mfaService.activate(context.userId(), request.code());
-        auditRecorder.record(AuditAction.USER_MFA_ACTIVATED, "user", context.userId().toString(),
-                Map.of("stage", "activated"));
-        return ResponseEntity.noContent().build();
-    }
-
-    @DeleteMapping("/me/mfa")
-    @Operation(summary = "Disable TOTP; requires a current code or a recovery code")
-    public ResponseEntity<Void> disableMfa(@PathVariable String portal,
-                                           @Valid @RequestBody SessionDtos.MfaCodeRequest request) {
-        TenantContext context = requireContext(portal);
-        if (mfaPolicy.isEnforcedFor(context.portal())) {
-            // Turning off a second factor the deployment mandates is not a user decision.
-            throw ForbiddenException.of(ErrorCode.MFA_REQUIRED, "error.mfa.required");
-        }
-        mfaService.disable(context.userId(), request.code());
-        auditRecorder.record(AuditAction.USER_MFA_DISABLED, "user", context.userId().toString(), Map.of());
-        return ResponseEntity.noContent().build();
     }
 
     /** Guards against a token of one portal reaching another portal's route via the path variable. */

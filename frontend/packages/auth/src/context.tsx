@@ -22,11 +22,8 @@ import {
 } from './storage';
 import { decodeAccessTokenClaims, isTokenExpired } from './claims';
 
-export type AuthStatus = 'loading' | 'unauthenticated' | 'mfa_required' | 'authenticated';
+export type AuthStatus = 'loading' | 'unauthenticated' | 'authenticated';
 
-export interface LoginResult {
-  mfaRequired: boolean;
-}
 
 export interface AuthContextValue {
   status: AuthStatus;
@@ -49,8 +46,7 @@ export interface AuthContextValue {
    */
   requiresTenantSelection: boolean;
   apiClient: ApiClient;
-  login: (payload: LoginRequest) => Promise<LoginResult>;
-  verifyMfa: (code: string) => Promise<void>;
+  login: (payload: LoginRequest) => Promise<void>;
   register: (payload: RegisterRequest) => Promise<RegisterResponse>;
   logout: () => Promise<void>;
   switchTenant: (tenantId: string) => Promise<void>;
@@ -106,7 +102,6 @@ export function AuthProvider({
     [tenantPreferenceStorage, portal],
   );
   const storedTokensRef = useRef<StoredTokens | null>(storage.getTokens());
-  const mfaTokenRef = useRef<string | null>(null);
 
   const [status, setStatus] = useState<AuthStatus>('loading');
   const [me, setMe] = useState<MeResponse | null>(null);
@@ -269,32 +264,12 @@ export function AuthProvider({
   }, [apiClient]);
 
   const login = useCallback(
-    async (payload: LoginRequest): Promise<LoginResult> => {
+    async (payload: LoginRequest): Promise<void> => {
       const response = await apiClient.auth.login(payload);
-      if (response.mfaRequired) {
-        mfaTokenRef.current = response.mfaToken ?? null;
-        setStatus('mfa_required');
-        return { mfaRequired: true };
-      }
-      if (response.accessToken && response.refreshToken && response.expiresIn) {
-        applyTokens(
-          { accessToken: response.accessToken, refreshToken: response.refreshToken, expiresIn: response.expiresIn },
-          null,
-        );
-        setMe(await adoptRememberedTenant(await apiClient.session.me()));
-        setStatus('authenticated');
-      }
-      return { mfaRequired: false };
-    },
-    [adoptRememberedTenant, apiClient, applyTokens],
-  );
-
-  const verifyMfa = useCallback(
-    async (code: string): Promise<void> => {
-      if (!mfaTokenRef.current) throw new Error('No pending MFA challenge');
-      const response = await apiClient.auth.mfaVerify({ mfaToken: mfaTokenRef.current, code });
-      mfaTokenRef.current = null;
-      applyTokens(response.tokens, null);
+      applyTokens(
+        { accessToken: response.accessToken, refreshToken: response.refreshToken, expiresIn: response.expiresIn },
+        null,
+      );
       setMe(await adoptRememberedTenant(await apiClient.session.me()));
       setStatus('authenticated');
     },
@@ -354,7 +329,6 @@ export function AuthProvider({
       requiresTenantSelection: status === 'authenticated' && !activeTenant && activeMemberships.length > 1,
       apiClient,
       login,
-      verifyMfa,
       register,
       logout,
       switchTenant,
@@ -371,7 +345,6 @@ export function AuthProvider({
       activeTenant,
       apiClient,
       login,
-      verifyMfa,
       register,
       logout,
       switchTenant,

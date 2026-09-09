@@ -36,8 +36,6 @@ import java.util.UUID;
  *   <li>the <b>access token</b>, whose {@code aud} and {@code portal} claims bind it to exactly one
  *       portal — a citizen token presented to {@code /api/v1/admin/**} is rejected by the resource
  *       server before any controller runs;</li>
- *   <li>the <b>MFA challenge token</b>, a five-minute token that proves the password step succeeded
- *       and carries no authority of its own;</li>
  *   <li>the <b>OAuth state token</b>, which keeps the federation round-trip stateless while still
  *       being tamper-evident.</li>
  * </ul>
@@ -45,7 +43,6 @@ import java.util.UUID;
 public class TokenService {
 
     private static final String PURPOSE_CLAIM = "purpose";
-    private static final String PURPOSE_MFA = "mfa_challenge";
     private static final String PURPOSE_OAUTH_STATE = "oauth_state";
 
     private final JwtKeySource keySource;
@@ -87,7 +84,6 @@ public class TokenService {
                 .claim("tid", request.tenantId() == null ? null : request.tenantId().toString())
                 .claim("roles", roles)
                 .claim("perms", permissions)
-                .claim("mfa", request.mfaSatisfied())
                 .claim("locale", request.locale())
                 .claim("ver", request.credentialsVersion())
                 .build();
@@ -96,38 +92,6 @@ public class TokenService {
 
     public long accessTokenTtlSeconds() {
         return properties.accessTokenTtl().toSeconds();
-    }
-
-    /** Short-lived proof that the password step succeeded, exchanged for tokens by {@code /mfa/verify}. */
-    public String issueMfaChallengeToken(UserId userId, Portal portal) {
-        Instant now = clock.instant();
-        JWTClaimsSet claims = new JWTClaimsSet.Builder()
-                .issuer(properties.issuer())
-                .subject(userId.toString())
-                .audience(portal.audience())
-                .issueTime(Date.from(now))
-                .expirationTime(Date.from(now.plus(properties.mfaChallengeTtl())))
-                .jwtID(UUID.randomUUID().toString())
-                .claim(PURPOSE_CLAIM, PURPOSE_MFA)
-                .claim("portal", portal.slug())
-                .build();
-        return sign(claims);
-    }
-
-    /**
-     * @return the user the challenge belongs to
-     * @throws UnauthorizedException when the token is malformed, expired, for another portal or not
-     *                               an MFA challenge at all
-     */
-    public UserId verifyMfaChallengeToken(String token, Portal portal) {
-        JWTClaimsSet claims = verify(token, ErrorCode.MFA_TOKEN_INVALID, "error.mfa.token.invalid");
-        requirePurpose(claims, PURPOSE_MFA, ErrorCode.MFA_TOKEN_INVALID, "error.mfa.token.invalid");
-        requireAudience(claims, portal, ErrorCode.MFA_TOKEN_INVALID, "error.mfa.token.invalid");
-        try {
-            return UserId.parse(claims.getSubject());
-        } catch (IllegalArgumentException exception) {
-            throw UnauthorizedException.of(ErrorCode.MFA_TOKEN_INVALID, "error.mfa.token.invalid");
-        }
     }
 
     /** Tamper-evident OAuth {@code state}: keeps the federation round-trip stateless. */

@@ -5,7 +5,6 @@ import cr.luparx.app.config.JwtProperties;
 import cr.luparx.app.config.SecurityProperties;
 import cr.luparx.core.domain.Portal;
 import cr.luparx.identity.port.JwtKeySource;
-import cr.luparx.identity.service.MfaPolicy;
 import cr.luparx.identity.repository.UserRepository;
 import cr.luparx.tenancy.service.AccessResolver;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -77,31 +76,16 @@ public class SecurityConfig {
         return new TenantContextFilter(accessResolver, userRepository, resolver);
     }
 
-    @Bean
-    public MfaEnforcementFilter mfaEnforcementFilter(
-            @Qualifier("handlerExceptionResolver") HandlerExceptionResolver resolver,
-            MfaPolicy mfaPolicy) {
-        return new MfaEnforcementFilter(resolver, mfaPolicy);
-    }
-
     /*
-     * Both filters above are Filter beans, which Spring Boot would otherwise register a second time
-     * in the plain servlet chain, where they would run for public routes as well. They belong only
-     * inside the portal security chains, so their automatic registration is switched off.
+     * The filter above is a Filter bean, which Spring Boot would otherwise register a second time in
+     * the plain servlet chain, where it would run for public routes as well. It belongs only inside
+     * the portal security chains, so its automatic registration is switched off.
      */
 
     @Bean
     public FilterRegistrationBean<TenantContextFilter> tenantContextFilterRegistration(
             TenantContextFilter filter) {
         FilterRegistrationBean<TenantContextFilter> registration = new FilterRegistrationBean<>(filter);
-        registration.setEnabled(false);
-        return registration;
-    }
-
-    @Bean
-    public FilterRegistrationBean<MfaEnforcementFilter> mfaEnforcementFilterRegistration(
-            MfaEnforcementFilter filter) {
-        FilterRegistrationBean<MfaEnforcementFilter> registration = new FilterRegistrationBean<>(filter);
         registration.setEnabled(false);
         return registration;
     }
@@ -148,10 +132,9 @@ public class SecurityConfig {
     public SecurityFilterChain citizenChain(HttpSecurity http, CorsConfigurationSource corsConfigurationSource,
                                             PortalJwtDecoders decoders, PortalAuthoritiesConverter converter,
                                             TenantContextFilter tenantContextFilter,
-                                            MfaEnforcementFilter mfaEnforcementFilter,
                                             ObjectMapper objectMapper) throws Exception {
         return portalChain(http, Portal.CITIZEN, corsConfigurationSource, decoders, converter, tenantContextFilter,
-                mfaEnforcementFilter, objectMapper);
+                objectMapper);
     }
 
     @Bean
@@ -159,10 +142,9 @@ public class SecurityConfig {
     public SecurityFilterChain adminChain(HttpSecurity http, CorsConfigurationSource corsConfigurationSource,
                                           PortalJwtDecoders decoders, PortalAuthoritiesConverter converter,
                                           TenantContextFilter tenantContextFilter,
-                                          MfaEnforcementFilter mfaEnforcementFilter,
                                           ObjectMapper objectMapper) throws Exception {
         return portalChain(http, Portal.ADMIN, corsConfigurationSource, decoders, converter, tenantContextFilter,
-                mfaEnforcementFilter, objectMapper);
+                objectMapper);
     }
 
     @Bean
@@ -170,10 +152,9 @@ public class SecurityConfig {
     public SecurityFilterChain inspectorChain(HttpSecurity http, CorsConfigurationSource corsConfigurationSource,
                                               PortalJwtDecoders decoders, PortalAuthoritiesConverter converter,
                                               TenantContextFilter tenantContextFilter,
-                                              MfaEnforcementFilter mfaEnforcementFilter,
-                                              ObjectMapper objectMapper) throws Exception {
+                                                ObjectMapper objectMapper) throws Exception {
         return portalChain(http, Portal.INSPECTOR, corsConfigurationSource, decoders, converter, tenantContextFilter,
-                mfaEnforcementFilter, objectMapper);
+                objectMapper);
     }
 
     @Bean
@@ -181,10 +162,9 @@ public class SecurityConfig {
     public SecurityFilterChain platformChain(HttpSecurity http, CorsConfigurationSource corsConfigurationSource,
                                              PortalJwtDecoders decoders, PortalAuthoritiesConverter converter,
                                              TenantContextFilter tenantContextFilter,
-                                             MfaEnforcementFilter mfaEnforcementFilter,
-                                             ObjectMapper objectMapper) throws Exception {
+                                              ObjectMapper objectMapper) throws Exception {
         return portalChain(http, Portal.PLATFORM, corsConfigurationSource, decoders, converter, tenantContextFilter,
-                mfaEnforcementFilter, objectMapper);
+                objectMapper);
     }
 
     /** Anything not matched above is denied rather than silently permitted. */
@@ -206,7 +186,6 @@ public class SecurityConfig {
                                             PortalJwtDecoders decoders,
                                             PortalAuthoritiesConverter converter,
                                             TenantContextFilter tenantContextFilter,
-                                            MfaEnforcementFilter mfaEnforcementFilter,
                                             ObjectMapper objectMapper) throws Exception {
         http.securityMatcher(PortalRoutes.pattern(portal))
                 .cors(cors -> cors.configurationSource(corsConfigurationSource))
@@ -224,11 +203,9 @@ public class SecurityConfig {
                 .exceptionHandling(handling -> handling
                         .authenticationEntryPoint(new ProblemAuthenticationEntryPoint(objectMapper))
                         .accessDeniedHandler(new ProblemAccessDeniedHandler(objectMapper)))
-                // Both filters need an authenticated token, so they run after the bearer token
-                // filter (which Spring Security places immediately before BasicAuthenticationFilter).
-                // They are independent of each other: the MFA filter reads only the token claims.
-                .addFilterAfter(tenantContextFilter, BasicAuthenticationFilter.class)
-                .addFilterAfter(mfaEnforcementFilter, BasicAuthenticationFilter.class);
+                // The filter needs an authenticated token, so it runs after the bearer token filter
+                // (which Spring Security places immediately before BasicAuthenticationFilter).
+                .addFilterAfter(tenantContextFilter, BasicAuthenticationFilter.class);
         applySecurityHeaders(http);
         return http.build();
     }

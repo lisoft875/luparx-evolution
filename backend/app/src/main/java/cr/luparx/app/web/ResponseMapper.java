@@ -14,7 +14,6 @@ import cr.luparx.geo.entity.CountryAdminLevel;
 import cr.luparx.geo.entity.IdentityDocumentType;
 import cr.luparx.identity.entity.User;
 import cr.luparx.identity.service.IssuedTokens;
-import cr.luparx.identity.service.MfaService;
 import cr.luparx.tenancy.entity.Tenant;
 import cr.luparx.tenancy.entity.TenantLocale;
 import cr.luparx.tenancy.model.TenantBranding;
@@ -40,11 +39,9 @@ import java.util.UUID;
 public class ResponseMapper {
 
     private final TenantRepository tenantRepository;
-    private final MfaService mfaService;
 
-    public ResponseMapper(TenantRepository tenantRepository, MfaService mfaService) {
+    public ResponseMapper(TenantRepository tenantRepository) {
         this.tenantRepository = tenantRepository;
-        this.mfaService = mfaService;
     }
 
     // --- catalogue -------------------------------------------------------------------------------
@@ -159,9 +156,7 @@ public class ResponseMapper {
                 toAddress(user),
                 user.getLocale(),
                 user.getTimeZone(),
-                user.getStatus(),
-                user.isMfaRequired(),
-                mfaService.isActive(UserId.of(user.getId())));
+                user.getStatus());
     }
 
     /** One language a municipality offers, for the public catalogue and the admin form. */
@@ -207,8 +202,6 @@ public class ResponseMapper {
                 toPhone(user),
                 toDocument(user),
                 toAddress(user),
-                user.isMfaRequired(),
-                mfaService.isActive(UserId.of(user.getId())),
                 user.getBlockedReason());
     }
 

@@ -22,8 +22,6 @@ erDiagram
 
   USERS ||--o| USER_CREDENTIALS : "contraseña local"
   USERS ||--o{ USER_FEDERATED_IDENTITIES : "identidades externas"
-  USERS ||--o| USER_MFA_TOTP : "segundo factor"
-  USERS ||--o{ USER_MFA_RECOVERY_CODES : "códigos de un solo uso"
   USERS ||--o{ REFRESH_TOKENS : "sesiones"
   USERS ||--o{ VERIFICATION_TOKENS : "verificación email / reset password"
 
@@ -114,7 +112,6 @@ erDiagram
     string time_zone
     string status
     string blocked_reason
-    bool mfa_required
     string accepted_terms_version
     int credentials_version
     timestamptz created_at
@@ -137,20 +134,6 @@ erDiagram
     string subject
     string email
     timestamptz linked_at
-  }
-
-  USER_MFA_TOTP {
-    uuid user_id PK_FK
-    string secret_encrypted
-    string status
-    timestamptz activated_at
-  }
-
-  USER_MFA_RECOVERY_CODES {
-    uuid id PK
-    uuid user_id FK
-    string code_hash
-    timestamptz used_at
   }
 
   REFRESH_TOKENS {

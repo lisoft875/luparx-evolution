@@ -31,7 +31,7 @@ una acción que ocurre dentro de un tenant.
 
 **Qué no se registra en texto plano**: `ip_hash` almacena un hash de la IP de origen, no la IP en
 claro (minimización de datos personales, ver `SECURITY.md`); `metadata jsonb` no debe incluir
-secretos (contraseñas, tokens, secretos TOTP) ni el número completo de documento de identidad sin
+secretos (contraseñas, tokens) ni el número completo de documento de identidad sin
 necesidad — sólo lo estrictamente necesario para reconstruir el "qué pasó".
 
 **No filtrado entre tenants**: `GET /api/v1/admin/audit-events?actor=&action=&from=&to=` filtra

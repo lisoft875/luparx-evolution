@@ -41,7 +41,6 @@ export const esCR = {
   'auth.portal.admin.title': 'Administración municipal',
   'auth.portal.inspector.title': 'Fiscalización',
   'auth.portal.platform.title': 'Back-office de plataforma',
-  'auth.login.mfaMandatoryNotice': 'El acceso a este portal exige verificación en dos pasos.',
   // Copy tomado del sitio del cliente (luparx.com/app/login) para que el portal web y la marca hablen igual.
   'auth.hero.description':
     'Encuentra tu zona, administra tu tiempo y mantén tus pagos en un solo lugar.',
@@ -65,12 +64,6 @@ export const esCR = {
   'auth.login.error.tooManyAttempts': 'Demasiados intentos. Esperá unos minutos antes de volver a probar.',
   'auth.login.error.server': 'El servidor no pudo procesar el inicio de sesión.',
 
-  'auth.mfa.title': 'Verificación en dos pasos',
-  'auth.mfa.description': 'Ingresa el código de 6 dígitos de tu aplicación de autenticación.',
-  'auth.mfa.codeLabel': 'Código de verificación',
-  'auth.mfa.submit': 'Verificar',
-  'auth.mfa.useRecoveryCode': 'Usar código de recuperación',
-  'auth.mfa.error.invalidCode': 'El código ingresado no es válido.',
 
   'auth.forgotPassword.title': 'Recuperar contraseña',
   'auth.forgotPassword.description':
@@ -362,7 +355,6 @@ export const esCR = {
   'admin.users.detail.actions.block': 'Bloquear',
   'admin.users.detail.actions.unblock': 'Desbloquear',
   'admin.users.detail.actions.forcePasswordReset': 'Forzar reseteo de contraseña',
-  'admin.users.detail.actions.requireMfa': 'Exigir MFA',
   'admin.users.detail.actions.assignRole': 'Asignar rol',
   'admin.users.detail.actions.approveMembership': 'Aprobar membresía',
   'admin.users.detail.actions.rejectMembership': 'Rechazar membresía',
@@ -484,9 +476,6 @@ export const esCR = {
   'nav.system': 'Sistema',
 
   'profile.title': 'Mi perfil',
-  'profile.mfa.setup': 'Configurar MFA',
-  'profile.mfa.enabled': 'MFA activado',
-  'profile.mfa.disabled': 'MFA desactivado',
   'profile.changeTenant': 'Cambiar municipalidad activa',
   'profile.verifiedBadge': 'Verificado',
   'profile.activeTenant': 'Municipalidad activa',
@@ -811,8 +800,6 @@ export const esCR = {
 
   'common.languageSwitcher.unavailable': 'no disponible en esta versión',
   'nav.settings': 'Configuración',
-  'auth.login.error.mfaChallengeUnsupported':
-    'Esta cuenta pide verificación en dos pasos, pero la aplicación no la ofrece. Contactá a la administración.',
 
   // ---- Mi cuenta (CONTRACT.md v0.3 §"Perfil editable") -----------------------------------------
   'account.profile.saved': 'Tus datos quedaron guardados.',

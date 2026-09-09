@@ -33,8 +33,9 @@ leer el token de otra aunque compartan dominio o dispositivo.
 
 - (+) Compromiso de un portal (p. ej. XSS en la SPA ciudadana) no otorga acceso al backoffice ni
   a la app de inspección, incluso si la misma persona tiene membresías en los tres.
-- (+) Permite políticas de seguridad distintas por portal (MFA obligatorio en admin/inspector,
-  opcional en citizen; expiración de sesión distinta; CORS/CSP distintos — ver `SECURITY.md`).
+- (+) Permite políticas de seguridad distintas por portal (auto-registro sólo en citizen — ADR 0016
+  retiró el segundo factor que este punto citaba; expiración de sesión distinta; CORS/CSP distintos —
+  ver `SECURITY.md`).
 - (+) El cambio de municipalidad activa (`POST /{portal}/session/tenant`) emite tokens nuevos con
   el mismo `aud` pero `tid`/roles actualizados, sin necesidad de reautenticación completa.
 - (−) Un usuario con membresías en dos portales (p. ej. citizen + admin) debe autenticarse por

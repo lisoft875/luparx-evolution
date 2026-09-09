@@ -143,12 +143,6 @@ function idempotentResult(idempotencyKey: string | null, opKey: string, compute:
   return json(result.data, result.status);
 }
 
-interface PendingMfa {
-  userId: string;
-  portal: Portal;
-}
-const pendingMfaByToken = new Map<string, PendingMfa>();
-
 interface RefreshRecord {
   userId: string;
   portal: Portal;
@@ -231,8 +225,6 @@ function toDetail(user: MockUserRecord): AdminUserDetail {
     phone: user.profile.phone,
     identityDocument: user.profile.identityDocument,
     address: user.profile.address,
-    mfaRequired: user.profile.mfaRequired,
-    mfaEnabled: user.mfaEnabled,
   };
 }
 
@@ -360,8 +352,6 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
           locale: payload.locale,
           timeZone: payload.timeZone,
           status: 'PENDING_VERIFICATION',
-          mfaRequired: false,
-          mfaEnabled: false,
         },
         password: payload.password,
         memberships: payload.tenantId
@@ -375,7 +365,6 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
               },
             ]
           : [],
-        mfaEnabled: false,
       };
       mockUsersById.set(id, record);
       recordAuditEvent({
@@ -399,11 +388,6 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
       if (!user || user.password !== payload.password) {
         return problem(401, 'INVALID_CREDENTIALS', 'Invalid credentials');
       }
-      if (user.mfaEnabled) {
-        const mfaToken = `mfa-${crypto.randomUUID()}`;
-        pendingMfaByToken.set(mfaToken, { userId: user.profile.id, portal });
-        return json({ mfaRequired: true, mfaToken });
-      }
       const membership = membershipForPortal(user, portal);
       const resolvedTenantId = autoResolvedTenantId(user, portal);
       const tokens = mintMockTokenPair(user, portal, resolvedTenantId, rolesForLogin(user, portal, membership));
@@ -412,33 +396,9 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
         portal,
         tenantId: resolvedTenantId,
       });
-      return json({ ...tokens, mfaRequired: false });
+      return json(tokens);
     }
 
-    if (method === 'POST' && action === 'mfa/verify') {
-      const payload = await readBody<{ mfaToken: string; code: string }>(init);
-      const pending = pendingMfaByToken.get(payload.mfaToken);
-      if (!pending || payload.code !== '123456') {
-        return problem(401, 'INVALID_MFA_CODE', 'Invalid verification code');
-      }
-      pendingMfaByToken.delete(payload.mfaToken);
-      const user = mockUsersById.get(pending.userId);
-      if (!user) return problem(404, 'USER_NOT_FOUND', 'User not found');
-      const membership = membershipForPortal(user, pending.portal);
-      const resolvedTenantId = autoResolvedTenantId(user, pending.portal);
-      const tokens = mintMockTokenPair(
-        user,
-        pending.portal,
-        resolvedTenantId,
-        rolesForLogin(user, pending.portal, membership),
-      );
-      refreshTokens.set(tokens.refreshToken, {
-        userId: user.profile.id,
-        portal: pending.portal,
-        tenantId: resolvedTenantId,
-      });
-      return json({ tokens });
-    }
 
     if (method === 'POST' && action === 'refresh') {
       const payload = await readBody<{ refreshToken: string }>(init);
@@ -534,21 +494,6 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
       const tokens = mintMockTokenPair(user, portal, membership.tenantId, [membership.role]);
       refreshTokens.set(tokens.refreshToken, { userId: user.profile.id, portal, tenantId: membership.tenantId });
       return json({ tokens, activeTenant: tenantCatalogEntry(membership.tenantId) });
-    }
-    if (method === 'POST' && path.endsWith('/me/mfa/setup')) {
-      return json({
-        secret: 'JBSWY3DPEHPK3PXP',
-        otpauthUri: `otpauth://totp/LupaRX:${user.profile.email}?secret=JBSWY3DPEHPK3PXP&issuer=LupaRX`,
-        recoveryCodes: ['AAAA-1111', 'BBBB-2222', 'CCCC-3333'],
-      });
-    }
-    if (method === 'POST' && path.endsWith('/me/mfa/activate')) {
-      user.mfaEnabled = true;
-      return noContent();
-    }
-    if (method === 'DELETE' && path.endsWith('/me/mfa')) {
-      user.mfaEnabled = false;
-      return noContent();
     }
   }
 
@@ -788,8 +733,6 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
             timeZone: payload.timeZone ?? 'America/Costa_Rica',
             // Until they follow the emailed link and choose a password, exactly as on the server.
             status: 'PENDING_VERIFICATION' as const,
-            mfaRequired: false,
-            mfaEnabled: false,
           },
           // No password at all: an operator never sets one.
           password: null,
@@ -802,7 +745,6 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
               status: 'ACTIVE',
             },
           ],
-          mfaEnabled: false,
         };
         mockUsersById.set(newId, record);
         recordAuditEvent({
@@ -843,13 +785,6 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
         return noContent();
       }
       if (method === 'POST' && segments[5] === 'password-reset') {
-        return noContent();
-      }
-      if (method === 'POST' && segments[5] === 'mfa' && segments[6] === 'require') {
-        const user = mockUsersById.get(segments[4] ?? '');
-        if (!user) return problem(404, 'USER_NOT_FOUND', 'User not found');
-        const payload = await readBody<{ required: boolean }>(init);
-        user.profile.mfaRequired = payload.required;
         return noContent();
       }
     }
@@ -1108,12 +1043,9 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
               locale: tenant.locale,
               timeZone: tenant.timeZone,
               status: 'PENDING_VERIFICATION',
-              mfaRequired: true,
-              mfaEnabled: false,
             },
             password: crypto.randomUUID(),
             memberships: [],
-            mfaEnabled: false,
           };
           mockUsersById.set(id, user);
         }
@@ -1186,13 +1118,6 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
         return noContent();
       }
       if (method === 'POST' && segments[5] === 'password-reset') {
-        return noContent();
-      }
-      if (method === 'POST' && segments[5] === 'mfa' && segments[6] === 'require') {
-        const user = mockUsersById.get(segments[4] ?? '');
-        if (!user) return problem(404, 'USER_NOT_FOUND', 'User not found');
-        const payload = await readBody<{ required: boolean }>(init);
-        user.profile.mfaRequired = payload.required;
         return noContent();
       }
     }

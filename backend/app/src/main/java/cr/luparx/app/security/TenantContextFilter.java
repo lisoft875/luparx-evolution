@@ -68,18 +68,14 @@ public class TenantContextFilter extends OncePerRequestFilter {
      * of their own account because a tenant was closed would be the platform punishing them for an
      * administrative act they had no part in.</p>
      *
-     * <p>{@code /me/memberships} and {@code /session/tenant} are here for the same reason the MFA
-     * filter keeps its enrolment paths open: they are how the caller sees what is wrong and gets out
-     * of it.</p>
+     * <p>{@code /me/memberships} and {@code /session/tenant} are here for a related reason: they are
+     * how a caller with no usable membership sees what is wrong and gets out of it.</p>
      */
     private static final List<String> ACCOUNT_PATHS = List.of(
             "/me",
             "/me/memberships",
             "/me/password",
             "/me/email",
-            "/me/mfa",
-            "/me/mfa/setup",
-            "/me/mfa/activate",
             "/session/tenant");
 
     private final AccessResolver accessResolver;

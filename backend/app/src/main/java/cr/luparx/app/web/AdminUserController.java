@@ -303,19 +303,6 @@ public class AdminUserController {
         return ResponseEntity.noContent().build();
     }
 
-    @PostMapping("/{id}/mfa/require")
-    @PreAuthorize("hasAuthority('PERM_USER_WRITE')")
-    @Operation(summary = "Force (or stop forcing) MFA for a user")
-    public ResponseEntity<Void> requireMfa(@PathVariable UUID id,
-                                           @Valid @RequestBody AdminDtos.RequireMfaRequest request) {
-        TenantId tenantId = TenantContextHolder.requireTenantId();
-        requireMemberOfTenant(tenantId, id);
-        userDirectoryService.setMfaRequired(UserId.of(id), Boolean.TRUE.equals(request.required()));
-        auditRecorder.record(AuditAction.USER_MFA_REQUIREMENT_CHANGED, "user", id.toString(),
-                Map.of("required", String.valueOf(request.required())));
-        return ResponseEntity.noContent().build();
-    }
-
     // --- helpers ---------------------------------------------------------------------------------
 
     /** The IDOR guard: the user must actually belong to the active tenant. */

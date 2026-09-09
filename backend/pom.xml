@@ -48,7 +48,6 @@
     <libphonenumber.version>8.13.42</libphonenumber.version>
     <springdoc.version>2.6.0</springdoc.version>
     <bouncycastle.version>1.78.1</bouncycastle.version>
-    <commons-codec.version>1.17.1</commons-codec.version>
     <!--
       Spring Boot 3.3 no gestiona com.nimbusds:nimbus-jose-jwt: llega transitivamente a traves de
       spring-security-oauth2-jose, pero module-identity lo usa de forma directa para emitir y rotar
