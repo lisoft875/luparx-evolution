@@ -30,7 +30,9 @@ import cr.luparx.tenancy.service.EffectiveLocaleService;
 import cr.luparx.tenancy.entity.Tenant;
 import cr.luparx.tenancy.entity.TenantMembership;
 import cr.luparx.tenancy.repository.TenantRepository;
+import cr.luparx.core.domain.Role;
 import cr.luparx.tenancy.service.AccessResolver;
+import cr.luparx.tenancy.service.MembershipService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
@@ -68,6 +70,7 @@ public class MeController {
     private final NotificationSender notificationSender;
     private final SmtpNotificationSender portalUrls;
     private final AccessResolver accessResolver;
+    private final MembershipService membershipService;
     private final TenantRepository tenantRepository;
     private final MfaService mfaService;
     private final MfaPolicy mfaPolicy;
@@ -83,6 +86,7 @@ public class MeController {
                         NotificationSender notificationSender,
                         SmtpNotificationSender portalUrls,
                         AccessResolver accessResolver,
+                        MembershipService membershipService,
                         TenantRepository tenantRepository,
                         MfaService mfaService,
                         MfaPolicy mfaPolicy,
@@ -97,6 +101,7 @@ public class MeController {
         this.notificationSender = notificationSender;
         this.portalUrls = portalUrls;
         this.accessResolver = accessResolver;
+        this.membershipService = membershipService;
         this.tenantRepository = tenantRepository;
         this.mfaService = mfaService;
         this.mfaPolicy = mfaPolicy;
@@ -248,6 +253,7 @@ public class MeController {
         User user = userDirectoryService.require(context.userId());
         Tenant tenant = tenantRepository.findById(request.tenantId())
                 .orElseThrow(() -> ForbiddenException.of(ErrorCode.TENANT_NOT_FOUND, "error.tenant.notFound"));
+        joinIfCitizen(context, tenant);
         boolean mfaSatisfied = mfaService.isActive(context.userId());
         IssuedTokens tokens = sessionService.switchTenant(user, context.portal(),
                 TenantId.of(tenant.getId()), mfaSatisfied, httpRequest);
@@ -256,6 +262,45 @@ public class MeController {
         // sending it back to the catalogue to learn what it just chose would be a round trip for
         // something the server already has in its hand.
         return new AuthDtos.TokensEnvelope(mapper.toTokenPair(tokens), mapper.toTenantCatalog(tenant));
+    }
+
+    /**
+     * On the citizen portal, switching to a municipality the person does not belong to <b>joins them
+     * to it</b> instead of refusing.
+     *
+     * <p>That is the product: somebody who drives to Cartago for the afternoon pays for a bay there
+     * without asking anyone's permission first. Refusing would mean a visitor cannot pay a
+     * municipality that wants to be paid.</p>
+     *
+     * <p><b>Only on the citizen portal.</b> A citizen membership carries no authority — no permission
+     * in {@code RolePermissions}, no access to another person's data, a wallet that starts at zero
+     * and money that never crosses from the municipality they came from. An admin or inspector
+     * membership <em>is</em> authority, so granting one on request would be a privilege escalation
+     * with a URL for a front door; those portals keep requiring a membership somebody decided to give,
+     * and reach {@code AccessResolver} unchanged, which refuses them exactly as before.</p>
+     *
+     * <p>The municipality still decides: {@code INVITE_ONLY} answers
+     * {@code TENANT_NOT_OPEN_TO_CITIZENS} rather than a mute access-denied, and a revoked membership
+     * stays revoked.</p>
+     */
+    private void joinIfCitizen(TenantContext context, Tenant tenant) {
+        if (context.portal() != Portal.CITIZEN) {
+            return;
+        }
+        MembershipService.Joined joined = membershipService.joinAsCitizen(context.userId(),
+                TenantId.of(tenant.getId()));
+        if (!joined.created()) {
+            return;
+        }
+        // Audited only when it really is a new membership: who, into which municipality, and which one
+        // they were in when they asked — the three things somebody reviewing this later would want.
+        auditRecorder.record(AuditAction.MEMBERSHIP_CREATED, "membership",
+                joined.membership().getId().toString(),
+                Map.of("tenantId", tenant.getId().toString(),
+                        "tenantSlug", tenant.getSlug(),
+                        "role", Role.CITIZEN.name(),
+                        "reason", "citizen-self-service",
+                        "fromTenantId", context.tenantId() == null ? "-" : context.tenantId().toString()));
     }
 
     @PostMapping("/me/mfa/setup")

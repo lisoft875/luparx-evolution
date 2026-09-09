@@ -29,11 +29,15 @@ export interface TenantSwitchControlProps {
  */
 export function TenantSwitchControl({ onSwitched, hint }: TenantSwitchControlProps): React.JSX.Element | null {
   const { t, locale } = useTranslation();
-  const { activeTenant, activeMemberships } = useAuth();
+  const { activeTenant, activeMemberships, portal } = useAuth();
   const [open, setOpen] = useState(false);
 
   if (!activeTenant) return null;
-  const canSwitch = activeMemberships.length > 1;
+  // A citizen can always change: since v0.6 the sheet offers the whole country and joins them to
+  // whichever they pick, so hiding the control behind "you belong to more than one" would lock a
+  // first-time visitor into the municipality they happened to register in. The other portals still
+  // need a membership somebody granted, so for them one membership is genuinely no choice.
+  const canSwitch = portal === 'citizen' || activeMemberships.length > 1;
 
   return (
     <>

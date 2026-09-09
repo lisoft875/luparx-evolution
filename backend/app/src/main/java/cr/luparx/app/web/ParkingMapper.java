@@ -16,6 +16,7 @@ import cr.luparx.parking.entity.ParkingZone;
 import cr.luparx.parking.entity.Vehicle;
 import cr.luparx.parking.entity.WalletTransaction;
 import cr.luparx.parking.model.ChargingBand;
+import cr.luparx.parking.model.ExtensionOption;
 import cr.luparx.parking.model.ChargingSchedule;
 import cr.luparx.parking.model.ParkingQuote;
 import cr.luparx.parking.model.ParkingSpaceRange;
@@ -189,6 +190,20 @@ public class ParkingMapper {
                 session.getStatus().isActive() ? session.remainingMinutesAt(now) : 0,
                 toMoney(session.getAmount()),
                 session.getCreditMinutesApplied());
+    }
+
+    public ParkingDtos.ExtensionOptionResponse toExtensionOption(ExtensionOption option) {
+        ParkingQuote quote = option.quote();
+        return new ParkingDtos.ExtensionOptionResponse(
+                option.minutes(),
+                quote.chargeableMinutes(),
+                toMoney(quote.amount()),
+                quote.creditMinutesApplied(),
+                quote.payableMinutes(),
+                toMoney(quote.payable()),
+                option.newExpiresAt(),
+                option.allowed(),
+                option.unavailableReason());
     }
 
     public ParkingDtos.ParkingSessionExtensionResponse toExtension(ParkingSessionExtension extension) {

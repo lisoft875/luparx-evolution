@@ -74,7 +74,7 @@ export function TenantCreatePage(): React.JSX.Element {
         <FormField label={t('platform.tenants.create.countryLabel')}>
           <Select
             value={countryCode}
-            onChange={(e) => handleCountryChange(e.target.value)}
+            onChange={(value) => handleCountryChange(value)}
             placeholder={t('common.select.placeholder')}
             options={(countriesQuery.data ?? []).map((c) => ({ value: c.code, label: `${c.flagEmoji} ${t(c.nameKey as TranslationKey)}`.trim() }))}
           />
@@ -85,7 +85,7 @@ export function TenantCreatePage(): React.JSX.Element {
         <FormField label={t('platform.tenants.create.localeLabel')}>
           <Select
             value={locale}
-            onChange={(e) => setLocale(e.target.value)}
+            onChange={(value) => setLocale(value)}
             options={SUPPORTED_LOCALES.map((l) => ({ value: l, label: l }))}
           />
         </FormField>
@@ -95,7 +95,7 @@ export function TenantCreatePage(): React.JSX.Element {
         <FormField label={t('platform.tenants.create.selfRegistrationLabel')}>
           <Select
             value={selfRegistrationPolicy}
-            onChange={(e) => setSelfRegistrationPolicy(e.target.value as SelfRegistrationPolicy)}
+            onChange={(value) => setSelfRegistrationPolicy(value as SelfRegistrationPolicy)}
             options={SELF_REGISTRATION_POLICIES.map((p) => ({
               value: p,
               label: t(`platform.tenants.create.selfRegistration.${p}` as TranslationKey),

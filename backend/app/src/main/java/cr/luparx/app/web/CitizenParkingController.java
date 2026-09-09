@@ -17,6 +17,7 @@ import cr.luparx.parking.entity.ParkingScheduleException;
 import cr.luparx.parking.entity.ParkingSession;
 import cr.luparx.parking.entity.ParkingSessionExtension;
 import cr.luparx.parking.entity.ParkingZone;
+import cr.luparx.parking.model.ExtensionOption;
 import cr.luparx.parking.model.ParkingQuote;
 import cr.luparx.parking.model.ParkingSessionStatus;
 import cr.luparx.parking.model.ParkingSpaceRange;
@@ -288,6 +289,32 @@ public class CitizenParkingController {
                 OutboxEventType.PARKING_SESSION_STARTED,
                 Map.of("sessionId", session.getId().toString(), "spaceId", session.getSpaceId().toString()));
         return mapper.toSession(session);
+    }
+
+    /**
+     * What extending this session would cost, for every duration the municipality offers.
+     *
+     * <p>A {@code GET} because nothing happens: no minute is reserved, no money moves. It answers the
+     * screen's whole question in one call — each option with its price and the expiry it would
+     * produce — rather than making the client quote each duration separately and hope the three
+     * answers were computed at the same instant.</p>
+     *
+     * <p>Not cached at all. The prices depend on the charging hours the session is about to cross and
+     * on a credit balance the citizen may spend elsewhere a second later; a minute of staleness here
+     * is a number that no longer matches what the extension will charge.</p>
+     */
+    @GetMapping("/sessions/{id}/extension-options")
+    @PreAuthorize("hasRole('CITIZEN')")
+    @Operation(summary = "Every extension this municipality offers for a session, already priced")
+    public List<ParkingDtos.ExtensionOptionResponse> extensionOptions(@PathVariable UUID id) {
+        TenantId tenantId = TenantContextHolder.requireTenantId();
+        UserId userId = TenantContextHolder.requireUserId();
+        List<ExtensionOption> options = sessionService.extensionOptions(tenantId, userId, id);
+        List<ParkingDtos.ExtensionOptionResponse> body = new ArrayList<>(options.size());
+        for (ExtensionOption option : options) {
+            body.add(mapper.toExtensionOption(option));
+        }
+        return body;
     }
 
     @PostMapping("/sessions/{id}/extend")

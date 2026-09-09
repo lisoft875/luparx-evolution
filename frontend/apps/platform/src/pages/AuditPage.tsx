@@ -42,9 +42,9 @@ export function AuditPage(): React.JSX.Element {
         <Select
           aria-label={t('platform.audit.filter.tenant')}
           value={tenantId}
-          onChange={(e) => {
+          onChange={(value) => {
             setPage(0);
-            setTenantId(e.target.value);
+            setTenantId(value);
           }}
           placeholder={t('platform.audit.filter.allTenants')}
           options={(tenantsQuery.data ?? []).map((tenant) => ({ value: tenant.id, label: tenant.displayName }))}

@@ -49,9 +49,9 @@ export function UsersListPage(): React.JSX.Element {
         <Select
           aria-label={t('platform.users.filter.status')}
           value={status}
-          onChange={(e) => {
+          onChange={(value) => {
             setPage(0);
-            setStatus(e.target.value as UserStatus | '');
+            setStatus(value as UserStatus | '');
           }}
           placeholder={t('platform.users.filter.allStatuses')}
           options={STATUSES.map((s) => ({ value: s, label: t(`admin.users.status.${s}` as TranslationKey) }))}

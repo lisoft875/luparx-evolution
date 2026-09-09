@@ -136,11 +136,37 @@ public class TenantService {
     /** Publishable tenants for the unauthenticated catalogue: active only (SECURITY.md §1). */
     @Transactional(readOnly = true)
     public List<Tenant> listPublishable(String countryCode) {
+        return listPublishable(countryCode, null);
+    }
+
+    /**
+     * The same catalogue, narrowed by a search term over the name or the slug.
+     *
+     * <p>Filtered in Java rather than in the query on purpose: the unfiltered list is already loaded
+     * for the picker, it is bounded by how many municipalities a country has, and a {@code LIKE} on a
+     * table of that size buys nothing while adding an index to maintain. This is the one place in the
+     * codebase where filtering in memory is the right call, and it stops being so the day a single
+     * deployment serves thousands of tenants — at which point this becomes a paged query and the
+     * search term is what makes the page usable.</p>
+     */
+    @Transactional(readOnly = true)
+    public List<Tenant> listPublishable(String countryCode, String query) {
         String country = CountryCodes.normalize(countryCode);
-        if (country != null && CountryCodes.isValid(country)) {
-            return tenantRepository.findByStatusAndCountryCodeOrderByDisplayNameAsc(TenantStatus.ACTIVE, country);
+        List<Tenant> tenants = country != null && CountryCodes.isValid(country)
+                ? tenantRepository.findByStatusAndCountryCodeOrderByDisplayNameAsc(TenantStatus.ACTIVE, country)
+                : tenantRepository.findByStatusOrderByDisplayNameAsc(TenantStatus.ACTIVE);
+        if (query == null || query.isBlank()) {
+            return tenants;
         }
-        return tenantRepository.findByStatusOrderByDisplayNameAsc(TenantStatus.ACTIVE);
+        String term = query.trim().toLowerCase(Locale.ROOT);
+        List<Tenant> matches = new java.util.ArrayList<>(tenants.size());
+        for (Tenant tenant : tenants) {
+            if (tenant.getDisplayName().toLowerCase(Locale.ROOT).contains(term)
+                    || tenant.getSlug().contains(term)) {
+                matches.add(tenant);
+            }
+        }
+        return matches;
     }
 
     @Transactional(readOnly = true)

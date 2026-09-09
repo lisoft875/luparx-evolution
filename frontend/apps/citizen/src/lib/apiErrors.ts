@@ -95,3 +95,18 @@ export function vehicleDeleteErrorMessage(error: unknown, t: Translate): string 
 export function parkingErrorMessage(error: unknown, t: Translate): string {
   return apiErrorMessage(error, t, PARKING_ERROR_KEYS);
 }
+
+/**
+ * The sentence for a bare refusal *code* rather than a thrown error.
+ *
+ * `GET /extension-options` reports why an option may not be taken with the same `ErrorCode`
+ * vocabulary the exceptions use (`EXTENSION_EXCEEDS_MAX`, `INSUFFICIENT_BALANCE`), so the option
+ * that is offered-but-refused and the request that is refused outright say the same thing. A code
+ * this app has no copy for is named rather than hidden: "no disponible" tells nobody anything, and
+ * the code is at least something a support agent can look up.
+ */
+export function parkingReasonMessage(code: string | null | undefined, t: Translate): string | undefined {
+  if (!code) return undefined;
+  const mapped = PARKING_ERROR_KEYS[code];
+  return mapped ? t(mapped) : t('common.error.referenceNoTrace', { code });
+}

@@ -521,7 +521,8 @@ GET /api/v1/catalog/vehicle-types    -> [{value, labelKey}]
 GET /api/v1/catalog/vehicle-colors   -> [{value, labelKey}]
 ```
 
-**Tipo**: `CAR`, `MOTORCYCLE`, `PICKUP`, `VAN`, `OTHER`. Cada uno se gana el lugar por ser distinto
+**Tipo** (*superado por v0.6: hoy la lista es `CAR` y `MOTORCYCLE`*): `CAR`, `MOTORCYCLE`, `PICKUP`,
+`VAN`, `OTHER`. Cada uno se gana el lugar por ser distinto
 *operativamente*: la moto ocupa una fracción de bahía y es lo que una municipalidad cobra distinto
 primero; pick-up y van son más largos que la bahía pintada, que es una pregunta de fiscalización;
 `OTHER` para que registrar un vehículo nunca lo bloquee una lista. La bicicleta queda fuera a
@@ -561,3 +562,89 @@ enviarla y un preflight que la rechaza falla de forma invisible. Toda respuesta 
 `Vary: Authorization`: casi todo lo que devuelve esta API depende de quién pregunta, y un caché
 intermedio que guardara una de esas respuestas sin saberlo le serviría a una persona lo que
 calculamos para otra.
+
+---
+
+# v0.6 — Vehículo, alta ciudadana y precio de la extensión (normativo)
+
+## Tipo de vehículo: `CAR` o `MOTORCYCLE`
+
+El catálogo de tipos de v0.5 se reduce a dos valores y **esta lista sustituye a la de v0.5**:
+
+```
+GET /api/v1/catalog/vehicle-types  -> [{value: "CAR", labelKey: "vehicle.type.car"},
+                                       {value: "MOTORCYCLE", labelKey: "vehicle.type.motorcycle"}]
+```
+
+`PICKUP`, `VAN` y `OTHER` se retiran porque ninguna tarifa, ningún reporte y ninguna regla de
+fiscalización los distinguía de un carro: eran tres decisiones más para el ciudadano que nada aguas
+abajo leía. La moto se queda porque ocupa una fracción de bahía y es lo primero que una municipalidad
+tarifa distinto. Ampliar la lista otra vez es un valor, una clave de traducción y un CHECK.
+
+La migración `V16_0` es **expand-and-contract, en ese orden**: primero reasigna a `CAR` toda fila con
+un tipo retirado y sólo después estrecha el CHECK. Al revés fallaría en la primera fila existente. Se
+reasigna —no se borra ni se rechaza— porque un pick-up *es* un carro para todo lo que hoy hace esta
+plataforma, y perder el vehículo del ciudadano (con sus sesiones y su libro de movimientos) para
+ordenar un enum sería un intercambio absurdo. `type` sigue siendo obligatorio con `CAR` por defecto;
+un valor fuera del catálogo es `VALIDATION_FAILED` por campo.
+
+## Un ciudadano puede estacionar en cualquier municipalidad
+
+`POST /api/v1/citizen/session/tenant` con una municipalidad donde la persona **no** tiene membresía
+la crea en el acto (rol `CITIZEN`, estado `ACTIVE`) y devuelve el par de tokens ya con ese `tid`.
+Estacionar en otro cantón no es un trámite: es el caso normal de quien viaja.
+
+Condiciones y límites, explícitos:
+
+* **Sólo el portal ciudadano.** En administración y fiscalización el alta automática sería una
+  escalada de privilegios: cualquiera con una cuenta se nombraría a sí mismo funcionario de una
+  municipalidad ajena. Ahí sigue exigiéndose una membresía aprobada, y el intento responde
+  `MEMBERSHIP_NOT_ACTIVE` (403).
+* La municipalidad debe estar **activa** y su `self_registration_policy` no puede ser `INVITE_ONLY`.
+  Cuando lo es, la respuesta es `TENANT_NOT_OPEN_TO_CITIZENS` (403) — un código propio, nunca un
+  `ACCESS_DENIED` mudo: el cliente puede decir "esta municipalidad todavía no atiende por la app" en
+  vez de dejar a la persona creyendo que su cuenta está rota. `OPEN` y `APPROVAL_REQUIRED` permiten
+  el alta inmediata porque para el ciudadano ya eran equivalentes (§1: el ciudadano queda activo de
+  una vez); la aprobación previa gobierna al personal.
+* Una membresía existente **no activa** (suspendida o revocada por la municipalidad) no se resucita:
+  responde `MEMBERSHIP_NOT_ACTIVE`. Autoreactivarse sería deshacer una decisión del administrador.
+* **Nada se transfiere.** Billetera y crédito de minutos son por municipalidad y arrancan en cero;
+  las zonas, tarifas, horarios y formatos de código son los de la municipalidad nueva.
+* El alta queda **auditada** como `MEMBERSHIP_CREATED` con `reason=citizen-self-service`, el tenant
+  destino y el `fromTenantId` desde el que se hizo el cambio. Cambiarse a una municipalidad donde ya
+  se es miembro no genera evento: no ocurrió un alta.
+
+**Catálogo público.** `GET /api/v1/catalog/tenants` ya es el catálogo completo: sólo municipalidades
+activas/publicables, con marca (nombre corto, color, logo) y ordenadas por nombre. **No se pagina**:
+un país tiene a lo sumo cientos de municipalidades (Costa Rica, 82), cada fila pesa unos cientos de
+bytes y la lista entera es una sola respuesta cacheable que un selector filtra en memoria; paginarla
+costaría un viaje por scroll para algo que cabe en uno. Lo que sí necesita una lista larga es saltar,
+y para eso se agrega `?q=` (coincide por nombre o slug en el servidor), junto al `?country=` que ya
+existía. El día que un despliegue sirva miles de tenants esto pasa a ser una página, y `q` es lo que
+seguirá haciéndolo usable.
+
+## Opciones de extensión con precio calculado
+
+```
+GET /api/v1/citizen/parking/sessions/{id}/extension-options
+-> [{minutes, chargeableMinutes, amount, creditMinutesApplied, payableMinutes, payable,
+     newExpiresAt, allowed, unavailableReason}]
+```
+
+Una sola llamada devuelve **todas** las duraciones que la municipalidad ofrece
+(`extensionIncrementsMinutes`), cada una con su monto, el crédito que se aplicaría, lo que quedaría
+por pagar y la nueva hora de vencimiento. Antes el cliente tenía que cotizar una por una y confiar en
+que las tres respuestas se calcularon en el mismo instante.
+
+Reglas que se mantienen intactas: **el monto lo calcula siempre el servidor**; sólo se cobran los
+minutos que caen dentro de una banda de cobro (`chargeableMinutes` puede ser menor que `minutes` y
+por eso dos opciones pueden costar lo mismo); el cálculo parte del **vencimiento actual** de la
+sesión, no de "ahora". `GET` porque nada ocurre: no se reserva minuto ni se mueve dinero.
+
+Una opción que no se puede tomar viaja igual, con `allowed: false` y el motivo:
+`EXTENSION_EXCEEDS_MAX` (superaría `extensionMaxTotalMinutes`) o `INSUFFICIENT_BALANCE`. Se listan en
+vez de omitirse para que la app pueda mostrarlas en gris con la razón, que es lo que evita la
+pregunta "¿por qué desapareció una hora?". Si la municipalidad tiene la extensión desactivada, el
+endpoint entero responde `EXTENSION_DISABLED` (409), igual que extender. La respuesta **no se
+cachea**: depende del horario que la sesión está por cruzar y de un crédito que puede gastarse en
+otra parte un segundo después.

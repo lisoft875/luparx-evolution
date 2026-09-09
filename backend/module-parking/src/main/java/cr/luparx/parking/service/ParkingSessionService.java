@@ -15,6 +15,8 @@ import cr.luparx.parking.entity.ParkingSession;
 import cr.luparx.parking.entity.ParkingSessionExtension;
 import cr.luparx.parking.entity.ParkingSpace;
 import cr.luparx.parking.entity.Vehicle;
+import cr.luparx.core.money.Money;
+import cr.luparx.parking.model.ExtensionOption;
 import cr.luparx.parking.model.ParkingQuote;
 import cr.luparx.parking.model.ParkingSessionStatus;
 import cr.luparx.parking.model.TimeCreditSource;
@@ -293,6 +295,65 @@ public class ParkingSessionService {
                     session.getId(), idempotencyKey);
         }
         return session;
+    }
+
+    /**
+     * Every extension the municipality offers for this session, each with its price already worked
+     * out and the expiry it would produce.
+     *
+     * <p>One call instead of a quote per option. Beyond the round trips saved, it is the only way the
+     * numbers can be consistent: priced one at a time, each option is computed at a different instant
+     * and against a possibly different charging band, so a list assembled that way can show two prices
+     * that were never simultaneously true.</p>
+     *
+     * <p>Every option is priced from the session's CURRENT expiry, because that is where the time it
+     * buys begins — extending at 17:55 a session that runs to 18:30 buys 18:30 onwards, and if the
+     * municipality stops charging at 18:00 that time is free. The credit balance is read once and
+     * applied to each option independently: they are alternatives, not a basket, and the citizen will
+     * take at most one.</p>
+     *
+     * <p>Read-only. Nothing is reserved, no minute is consumed and no money moves; the extension
+     * itself re-computes everything inside its own transaction, because a list the client held on to
+     * for a minute is a display and not a promise.</p>
+     *
+     * @throws ConflictException {@code EXTENSION_DISABLED} when the municipality does not allow
+     *         extending at all, and {@code PARKING_SESSION_NOT_ACTIVE} when the stay is over
+     */
+    @Transactional
+    public List<ExtensionOption> extensionOptions(TenantId tenantId, UserId userId, UUID sessionId) {
+        ParkingPolicy policy = policyService.require(tenantId);
+        if (!policy.isExtensionEnabled()) {
+            throw ConflictException.of(ErrorCode.EXTENSION_DISABLED, "error.parking.extension.disabled");
+        }
+        ParkingSession session = requireOwn(tenantId, userId, sessionId);
+        if (expireIfDue(session, policy) || !session.getStatus().isActive()) {
+            throw ConflictException.of(ErrorCode.PARKING_SESSION_NOT_ACTIVE, "error.parking.session.notActive");
+        }
+
+        Instant now = clock.instant();
+        ParkingRate rate = quoteService.requireRate(tenantId, session.getZoneId(), now);
+        int credit = timeCreditService.availableMinutes(tenantId, userId);
+        Money balance = walletService.balance(tenantId, userId);
+        Instant from = session.getExpiresAt();
+
+        List<Integer> offered = policy.extensionIncrements().values();
+        List<ExtensionOption> options = new ArrayList<>(offered.size());
+        for (Integer minutes : offered) {
+            int added = minutes.intValue();
+            int chargeable = quoteService.chargeableMinutes(tenantId, from, added);
+            ParkingQuote quote = quoteService.price(rate, added, chargeable, credit);
+            Instant newExpiresAt = from.plusSeconds((long) added * 60L);
+            if (session.bookedMinutes() + added > policy.getExtensionMaxTotalMinutes()) {
+                options.add(ExtensionOption.unavailable(added, quote, newExpiresAt,
+                        ErrorCode.EXTENSION_EXCEEDS_MAX));
+            } else if (quote.payable().isPositive() && balance.compareTo(quote.payable()) < 0) {
+                options.add(ExtensionOption.unavailable(added, quote, newExpiresAt,
+                        ErrorCode.INSUFFICIENT_BALANCE));
+            } else {
+                options.add(ExtensionOption.available(added, quote, newExpiresAt));
+            }
+        }
+        return options;
     }
 
     // --- finish ----------------------------------------------------------------------------------

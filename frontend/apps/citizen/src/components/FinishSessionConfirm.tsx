@@ -14,10 +14,18 @@ export interface FinishSessionConfirmProps {
 }
 
 /**
- * Explains plainly what happens to the remaining minutes (CONTRACT.md v0.2 rule 5) — no
- * euphemisms: either they're credited (how many, and exactly when they expire) or they're lost
- * outright. The parent only renders this when `policy.earlyFinishEnabled` is true, mirroring how
- * the extend sheet is gated (the finish CTA itself doesn't show otherwise).
+ * "¿Terminar el estacionamiento?" — the reference dialog's two sentences, in this order and with
+ * nothing between them: what happens to the stay, then what happens to the time not used.
+ *
+ * <p>The second sentence is the municipality's policy, not a house style. Where
+ * `creditOnEarlyFinishEnabled` is on and enough minutes remain to clear
+ * `creditMinRemainingMinutes`, it says how many minutes are credited and the date they lapse; where
+ * it is off, or too little is left to qualify, it says plainly that they are lost. A single
+ * "el tiempo no utilizado no se reembolsa" would be a lie in the first municipality and
+ * "se te acreditan los minutos" a lie in the second, so neither is hardcoded.</p>
+ *
+ * <p>The parent renders this only when `policy.earlyFinishEnabled` is true — the same gate the
+ * finish action itself is behind.</p>
  */
 export function FinishSessionConfirm({ open, onClose, session, policy }: FinishSessionConfirmProps): React.JSX.Element {
   const { t, tPlural, locale } = useTranslation();
@@ -48,7 +56,15 @@ export function FinishSessionConfirm({ open, onClose, session, policy }: FinishS
     <Modal open={open} onClose={onClose} title={t('citizen.parking.finish.confirmTitle')} closeLabel={t('common.close')}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--lx-space-4)' }}>
         {error ? <Alert tone="danger">{error}</Alert> : null}
-        <Alert tone={willCredit ? 'info' : 'danger'}>
+
+        {/* Body copy, not an alert box: this is the description of an action the citizen asked
+            for, and dressing it in a warning colour would make an ordinary early finish read as a
+            failure. The consequence below carries the tone. */}
+        <p className="lx-text-body" style={{ margin: 0 }}>
+          {t('citizen.parking.finish.immediate', { space: session.spaceCode })}
+        </p>
+
+        <p className="lx-text-meta" style={{ margin: 0 }}>
           {willCredit
             ? t('citizen.parking.finish.confirmDescription.credited', {
                 minutes: tPlural('citizen.parking.durationMinutes', remainingMinutes),
@@ -57,8 +73,9 @@ export function FinishSessionConfirm({ open, onClose, session, policy }: FinishS
             : t('citizen.parking.finish.confirmDescription.lost', {
                 minutes: tPlural('citizen.parking.durationMinutes', remainingMinutes),
               })}
-        </Alert>
-        <div style={{ display: 'flex', gap: 'var(--lx-space-2)' }}>
+        </p>
+
+        <div className="lx-dialog-actions">
           <Button type="button" variant="secondary" fullWidth onClick={onClose}>
             {t('common.cancel')}
           </Button>

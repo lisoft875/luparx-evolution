@@ -84,6 +84,72 @@ public class MembershipService {
     }
 
     /**
+     * Puts a citizen into a municipality they had never joined, on the spot, so they can pay to park
+     * there.
+     *
+     * <h2>Why this is safe on the citizen portal</h2>
+     *
+     * <p>Somebody who drives to Cartago for the afternoon has to be able to pay for a bay without
+     * asking anyone's permission first. What this grants them is the {@code CITIZEN} role, and a
+     * citizen membership carries <b>no authority over the municipality at all</b>: no permission in
+     * {@code RolePermissions}, no access to anybody else's data, no read of the municipality's
+     * configuration beyond the price list it publishes to the world anyway. It creates a wallet with
+     * zero in it and the ability to spend their own money. The municipality is not exposed by having
+     * one more citizen; it is paid.</p>
+     *
+     * <p>It also changes nothing about what the citizen already had. Money and minutes are per tenant
+     * by contract (CONTRACT.md v0.2, rule 6): the new wallet starts empty, the credit balance starts
+     * empty, and nothing crosses from the municipality they came from. Joining is not a transfer.</p>
+     *
+     * <h2>Why it would NOT be safe on the other portals</h2>
+     *
+     * <p>An admin or inspector membership is authority — reading the padrón, editing tariffs,
+     * verifying stays — and granting it on request would be a privilege escalation with a URL for a
+     * front door. Those portals keep requiring a membership somebody decided to give, which is why
+     * this method is named for the citizen and hard-codes {@link Role#CITIZEN} instead of taking a
+     * portal.</p>
+     *
+     * <p>The municipality still has the last word: {@link SelfRegistrationPolicy#INVITE_ONLY} refuses,
+     * and a citizen whose membership was revoked stays revoked — re-granting it here would silently
+     * undo an administrative decision.</p>
+     *
+     * @return the membership and whether this call created it, so the caller audits only real joins
+     * @throws ForbiddenException {@code TENANT_NOT_OPEN_TO_CITIZENS} when the municipality does not
+     *         admit citizens on request, {@code TENANT_NOT_ACTIVE} when it is suspended or closed,
+     *         and {@code MEMBERSHIP_NOT_ACTIVE} when this person's membership was revoked or rejected
+     */
+    @Transactional
+    public Joined joinAsCitizen(UserId userId, TenantId tenantId) {
+        Tenant tenant = tenantService.requireActive(tenantId);
+        Optional<TenantMembership> existing = membershipRepository.findByTenantIdAndUserIdAndPortal(
+                tenantId.value(), userId.value(), Portal.CITIZEN);
+        if (existing.isPresent()) {
+            TenantMembership membership = existing.get();
+            if (membership.getStatus() == MembershipStatus.ACTIVE) {
+                return new Joined(membership, false);
+            }
+            // Revoked, rejected or still waiting: somebody decided that, and it is not this call's
+            // business to overturn it.
+            throw ForbiddenException.of(ErrorCode.MEMBERSHIP_NOT_ACTIVE, "error.membership.notActive");
+        }
+        if (tenant.getSelfRegistrationPolicy() == SelfRegistrationPolicy.INVITE_ONLY) {
+            throw ForbiddenException.of(ErrorCode.TENANT_NOT_OPEN_TO_CITIZENS,
+                    "error.tenant.notOpenToCitizens");
+        }
+        Instant now = clock.instant();
+        TenantMembership membership = new TenantMembership(Uuid7.generate(), tenantId.value(), userId.value(),
+                Portal.CITIZEN, Role.CITIZEN, MembershipStatus.ACTIVE, now);
+        // Active immediately, whatever the policy says about approvals: CONTRACT.md §1 makes that the
+        // rule for citizens, and APPROVAL_REQUIRED exists to gate the portals that carry authority.
+        membership.approve(null, now);
+        return new Joined(membershipRepository.save(membership), true);
+    }
+
+    /** A membership obtained by {@link #joinAsCitizen}, and whether that call is what created it. */
+    public record Joined(TenantMembership membership, boolean created) {
+    }
+
+    /**
      * CONTRACT.md §1: citizens are active immediately; admin/inspector requests wait for approval
      * unless the tenant explicitly opted into OPEN.
      */

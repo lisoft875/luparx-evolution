@@ -80,6 +80,8 @@ export function ActiveSessionsBar(): React.JSX.Element | null {
     <>
       <div
         className={['lx-sticky-timer-bar', isPrimaryWarning ? 'lx-sticky-timer-bar--warning' : ''].filter(Boolean).join(' ')}
+        // Bottom chrome, like the tab bar under it: a list opening near it must not run beneath it.
+        data-lx-bottom-chrome=""
         role="group"
         aria-label={t('citizen.home.activeSession.title')}
       >

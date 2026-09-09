@@ -155,7 +155,7 @@ export function AddressFields({
                   placeholder={selectPlaceholder}
                   value={value[field] ?? ''}
                   disabled={disabled || loadingLevel === entry.level}
-                  onChange={(event) => handleLevelChange(entry.level, event.target.value)}
+                  onChange={(value) => handleLevelChange(entry.level, value)}
                   options={options.map((division) => ({ value: division.id, label: division.name }))}
                 />
                 {/* The way out sits with the sentence explaining why it is there — a retry floating

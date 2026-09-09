@@ -32,7 +32,7 @@ export function PhoneField({
         aria-label="Phone country code"
         className="lx-phone-field__country"
         value={value.countryCode}
-        onChange={(event) => onChange({ ...value, countryCode: event.target.value })}
+        onChange={(countryCode) => onChange({ ...value, countryCode })}
         onBlur={onBlur}
         options={countries.map((country) => ({
           value: country.code,

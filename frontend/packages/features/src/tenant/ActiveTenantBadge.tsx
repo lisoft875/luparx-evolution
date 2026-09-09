@@ -18,10 +18,13 @@ export interface ActiveTenantBadgeProps {
  */
 export function ActiveTenantBadge({ onOpenSelector, className }: ActiveTenantBadgeProps): React.JSX.Element | null {
   const { t, locale } = useTranslation();
-  const { activeTenant, activeMemberships } = useAuth();
+  const { activeTenant, activeMemberships, portal } = useAuth();
 
   if (!activeTenant) return null;
-  const canSwitch = Boolean(onOpenSelector) && activeMemberships.length > 1;
+  // On the citizen portal the sheet offers every municipality in the country and joins them to
+  // whichever they choose, so there is always somewhere else to go. Elsewhere it still needs a
+  // second membership: a picker with one option in it is a dead end dressed as an affordance.
+  const canSwitch = Boolean(onOpenSelector) && (portal === 'citizen' || activeMemberships.length > 1);
 
   return (
     <TenantBadge

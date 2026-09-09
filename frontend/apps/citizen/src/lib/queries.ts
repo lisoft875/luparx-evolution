@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
+import { useMutation, useQueries, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 import { useAuth } from '@luparx/auth';
 import { useVehicleColors, useVehicleTypes } from '@luparx/features';
 import { ApiError } from '@luparx/api-client';
@@ -8,7 +8,7 @@ import type {
   ChangePasswordRequest,
   CreateVehicleRequest,
   ExtendParkingSessionRequest,
-  MeResponse,
+  ParkingExtensionOption,
   ParkingPolicy,
   ParkingQuoteResponse,
   ParkingSchedule,
@@ -19,6 +19,7 @@ import type {
   TimeCreditsResponse,
   UpdateProfileRequest,
   UpdateVehicleRequest,
+  UserProfile,
   Vehicle,
   VehicleAttributeCatalogEntry,
   WalletResponse,
@@ -35,6 +36,7 @@ const KEYS = {
   policy: ['citizen', 'parking', 'policy'] as const,
   activeSessions: ['citizen', 'parking', 'sessions', 'ACTIVE'] as const,
   quote: (zoneId: string, minutes: number) => ['citizen', 'parking', 'quote', zoneId, minutes] as const,
+  extensionOptions: (sessionId: string) => ['citizen', 'parking', 'extension-options', sessionId] as const,
   wallet: ['citizen', 'wallet'] as const,
   timeCredits: ['citizen', 'time-credits'] as const,
   schedule: ['citizen', 'parking', 'schedule'] as const,
@@ -113,6 +115,58 @@ export function useParkingQuote(zoneId: string | null, minutes: number | null): 
   });
 }
 
+/**
+ * A quote for each duration the municipality sells, so the picker can print the price on every
+ * option (v0.6 — the reference product's "30 minutos · ₡300,00").
+ *
+ * One request per option and no arithmetic here: the tariff ladder is the municipality's and is
+ * not linear in most of them, so multiplying the 30-minute price by two to guess the hour would be
+ * wrong wherever it matters. The list is short (the municipality's own increments), every answer
+ * is cached under the same key the single-quote hook uses, and a failed one simply leaves that
+ * option without a price rather than emptying the list.
+ */
+export function useParkingQuotes(
+  zoneId: string | null,
+  minutesList: number[],
+): Map<number, ParkingQuoteResponse> {
+  const { apiClient } = useAuth();
+  const results = useQueries({
+    queries: minutesList.map((minutes) => ({
+      queryKey: KEYS.quote(zoneId ?? '', minutes),
+      queryFn: () => apiClient.citizenParking.quote({ zoneId: zoneId as string, minutes }),
+      enabled: Boolean(zoneId) && minutes > 0,
+      staleTime: 60_000,
+    })),
+  });
+  const quotes = new Map<number, ParkingQuoteResponse>();
+  results.forEach((result, index) => {
+    if (result.data) quotes.set(minutesList[index]!, result.data);
+  });
+  return quotes;
+}
+
+/**
+ * Every extension this municipality offers on a running stay, already priced
+ * (`GET /citizen/parking/sessions/{id}/extension-options`).
+ *
+ * Refetched whenever the dialog is opened rather than served from a long cache: `newExpiresAt` and
+ * the chargeable minutes are answers about *now*, and a stay that has since crossed the end of the
+ * charging day is priced differently from the one this list described a minute ago.
+ */
+export function useExtensionOptions(
+  sessionId: string | null,
+  enabled: boolean,
+): UseQueryResult<ParkingExtensionOption[]> {
+  const { apiClient } = useAuth();
+  return useQuery({
+    queryKey: KEYS.extensionOptions(sessionId ?? ''),
+    queryFn: () => apiClient.citizenParking.extensionOptions(sessionId as string),
+    enabled: Boolean(sessionId) && enabled,
+    staleTime: 0,
+    gcTime: 0,
+  });
+}
+
 export function useStartParkingSession() {
   const { apiClient } = useAuth();
   const queryClient = useQueryClient();
@@ -176,14 +230,12 @@ export function useParkingSchedule(): UseQueryResult<ParkingSchedule> {
 }
 
 /**
- * Zones the citizen can park in.
+ * Zones the citizen can park in, from `GET /citizen/parking/zones`.
  *
- * TODO(backend): there is no `GET /citizen/parking/zones` yet — the list is only published under
- * `/admin/parking/zones`, behind `TENANT_MANAGE` — while `POST /quote` and `POST /sessions` both
- * require a `zoneId`. Until the endpoint exists this degrades to the zones the citizen has
- * already parked in, read from their own session history, and the parking screen says plainly
- * when that leaves it with nothing to offer. No zone is ever invented client-side: a made-up id
- * would only fail later, at the moment of charging.
+ * The 404 branch is kept deliberately: it is what this app does against a server older than the
+ * change that published the endpoint, and it degrades to the zones the citizen has already parked
+ * in rather than to nothing. No zone is ever invented client-side — a made-up id would only fail
+ * later, at the moment of charging.
  */
 export function useParkingZones(): UseQueryResult<ParkingZone[]> {
   const { apiClient } = useAuth();
@@ -266,7 +318,7 @@ export function useDivisions(
  */
 export function useUpdateProfile() {
   const { apiClient, refreshProfile } = useAuth();
-  return useMutation<MeResponse, unknown, UpdateProfileRequest>({
+  return useMutation<UserProfile, unknown, UpdateProfileRequest>({
     mutationFn: (payload) => apiClient.session.updateMe(payload),
     onSuccess: () => {
       void refreshProfile();

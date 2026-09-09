@@ -148,7 +148,7 @@ export function PersonalDataFields<TValues extends PersonalDataValues>({
                   label: tKey(docType.labelKey),
                 }))}
                 value={String(field.value ?? '')}
-                onChange={(event) => field.onChange(event.target.value)}
+                onChange={(value) => field.onChange(value)}
                 onBlur={field.onBlur}
               />
             )}

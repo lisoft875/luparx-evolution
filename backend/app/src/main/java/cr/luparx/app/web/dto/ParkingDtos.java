@@ -211,6 +211,33 @@ public final class ParkingDtos {
     }
 
     /**
+     * One entry of {@code GET /citizen/parking/sessions/{id}/extension-options}: a duration the
+     * municipality offers, already priced, with the expiry it would produce.
+     *
+     * <p>It exists so the screen that offers extensions can show a price next to each option without
+     * a quote per option — three round trips to draw one list, each answering at a different instant.
+     *
+     * <p>{@code chargeableMinutes} is smaller than {@code minutes} when the extension runs past the
+     * municipality's closing time; an option entirely outside the charging hours costs nothing and is
+     * still offered, because the citizen genuinely may park for it.</p>
+     *
+     * <p>{@code allowed} false with {@code unavailableReason} — {@code EXTENSION_EXCEEDS_MAX} or
+     * {@code INSUFFICIENT_BALANCE} — instead of dropping the entry: a list that silently loses its
+     * last option teaches the citizen nothing.</p>
+     */
+    public record ExtensionOptionResponse(
+            int minutes,
+            int chargeableMinutes,
+            MoneyDto amount,
+            int creditMinutesApplied,
+            int payableMinutes,
+            MoneyDto payable,
+            Instant newExpiresAt,
+            boolean allowed,
+            String unavailableReason) {
+    }
+
+    /**
      * A stay. {@code plateSnapshot} is the plate as it was when the session started — what the
      * inspector verifies against — and not necessarily what the vehicle carries today.
      */

@@ -46,7 +46,7 @@ export function TenantsListPage(): React.JSX.Element {
         <Select
           aria-label={t('platform.tenants.filter.status')}
           value={status}
-          onChange={(e) => setStatus(e.target.value as TenantStatus | '')}
+          onChange={(value) => setStatus(value as TenantStatus | '')}
           placeholder={t('platform.tenants.filter.allStatuses')}
           options={STATUSES.map((s) => ({ value: s, label: t(`platform.tenants.status.${s}` as TranslationKey) }))}
         />

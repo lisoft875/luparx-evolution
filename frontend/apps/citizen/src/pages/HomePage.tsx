@@ -112,7 +112,9 @@ function ActiveSessionCard({ session, policy }: { session: ParkingSession; polic
           ) : null}
         </div>
       </div>
-      {policy ? <ExtendSessionSheet open={extendOpen} onClose={() => setExtendOpen(false)} session={session} policy={policy} /> : null}
+      {/* No policy needed: the options, their prices and whether each is allowed all come from
+          `GET /sessions/{id}/extension-options`, which knows this stay and not just the rules. */}
+      <ExtendSessionSheet open={extendOpen} onClose={() => setExtendOpen(false)} session={session} />
       {policy ? <FinishSessionConfirm open={finishOpen} onClose={() => setFinishOpen(false)} session={session} policy={policy} /> : null}
     </Card>
   );

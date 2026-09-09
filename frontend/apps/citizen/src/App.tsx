@@ -14,8 +14,6 @@ import { TenantSelectPage } from './pages/TenantSelectPage';
 import { HomePage } from './pages/HomePage';
 import { ProfilePage } from './pages/ProfilePage';
 import { AccountPersonalDataPage } from './pages/AccountPersonalDataPage';
-import { AccountEmailPage } from './pages/AccountEmailPage';
-import { AccountPasswordPage } from './pages/AccountPasswordPage';
 import { ParkingPage } from './pages/ParkingPage';
 import { VehiclesPage } from './pages/VehiclesPage';
 import { FinesPage } from './pages/FinesPage';
@@ -75,22 +73,11 @@ export function App(): React.JSX.Element {
                   </RequireAuth>
                 }
               />
-              <Route
-                path="/profile/email"
-                element={
-                  <RequireAuth loginPath="/login">
-                    <AccountEmailPage />
-                  </RequireAuth>
-                }
-              />
-              <Route
-                path="/profile/password"
-                element={
-                  <RequireAuth loginPath="/login">
-                    <AccountPasswordPage />
-                  </RequireAuth>
-                }
-              />
+              {/* The e-mail and the password used to have a screen each. They are now edited from
+                  the personal-data screen, in place; these paths stay as redirects so a link that
+                  was bookmarked, mailed or written into a test still lands somewhere real. */}
+              <Route path="/profile/email" element={<Navigate to="/profile/personal" replace />} />
+              <Route path="/profile/password" element={<Navigate to="/profile/personal" replace />} />
               <Route
                 path="/park"
                 element={

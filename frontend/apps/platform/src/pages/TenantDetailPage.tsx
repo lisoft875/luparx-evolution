@@ -97,7 +97,7 @@ export function TenantDetailPage(): React.JSX.Element {
             <FormField label={t('platform.tenants.column.status')}>
               <Select
                 value={nextStatus}
-                onChange={(e) => setNextStatus(e.target.value as TenantStatus)}
+                onChange={(value) => setNextStatus(value as TenantStatus)}
                 options={STATUSES.map((s) => ({ value: s, label: t(`platform.tenants.status.${s}` as TranslationKey) }))}
               />
             </FormField>

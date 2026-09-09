@@ -55,10 +55,21 @@ export function useVehicleColors(apiClient: ApiClient) {
   });
 }
 
-export function useTenants(apiClient: ApiClient, countryCode: string | undefined) {
+/**
+ * Every publishable municipality, optionally narrowed by country and by a search term.
+ *
+ * `q` is the server's search, not a filter applied to a page of results, so it reaches
+ * municipalities the first response never carried. The term is part of the cache key: two searches
+ * are two different answers and must not overwrite each other.
+ */
+export function useTenants(apiClient: ApiClient, countryCode: string | undefined, q?: string) {
+  const term = q?.trim() || undefined;
   return useQuery({
-    queryKey: ['catalog', 'tenants', countryCode],
-    queryFn: () => apiClient.catalog.tenants(countryCode),
+    queryKey: ['catalog', 'tenants', countryCode, term ?? ''],
+    queryFn: () => apiClient.catalog.tenants({ country: countryCode, q: term }),
     staleTime: CATALOG_STALE_TIME_MS,
+    // A search that is still in flight must not blank the list underneath the field: the previous
+    // answer stays on screen while the next one is fetched.
+    placeholderData: (previous) => previous,
   });
 }

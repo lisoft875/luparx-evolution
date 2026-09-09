@@ -341,12 +341,66 @@ body {
 .lx-select--invalid {
   border-color: var(--lx-danger);
 }
-.lx-select--with-icon {
-  padding-left: calc(var(--lx-icon-box-size) + var(--lx-space-2));
+
+/* ---- The platform's own dropdown (components/Select.tsx) ----
+   The closed field is the field: same surface, border, radius and type scale as `.lx-input`
+   above, which is why it shares that rule rather than restating it. Everything below is the
+   parts a native <select> has no equivalent of — the caret, the two-line value, and the list,
+   which is a portal positioned against the viewport. */
+.lx-select {
+  display: flex;
+  align-items: center;
+  gap: var(--lx-space-2);
+  text-align: start;
+  cursor: pointer;
+  appearance: none;
+}
+.lx-select:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.lx-select--open {
+  border-color: var(--lx-border-strong);
+}
+.lx-select__value {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: var(--lx-space-2) 0;
+}
+.lx-select__value--placeholder {
+  color: var(--lx-text-subtle);
+}
+.lx-select__label,
+.lx-listbox__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lx-listbox__detail {
+  font-size: var(--lx-text-meta-size);
+  color: var(--lx-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lx-select__caret {
+  flex: 0 0 auto;
+  display: inline-flex;
+  color: var(--lx-text-muted);
+  transition: transform 120ms ease;
+}
+.lx-select--open .lx-select__caret {
+  transform: rotate(180deg);
 }
 .lx-select-wrap {
   position: relative;
   display: block;
+}
+.lx-select-wrap--with-icon .lx-select {
+  padding-left: calc(var(--lx-icon-box-size) + var(--lx-space-2));
 }
 .lx-select-wrap__icon {
   position: absolute;
@@ -357,6 +411,71 @@ body {
   align-items: center;
   color: var(--lx-primary);
   pointer-events: none;
+  z-index: 1;
+}
+
+/* Level 2 — a floating surface, like the modal, and above it: a field inside a dialog has to be
+   able to open its list over that dialog's own edge. */
+.lx-listbox {
+  position: fixed;
+  z-index: 1100;
+  margin: var(--lx-space-1) 0 0 0;
+  padding: var(--lx-space-1);
+  list-style: none;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--lx-surface-raised);
+  backdrop-filter: blur(var(--lx-blur-2));
+  border: 1px solid var(--lx-border-strong);
+  border-radius: var(--lx-radius-md);
+  box-shadow: var(--lx-shadow-md), var(--lx-inset-highlight);
+  color: var(--lx-text);
+  font-size: var(--lx-text-body-size);
+}
+.lx-listbox--above {
+  margin: 0 0 var(--lx-space-1) 0;
+}
+.lx-listbox__option {
+  display: flex;
+  align-items: center;
+  gap: var(--lx-space-2);
+  min-height: var(--lx-touch-target-min);
+  padding: var(--lx-space-2) var(--lx-space-2);
+  border-radius: var(--lx-radius-sm);
+  cursor: pointer;
+}
+.lx-listbox__option--active {
+  background: var(--lx-primary-soft);
+}
+.lx-listbox__option--selected .lx-listbox__label {
+  font-weight: 600;
+}
+.lx-listbox__option--disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.lx-listbox__check {
+  flex: 0 0 auto;
+  width: 16px;
+  display: inline-flex;
+  color: var(--lx-primary-strong);
+}
+.lx-listbox__icon {
+  flex: 0 0 auto;
+  display: inline-flex;
+  color: var(--lx-primary);
+}
+.lx-listbox__text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.lx-listbox__empty {
+  padding: var(--lx-space-3);
+  color: var(--lx-text-subtle);
+  font-size: var(--lx-text-meta-size);
 }
 
 .lx-checkbox {
@@ -1611,20 +1730,19 @@ button.lx-list-row {
   pointer-events: none;
   color: var(--lx-text-muted);
 }
-.lx-locale-select__control {
-  appearance: none;
-  -webkit-appearance: none;
+/* The language control is the shared dropdown wearing the pill: it keeps the pill's border and
+   background (the wrapper's) and contributes only its own padding and caret. */
+.lx-locale-select__control.lx-select {
   min-height: var(--lx-touch-target-min);
   max-width: 100%;
-  padding: 0 var(--lx-space-6) 0 calc(var(--lx-space-4) + 16px + var(--lx-space-2));
+  padding: 0 var(--lx-space-4) 0 calc(var(--lx-space-4) + 16px + var(--lx-space-2));
   border: 0;
   border-radius: inherit;
   background: transparent;
   color: inherit;
   font: inherit;
-  cursor: pointer;
 }
-.lx-locale-select__control:focus-visible {
+.lx-locale-select__control.lx-select:focus-visible {
   outline: 2px solid var(--lx-focus-ring);
   outline-offset: 2px;
 }
@@ -1636,6 +1754,10 @@ button.lx-list-row {
   box-shadow: var(--lx-shadow-md), var(--lx-inset-highlight);
 }
 
+.lx-locale-select .lx-select-wrap {
+  flex: 1 1 auto;
+  min-width: 0;
+}
 .lx-locale-select--field {
   width: 100%;
   border-radius: var(--lx-radius-md);
@@ -2080,4 +2202,134 @@ button.lx-list-row {
 .lx-tenant-switch__meta {
   font-size: var(--lx-text-meta-size);
   color: var(--lx-text-muted);
+}
+
+/* ==============================================================================================
+   RADIO CARDS (components/RadioCardGroup.tsx)
+   The "how much more time" list of the extend dialog: one full-width row per option, its price on
+   the same line, and a disabled row that stays visible with its reason instead of disappearing.
+   ============================================================================================== */
+.lx-radio-cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lx-space-2);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.lx-radio-cards__legend {
+  padding: 0 0 var(--lx-space-2) 0;
+  font-size: var(--lx-text-card-title-size);
+  font-weight: var(--lx-text-card-title-weight);
+  color: var(--lx-text);
+}
+.lx-radio-card {
+  display: flex;
+  align-items: center;
+  gap: var(--lx-space-3);
+  min-height: var(--lx-touch-target-min);
+  padding: var(--lx-space-3);
+  border: 1px solid var(--lx-border);
+  border-radius: var(--lx-radius-sm);
+  background: var(--lx-surface-2);
+  color: var(--lx-text);
+  font-size: var(--lx-text-body-size);
+  cursor: pointer;
+}
+.lx-radio-card--selected {
+  border-color: var(--lx-primary);
+  background: var(--lx-primary-soft);
+}
+.lx-radio-card--disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.lx-radio-card__input {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  accent-color: var(--lx-primary);
+  margin: 0;
+}
+.lx-radio-card__input:focus-visible {
+  outline: 2px solid var(--lx-focus-ring);
+  outline-offset: 2px;
+}
+.lx-radio-card__text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.lx-radio-card__detail {
+  font-size: var(--lx-text-meta-size);
+  color: var(--lx-text-muted);
+}
+.lx-radio-card__trailing {
+  flex: 0 0 auto;
+  font-weight: 600;
+}
+
+/* ==============================================================================================
+   SUMMARY ROWS — label on the left, the server's own value on the right. Used under the extend
+   options ("nueva hora de vencimiento", "precio de la extensión") and wherever a dialog has to
+   restate what is about to be charged.
+   ============================================================================================== */
+.lx-summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lx-space-2);
+  margin: 0;
+}
+.lx-summary__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--lx-space-3);
+}
+.lx-summary__label {
+  margin: 0;
+  font-size: var(--lx-text-meta-size);
+  color: var(--lx-text-muted);
+}
+.lx-summary__value {
+  margin: 0;
+  text-align: end;
+  font-size: var(--lx-text-body-size);
+  font-weight: 600;
+  color: var(--lx-text);
+}
+
+/* The "you already use this one" mark under a tile's name, for the grid that now shows every
+   municipality in the country and not only the citizen's own. */
+.lx-tenant-tile__badge {
+  display: inline-block;
+  max-width: 100%;
+  padding: 2px var(--lx-space-2);
+  border-radius: var(--lx-radius-pill);
+  background: var(--lx-success-soft);
+  color: var(--lx-success);
+  font-size: var(--lx-text-meta-size);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ==============================================================================================
+   DIALOG ACTIONS — the row a confirm dialog ends with.
+   Two full-width buttons in a plain flex row overflow their container: `width: 100%` each is
+   200% plus the gap, and the primary — the one the dialog exists for — is what falls off the
+   right edge. Here they share the row instead, and wrap to two rows when the words are long
+   enough that sharing would clip them.
+   ============================================================================================== */
+.lx-dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--lx-space-2);
+}
+.lx-dialog-actions > * {
+  flex: 1 1 160px;
+  min-width: 0;
 }

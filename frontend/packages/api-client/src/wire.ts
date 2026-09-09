@@ -14,6 +14,7 @@
  */
 
 import type {
+  ParkingExtensionOption,
   ParkingQuoteResponse,
   ParkingSession,
   ParkingSessionStatus,
@@ -54,6 +55,18 @@ export interface WireQuote {
   creditMinutesApplied: number;
   payableMinutes: number;
   payable: WireMoney;
+}
+
+export interface WireExtensionOption {
+  minutes: number;
+  chargeableMinutes: number;
+  amount: WireMoney;
+  creditMinutesApplied: number;
+  payableMinutes: number;
+  payable: WireMoney;
+  newExpiresAt: string;
+  allowed: boolean;
+  unavailableReason?: string | null;
 }
 
 export interface WireWalletTransaction {
@@ -120,6 +133,22 @@ export function toQuote(wire: WireQuote): ParkingQuoteResponse {
     creditMinutesApplied: wire.creditMinutesApplied,
     payableMinutes: wire.payableMinutes,
     payableMinor: wire.payable.amountMinor,
+  };
+}
+
+/** Unwraps the two money objects and normalises the absent reason to null. No arithmetic. */
+export function toExtensionOption(wire: WireExtensionOption): ParkingExtensionOption {
+  return {
+    minutes: wire.minutes,
+    chargeableMinutes: wire.chargeableMinutes,
+    amountMinor: wire.amount.amountMinor,
+    currencyCode: wire.amount.currencyCode,
+    creditMinutesApplied: wire.creditMinutesApplied,
+    payableMinutes: wire.payableMinutes,
+    payableMinor: wire.payable.amountMinor,
+    newExpiresAt: wire.newExpiresAt,
+    allowed: wire.allowed,
+    unavailableReason: wire.unavailableReason ?? null,
   };
 }
 

@@ -152,7 +152,7 @@ export function UserDetailPage(): React.JSX.Element {
                 <FormField label={t('platform.users.detail.createMembership.tenantLabel')}>
                   <Select
                     value={grantTenantId}
-                    onChange={(e) => setGrantTenantId(e.target.value)}
+                    onChange={(value) => setGrantTenantId(value)}
                     placeholder={t('common.select.placeholder')}
                     options={(tenantsQuery.data ?? []).map((tenant) => ({ value: tenant.id, label: tenant.displayName }))}
                   />
@@ -160,12 +160,12 @@ export function UserDetailPage(): React.JSX.Element {
                 <FormField label={t('platform.users.detail.createMembership.portalLabel')}>
                   <Select
                     value={grantPortal}
-                    onChange={(e) => setGrantPortal(e.target.value as Portal)}
+                    onChange={(value) => setGrantPortal(value as Portal)}
                     options={PORTALS.filter((p) => p !== 'platform').map((p) => ({ value: p, label: p }))}
                   />
                 </FormField>
                 <FormField label={t('platform.users.detail.createMembership.roleLabel')}>
-                  <Select value={grantRole} onChange={(e) => setGrantRole(e.target.value as Role)} options={ROLES.map((r) => ({ value: r, label: r }))} />
+                  <Select value={grantRole} onChange={(value) => setGrantRole(value as Role)} options={ROLES.map((r) => ({ value: r, label: r }))} />
                 </FormField>
                 <Button
                   type="button"

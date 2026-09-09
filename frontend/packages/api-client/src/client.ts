@@ -1,10 +1,12 @@
 import { HttpClient, type HttpClientOptions } from './http';
 import {
+  toExtensionOption,
   toParkingSession,
   toParkingSessions,
   toQuote,
   toTimeCredits,
   toWallet,
+  type WireExtensionOption,
   type WireParkingSession,
   type WireQuote,
   type WireTimeCredits,
@@ -50,6 +52,7 @@ import type {
   MfaVerifyRequest,
   MfaVerifyResponse,
   OAuthProvider,
+  ParkingExtensionOption,
   ParkingPolicy,
   ParkingQuoteRequest,
   ParkingQuoteResponse,
@@ -98,6 +101,7 @@ import type {
   UpsertCountryRequest,
   UpsertDivisionRequest,
   UpsertDocumentTypeRequest,
+  UserProfile,
   Vehicle,
   VehicleAttributeCatalogEntry,
   VerifyEmailRequest,
@@ -146,11 +150,17 @@ export class ApiClient {
       }),
     documentTypes: (countryCode: string): Promise<DocumentTypeCatalogEntry[]> =>
       this.http.request('GET', `/api/v1/catalog/countries/${countryCode}/document-types`, { auth: false }),
-    tenants: async (country?: string): Promise<TenantCatalogEntry[]> =>
+    /**
+     * Every municipality a citizen may pick — the whole publishable catalogue, not the ones they
+     * already belong to: switching to a municipality they have never used joins them to it on the
+     * spot. `q` is matched server-side against the name and the slug, which is what makes a list
+     * of every municipality in a country usable without paging it.
+     */
+    tenants: async (params: { country?: string; q?: string } = {}): Promise<TenantCatalogEntry[]> =>
       (
         await this.http.request<TenantCatalogEntry[]>('GET', '/api/v1/catalog/tenants', {
           auth: false,
-          query: { country },
+          query: { country: params.country, q: params.q },
         })
       ).map((tenant) => withResolvedTenantLogo(tenant, this.baseUrl)),
     /**
@@ -204,12 +214,16 @@ export class ApiClient {
      * Every personal field of CONTRACT.md §2 (v0.3 §"Perfil editable"). The e-mail is deliberately
      * NOT part of this payload: changing it is changing the identity you sign in with, so it goes
      * through {@link changeEmail} and its verification.
+     *
+     * <p>It answers with the PROFILE, not with the `/me` envelope: no memberships, no active
+     * municipality — editing a phone number changes none of those. This used to be typed and
+     * post-processed as a {@link MeResponse}, so every successful save then threw on
+     * `memberships.map(...)` of an undefined list and the screen reported a generic failure over a
+     * change the server had already committed. The shape is the server's; reading it correctly is
+     * this layer's job.</p>
      */
-    updateMe: async (payload: UpdateProfileRequest): Promise<MeResponse> =>
-      withResolvedMeLogos(
-        await this.http.request<MeResponse>('PUT', `/api/v1/${this.portal}/me`, { body: payload }),
-        this.baseUrl,
-      ),
+    updateMe: (payload: UpdateProfileRequest): Promise<UserProfile> =>
+      this.http.request('PUT', `/api/v1/${this.portal}/me`, { body: payload }),
     /** Requires the current password; revokes every other session (CONTRACT.md v0.3 §1.3). */
     changePassword: (payload: ChangePasswordRequest): Promise<void> =>
       this.http.request('POST', `/api/v1/${this.portal}/me/password`, { body: payload }),
@@ -315,13 +329,8 @@ export class ApiClient {
     /** The municipality's charging schedule, evaluated in its own time zone (CONTRACT.md v0.3). */
     schedule: (): Promise<ParkingSchedule> => this.http.request('GET', '/api/v1/citizen/parking/schedule'),
     /**
-     * Zones the citizen can park in.
-     *
-     * TODO(backend): `GET /api/v1/citizen/parking/zones` does not exist yet — today the zone list
-     * is only published under `/api/v1/admin/parking/zones`, which needs `TENANT_MANAGE` and is
-     * therefore unreachable from this portal, while `POST /quote` and `POST /sessions` both take a
-     * mandatory `zoneId`. Until the backend publishes it, {@link useParkingZones} degrades to the
-     * zones the citizen has already parked in (their own session history).
+     * Zones the citizen can park in, with the bay-code range of each — the list `POST /quote` and
+     * `POST /sessions` take their mandatory `zoneId` from.
      */
     zones: (): Promise<ParkingZone[]> => this.http.request('GET', '/api/v1/citizen/parking/zones'),
     /**
@@ -356,6 +365,21 @@ export class ApiClient {
           idempotent: true,
         }),
       ),
+    /**
+     * Every extension this municipality offers on this stay, priced, in one request.
+     *
+     * <p>The dialog that offers extensions needs a price per option; quoting them one at a time
+     * would be a round trip per row and a list whose rows were answered at different instants.
+     * Options the citizen may not take come back with `allowed: false` and a reason, and are shown
+     * disabled rather than hidden.</p>
+     */
+    extensionOptions: async (id: string): Promise<ParkingExtensionOption[]> =>
+      (
+        await this.http.request<WireExtensionOption[]>(
+          'GET',
+          `/api/v1/citizen/parking/sessions/${id}/extension-options`,
+        )
+      ).map(toExtensionOption),
     extend: async (id: string, payload: ExtendParkingSessionRequest): Promise<ParkingSession> =>
       toParkingSession(
         await this.http.request<WireParkingSession>(`POST`, `/api/v1/citizen/parking/sessions/${id}/extend`, {

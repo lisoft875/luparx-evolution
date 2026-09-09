@@ -164,6 +164,15 @@ export const esCR = {
   // barra de 320 px sin cortarse. La frase completa vive en la descripción, debajo.
   'tenant.sheet.title': 'Municipalidad',
   'tenant.sheet.description': 'Las zonas, las tarifas y tu saldo dependen de la que elijás.',
+  // La hoja del ciudadano ofrece todo el país, no sólo su historial: elegir una municipalidad
+  // nueva lo inscribe en el acto (POST /citizen/session/tenant), con saldo en cero.
+  'tenant.sheet.catalogDescription':
+    'Elegí cualquier municipalidad del país. Si es nueva para vos, entrás con saldo en cero y con sus zonas y tarifas.',
+  'tenant.sheet.searchLabel': 'Buscar municipalidad',
+  'tenant.sheet.searchPlaceholder': 'Buscar municipalidad',
+  'tenant.sheet.memberBadge': 'Ya la usás',
+  'tenant.sheet.noMatches.title': 'Sin resultados',
+  'tenant.sheet.noMatches.description': 'Ninguna municipalidad coincide con «{{query}}».',
   'tenant.selector.title': 'Elegí tu municipalidad',
   'tenant.selector.description':
     'Tu cuenta pertenece a varias municipalidades. Las zonas, las tarifas y tu saldo dependen de la que elijas.',
@@ -174,6 +183,10 @@ export const esCR = {
   // redacción (la descripción reutiliza esa clave, no la repite con otras palabras).
   'tenant.selector.error.notAvailable':
     'Esa municipalidad ya no está disponible para tu cuenta. Elegí otra o pedile acceso a un administrador.',
+  // TENANT_NOT_OPEN_TO_CITIZENS: la municipalidad decidió no admitir registros por cuenta propia.
+  // No es un error del ciudadano y no hay nada que pueda corregir, así que se dice tal cual.
+  'tenant.selector.error.notOpenToCitizens':
+    'Esta municipalidad no admite registros por cuenta propia. Pedile acceso a su administración.',
   'tenant.selector.signOut': 'Cerrar sesión',
   'tenant.badge.changeAction': 'cambiar de municipalidad',
   'tenant.switch.action': 'Cambiar',
@@ -317,6 +330,7 @@ export const esCR = {
   'citizen.parking.step2.empty': 'Agrega un vehículo antes de estacionar.',
   'citizen.parking.step2.addVehicleCta': 'Agregar vehículo',
   'citizen.parking.step3.title': 'Tiempo',
+  'citizen.parking.step3.creditApplied': 'incluye {{minutes}} a favor',
   'citizen.parking.step4.title': 'Resumen y pago',
   'citizen.parking.step4.zoneLabel': 'Zona',
   'citizen.parking.step4.vehicleLabel': 'Vehículo',
@@ -330,13 +344,19 @@ export const esCR = {
   'citizen.parking.durationHours.one': '{{count}} hora',
   'citizen.parking.durationHours.other': '{{count}} horas',
 
-  'citizen.parking.extend.title': 'Extender tiempo',
-  'citizen.parking.extend.description': 'Elige cuánto quieres extender tu estacionamiento.',
-  'citizen.parking.extend.costLabel': 'Costo de la extensión',
-  'citizen.parking.extend.newExpiryLabel': 'Nuevo vencimiento',
-  'citizen.parking.extend.submit': 'Confirmar extensión',
+  'citizen.parking.extend.title': 'Ampliar estacionamiento',
+  'citizen.parking.extend.currentlyEndsAt': 'Ahora termina a las {{time}}.',
+  'citizen.parking.extend.chooseLabel': 'Tiempo adicional',
+  'citizen.parking.extend.chargeableMinutes': 'Se cobran {{minutes}}: el resto cae fuera del horario de cobro.',
+  'citizen.parking.extend.creditApplied': 'Incluye {{minutes}} a favor.',
+  'citizen.parking.extend.costLabel': 'Precio de la extensión',
+  'citizen.parking.extend.newExpiryLabel': 'Nueva hora de vencimiento',
+  'citizen.parking.extend.walletNote': 'El monto adicional se cobrará de tu billetera según la tarifa de esta municipalidad.',
+  'citizen.parking.extend.noOptions': 'Esta municipalidad no ofrece ampliaciones para este estacionamiento.',
+  'citizen.parking.extend.submit': 'Ampliar',
 
-  'citizen.parking.finish.confirmTitle': 'Finalizar estacionamiento',
+  'citizen.parking.finish.confirmTitle': '¿Terminar el estacionamiento?',
+  'citizen.parking.finish.immediate': 'La sesión terminará de inmediato y el espacio {{space}} quedará libre.',
   'citizen.parking.finish.confirmDescription.credited':
     'Te quedan {{minutes}}. Se guardarán como minutos a favor en esta municipalidad y vencen el {{date}}. Se consumen primero en tu próxima sesión aquí; no son dinero y no se pueden usar en otra municipalidad.',
   'citizen.parking.finish.confirmDescription.lost':
@@ -431,6 +451,8 @@ export const esCR = {
 
   'citizen.profile.title': 'Mi cuenta',
   'citizen.profile.personalData.label': 'Datos personales',
+  'citizen.profile.personalData.description':
+    'Tu nombre, tu identificación, tu teléfono y tu dirección. Se guardan todos juntos.',
   'citizen.profile.phoneLabel': 'Teléfono',
   'citizen.profile.identification.label': 'Identificación',
   'citizen.profile.identification.value': 'Cédula o DIMEX',
@@ -583,15 +605,18 @@ export const esCR = {
   'account.password.newLabel': 'Contraseña nueva',
   'account.password.confirmLabel': 'Confirmá la contraseña nueva',
   'account.password.submit': 'Cambiar contraseña',
+  'account.password.changeCta': 'Cambiar contraseña',
   'account.password.sessionsWarning':
     'Al cambiarla se cierran todas tus sesiones, incluida esta: vas a tener que ingresar de nuevo con la contraseña nueva.',
   'account.password.done': 'Listo: tu contraseña cambió y se cerraron todas tus sesiones.',
   'account.password.signInAgain': 'Ingresar de nuevo',
   'account.password.error.currentInvalid': 'La contraseña actual no es correcta.',
   'account.email.title': 'Correo electrónico',
+  'account.email.meta': 'La dirección con la que ingresás a tu cuenta.',
   'account.email.currentLabel': 'Correo actual',
   'account.email.newLabel': 'Correo nuevo',
   'account.email.submit': 'Enviar verificación',
+  'account.email.changeCta': 'Cambiar correo',
   'account.email.verificationNotice':
     'Te enviamos un enlace al correo nuevo. Tu correo actual sigue funcionando hasta que lo verifiqués.',
   'account.email.pending': 'Revisá {{email}} y abrí el enlace para terminar el cambio.',
@@ -663,11 +688,6 @@ export const esCR = {
   'citizen.parking.step1.spaceCodeError.range': 'Esta zona solo tiene espacios del {{first}} al {{last}}.',
 
   // ---- Ciudadano: duración "Otro" dentro de los límites de la municipalidad --------------------
-  'citizen.parking.step3.customCta': 'Otro',
-  'citizen.parking.step3.customLabel': 'Minutos',
-  'citizen.parking.step3.customHint': 'Otros tiempos que ofrece esta municipalidad, hasta {{max}}.',
-  'citizen.parking.step3.customUnavailable':
-    'Esta municipalidad solo ofrece los tiempos de arriba, hasta {{max}} por estacionamiento.',
   'citizen.parking.step3.maxNotice': 'Esta municipalidad permite hasta {{max}} por estacionamiento.',
 
   // ---- Catálogos (claves que devuelve el servidor: países, documentos, divisiones) --------------

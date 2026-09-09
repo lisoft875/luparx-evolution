@@ -290,7 +290,7 @@ export function VehiclesPage(): React.JSX.Element {
                   <Select
                     id={inputId}
                     value={form.type}
-                    onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}
+                    onChange={(value) => setForm((f) => ({ ...f, type: value }))}
                     options={types.map((entry) => ({ value: entry.value, label: tKey(entry.labelKey) }))}
                   />
                 )}
@@ -304,7 +304,7 @@ export function VehiclesPage(): React.JSX.Element {
                   <Select
                     id={inputId}
                     value={form.color}
-                    onChange={(e) => setForm((f) => ({ ...f, color: e.target.value }))}
+                    onChange={(value) => setForm((f) => ({ ...f, color: value }))}
                     options={[
                       { value: '', label: t('citizen.vehicles.form.colorUnset') },
                       ...colors.map((entry) => ({ value: entry.value, label: tKey(entry.labelKey) })),
@@ -394,7 +394,7 @@ export function VehiclesPage(): React.JSX.Element {
           <p className="lx-text-body" style={{ margin: 0 }}>
             {t('citizen.vehicles.delete.confirmDescription', { plate: deleteTarget?.plate ?? '' })}
           </p>
-          <div style={{ display: 'flex', gap: 'var(--lx-space-2)' }}>
+          <div className="lx-dialog-actions">
             <Button type="button" variant="secondary" fullWidth onClick={() => setDeleteTarget(null)}>
               {t('common.cancel')}
             </Button>

@@ -56,17 +56,18 @@ export function vehicleDescriptor(vehicle: Vehicle, options: VehicleDescriptorOp
 }
 
 /**
- * The one-line label a `<select>` option carries: `BHL019 — Toyota Yaris`.
+ * The second line of a vehicle in the picker: `Toyota Yaris`, or `Toyota Yaris · Gris` when
+ * another vehicle in the same list would read identically without the colour.
  *
- * A native select has one line per option, so the plate leads and the description follows it. The
- * colour is added only when it earns its place — when another vehicle in the same list would read
- * identically without it, which is exactly the "two similar plates" case the picker has to survive.
+ * The plate is the first line and this is what distinguishes two cars that share a description —
+ * exactly the "two similar vehicles" case a picker has to survive. Undefined when there is nothing
+ * to add, so the option is one line rather than one line and an empty one.
  */
-export function vehicleOptionLabel(
+export function vehicleOptionDetail(
   vehicle: Vehicle,
   vehicles: Vehicle[],
   colorOf: (value: string | undefined) => string | undefined,
-): string {
+): string | undefined {
   const base = vehicleDescriptor(vehicle, { includeName: false, includeYear: false });
   const ambiguous = vehicles.some(
     (other) =>
@@ -75,5 +76,5 @@ export function vehicleOptionLabel(
   const description = ambiguous
     ? vehicleDescriptor(vehicle, { includeName: false, colorLabel: colorOf(vehicle.color), includeYear: false })
     : base;
-  return description ? `${vehicle.plate} — ${description}` : vehicle.plate;
+  return description || undefined;
 }

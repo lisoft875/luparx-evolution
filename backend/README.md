@@ -491,6 +491,7 @@ and only when it has none — a developer who set a colour or uploaded an emblem
 
 ```
 GET /api/v1/catalog/vehicle-types     [{value, labelKey}]  CAR, MOTORCYCLE, PICKUP, VAN, OTHER
+                                                          (superseded in v0.6: CAR, MOTORCYCLE)
 GET /api/v1/catalog/vehicle-colors    [{value, labelKey}]  WHITE … BEIGE, OTHER
 ```
 
@@ -526,6 +527,69 @@ preflight that refuses it fails invisibly, with `fetch` rejecting on a bare "Fai
 response under `/api/` carries `Vary: Authorization` (added, not set, so the CORS layer's own `Vary`
 survives): almost everything here depends on who asked, and a shared cache that stored one of these
 without knowing that would hand one person what we computed for another.
+
+## Two vehicle types, citizen self-join and priced extensions (v0.6)
+
+**A vehicle is a car or a motorcycle.** `V16_0` withdraws `PICKUP`, `VAN` and `OTHER` from
+`vehicles.type`: no tariff, no report and no enforcement rule ever distinguished a pick-up from a
+car, so they were three extra choices on the form that nothing downstream read. The motorcycle stays
+because it occupies a fraction of a bay and is what a municipality prices differently first.
+
+The migration is **expand and contract, in that order**:
+
+```sql
+UPDATE vehicles SET type = 'CAR' WHERE type NOT IN ('CAR', 'MOTORCYCLE');   -- data first
+ALTER TABLE vehicles DROP CONSTRAINT ck_vehicles_type;                      -- constraint second
+ALTER TABLE vehicles ADD CONSTRAINT ck_vehicles_type CHECK (type IN ('CAR', 'MOTORCYCLE'));
+```
+
+Tightening the CHECK first would fail on the first existing row holding a withdrawn value, and a
+migration that only runs on a database nobody used is not a migration. The rows are reassigned rather
+than deleted: a pick-up *is* a car for everything this platform does today, and losing a citizen's
+vehicle — with the sessions and ledger entries that reference it — to tidy up an enum would be an
+absurd trade. Verified on real rows: `PICKUP`/`VAN`/`OTHER` became `CAR`, `MOTORCYCLE` was untouched,
+and the CHECK then refuses an update back to `PICKUP`.
+
+**A citizen may park anywhere.** `POST /api/v1/citizen/session/tenant` with a municipality where the
+person has no membership now creates one on the spot (`CITIZEN`, `ACTIVE`) and returns the token pair
+already scoped to it. Travelling to the next canton is not a procedure.
+
+Why this is safe here and would not be elsewhere: on the citizen portal the role granted is the one
+every self-registered citizen already gets, and CONTRACT.md §1 already made citizens active
+immediately, so instant membership grants nothing that registering in that municipality would not
+have granted a minute later. On the admin and inspector portals the same code would let anyone with
+an account appoint themselves staff of a municipality that never invited them — a privilege
+escalation — so `MembershipService.joinAsCitizen` is called only when `context.portal() == CITIZEN`,
+and the other portals keep failing with `MEMBERSHIP_NOT_ACTIVE` (403). Three more limits:
+`INVITE_ONLY` municipalities answer `TENANT_NOT_OPEN_TO_CITIZENS` (403) — a code of its own, so the
+client can say "this municipality is not on the app yet" instead of leaving the person thinking their
+account is broken; a membership that exists but is suspended or revoked is *not* resurrected
+(`MEMBERSHIP_NOT_ACTIVE`), since self-reactivation would undo an administrator's decision; and
+nothing transfers — wallet and minute credit are per municipality and start at zero. Every real join
+is audited as `MEMBERSHIP_CREATED` with `reason=citizen-self-service`, the target tenant and the
+`fromTenantId`; switching to a municipality you already belong to writes no event, because no join
+happened.
+
+`GET /api/v1/catalog/tenants` was already the full public catalogue (active/publishable only, with
+branding, ordered by name) and it stays **unpaginated on purpose**: a country has at most a few
+hundred municipalities (Costa Rica, 82), each row a few hundred bytes, and the whole list is one
+cacheable response a picker filters in memory — paging it would cost a round trip per scroll for a
+list that fits in one. What a long list does need is a way to jump, so `?q=` now matches name or slug
+server-side alongside the existing `?country=`. The day a deployment serves thousands of tenants this
+becomes a page, and `q` is what will still make it usable.
+
+**Extension options arrive priced.** `GET /citizen/parking/sessions/{id}/extension-options` answers
+the whole screen in one call: every duration the municipality offers, each with `chargeableMinutes`,
+`amount`, `creditMinutesApplied`, `payableMinutes`, `payable` and the `newExpiresAt` it would
+produce. The server still computes every amount, only minutes inside a charging band are charged, and
+the arithmetic starts from the session's **current expiry**, not from now. A `GET`, because nothing
+is reserved and no money moves; deliberately uncached, since the price depends on the charging hours
+the session is about to cross and on a credit balance that can be spent elsewhere a second later.
+
+Options that cannot be taken are listed too, with `allowed: false` and a reason —
+`EXTENSION_EXCEEDS_MAX` or `INSUFFICIENT_BALANCE` — so the app can grey them out with an explanation
+instead of silently dropping an option. A municipality with extensions disabled fails the whole
+endpoint with `EXTENSION_DISABLED` (409), exactly as extending does.
 
 ## Environment variables
 

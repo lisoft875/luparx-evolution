@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { useTranslation, localeEndonym, isSupportedLocale, type SupportedLocale } from '@luparx/i18n';
 import { IconGlobe } from '../icons';
+import { Select } from './Select';
 
 export interface LocaleSelectProps {
   /**
@@ -43,27 +44,29 @@ export function LocaleSelect({
       <span className="lx-locale-select__icon" aria-hidden="true">
         <IconGlobe size={16} />
       </span>
-      <select
+      {/* The platform's own dropdown, like every other list on every other screen. The native
+          control this replaced opened the operating system's menu — a light sheet in the OS font
+          over a dark app, which is precisely the break the v0.6 review flagged. */}
+      <Select
         id={id}
         className="lx-locale-select__control"
         aria-label={t('common.languageSwitcher.label')}
         value={locale}
-        onChange={(event) => {
-          const next = event.target.value;
+        onChange={(next) => {
           if (!isSupportedLocale(next)) return;
           setLocale(next);
           onLocaleChange?.(next);
         }}
-      >
-        {options.map((option) => {
+        options={options.map((option) => {
           const available = isSupportedLocale(option);
-          return (
-            <option key={option} value={option} disabled={!available}>
-              {available ? localeEndonym(option) : `${localeEndonym(option)} — ${t('common.languageSwitcher.unavailable')}`}
-            </option>
-          );
+          return {
+            value: option,
+            label: localeEndonym(option),
+            detail: available ? undefined : t('common.languageSwitcher.unavailable'),
+            disabled: !available,
+          };
         })}
-      </select>
+      />
     </span>
   );
 }

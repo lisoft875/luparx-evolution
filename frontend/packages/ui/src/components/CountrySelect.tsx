@@ -42,7 +42,7 @@ export function CountrySelect({
       invalid={invalid}
       disabled={disabled}
       value={value}
-      onChange={(event) => onChange(event.target.value)}
+      onChange={(value) => onChange(value)}
       onBlur={onBlur}
       placeholder={placeholder}
       aria-describedby={aria['aria-describedby']}

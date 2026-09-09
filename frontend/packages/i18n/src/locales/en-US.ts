@@ -158,6 +158,13 @@ export const enUS: Record<TranslationKey, string> = {
 
   'tenant.sheet.title': 'Municipality',
   'tenant.sheet.description': 'Zones, rates and your balance depend on the one you choose.',
+  'tenant.sheet.catalogDescription':
+    'Choose any municipality in the country. If it is new to you, you join with a zero balance and its own zones and rates.',
+  'tenant.sheet.searchLabel': 'Search municipalities',
+  'tenant.sheet.searchPlaceholder': 'Search municipalities',
+  'tenant.sheet.memberBadge': 'Already yours',
+  'tenant.sheet.noMatches.title': 'No matches',
+  'tenant.sheet.noMatches.description': 'No municipality matches "{{query}}".',
   'tenant.selector.title': 'Choose your municipality',
   'tenant.selector.description':
     'Your account belongs to several municipalities. Zones, rates and your balance depend on the one you pick.',
@@ -166,6 +173,8 @@ export const enUS: Record<TranslationKey, string> = {
   'tenant.selector.empty.title': 'No municipalities yet',
   'tenant.selector.error.notAvailable':
     'That municipality is no longer available to your account. Pick another one or ask an administrator for access.',
+  'tenant.selector.error.notOpenToCitizens':
+    'This municipality does not accept self-service sign-ups. Ask its administration for access.',
   'tenant.selector.signOut': 'Sign out',
   'tenant.badge.changeAction': 'change municipality',
   'tenant.switch.action': 'Change',
@@ -309,6 +318,7 @@ export const enUS: Record<TranslationKey, string> = {
   'citizen.parking.step2.empty': 'Add a vehicle before parking.',
   'citizen.parking.step2.addVehicleCta': 'Add vehicle',
   'citizen.parking.step3.title': 'Time',
+  'citizen.parking.step3.creditApplied': 'includes {{minutes}} of credit',
   'citizen.parking.step4.title': 'Summary and payment',
   'citizen.parking.step4.zoneLabel': 'Zone',
   'citizen.parking.step4.vehicleLabel': 'Vehicle',
@@ -322,13 +332,19 @@ export const enUS: Record<TranslationKey, string> = {
   'citizen.parking.durationHours.one': '{{count}} hour',
   'citizen.parking.durationHours.other': '{{count}} hours',
 
-  'citizen.parking.extend.title': 'Extend time',
-  'citizen.parking.extend.description': 'Choose how much you want to extend your parking session.',
-  'citizen.parking.extend.costLabel': 'Extension cost',
-  'citizen.parking.extend.newExpiryLabel': 'New expiry',
-  'citizen.parking.extend.submit': 'Confirm extension',
+  'citizen.parking.extend.title': 'Extend parking',
+  'citizen.parking.extend.currentlyEndsAt': 'It currently ends at {{time}}.',
+  'citizen.parking.extend.chooseLabel': 'Additional time',
+  'citizen.parking.extend.chargeableMinutes': 'Only {{minutes}} are charged; the rest falls outside charging hours.',
+  'citizen.parking.extend.creditApplied': 'Includes {{minutes}} of credit.',
+  'citizen.parking.extend.costLabel': 'Extension price',
+  'citizen.parking.extend.newExpiryLabel': 'New expiry time',
+  'citizen.parking.extend.walletNote': "The additional amount will be charged to your wallet at this municipality's rate.",
+  'citizen.parking.extend.noOptions': 'This municipality does not offer extensions for this stay.',
+  'citizen.parking.extend.submit': 'Extend',
 
-  'citizen.parking.finish.confirmTitle': 'Finish parking session',
+  'citizen.parking.finish.confirmTitle': 'Finish this parking session?',
+  'citizen.parking.finish.immediate': 'The session ends immediately and bay {{space}} becomes free.',
   'citizen.parking.finish.confirmDescription.credited':
     'You have {{minutes}} left. They will be saved as time credit in this municipality and expire on {{date}}. They are used first in your next session here; they are not money and cannot be used in another municipality.',
   'citizen.parking.finish.confirmDescription.lost':
@@ -423,6 +439,8 @@ export const enUS: Record<TranslationKey, string> = {
 
   'citizen.profile.title': 'My account',
   'citizen.profile.personalData.label': 'Personal details',
+  'citizen.profile.personalData.description':
+    'Your name, identity document, phone and address. They are saved together.',
   'citizen.profile.phoneLabel': 'Phone',
   'citizen.profile.identification.label': 'Identification',
   'citizen.profile.identification.value': 'National ID or DIMEX',
@@ -574,15 +592,18 @@ export const enUS: Record<TranslationKey, string> = {
   'account.password.newLabel': 'New password',
   'account.password.confirmLabel': 'Confirm the new password',
   'account.password.submit': 'Change password',
+  'account.password.changeCta': 'Change password',
   'account.password.sessionsWarning':
     'Changing it closes every session, this one included: you will have to sign in again with the new password.',
   'account.password.done': 'Done: your password changed and every session was closed.',
   'account.password.signInAgain': 'Sign in again',
   'account.password.error.currentInvalid': 'That is not your current password.',
   'account.email.title': 'Email address',
+  'account.email.meta': 'The address you sign in with.',
   'account.email.currentLabel': 'Current email',
   'account.email.newLabel': 'New email',
   'account.email.submit': 'Send verification',
+  'account.email.changeCta': 'Change email',
   'account.email.verificationNotice':
     'We send a link to the new address. Your current email keeps working until you verify the new one.',
   'account.email.pending': 'Check {{email}} and open the link to finish the change.',
@@ -654,11 +675,6 @@ export const enUS: Record<TranslationKey, string> = {
   'citizen.parking.step1.spaceCodeError.range': 'This zone only has bays from {{first}} to {{last}}.',
 
   // ---- Citizen: "Other" duration, inside the municipality's own limits --------------------------
-  'citizen.parking.step3.customCta': 'Other',
-  'citizen.parking.step3.customLabel': 'Minutes',
-  'citizen.parking.step3.customHint': 'Other times this municipality offers, up to {{max}}.',
-  'citizen.parking.step3.customUnavailable':
-    'This municipality only offers the times above, up to {{max}} per stay.',
   'citizen.parking.step3.maxNotice': 'This municipality allows up to {{max}} per stay.',
 
   // ---- Catalogs (server-provided keys: countries, documents, divisions) -------------------------

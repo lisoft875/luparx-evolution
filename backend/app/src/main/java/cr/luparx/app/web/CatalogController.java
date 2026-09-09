@@ -98,11 +98,29 @@ public class CatalogController {
         return cacheable(body);
     }
 
+    /**
+     * Every municipality a citizen may pick, with the branding the picker draws it with.
+     *
+     * <p>This is the whole catalogue and not "the ones you belong to": since v0.6 a citizen switching
+     * to a municipality they had never joined is put into it on the spot, so the sheet has to offer
+     * the country, not their history. Only ACTIVE municipalities appear — a suspended one cannot be
+     * paid — and they come ordered by name, which is the order the sheet renders.</p>
+     *
+     * <p><b>Not paginated, and searched instead.</b> A municipality is an institution: a country has
+     * hundreds at the very most (Costa Rica has 82), each row is a few hundred bytes, and the whole
+     * list is one cacheable response of a few tens of kilobytes that a picker filters instantly in
+     * memory. Paging it would cost a round trip per scroll for a list that fits in one. What a long
+     * list genuinely needs is a way to jump — hence {@code q}, which matches the name or the slug
+     * server-side so a citizen can type "cart" instead of scrolling to C. The day one deployment
+     * serves thousands of tenants this becomes a page, and the {@code q} parameter is what will still
+     * make it usable.</p>
+     */
     @GetMapping("/tenants")
-    @Operation(summary = "Publishable municipalities, optionally filtered by country")
+    @Operation(summary = "Publishable municipalities, optionally filtered by country or searched by name")
     public ResponseEntity<List<CatalogDtos.TenantCatalogResponse>> tenants(
-            @RequestParam(required = false) String country) {
-        List<CatalogDtos.TenantCatalogResponse> body = tenantService.listPublishable(country).stream()
+            @RequestParam(required = false) String country,
+            @RequestParam(required = false) String q) {
+        List<CatalogDtos.TenantCatalogResponse> body = tenantService.listPublishable(country, q).stream()
                 .map(mapper::toTenantCatalog)
                 .toList();
         return cacheable(body);

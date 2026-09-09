@@ -103,8 +103,8 @@ public class DevActivitySeeder {
                     // Same plate as Ana's second vehicle, on purpose: uniqueness is per user. A
                     // different make, colour and type under the same plate is also what makes an
                     // inspector's lookup ambiguous in development, which is the point.
-                    new VehicleSeed("SJP123", "Mi pick-up", "Toyota", "Hilux", 2021,
-                            VehicleType.PICKUP, VehicleColor.WHITE, true)),
+                    new VehicleSeed("SJP123", "Mi carro", "Toyota", "Hilux", 2021,
+                            VehicleType.CAR, VehicleColor.WHITE, true)),
             "carla.jimenez@luparx.test", List.of(
                     new VehicleSeed("CTG789", "El de mamá", "Nissan", "March", 2015,
                             VehicleType.CAR, VehicleColor.SILVER, true)));

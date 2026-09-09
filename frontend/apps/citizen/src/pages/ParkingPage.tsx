@@ -7,9 +7,9 @@ import {
   Alert,
   Button,
   Card,
-  ChipGroup,
   FormField,
   IconCar,
+  IconClock,
   IconPin,
   IconPlus,
   Input,
@@ -21,12 +21,13 @@ import {
 import { formatDurationLabel } from '../lib/duration';
 import { parkingErrorMessage } from '../lib/apiErrors';
 import { checkSpaceCode } from '../lib/spaceCode';
-import { catalogLabeller, vehicleDescriptor, vehicleOptionLabel } from '../lib/vehiclePresentation';
+import { catalogLabeller, vehicleDescriptor, vehicleOptionDetail } from '../lib/vehiclePresentation';
 import { CitizenShell } from '../components/CitizenShell';
 import { QueryBoundary } from '../components/QueryBoundary';
 import {
   useParkingPolicy,
   useParkingQuote,
+  useParkingQuotes,
   useParkingSchedule,
   useParkingSpaceFormat,
   useParkingZones,
@@ -34,9 +35,6 @@ import {
   useVehicleColorCatalog,
   useVehicles,
 } from '../lib/queries';
-
-/** Sentinel for the "Otro" chip — a value no duration can collide with. */
-const CUSTOM_DURATION = 'custom';
 
 export function ParkingPage(): React.JSX.Element {
   const { t, tPlural, locale } = useTranslation();
@@ -106,30 +104,18 @@ export function ParkingPage(): React.JSX.Element {
    * and maximum the server applies — a free-text minute box would only manufacture requests that
    * are certain to be refused.
    */
-  const offeredMinutes = (policy?.sessionIncrementsMinutes ?? []).filter(
-    (option) => option >= (policy?.sessionMinMinutes ?? 0) && option <= (policy?.sessionMaxMinutes ?? Infinity),
+  const offeredMinutes = useMemo(
+    () =>
+      (policy?.sessionIncrementsMinutes ?? []).filter(
+        (option) => option >= (policy?.sessionMinMinutes ?? 0) && option <= (policy?.sessionMaxMinutes ?? Infinity),
+      ),
+    [policy?.sessionIncrementsMinutes, policy?.sessionMinMinutes, policy?.sessionMaxMinutes],
   );
-  // Three chips is what fits a phone without the row scrolling; anything the municipality offers
-  // beyond that lives behind "Otro" rather than being dropped.
-  const CHIP_LIMIT = 3;
-  const chipMinutes = offeredMinutes.slice(0, CHIP_LIMIT);
-  const otherMinutes = offeredMinutes.slice(CHIP_LIMIT);
 
-  const [presetMinutes, setPresetMinutes] = useState<number | null>(null);
-  const [customOpen, setCustomOpen] = useState(false);
-  const [customMinutes, setCustomMinutes] = useState<number | null>(null);
+  const [minutes, setMinutes] = useState<number | null>(null);
   useEffect(() => {
-    if (presetMinutes === null && !customOpen && chipMinutes.length > 0) setPresetMinutes(chipMinutes[0]!);
-  }, [presetMinutes, customOpen, chipMinutes]);
-
-  /**
-   * "Otro" is shown disabled, not hidden, when the municipality publishes nothing beyond the chips:
-   * the absence of longer stays is its rule, and an option that vanished would read as a missing
-   * feature rather than as a decision somebody made.
-   */
-  const customAvailable = otherMinutes.length > 0;
-
-  const minutes = customOpen ? customMinutes : presetMinutes;
+    if (minutes === null && offeredMinutes.length > 0) setMinutes(offeredMinutes[0]!);
+  }, [minutes, offeredMinutes]);
 
   /**
    * Priced only against a zone this municipality actually publishes.
@@ -139,6 +125,9 @@ export function ParkingPage(): React.JSX.Element {
    * answered with `PARKING_ZONE_NOT_FOUND`. Deriving the id from the loaded list closes the gap.
    */
   const quoteZoneId = zone ? zoneId : null;
+  // A quote per offered duration, so the price rides on the option itself rather than only
+  // appearing in the summary after the choice has been made (v0.6, reference screen 5).
+  const durationQuotes = useParkingQuotes(quoteZoneId, offeredMinutes);
   const { data: quote } = useParkingQuote(quoteZoneId, minutes);
   const { data: schedule } = useParkingSchedule();
   const startSession = useStartParkingSession();
@@ -156,16 +145,6 @@ export function ParkingPage(): React.JSX.Element {
           })
         : t('citizen.parking.schedule.notCharging')
       : null;
-
-  function handleDurationChange(value: string): void {
-    if (value === CUSTOM_DURATION) {
-      setCustomOpen(true);
-      setCustomMinutes((current) => current ?? otherMinutes[0] ?? null);
-      return;
-    }
-    setCustomOpen(false);
-    setPresetMinutes(Number(value));
-  }
 
   async function handleSubmit(): Promise<void> {
     if (!vehicleId || !minutes || !zoneId || !spaceCode.trim() || spaceProblem) return;
@@ -190,9 +169,7 @@ export function ParkingPage(): React.JSX.Element {
   function handleTenantSwitched(): void {
     setZoneId('');
     setSpaceCode('');
-    setPresetMinutes(null);
-    setCustomOpen(false);
-    setCustomMinutes(null);
+    setMinutes(null);
     setError(null);
   }
 
@@ -222,9 +199,14 @@ export function ParkingPage(): React.JSX.Element {
                   icon={<IconPin size={18} />}
                   aria-label={t('citizen.parking.step1.zoneLabel')}
                   value={zoneId}
-                  onChange={(e) => setZoneId(e.target.value)}
+                  onChange={(value) => setZoneId(value)}
                   placeholder={t('common.select.placeholder')}
-                  options={list.map((z) => ({ value: z.id, label: z.name }))}
+                  options={list.map((z) => ({
+                    value: z.id,
+                    label: z.name,
+                    detail: z.description || undefined,
+                    icon: <IconPin size={16} />,
+                  }))}
                 />
               )}
             </QueryBoundary>
@@ -276,9 +258,16 @@ export function ParkingPage(): React.JSX.Element {
                   icon={<IconCar size={18} />}
                   aria-label={t('citizen.parking.step2.selectLabel')}
                   value={vehicleId ?? ''}
-                  onChange={(e) => setVehicleId(e.target.value)}
+                  onChange={(value) => setVehicleId(value)}
                   placeholder={t('common.select.placeholder')}
-                  options={list.map((v) => ({ value: v.id, label: vehicleOptionLabel(v, list, colorOf) }))}
+                  // Plate first, description underneath — the reference product's two-line row.
+                  // The plate is what the inspector reads off the windscreen, so it leads.
+                  options={list.map((v) => ({
+                    value: v.id,
+                    label: v.plate,
+                    detail: vehicleOptionDetail(v, list, colorOf),
+                    icon: <IconCar size={16} />,
+                  }))}
                 />
               )}
             </QueryBoundary>
@@ -297,54 +286,49 @@ export function ParkingPage(): React.JSX.Element {
           <QueryBoundary query={policyQuery} errorTitle={t('citizen.parking.step3.title')}>
             {(p) => (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--lx-space-3)' }}>
-                {/* Every option here is the municipality's: its published increments, plus "Otro"
-                    bounded by its own minimum and maximum. Nothing in this file knows what half an
-                    hour costs or whether it is even offered. */}
-                <ChipGroup
+                {/* Every option here is the municipality's published increment, and every price on
+                    it is a quote the server gave for that exact duration in this exact zone. The
+                    row of chips this replaced showed three of them and hid the rest behind "Otro",
+                    and none of them said what they cost — so the citizen chose a length and only
+                    then learnt the price. Nothing in this file computes money. */}
+                <Select
+                  icon={<IconClock size={18} />}
                   aria-label={t('citizen.parking.step3.title')}
-                  value={customOpen ? CUSTOM_DURATION : presetMinutes !== null ? String(presetMinutes) : ''}
-                  onChange={handleDurationChange}
-                  options={[
-                    ...chipMinutes.map((option) => ({
+                  value={minutes !== null ? String(minutes) : ''}
+                  onChange={(value) => setMinutes(Number(value))}
+                  placeholder={t('common.select.placeholder')}
+                  options={offeredMinutes.map((option) => {
+                    const optionQuote = durationQuotes.get(option);
+                    // What would actually leave the wallet, which is what the citizen is deciding
+                    // about — and, when the citizen's own minutes brought it down, why. A bare
+                    // "₡0" on an option that costs ₡600 to somebody with no credit is a number
+                    // nobody can act on.
+                    const price = optionQuote
+                      ? formatCurrencyMinor(optionQuote.payableMinor, optionQuote.currencyCode, locale)
+                      : undefined;
+                    const credited =
+                      optionQuote && optionQuote.creditMinutesApplied > 0
+                        ? t('citizen.parking.step3.creditApplied', {
+                            minutes: tPlural('citizen.parking.durationMinutes', optionQuote.creditMinutesApplied),
+                          })
+                        : undefined;
+                    return {
                       value: String(option),
                       label: formatDurationLabel(option, tPlural),
-                    })),
-                    {
-                      value: CUSTOM_DURATION,
-                      label: t('citizen.parking.step3.customCta'),
-                      disabled: !customAvailable,
-                    },
-                  ]}
+                      // Absent while its quote is still in flight, and absent for good if that
+                      // request failed: a duration without a price is still choosable, and the
+                      // summary below states the amount before anything is charged.
+                      detail: price ? [price, credited].filter(Boolean).join(' · ') : undefined,
+                      icon: <IconClock size={16} />,
+                    };
+                  })}
                 />
-                {customOpen && customAvailable ? (
-                  <FormField
-                    label={t('citizen.parking.step3.customLabel')}
-                    hint={t('citizen.parking.step3.customHint', {
-                      max: formatDurationLabel(p.sessionMaxMinutes, tPlural),
-                    })}
-                  >
-                    {({ inputId }) => (
-                      <Select
-                        id={inputId}
-                        value={customMinutes !== null ? String(customMinutes) : ''}
-                        onChange={(e) => setCustomMinutes(Number(e.target.value))}
-                        placeholder={t('common.select.placeholder')}
-                        options={otherMinutes.map((option) => ({
-                          value: String(option),
-                          label: formatDurationLabel(option, tPlural),
-                        }))}
-                      />
-                    )}
-                  </FormField>
-                ) : null}
                 {/* One line, and it always states the municipality's ceiling — that is the number
-                    a person needs before choosing. When "Otro" is greyed out it also says why,
-                    rather than leaving a dead option unexplained. */}
+                    a person needs before choosing. */}
                 <p className="lx-text-meta" style={{ margin: 0 }}>
-                  {t(
-                    customAvailable ? 'citizen.parking.step3.maxNotice' : 'citizen.parking.step3.customUnavailable',
-                    { max: formatDurationLabel(p.sessionMaxMinutes, tPlural) },
-                  )}
+                  {t('citizen.parking.step3.maxNotice', {
+                    max: formatDurationLabel(p.sessionMaxMinutes, tPlural),
+                  })}
                 </p>
               </div>
             )}
@@ -421,12 +405,8 @@ export function ParkingPage(): React.JSX.Element {
       colorCatalogQuery.data,
       policyQuery,
       policy,
-      presetMinutes,
-      customOpen,
-      customMinutes,
-      customAvailable,
-      chipMinutes,
-      otherMinutes,
+      offeredMinutes,
+      durationQuotes,
       minutes,
       durationLabel,
       quote,

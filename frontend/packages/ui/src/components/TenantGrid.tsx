@@ -13,6 +13,12 @@ export interface TenantTileProps {
   onSelect: () => void;
   /** Translated label for the busy state, announced while the switch is in flight. */
   busyLabel?: string;
+  /**
+   * A short translated word under the name — "ya la usás" in a grid that also contains
+   * municipalities the citizen has never entered. It is read out as part of the tile's own label,
+   * not hidden from the accessible name, because it is the fact that distinguishes the tiles.
+   */
+  badge?: string;
   locale?: string;
 }
 
@@ -33,6 +39,7 @@ export function TenantTile({
   disabled = false,
   onSelect,
   busyLabel,
+  badge,
   locale,
 }: TenantTileProps): React.JSX.Element {
   return (
@@ -61,6 +68,7 @@ export function TenantTile({
         ) : null}
       </span>
       <span className="lx-tenant-tile__name">{name}</span>
+      {badge ? <span className="lx-tenant-tile__badge">{badge}</span> : null}
       {busy && busyLabel ? <span className="lx-visually-hidden">{busyLabel}</span> : null}
     </button>
   );

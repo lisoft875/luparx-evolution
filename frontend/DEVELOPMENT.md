@@ -206,20 +206,36 @@ server refuses to start a stay with `OUTSIDE_CHARGING_HOURS`. The reset flips th
 
 ---
 
-## Known backend gaps found while testing
+## Backend gaps that were closed since
 
-Neither is fixable from the frontend; both are noted where the code works around them.
+Both of the gaps this file used to list are gone, and the notes are kept only so nobody re-adds the
+workarounds:
 
-1. **No citizen-facing zone list.** `POST /citizen/parking/quote` and `POST /citizen/parking/sessions`
-   both require a `zoneId`, but the only endpoint that publishes zones is
-   `GET /admin/parking/zones`, behind `TENANT_MANAGE` and on the admin portal's audience — a citizen
-   token gets `401`. `GET /api/v1/citizen/parking/zones` does not exist. Until it does,
-   `useParkingZones` (`apps/citizen/src/lib/queries.ts`) calls that endpoint, and on `404` falls back
-   to the zones in the citizen's own session history — which means a brand-new citizen with no
-   history has an empty zone list and cannot start a stay. The screen says so plainly rather than
-   inventing an id that would fail at the moment of charging.
-2. **No citizen-facing bay-code format.** `GET /admin/parking/space-format` is admin-only, so the
-   citizen's bay-code field cannot use the tenant's `example` as its placeholder or its `pattern` to
-   validate as you type, the way CONTRACT.md v0.3 describes. The field accepts free text (uppercased)
-   and relies on the server's `PARKING_SPACE_CODE_INVALID` / `PARKING_SPACE_NOT_FOUND`, which are
-   translated. A `GET /api/v1/citizen/parking/space-format` would close it.
+1. **`GET /api/v1/citizen/parking/zones` exists.** It returns the active zones of the municipality
+   with the tariff in force and the bay-code range of each. `useParkingZones` still has a `404`
+   branch that falls back to the citizen's own history — that is for an older server, not for this
+   one, and it should not be treated as the normal path.
+2. **`GET /api/v1/citizen/parking/space-format` exists.** The citizen's bay-code field uses the
+   municipality's own `example` as its placeholder and its `pattern` to refuse an impossible code
+   before spending a round trip.
+
+Added in v0.6 and used by the extend dialog:
+`GET /api/v1/citizen/parking/sessions/{id}/extension-options` — every extension the municipality
+offers on that stay, priced, with `chargeableMinutes`, the credit applied, `payable`, `newExpiresAt`,
+and `allowed`/`unavailableReason` for the ones it will not sell.
+
+## Still missing
+
+**No wallet top-up endpoint.** `WalletService.topUp` exists but nothing exposes it over HTTP, so a
+balance can only come from the dev seeder. A citizen who joins a municipality for the first time
+starts at zero and cannot start a stay there until one exists. The end-to-end suites work around it
+by using the seeded accounts that already have a balance.
+
+## End-to-end suites
+
+| Script | What it covers |
+|---|---|
+| `/home/claude/e2e-reset.mjs` | Puts the database back to a known state **through the API**. Run it before every suite. |
+| `/home/claude/e2e-v06.mjs` | The v0.6 surface: the custom dropdown by mouse and keyboard, a price on every duration, the extend and finish dialogs, joining a municipality with no prior membership, and editing every personal datum from one screen. |
+| `/home/claude/e2e-v06-edges.mjs` | Two cases the main suite cannot reach: an extension option refused for lack of balance, and a citizen with a single membership entering another municipality. Sets up its own fixture. |
+| `/home/claude/shots-v06.mjs` | The screenshots in `/home/claude/previews/v06/`, at 320×568, 390×844 and 1440×900. |

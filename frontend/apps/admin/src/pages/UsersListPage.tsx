@@ -63,9 +63,9 @@ export function UsersListPage(): React.JSX.Element {
         <Select
           aria-label={t('admin.users.filter.role')}
           value={role}
-          onChange={(e) => {
+          onChange={(value) => {
             setPage(0);
-            setRole(e.target.value as Role | '');
+            setRole(value as Role | '');
           }}
           placeholder={t('admin.users.filter.allRoles')}
           options={ROLES.map((r) => ({ value: r, label: r }))}
@@ -73,9 +73,9 @@ export function UsersListPage(): React.JSX.Element {
         <Select
           aria-label={t('admin.users.filter.status')}
           value={status}
-          onChange={(e) => {
+          onChange={(value) => {
             setPage(0);
-            setStatus(e.target.value as UserStatus | '');
+            setStatus(value as UserStatus | '');
           }}
           placeholder={t('admin.users.filter.allStatuses')}
           options={STATUSES.map((s) => ({ value: s, label: t(`admin.users.status.${s}` as TranslationKey) }))}
@@ -83,9 +83,9 @@ export function UsersListPage(): React.JSX.Element {
         <Select
           aria-label={t('admin.users.filter.portal')}
           value={portal}
-          onChange={(e) => {
+          onChange={(value) => {
             setPage(0);
-            setPortal(e.target.value as Portal | '');
+            setPortal(value as Portal | '');
           }}
           placeholder={t('admin.users.filter.allPortals')}
           options={PORTALS_FILTER.map((p) => ({ value: p, label: p }))}

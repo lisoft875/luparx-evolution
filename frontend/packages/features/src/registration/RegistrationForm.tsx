@@ -124,7 +124,13 @@ export function RegistrationForm({
                     value: tenant.id,
                     label: tenant.name,
                   }))}
-                  {...register('tenantId')}
+                  // The dropdown reports a value, not a DOM event, so it is bound through
+                  // watch/setValue rather than `register`'s change handler.
+                  name="tenantId"
+                  value={watch('tenantId') ?? ''}
+                  onChange={(tenantId) =>
+                    setValue('tenantId', tenantId, { shouldDirty: true, shouldValidate: true })
+                  }
                 />
               )}
             </FormField>

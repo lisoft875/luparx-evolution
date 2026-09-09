@@ -105,7 +105,7 @@ function CountryScopedTab({ tab }: { tab: 'adminLevels' | 'divisions' | 'documen
         <Select
           aria-label={t('platform.catalogs.selectCountry')}
           value={countryCode}
-          onChange={(e) => setCountryCode(e.target.value)}
+          onChange={(value) => setCountryCode(value)}
           options={(countriesQuery.data ?? []).map((c) => ({ value: c.code, label: `${c.flagEmoji} ${tKey(c.nameKey)}`.trim() }))}
         />
       </div>

@@ -69,10 +69,13 @@ function useAddressSummary(profile: UserProfile | undefined): string | undefined
  *
  * It used to be an index — seven rows whose only content was the name of another screen — so
  * answering "what phone number does my account have?" cost a navigation, a load and a trip back.
- * Each row now carries its own value, and tapping it still opens the form that changes it: seeing
- * is one screen, editing is a deliberate step. Editing stays split by consequence — personal data
- * saves a record, the e-mail starts a verification, the password ends every other session — which
- * is why those remain three destinations rather than one long form.
+ * Each row now carries its own value, so this screen answers on its own.
+ *
+ * Every row that can be changed leads to the same place: `/profile/personal`, where name, identity
+ * document, phone, address, e-mail and password are all edited (v0.6). Editing used to be split
+ * across three destinations by consequence; the consequences are still different and are still
+ * confirmed differently, but they are confirmed *there*, in place, rather than by making somebody
+ * navigate to find out which screen owns which field.
  */
 export function ProfilePage(): React.JSX.Element {
   const { t } = useTranslation();
@@ -146,7 +149,7 @@ export function ProfilePage(): React.JSX.Element {
               </span>
             }
             value={chevronValue()}
-            onClick={() => navigate('/profile/email')}
+            onClick={() => navigate('/profile/personal')}
           />
         </Card>
         <Card>
@@ -182,7 +185,7 @@ export function ProfilePage(): React.JSX.Element {
             title={t('citizen.profile.security.label')}
             meta={t('citizen.profile.security.value')}
             value={chevronValue()}
-            onClick={() => navigate('/profile/password')}
+            onClick={() => navigate('/profile/personal')}
           />
         </Card>
         {/* The language row keeps its control in place rather than leading somewhere: switching is

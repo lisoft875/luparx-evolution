@@ -90,6 +90,13 @@ public final class ErrorCode {
     public static final String MEMBERSHIP_INVALID_TRANSITION = "MEMBERSHIP_INVALID_TRANSITION";
     public static final String ROLE_NOT_ALLOWED_FOR_PORTAL = "ROLE_NOT_ALLOWED_FOR_PORTAL";
     public static final String TENANT_SETTING_INVALID = "TENANT_SETTING_INVALID";
+    /**
+     * The municipality does not admit citizens on request, so switching to it could not create the
+     * membership that would have been needed. Distinct from {@link #MEMBERSHIP_NOT_ACTIVE}, which is
+     * about a membership this person already has, and from a bare {@link #ACCESS_DENIED}, which would
+     * tell them nothing about what to do next.
+     */
+    public static final String TENANT_NOT_OPEN_TO_CITIZENS = "TENANT_NOT_OPEN_TO_CITIZENS";
 
     // --- parking (CONTRACT.md "v0.2 — Dominio de parqueo") --------------------------------------
     public static final String VEHICLE_NOT_FOUND = "VEHICLE_NOT_FOUND";

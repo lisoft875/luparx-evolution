@@ -18,32 +18,28 @@ import java.util.Optional;
  * ({@code GET /api/v1/catalog/vehicle-types}). The client renders the key it is given; it never
  * ships its own copy of the list, and adding a value is a change in one place.</p>
  *
- * <h2>Why these values and not more</h2>
+ * <h2>Why exactly two</h2>
  *
- * <p>Each one earns its place by being <em>operationally</em> different — different to charge, or
- * different to find in a bay:</p>
- * <ul>
- *   <li>{@link #CAR} — the ordinary case, and the default of any backfill;</li>
- *   <li>{@link #MOTORCYCLE} — occupies a fraction of a bay and is the one kind municipalities most
- *       commonly price differently;</li>
- *   <li>{@link #PICKUP} and {@link #VAN} — longer than a marked bay, which is an enforcement
- *       question ("it is over the line") rather than a styling one;</li>
- *   <li>{@link #OTHER} — so that registering a vehicle can never be blocked by a list. A citizen
- *       with something unusual still parks, and the municipality still gets paid.</li>
- * </ul>
+ * <p>A car and a motorcycle, and nothing else. The product asks a citizen one question — "is it a car
+ * or a motorcycle?" — and every additional option would be a choice the citizen has to make that
+ * nothing downstream reads. {@link #MOTORCYCLE} earns its place because it occupies a fraction of a
+ * bay and is the one kind municipalities price differently first; {@link #CAR} is everything else and
+ * is the default of any backfill.</p>
  *
- * <p>A bicycle is deliberately absent: it does not occupy a paid bay in any municipality this
- * platform serves, so offering it would create a vehicle that can never legitimately start a
- * session — a dead end dressed up as a feature. It is added the day a municipality charges for
- * one.</p>
+ * <p>An earlier revision offered PICKUP, VAN and OTHER. They were removed in V16_0 because no tariff,
+ * no report and no enforcement rule ever distinguished them: they were three ways to make a form
+ * longer. The set is deliberately easy to grow — a value, a translation key, a widened CHECK — so the
+ * day a municipality genuinely charges a pick-up differently, it comes back with a reason attached
+ * rather than in anticipation of one.</p>
+ *
+ * <p>A bicycle is absent for a different reason: it does not occupy a paid bay in any municipality
+ * this platform serves, so offering it would create a vehicle that can never legitimately start a
+ * session — a dead end dressed up as a feature.</p>
  */
 public enum VehicleType {
 
     CAR,
-    MOTORCYCLE,
-    PICKUP,
-    VAN,
-    OTHER;
+    MOTORCYCLE;
 
     /** The default of a vehicle that predates this field, and of a client that sends none. */
     public static final VehicleType DEFAULT = CAR;

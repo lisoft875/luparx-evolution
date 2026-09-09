@@ -20,7 +20,13 @@ export interface BottomTabBarProps {
  */
 export function BottomTabBar({ tabs, className }: BottomTabBarProps): React.JSX.Element {
   return (
-    <nav className={['lx-bottom-tab-bar', className].filter(Boolean).join(' ')} aria-label="primary">
+    // `data-lx-bottom-chrome` marks this as covering the bottom of the viewport, so a dropdown
+    // opening near it stops above it instead of running underneath (see components/Select.tsx).
+    <nav
+      className={['lx-bottom-tab-bar', className].filter(Boolean).join(' ')}
+      aria-label="primary"
+      data-lx-bottom-chrome=""
+    >
       {tabs.map((tab) => (
         <button
           key={tab.key}

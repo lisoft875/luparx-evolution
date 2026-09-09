@@ -716,6 +716,33 @@ export interface ExtendParkingSessionRequest {
 }
 
 /**
+ * One entry of `GET /citizen/parking/sessions/{id}/extension-options`: a duration this
+ * municipality sells as an extension, already priced, with the expiry it would produce.
+ *
+ * <p>The whole list arrives in one request, which is the point of the endpoint — a dialog that
+ * quoted each option separately would draw one list out of several answers given at several
+ * instants, and the total under it would belong to none of them.</p>
+ *
+ * <p>An option the citizen may not take is present with `allowed: false` and the server's own
+ * `unavailableReason` (`EXTENSION_EXCEEDS_MAX`, `INSUFFICIENT_BALANCE`, …) rather than dropped:
+ * a list that quietly loses its last option teaches nobody why.</p>
+ */
+export interface ParkingExtensionOption {
+  minutes: number;
+  /** Of those, the ones inside a charging band — smaller when the extension runs past closing. */
+  chargeableMinutes: number;
+  amountMinor: number;
+  currencyCode: string;
+  creditMinutesApplied: number;
+  payableMinutes: number;
+  /** What would actually leave the wallet. This is the number the dialog shows. */
+  payableMinor: number;
+  newExpiresAt: string;
+  allowed: boolean;
+  unavailableReason: string | null;
+}
+
+/**
  * A parking zone as the citizen picks it. The tariff lives on the zone, so the zone plus the
  * duration is all a quote needs.
  */

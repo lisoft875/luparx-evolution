@@ -26,7 +26,7 @@ export function ReportsPage(): React.JSX.Element {
         <Select
           aria-label={t('admin.reports.registeredUsers.groupBy')}
           value={groupBy}
-          onChange={(e) => setGroupBy(e.target.value as RegisteredUsersGroupBy)}
+          onChange={(value) => setGroupBy(value as RegisteredUsersGroupBy)}
           options={GROUP_BY_OPTIONS.map((option) => ({
             value: option,
             label: t(`admin.reports.registeredUsers.groupBy.${option}` as TranslationKey),
