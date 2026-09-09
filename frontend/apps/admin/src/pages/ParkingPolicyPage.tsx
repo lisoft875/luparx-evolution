@@ -111,12 +111,11 @@ function MinuteList({
 }
 
 /**
- * What this municipality sells, and under what rules (CONTRACT.md v0.18).
+ * What this municipality sells, and under what rules (CONTRACT.md v0.18, simplified in v0.23).
  *
  * <p>Everything a citizen can do with a stay is decided here: which durations they may buy, whether
  * they may extend, whether finishing early gives the unused minutes back, and how long after
- * expiry a car is still not fineable. It is the screen with the widest blast radius in the portal,
- * which is why it does three things beyond posting the form.</p>
+ * expiry a car is still not fineable. It is the screen with the widest blast radius in the portal.</p>
  *
  * <h2>It previews the citizen's picker</h2>
  *
@@ -125,15 +124,18 @@ function MinuteList({
  * `@luparx/features`), because a preview with its own copy of the rule is a preview that can
  * disagree with the thing it previews.</p>
  *
- * <h2>It names the options the rest of the policy kills</h2>
+ * <h2>The list is the floor and the ceiling</h2>
  *
- * <p>The server validates each field and the coherence between fields, but it accepts a policy that
- * offers 15 minutes with a minimum of 30: the option is on the list, the minimum refuses it, and the
- * citizen who picks it gets {@code INVALID_INCREMENT} from a picker their municipality filled. That
- * is not a validation error, it is a configuration mistake nobody sees until someone in the street
- * cannot park. So the screen says which options are unreachable, and why, without blocking the save
- * — the municipality may be mid-edit, and refusing to save a coherent-but-odd policy would be this
- * screen deciding policy instead of the municipality.</p>
+ * <p>{@code sessionMinMinutes} and {@code sessionMaxMinutes} used to be their own fields, and the
+ * three could disagree: a municipality selling 15 minutes with a minimum of 30 showed the citizen an
+ * option the server then refused with {@code INVALID_INCREMENT}, and nobody found out until somebody
+ * in the street could not park. The screen had grown a warning to detect a contradiction the screen
+ * itself was inviting.</p>
+ *
+ * <p>Since v0.23 both are <b>derived</b> from the durations on sale — the first and the last of them.
+ * The contradiction is now unrepresentable, so the warning is gone rather than merely silenced. They
+ * are still sent, because the server still stores them and the extension ceiling is still measured
+ * against the maximum; they are just no longer a second place to say what the list already says.</p>
  *
  * <h2>It replaces the whole policy</h2>
  *
@@ -152,7 +154,24 @@ export function ParkingPolicyPage(): React.JSX.Element {
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    if (policyQuery.data) setForm(policyQuery.data);
+    const stored = policyQuery.data;
+    if (!stored) return;
+    // The list is narrowed to what the stored floor and ceiling actually allowed, ONCE, on load.
+    //
+    // A municipality configured before v0.23 can hold a contradiction — 15 minutes on the list with a
+    // minimum of 30 — where the 15 is offered to the citizen and then refused. Deriving the floor
+    // from the list without this would make that dead option start working the moment somebody opened
+    // this screen and pressed save: the municipality would begin selling quarter-hour stays without
+    // anyone deciding to. A settings screen must not change what is sold merely by being opened.
+    //
+    // So what loads is what is effectively on sale today. Wanting the 15 back is one click, and it is
+    // then an act somebody took.
+    setForm({
+      ...stored,
+      sessionIncrementsMinutes: stored.sessionIncrementsMinutes.filter(
+        (minutes) => minutes >= stored.sessionMinMinutes && minutes <= stored.sessionMaxMinutes,
+      ),
+    });
   }, [policyQuery.data]);
 
   const format = (minutes: number): string => formatDurationLabel(minutes, tPlural);
@@ -163,42 +182,47 @@ export function ParkingPolicyPage(): React.JSX.Element {
   }
 
   /**
-   * The options the policy offers and then refuses. Computed, never stored: it is a reading of the
-   * three fields together, and caching a reading is how it goes stale.
+   * What the citizen is offered: the list, canonicalised, and nothing else.
+   *
+   * <p>Until v0.23 a floor and a ceiling were configured separately, and the three could disagree —
+   * a municipality selling 15 minutes with a minimum of 30 showed the citizen an option the server
+   * then refused with {@code INVALID_INCREMENT}. The screen had to grow a warning to detect a
+   * contradiction it was itself inviting. Now <b>the list is the floor and the ceiling</b>: they are
+   * derived below, so the contradiction is unrepresentable and there is nothing left to warn about.</p>
    */
-  const unreachable = useMemo(() => {
-    if (!form) return [] as number[];
-    return form.sessionIncrementsMinutes.filter(
-      (minutes) => minutes < form.sessionMinMinutes || minutes > form.sessionMaxMinutes,
-    );
-  }, [form]);
+  const offered = useMemo(() => canonical(form?.sessionIncrementsMinutes ?? []), [form]);
 
-  const offered = useMemo(() => {
-    if (!form) return [] as number[];
-    return form.sessionIncrementsMinutes.filter(
-      (minutes) => minutes >= form.sessionMinMinutes && minutes <= form.sessionMaxMinutes,
-    );
-  }, [form]);
+  /**
+   * The floor and ceiling the server still requires, computed from the list. They keep meaning what
+   * they meant — the shortest and longest stay sold in one go — they are just no longer a second
+   * place to say it.
+   */
+  const derivedMin = offered[0] ?? 0;
+  const derivedMax = offered[offered.length - 1] ?? 0;
 
   async function handleSave(): Promise<void> {
     if (!form) return;
     setError(null);
     setSaved(false);
-    // The two rules the server refuses outright, checked here as well so the answer is a sentence
-    // about the municipality's own numbers rather than a field code from an HTTP response.
-    if (form.sessionMaxMinutes < form.sessionMinMinutes) {
-      setError(t('admin.policy.error.maxBelowMin'));
+    // A municipality that sells nothing is the one state the derived floor and ceiling cannot
+    // express, and the server refuses it too — say so here, in words, rather than let it go and come
+    // back as a field code.
+    if (offered.length === 0) {
+      setError(t('admin.policy.error.emptyList'));
       return;
     }
-    if (form.extensionEnabled && form.extensionMaxTotalMinutes < form.sessionMaxMinutes) {
-      setError(t('admin.policy.error.extensionCeiling'));
+    // The remaining rule the server refuses outright: the ceiling including extensions has to clear
+    // the longest stay on sale. Checked here as well so the answer is a sentence about the
+    // municipality's own numbers rather than a field code from an HTTP response.
+    if (form.extensionEnabled && form.extensionMaxTotalMinutes < derivedMax) {
+      setError(t('admin.policy.error.extensionCeiling', { max: format(derivedMax) }));
       return;
     }
     try {
       await updateMutation.mutateAsync({
-        sessionIncrementsMinutes: canonical(form.sessionIncrementsMinutes),
-        sessionMinMinutes: form.sessionMinMinutes,
-        sessionMaxMinutes: form.sessionMaxMinutes,
+        sessionIncrementsMinutes: offered,
+        sessionMinMinutes: derivedMin,
+        sessionMaxMinutes: derivedMax,
         extensionEnabled: form.extensionEnabled,
         extensionIncrementsMinutes: canonical(form.extensionIncrementsMinutes),
         extensionMaxTotalMinutes: form.extensionMaxTotalMinutes,
@@ -257,17 +281,6 @@ export function ParkingPolicyPage(): React.JSX.Element {
             ))}
           </div>
         )}
-        {unreachable.length > 0 ? (
-          <div style={{ marginTop: 'var(--lx-space-3)' }}>
-            <Alert tone="warning">
-              {t('admin.policy.preview.unreachable', {
-                options: unreachable.map(format).join(', '),
-                min: format(form.sessionMinMinutes),
-                max: format(form.sessionMaxMinutes),
-              })}
-            </Alert>
-          </div>
-        ) : null}
       </Card>
 
       <RequirePermission permission="TENANT_MANAGE">
@@ -282,18 +295,14 @@ export function ParkingPolicyPage(): React.JSX.Element {
             emptyLabel={t('admin.policy.session.empty')}
             format={format}
           />
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 'var(--lx-space-4)' }}>
-            <div style={{ width: 200 }}>
-              <FormField label={t('admin.policy.field.sessionMin')} hint={t('admin.policy.field.sessionMinHint')}>
-                {() => number(form.sessionMinMinutes, (value) => patch({ sessionMinMinutes: value }), 1)}
-              </FormField>
-            </div>
-            <div style={{ width: 200 }}>
-              <FormField label={t('admin.policy.field.sessionMax')} hint={t('admin.policy.field.sessionMaxHint')}>
-                {() => number(form.sessionMaxMinutes, (value) => patch({ sessionMaxMinutes: value }), 1)}
-              </FormField>
-            </div>
-          </div>
+          {/* Read out rather than edited. The server still stores a floor and a ceiling, and this
+              says what they will be — so the two numbers stay visible without being a second place
+              to set them, which is what made them contradict the list. */}
+          {offered.length > 0 ? (
+            <p className="lx-text-meta" style={{ marginBottom: 0 }}>
+              {t('admin.policy.session.range', { min: format(derivedMin), max: format(derivedMax) })}
+            </p>
+          ) : null}
         </Card>
 
         <Card>

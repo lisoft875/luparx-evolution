@@ -1782,3 +1782,45 @@ responde el servidor.** Se revisaron los demás: sesiones, cotizaciones, opcione
 billetera y sus movimientos, tipos de infracción, boletas y multas ya lo hacían. `CitizenParkingZoneResponse.rate`
 también viaja envuelto y no se rompe porque el tipo del cliente no lo declara: la app del ciudadano
 no lo lee.
+
+# v0.23 — La lista de duraciones es el piso y el techo (normativo)
+
+Sin cambios de API: `sessionMinMinutes` y `sessionMaxMinutes` siguen en el contrato, en la base y en
+las validaciones del servidor. Lo que cambia es **quién los decide**.
+
+## Tres números que podían contradecirse
+
+La pantalla de política dejaba configurar por separado la lista de duraciones, el mínimo y el máximo.
+Los tres podían discrepar, y el servidor **acepta** la discrepancia: una municipalidad que vende 15
+minutos con un mínimo de 30 le muestra al ciudadano una opción que después `requireSessionIncrement`
+rechaza con `INVALID_INCREMENT`. Nadie se entera hasta que alguien en la calle no puede parquear.
+
+v0.18 le puso un aviso a esa contradicción. Estaba bien detectarla, pero era una advertencia sobre un
+problema que la propia pantalla invitaba a crear.
+
+Ahora **el piso y el techo se derivan de la lista** —el primero y el último de lo que se vende—. La
+contradicción deja de ser representable, así que el aviso no se silencia: desaparece porque ya no hay
+nada que avisar. Los dos campos se van de la pantalla; la app los sigue mandando calculados, porque el
+servidor los sigue guardando y el techo con extensiones se sigue midiendo contra el máximo.
+
+## Abrir la pantalla no cambia lo que se vende
+
+Una municipalidad configurada antes de esto puede tener la contradicción guardada. Derivar el piso de
+la lista sin más haría que esa opción muerta **empezara a funcionar** apenas alguien abriera la
+pantalla y guardara: la municipalidad se pondría a vender estadías de cuarto de hora sin que nadie lo
+decidiera.
+
+Por eso, al cargar, la lista se recorta **una sola vez** a lo que el mínimo y el máximo guardados
+permitían de verdad. Lo que aparece en pantalla es lo que hoy está efectivamente a la venta. Recuperar
+los 15 minutos es un clic, y entonces es un acto que alguien tomó.
+
+Es la misma regla que gobierna toda pantalla de configuración: **abrirla y guardarla sin tocar nada no
+puede cambiar el comportamiento del sistema.**
+
+## Lo que sigue validándose
+
+Una lista vacía se rechaza en el cliente con una frase —«sin ninguna duración el ciudadano no podría
+parquear»— y en el servidor con `error.parking.policy.sessionIncrements.required`.
+
+El techo con extensiones tiene que superar la duración más larga que se vende, y el mensaje ahora la
+nombra en vez de referirse a un campo que ya no está en pantalla.
