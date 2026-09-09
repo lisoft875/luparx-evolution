@@ -4,9 +4,9 @@ import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 /**
- * The operational core of the municipal portal (CONTRACT.md v0.16): zones, their bays and their
- * price. Driven against the mock transport, which mirrors the server's refusals so the screens'
- * copy is exercised rather than assumed.
+ * Zones and their bays (CONTRACT.md v0.16). Driven against the mock transport, which mirrors the
+ * server's refusals so the screens' copy is exercised rather than assumed. Tariffs moved to their
+ * own script when that screen was rebuilt around the list of zones (v0.21): see shot-tariffs.mjs.
  */
 const here = path.dirname(fileURLToPath(import.meta.url));
 const indexUrl = 'file://' + path.join(here, 'dist-preview', 'index.html');
@@ -73,23 +73,6 @@ if (await outOfService.count()) {
   await page.screenshot({ path: `${outDir}/04-space-out-of-service.png`, fullPage: true });
 }
 
-// ---- Tarifas ----
-await page.getByRole('link', { name: 'Tarifas' }).first().click();
-await page.waitForTimeout(900);
-await page.screenshot({ path: `${outDir}/05-tariffs.png`, fullPage: true });
-const tariffRows = await page.locator('tbody tr').allInnerTexts();
-
-// Poner una tarifa nueva: la vigente se cierra y la anterior queda como historia.
-await page.locator('[role="combobox"]').first().click();
-await page.waitForTimeout(400);
-await page.locator('[role="option"]').first().click();
-await page.waitForTimeout(300);
-await page.locator('input[type="number"]').first().fill('700');
-await page.click('button:has-text("Poner tarifa")');
-await page.waitForTimeout(1000);
-await page.screenshot({ path: `${outDir}/06-tariff-set.png`, fullPage: true });
-const tariffsAfter = await page.locator('tbody tr').allInnerTexts();
-
 console.log('\n== operación municipal ==');
 console.log('zonas — primera fila:', zoneRow.replace(/\n/g, ' | '));
 console.log('código repetido rechazado con una frase:', /Ya hay otra zona con ese código/.test(duplicateMessage));
@@ -97,9 +80,6 @@ console.log('zona creada aparece en la lista:', /SJ-SUR/.test(afterCreate));
 console.log('espacios pide escoger zona primero:', /Escoja una zona/.test(beforeZonePick));
 console.log('espacios:', spaceRows.map((s) => s.replace(/\n/g, ' | ')));
 console.log('sacada de servicio:', toggled);
-console.log('tarifas antes:', tariffRows.map((s) => s.replace(/\n/g, ' | ')));
-console.log('tarifas después:', tariffsAfter.map((s) => s.replace(/\n/g, ' | ')));
-console.log('la ventana anterior quedó cerrada:', tariffsAfter.filter((r) => /Cerrada/.test(r)).length);
 if (errors.length) console.log('ERRORS:', errors);
 
 await page.close();

@@ -1684,3 +1684,56 @@ base de datos — y, como requisito antes de exponer el portal de plataforma a i
 **restricción por IP**.
 
 Si el segundo factor vuelve, debería volver como **passkeys/WebAuthn**, no como el TOTP que se retiró.
+
+# v0.21 — Tarifas: la pantalla es la lista de zonas (normativo)
+
+Sin cambios de API. La pantalla estaba mal armada y escondía un error de configuración que deja a la
+gente sin poder parquear.
+
+## Una zona sin tarifa es una zona en la que nadie puede parquear
+
+`ParkingSessionService.start` llama a `requireRate`, que responde `PARKING_RATE_NOT_FOUND` cuando la
+zona no tiene ventana abierta. No es un hueco cosmético: el ciudadano parado en ese sector **no puede
+iniciar la estadía**, y la municipalidad no se entera hasta que alguien reclama.
+
+La pantalla anterior no podía responder «¿qué zonas no tienen precio?» de ninguna manera: listaba
+ventanas de tarifa, no zonas, y las zonas sin ninguna simplemente no aparecían. Ahora **las zonas son
+la tabla**, cada una con su precio vigente al lado, y las que no tienen precio se nombran arriba en un
+aviso. Es el mismo tipo de arreglo que la vista previa de la política de parqueo: el servidor acepta
+la configuración, y lo que faltaba era que alguien la viera.
+
+## Poner tarifa es una acción sobre una zona
+
+El formulario suelto pedía escoger la zona otra vez en un desplegable que no sabía cuáles la
+necesitaban. Ahora el botón vive en la fila de la zona y el diálogo dice **cuál** es y **qué
+reemplaza** («Hoy esta zona cobra ₡550 por 60 min. Eso deja de regir en cuanto guarde»). El bloque de
+minutos viene precargado con el que esa zona ya vende, porque subir el precio no es cambiar el bloque.
+
+## El listado dejó de estar filtrado por el formulario
+
+`zoneId` era una sola variable para dos cosas: la zona a tarifar y el filtro de la tabla. Escoger una
+zona para ponerle precio cambiaba el historial por debajo, y no había forma de ver el conjunto —que es
+justamente para lo que sirve esta pantalla—. Ahora se leen **todas** las tarifas de una vez y de ahí
+salen las tres respuestas: el precio vigente por zona, cuáles no tienen, y el historial.
+
+## La moneda ya no cae en un valor quemado
+
+Era `ratesQuery.data?.[0]?.currencyCode ?? 'CRC'`. Una municipalidad sin ninguna tarifa —que es
+exactamente el estado en el que se abre esta pantalla la primera vez— veía «Monto (CRC)» sin que nadie
+lo hubiera dicho. Ahora, sin tarifas, el campo dice sólo «Monto»: el servidor pone la moneda desde la
+municipalidad e ignora lo que mande el cliente, así que la pantalla no tiene por qué adivinarla. Un
+valor por defecto quemado es como una plataforma pensada para varios países termina cotizando colones
+en Panamá.
+
+## El historial dice desde y hasta
+
+Dos fechas apiladas en una celda «Vigencia» dejaban al lector adivinando cuál era cuál. Son dos
+columnas rotuladas.
+
+## El fixture ahora llega al estado malo
+
+El transporte simulado tenía **una** zona por municipalidad, y todas con tarifa. Un fixture que nunca
+alcanza el estado defectuoso no puede mostrarlo. San José pasa a tener tres sectores con los nombres
+del sembrador real (`DevMunicipalities.SAN_JOSE`): Centro a ₡550/60 min, Barrio Escalante a ₡400/**30**
+min —para que se vea que dos precios no se comparan sólo por el monto— y La Sabana **sin tarifa**, a
+propósito.

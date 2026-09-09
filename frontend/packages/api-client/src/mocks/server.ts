@@ -75,6 +75,12 @@ interface MockAdminZone {
 const mockExtraZones: MockAdminZone[] = [];
 const mockSeededZones: MockAdminZone[] = [
   { id: 'zone-centro', tenantId: 'tenant-sanjose', code: 'SJ-CENTRO', name: 'Centro', description: null, divisionId: null, active: true },
+  // Two more sectors of San José, named as the real development seeder names them
+  // (`DevMunicipalities.SAN_JOSE`). One of them is deliberately left WITHOUT a rate: a municipality
+  // whose every zone is priced cannot show what an unpriced zone looks like, and an unpriced zone is
+  // one a citizen simply cannot park in. A fixture that never reaches that state hides the bug.
+  { id: 'zone-escalante', tenantId: 'tenant-sanjose', code: 'SJ-ESCALANTE', name: 'Barrio Escalante', description: 'Calle 33, zona de restaurantes con alta rotación nocturna.', divisionId: null, active: true },
+  { id: 'zone-sabana', tenantId: 'tenant-sanjose', code: 'SJ-SABANA', name: 'La Sabana', description: 'Costados del Parque Metropolitano y el Estadio Nacional.', divisionId: null, active: true },
   { id: 'zone-escazu-centro', tenantId: 'tenant-escazu', code: 'ESC-CENTRO', name: 'Centro', description: null, divisionId: null, active: true },
 ];
 function mockAdminZones(tenantId: string | null): MockAdminZone[] {
@@ -105,6 +111,10 @@ const mockAdminSpaces: { id: string; zoneId: string; code: string; status: 'AVAI
 const mockAdminRates: { id: string; zoneId: string; amountMinor: number; currencyCode: string; minutes: number; validFrom: string; validTo: string | null }[] = [
   { id: 'rate-1', zoneId: 'zone-centro', amountMinor: 55000, currencyCode: 'CRC', minutes: 60, validFrom: new Date(Date.now() - 90 * 864e5).toISOString(), validTo: null },
   { id: 'rate-0', zoneId: 'zone-centro', amountMinor: 40000, currencyCode: 'CRC', minutes: 60, validFrom: new Date(Date.now() - 400 * 864e5).toISOString(), validTo: new Date(Date.now() - 90 * 864e5).toISOString() },
+  // Escalante is priced by the half hour, so the screen shows two zones that are NOT comparable by
+  // amount alone — which is the whole reason the block travels with the price.
+  { id: 'rate-2', zoneId: 'zone-escalante', amountMinor: 40000, currencyCode: 'CRC', minutes: 30, validFrom: new Date(Date.now() - 30 * 864e5).toISOString(), validTo: null },
+  // `zone-sabana` has none, on purpose: see the note on mockSeededZones.
 ];
 
 function json(data: unknown, status = 200): Response {
