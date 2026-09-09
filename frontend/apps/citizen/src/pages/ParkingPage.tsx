@@ -33,8 +33,18 @@ import {
   useParkingZones,
   useStartParkingSession,
   useVehicleColorCatalog,
+  useVehicleTypeCatalog,
   useVehicles,
 } from '../lib/queries';
+
+/**
+ * The value of the "someone else's car" entry in the vehicle dropdown.
+ *
+ * <p>A sentinel and not `null`, because "nothing chosen yet" and "chosen: a car that is not mine"
+ * are different states and the submit button has to tell them apart. It cannot collide with a
+ * vehicle id: those are UUIDs.</p>
+ */
+const GUEST_VEHICLE = '__guest__';
 
 export function ParkingPage(): React.JSX.Element {
   const { t, tPlural, locale } = useTranslation();
@@ -84,6 +94,7 @@ export function ParkingPage(): React.JSX.Element {
   const vehicles = vehiclesQuery.data;
   const colorCatalogQuery = useVehicleColorCatalog();
   const colorOf = catalogLabeller(colorCatalogQuery.data, tKey);
+  const typeCatalogQuery = useVehicleTypeCatalog();
   const [vehicleId, setVehicleId] = useState<string | null>(null);
   useEffect(() => {
     if (!vehicleId && vehicles && vehicles.length > 0) {
@@ -91,6 +102,22 @@ export function ParkingPage(): React.JSX.Element {
     }
   }, [vehicleId, vehicles]);
   const vehicle = vehicles?.find((v) => v.id === vehicleId);
+
+  // Parking somebody else's car (CONTRACT.md v0.11): the plate is typed here and stored on the
+  // stay, not in the citizen's garage. It lives beside `vehicleId` in the same dropdown rather
+  // than behind a separate button because it answers the same question — which car is this for —
+  // and a citizen doing a friend a favour should not have to find a different control for it.
+  const [guestPlate, setGuestPlate] = useState('');
+  const [guestType, setGuestType] = useState('');
+  const isGuest = vehicleId === GUEST_VEHICLE;
+  const guestPlateNormalized = guestPlate.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+  useEffect(() => {
+    // Defaulted from the server's catalogue, never from a literal here: the day the platform adds a
+    // type, this picks up the first one it publishes instead of a value written into this file.
+    if (!guestType && typeCatalogQuery.data?.length) setGuestType(typeCatalogQuery.data[0]!.value);
+  }, [guestType, typeCatalogQuery.data]);
+  const plateForSummary = isGuest ? guestPlateNormalized : (vehicle?.plate ?? '');
+  const vehicleChosen = isGuest ? guestPlateNormalized.length > 0 : Boolean(vehicleId);
 
   const policyQuery = useParkingPolicy();
   const policy = policyQuery.data;
@@ -147,10 +174,16 @@ export function ParkingPage(): React.JSX.Element {
       : null;
 
   async function handleSubmit(): Promise<void> {
-    if (!vehicleId || !minutes || !zoneId || !spaceCode.trim() || spaceProblem) return;
+    if (!vehicleChosen || !minutes || !zoneId || !spaceCode.trim() || spaceProblem) return;
     setError(null);
     try {
-      await startSession.mutateAsync({ zoneId, spaceCode: spaceCode.trim().toUpperCase(), vehicleId, minutes });
+      const where = { zoneId, spaceCode: spaceCode.trim().toUpperCase(), minutes };
+      // One of the two, never both: the request type says so and the server refuses the pair.
+      await startSession.mutateAsync(
+        isGuest
+          ? { ...where, plate: guestPlateNormalized, vehicleType: guestType }
+          : { ...where, vehicleId: vehicleId! },
+      );
       navigate('/');
     } catch (err) {
       setError(parkingErrorMessage(err, t));
@@ -243,16 +276,11 @@ export function ParkingPage(): React.JSX.Element {
         // in fact cycled silently through the list on tap.
         content: (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--lx-space-2)' }}>
-            <QueryBoundary
-              query={vehiclesQuery}
-              errorTitle={t('citizen.parking.step2.title')}
-              isEmpty={(list) => list.length === 0}
-              empty={
-                <p className="lx-text-meta" style={{ margin: 0 }}>
-                  {t('citizen.parking.step2.empty')}
-                </p>
-              }
-            >
+            {/* No `isEmpty` here any more: a citizen with no vehicles of their own can still park
+                somebody else's car, and replacing the whole control with "you have no vehicles"
+                would take that away from exactly the person most likely to be doing a favour. An
+                empty list simply means the dropdown offers the one entry that does not need one. */}
+            <QueryBoundary query={vehiclesQuery} errorTitle={t('citizen.parking.step2.title')}>
               {(list) => (
                 <Select
                   icon={<IconCar size={18} />}
@@ -262,20 +290,69 @@ export function ParkingPage(): React.JSX.Element {
                   placeholder={t('common.select.placeholder')}
                   // Plate first, description underneath — the reference product's two-line row.
                   // The plate is what the inspector reads off the windscreen, so it leads.
-                  options={list.map((v) => ({
-                    value: v.id,
-                    label: v.plate,
-                    detail: vehicleOptionDetail(v, list, colorOf),
-                    icon: <IconCar size={16} />,
-                  }))}
+                  options={[
+                    ...list.map((v) => ({
+                      value: v.id,
+                      label: v.plate,
+                      detail: vehicleOptionDetail(v, list, colorOf),
+                      icon: <IconCar size={16} />,
+                    })),
+                    // Last, because it is the exception: the everyday case is one of your own cars.
+                    {
+                      value: GUEST_VEHICLE,
+                      label: t('citizen.parking.step2.guestOption'),
+                      detail: t('citizen.parking.step2.guestOptionDetail'),
+                      icon: <IconCar size={16} />,
+                    },
+                  ]}
                 />
               )}
             </QueryBoundary>
-            {/* Reachable whether or not the list is empty: the citizen who has one car and just
-                bought another should not have to leave through the menu to say so. */}
-            <Button type="button" variant="ghost" onClick={() => navigate('/vehicles')}>
-              <IconPlus size={16} /> {t('citizen.parking.step2.addVehicleCta')}
-            </Button>
+
+            {isGuest ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--lx-space-3)' }}>
+                <FormField label={t('citizen.parking.step2.guestPlateLabel')} hint={t('citizen.parking.step2.guestPlateHint')}>
+                  {({ inputId, describedBy }) => (
+                    <Input
+                      id={inputId}
+                      aria-describedby={describedBy}
+                      value={guestPlate}
+                      onChange={(e) => setGuestPlate(e.target.value)}
+                      // Same normalisation the server applies, shown as the person types, so the
+                      // plate on the summary is the plate the inspector will look for.
+                      onBlur={() => setGuestPlate(guestPlateNormalized)}
+                      autoCapitalize="characters"
+                      autoCorrect="off"
+                      spellCheck={false}
+                      maxLength={16}
+                      placeholder={t('citizen.parking.step2.guestPlatePlaceholder')}
+                    />
+                  )}
+                </FormField>
+                <QueryBoundary query={typeCatalogQuery} errorTitle={t('citizen.parking.step2.guestTypeLabel')}>
+                  {(types) => (
+                    <FormField label={t('citizen.parking.step2.guestTypeLabel')}>
+                      {({ inputId }) => (
+                        <Select
+                          id={inputId}
+                          value={guestType}
+                          onChange={setGuestType}
+                          options={types.map((entry) => ({ value: entry.value, label: tKey(entry.labelKey) }))}
+                        />
+                      )}
+                    </FormField>
+                  )}
+                </QueryBoundary>
+              </div>
+            ) : (
+              /* Reachable whether or not the list is empty: the citizen who has one car and just
+                 bought another should not have to leave through the menu to say so. Hidden while a
+                 borrowed plate is being typed, because adding a vehicle is the opposite of what
+                 that choice means. */
+              <Button type="button" variant="ghost" onClick={() => navigate('/vehicles')}>
+                <IconPlus size={16} /> {t('citizen.parking.step2.addVehicleCta')}
+              </Button>
+            )}
           </div>
         ),
       },
@@ -347,11 +424,15 @@ export function ParkingPage(): React.JSX.Element {
             <ListRow
               title={t('citizen.parking.step4.vehicleLabel')}
               meta={
-                vehicle
-                  ? vehicleDescriptor(vehicle, { includeName: true, colorLabel: colorOf(vehicle.color) }) || undefined
-                  : undefined
+                isGuest
+                  ? // A borrowed car has no record to describe, so the line says what it is instead
+                    // of leaving the plate to stand alone as if it were one of the citizen's own.
+                    t('citizen.parking.step2.guestOption')
+                  : vehicle
+                    ? vehicleDescriptor(vehicle, { includeName: true, colorLabel: colorOf(vehicle.color) }) || undefined
+                    : undefined
               }
-              value={vehicle?.plate ?? '—'}
+              value={plateForSummary || '—'}
             />
             <ListRow title={t('citizen.parking.step4.durationLabel')} value={durationLabel || '—'} />
             {quote ? (
@@ -402,6 +483,12 @@ export function ParkingPage(): React.JSX.Element {
       vehiclesQuery,
       vehicle,
       vehicleId,
+      isGuest,
+      guestPlate,
+      guestPlateNormalized,
+      guestType,
+      plateForSummary,
+      typeCatalogQuery,
       colorCatalogQuery.data,
       policyQuery,
       policy,
@@ -424,7 +511,7 @@ export function ParkingPage(): React.JSX.Element {
         variant="primary"
         fullWidth
         loading={startSession.isPending}
-        disabled={!vehicleId || !minutes || !quote || !zoneId || spaceCode.trim().length === 0 || Boolean(spaceProblem)}
+        disabled={!vehicleChosen || !minutes || !quote || !zoneId || spaceCode.trim().length === 0 || Boolean(spaceProblem)}
         onClick={handleSubmit}
       >
         {t('citizen.parking.submit')}

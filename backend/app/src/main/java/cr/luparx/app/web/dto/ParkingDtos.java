@@ -4,7 +4,9 @@ import cr.luparx.core.page.PageResponse;
 import cr.luparx.parking.model.ParkingSessionStatus;
 import cr.luparx.parking.model.ParkingSpaceStatus;
 import cr.luparx.parking.model.TimeCreditSource;
+import cr.luparx.parking.model.VehicleType;
 import cr.luparx.parking.model.WalletTransactionType;
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -198,12 +200,28 @@ public final class ParkingDtos {
 
     // --- sessions --------------------------------------------------------------------------------
 
-    /** {@code POST /citizen/parking/sessions}. Requires an {@code Idempotency-Key} header. */
+    /**
+     * {@code POST /citizen/parking/sessions}. Requires an {@code Idempotency-Key} header.
+     *
+     * <p>Exactly one of {@code vehicleId} and {@code plate} is sent. The first is a vehicle the
+     * citizen registered; the second is somebody else's car, typed on the spot and saved nowhere
+     * but on the stay (CONTRACT.md v0.11) — {@code vehicleType} accompanies it, because for a
+     * borrowed car this request is the only place that fact exists. Sending both, or neither, is
+     * refused as a validation error rather than resolved by precedence: a client that means one
+     * thing and sends two is a client with a bug, and picking a winner would hide it.</p>
+     */
     public record StartSessionRequest(
             @NotNull UUID zoneId,
             @NotBlank @Size(max = 16) String spaceCode,
-            @NotNull UUID vehicleId,
+            UUID vehicleId,
+            @Size(max = 16) String plate,
+            VehicleType vehicleType,
             @NotNull @Min(1) Integer minutes) {
+
+        @AssertTrue(message = "exactly one of vehicleId and plate must be given")
+        public boolean isExactlyOneVehicleGiven() {
+            return (vehicleId != null) ^ (plate != null && !plate.isBlank());
+        }
     }
 
     /** {@code POST /citizen/parking/sessions/{id}/extend}. Requires an {@code Idempotency-Key}. */
@@ -240,11 +258,16 @@ public final class ParkingDtos {
     /**
      * A stay. {@code plateSnapshot} is the plate as it was when the session started — what the
      * inspector verifies against — and not necessarily what the vehicle carries today.
+     *
+     * <p>{@code vehicleId} is null for a stay opened with a typed plate: the citizen parked
+     * somebody else's car and there is no vehicle of theirs behind it. {@code plateSnapshot} and
+     * {@code vehicleType} are always present, so nothing on screen has to branch on that.</p>
      */
     public record ParkingSessionResponse(
             UUID id,
             UUID vehicleId,
             String plateSnapshot,
+            VehicleType vehicleType,
             UUID zoneId,
             String zoneName,
             UUID spaceId,

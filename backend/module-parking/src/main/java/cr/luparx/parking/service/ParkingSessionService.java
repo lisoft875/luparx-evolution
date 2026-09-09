@@ -4,6 +4,7 @@ import cr.luparx.core.error.ConflictException;
 import cr.luparx.core.error.ErrorCode;
 import cr.luparx.core.error.NotFoundException;
 import cr.luparx.core.error.UnprocessableEntityException;
+import cr.luparx.core.error.ValidationException;
 import cr.luparx.core.id.TenantId;
 import cr.luparx.core.id.UserId;
 import cr.luparx.core.id.Uuid7;
@@ -19,7 +20,10 @@ import cr.luparx.core.money.Money;
 import cr.luparx.parking.model.ExtensionOption;
 import cr.luparx.parking.model.ParkingQuote;
 import cr.luparx.parking.model.ParkingSessionStatus;
+import cr.luparx.parking.model.PlateNormalizer;
+import cr.luparx.parking.model.SessionVehicleRef;
 import cr.luparx.parking.model.TimeCreditSource;
+import cr.luparx.parking.model.VehicleType;
 import cr.luparx.parking.model.WalletTransactionType;
 import cr.luparx.parking.repository.ParkingSessionExtensionRepository;
 import cr.luparx.parking.repository.ParkingSessionRepository;
@@ -189,16 +193,31 @@ public class ParkingSessionService {
      * Starts a session: credit first, money for the rest, both with the session in one transaction.
      *
      * @param spaceCode the code painted on the bay, as the citizen typed it
+     * @param vehicle which car this is for — one of theirs, or a plate typed for somebody else's
+     *                (CONTRACT.md v0.11)
      * @param idempotencyKey the {@code Idempotency-Key} of the request, recorded for the audit trail;
      *                       replay protection itself belongs to the filter (ADR 0012)
      */
     @Transactional
-    public ParkingSession start(TenantId tenantId, UserId userId, UUID zoneId, String spaceCode, UUID vehicleId,
-                                int minutes, String idempotencyKey) {
+    public ParkingSession start(TenantId tenantId, UserId userId, UUID zoneId, String spaceCode,
+                                SessionVehicleRef vehicleRef, int minutes, String idempotencyKey) {
         ParkingPolicy policy = policyService.require(tenantId);
         policyService.requireSessionIncrement(policy, minutes);
 
-        Vehicle vehicle = vehicleService.requireOwn(userId, vehicleId);
+        // Resolved to the two facts a stay actually records — the plate as it will be verified, and
+        // what kind of vehicle it is. For a registered car they come from the record (so a citizen
+        // cannot park a plate they never registered); for a borrowed one, from what they typed.
+        UUID vehicleId = vehicleRef.vehicleId();
+        String plate;
+        VehicleType vehicleType;
+        if (vehicleRef.isGuest()) {
+            plate = requireValidPlate(vehicleRef.plate());
+            vehicleType = vehicleRef.vehicleType();
+        } else {
+            Vehicle vehicle = vehicleService.requireOwn(userId, vehicleId);
+            plate = vehicle.getPlateNormalized();
+            vehicleType = vehicle.getType();
+        }
         quoteService.requireActiveZone(tenantId, zoneId);
         // The code is checked against the municipality's own format BEFORE it is looked up, so a
         // shape that municipality never paints is refused as such instead of as "no such bay"
@@ -209,12 +228,15 @@ public class ParkingSessionService {
         // Free whatever the clock already ended, then refuse what is genuinely taken.
         releaseIfExpired(sessionRepository.findBySpaceIdAndStatus(space.getId(), ParkingSessionStatus.ACTIVE),
                 policy);
-        releaseIfExpired(sessionRepository.findByVehicleIdAndStatus(vehicleId, ParkingSessionStatus.ACTIVE),
-                policy);
-        if (sessionRepository.existsByVehicleIdAndStatus(vehicleId, ParkingSessionStatus.ACTIVE)) {
-            throw ConflictException.of(ErrorCode.SESSION_ALREADY_ACTIVE_FOR_VEHICLE,
-                    "error.parking.session.vehicleBusy");
+        if (vehicleId != null) {
+            releaseIfExpired(sessionRepository.findByVehicleIdAndStatus(vehicleId, ParkingSessionStatus.ACTIVE),
+                    policy);
+            if (sessionRepository.existsByVehicleIdAndStatus(vehicleId, ParkingSessionStatus.ACTIVE)) {
+                throw ConflictException.of(ErrorCode.SESSION_ALREADY_ACTIVE_FOR_VEHICLE,
+                        "error.parking.session.vehicleBusy");
+            }
         }
+        requirePlateFree(tenantId, policy, plate, vehicleRef.isGuest());
         if (sessionRepository.findBySpaceIdAndStatus(space.getId(), ParkingSessionStatus.ACTIVE).isPresent()) {
             throw ConflictException.of(ErrorCode.SPACE_OCCUPIED, "error.parking.space.occupied");
         }
@@ -226,7 +248,7 @@ public class ParkingSessionService {
         ParkingQuote quote = quoteService.price(rate, minutes, chargeable, available);
 
         ParkingSession session = new ParkingSession(Uuid7.generate(), tenantId.value(), userId.value(),
-                vehicle.getId(), vehicle.getPlateNormalized(), zoneId, space.getId(), now,
+                vehicleId, plate, vehicleType, zoneId, space.getId(), now,
                 now.plusSeconds((long) minutes * 60L), quote.payable(), quote.creditMinutesApplied());
         // Flushed here so the partial unique indexes decide the race between two replicas now, while
         // the transaction can still be rolled back cleanly, rather than at commit.
@@ -242,6 +264,54 @@ public class ParkingSessionService {
                     session.getId(), idempotencyKey);
         }
         return session;
+    }
+
+    /**
+     * The typed plate, normalised the same way a registered one is.
+     *
+     * <p>Deliberately the same rule and the same message as registering a vehicle: no country's
+     * plate shape is validated (see {@link PlateNormalizer}), only that something usable is left
+     * after normalising and that it fits. A plate typed to park a friend's car and a plate typed to
+     * register your own are the same kind of input, and two different verdicts on the same text
+     * would be a bug the citizen experiences as the app contradicting itself.</p>
+     */
+    private static String requireValidPlate(String typed) {
+        String normalized = PlateNormalizer.normalize(typed);
+        if (typed == null || !PlateNormalizer.isValid(normalized)
+                || typed.trim().length() > PlateNormalizer.MAX_LENGTH) {
+            throw new ValidationException("plate", ErrorCode.VALIDATION_FAILED,
+                    "error.parking.vehicle.plate.invalid");
+        }
+        return normalized;
+    }
+
+    /**
+     * Refuses a second running stay on the same plate in the same municipality — but only where the
+     * platform can tell it is the same physical car.
+     *
+     * <p>A plate typed into the app is the car standing in front of the person typing it, so a
+     * typed plate may not overlap with anything already running on that plate, and nothing already
+     * running on a typed plate may be overlapped either. Between two <em>registered</em> vehicles
+     * the rule stays as it was: plates are unique per citizen and not globally (CONTRACT.md v0.2,
+     * rule 2), two people may legitimately have the same plate on file, and narrowing that here
+     * would refuse stays that have always been allowed.</p>
+     *
+     * <p>Expired-but-not-yet-closed stays are released first, exactly as the bay is: a car whose
+     * time ran out an hour ago must not block the next payment for it.</p>
+     */
+    private void requirePlateFree(TenantId tenantId, ParkingPolicy policy, String plate, boolean startingGuest) {
+        List<ParkingSession> onPlate = sessionRepository
+                .findByTenantIdAndPlateSnapshotAndStatusOrderByExpiresAtAsc(tenantId.value(), plate,
+                        ParkingSessionStatus.ACTIVE);
+        for (ParkingSession running : onPlate) {
+            if (expireIfDue(running, policy)) {
+                continue;
+            }
+            if (startingGuest || running.isGuestVehicle()) {
+                throw ConflictException.of(ErrorCode.SESSION_ALREADY_ACTIVE_FOR_PLATE,
+                        "error.parking.session.plateBusy");
+            }
+        }
     }
 
     // --- extend ----------------------------------------------------------------------------------

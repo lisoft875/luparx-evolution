@@ -82,6 +82,9 @@ Sin sombras duras; la jerarquía la da el color de superficie.
 - **Barra inferior de 5 destinos**: Inicio · Estacionar · Vehículos · Billetera · Más.
   Icono + etiqueta siempre visibles; activo en `--lx-primary`; área táctil ≥ 44×44 px;
   respetar `env(safe-area-inset-bottom)`.
+- **Barra de sesión activa (cronómetro)**: pegada al **borde superior** mientras haya al menos un
+  estacionamiento corriendo, `sticky` junto con la barra de app. En pantallas sin barra de app va
+  **debajo del título de la pantalla**: el título dice dónde estás, la barra dice qué está corriendo.
 - **Tarjeta de sesión activa**: superficie `--lx-success-soft` con borde verde, placa, zona y espacio,
   temporizador grande, hora de vencimiento y acción "Extender tiempo". Cambia a `--lx-warning`
   cuando falten ≤ 10 min (umbral configurable por municipalidad).

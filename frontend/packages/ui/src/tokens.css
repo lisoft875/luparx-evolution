@@ -1308,6 +1308,16 @@ button.lx-list-row {
   display: none;
 }
 
+/* The screen title on a `bare` screen. Same box as `main` — the running-stay bar is full-bleed and
+   has to sit between the two, which is the only reason this is not simply `main`'s first child.
+   It scrolls; the bar under it is what stays. */
+.lx-screen-heading {
+  width: 100%;
+  max-width: 560px;
+  margin: 0 auto;
+  padding: max(var(--lx-space-4), env(safe-area-inset-top)) var(--lx-space-4) var(--lx-space-4);
+}
+
 .lx-sticky-timer-bar {
   display: flex;
   align-items: center;

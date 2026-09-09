@@ -21,6 +21,7 @@ import cr.luparx.parking.model.ExtensionOption;
 import cr.luparx.parking.model.ParkingQuote;
 import cr.luparx.parking.model.ParkingSessionStatus;
 import cr.luparx.parking.model.ParkingSpaceRange;
+import cr.luparx.parking.model.SessionVehicleRef;
 import cr.luparx.parking.service.ParkingCatalogService;
 import cr.luparx.parking.service.ParkingPolicyService;
 import cr.luparx.parking.service.ParkingQuoteService;
@@ -279,8 +280,13 @@ public class CitizenParkingController {
             @Valid @RequestBody ParkingDtos.StartSessionRequest request) {
         TenantId tenantId = TenantContextHolder.requireTenantId();
         UserId userId = TenantContextHolder.requireUserId();
+        // Which of the two the request means was already settled by validation (exactly one of the
+        // pair is present), so this only names it.
+        SessionVehicleRef vehicleRef = request.vehicleId() != null
+                ? SessionVehicleRef.registered(request.vehicleId())
+                : SessionVehicleRef.guest(request.plate(), request.vehicleType());
         ParkingSession session = sessionService.start(tenantId, userId, request.zoneId(), request.spaceCode(),
-                request.vehicleId(), request.minutes().intValue(), idempotencyKey);
+                vehicleRef, request.minutes().intValue(), idempotencyKey);
         audit(AuditAction.PARKING_SESSION_STARTED, session,
                 Map.of("minutes", String.valueOf(request.minutes()),
                         "amountMinor", String.valueOf(session.getAmountMinor()),
@@ -359,7 +365,12 @@ public class CitizenParkingController {
      */
     private void audit(String action, ParkingSession session, Map<String, Object> extra) {
         Map<String, Object> metadata = new HashMap<>(extra);
-        metadata.put("vehicleId", session.getVehicleId().toString());
+        // Absent, not null, for a stay on a typed plate: there is no vehicle of ours behind it, and
+        // the plate below is what identifies the car in that case (CONTRACT.md v0.11).
+        if (session.getVehicleId() != null) {
+            metadata.put("vehicleId", session.getVehicleId().toString());
+        }
+        metadata.put("vehicleType", session.getVehicleType().name());
         metadata.put("spaceId", session.getSpaceId().toString());
         metadata.put("zoneId", session.getZoneId().toString());
         metadata.put("plate", session.getPlateSnapshot());

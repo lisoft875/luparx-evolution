@@ -9,6 +9,7 @@ type Translate = (key: TranslationKey, params?: TranslationParams) => string;
 // a broken app. Anything not listed is genuinely unexpected and gets the generic message.
 const PARKING_ERROR_KEYS: Record<string, TranslationKey> = {
   SESSION_ALREADY_ACTIVE_FOR_VEHICLE: 'citizen.parking.error.SESSION_ALREADY_ACTIVE_FOR_VEHICLE',
+  SESSION_ALREADY_ACTIVE_FOR_PLATE: 'citizen.parking.error.SESSION_ALREADY_ACTIVE_FOR_PLATE',
   SPACE_OCCUPIED: 'citizen.parking.error.SPACE_OCCUPIED',
   INVALID_INCREMENT: 'citizen.parking.error.INVALID_INCREMENT',
   INSUFFICIENT_BALANCE: 'citizen.parking.error.INSUFFICIENT_BALANCE',

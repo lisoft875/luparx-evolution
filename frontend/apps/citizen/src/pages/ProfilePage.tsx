@@ -30,8 +30,7 @@ export function ProfilePage(): React.JSX.Element {
   // could not be restored — and the second case needs a way out rather than a spinner forever.
   if (!profile) {
     return (
-      <CitizenShell bare>
-        <h1 className="lx-text-screen-title">{t('citizen.profile.title')}</h1>
+      <CitizenShell bare heading={<h1 className="lx-text-screen-title">{t('citizen.profile.title')}</h1>}>
         {status === 'loading' ? (
           <p className="lx-text-meta">{t('common.loading')}</p>
         ) : (
@@ -51,9 +50,7 @@ export function ProfilePage(): React.JSX.Element {
   }
 
   return (
-    <CitizenShell bare>
-      <h1 className="lx-text-screen-title">{t('citizen.profile.title')}</h1>
-
+    <CitizenShell bare heading={<h1 className="lx-text-screen-title">{t('citizen.profile.title')}</h1>}>
       <CardStack>
         {/* Name, identity document, phone, nationality, birth date and address are one record and
             are edited as one form — the same fields, in the same order, as registration. */}

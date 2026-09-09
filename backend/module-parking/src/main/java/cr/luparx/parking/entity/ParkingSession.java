@@ -4,6 +4,7 @@ import cr.luparx.core.id.TenantId;
 import cr.luparx.core.id.UserId;
 import cr.luparx.core.money.Money;
 import cr.luparx.parking.model.ParkingSessionStatus;
+import cr.luparx.parking.model.VehicleType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -19,9 +20,15 @@ import java.util.UUID;
 /**
  * A paid stay of one vehicle on one bay ({@code parking_sessions}, V11_0).
  *
- * <p>The two invariants of the domain are enforced by partial unique indexes over
- * {@code status = 'ACTIVE'}, not by this class: one running session per bay, one per vehicle. That
- * is what makes them hold with several backend instances running.</p>
+ * <p>The invariants of the domain are enforced by partial unique indexes over
+ * {@code status = 'ACTIVE'}, not by this class: one running session per bay, one per registered
+ * vehicle, and — since V21_0 — one per typed plate within a municipality. That is what makes them
+ * hold with several backend instances running.</p>
+ *
+ * <p>Since v0.11 the stay does not need a vehicle of the citizen's at all: {@link #getVehicleId()}
+ * is null when they typed a plate to park somebody else's car, which is why
+ * {@link #getPlateSnapshot()} and {@link #getVehicleType()} are copies on the row rather than a
+ * join. For a borrowed car this row is the only place those two facts exist.</p>
  *
  * <p>{@link #getPlateSnapshot()} is a copy of the plate as it was when the session started. It is
  * deliberately not a join: the inspector verifies against what was painted on the car at that
@@ -41,11 +48,16 @@ public class ParkingSession {
     @Column(name = "user_id", nullable = false)
     private UUID userId;
 
-    @Column(name = "vehicle_id", nullable = false)
+    /** Null when the stay was opened with a plate typed on the spot — someone else's car (V21_0). */
+    @Column(name = "vehicle_id")
     private UUID vehicleId;
 
     @Column(name = "plate_snapshot", nullable = false, length = 16)
     private String plateSnapshot;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "vehicle_type", nullable = false, length = 32)
+    private VehicleType vehicleType;
 
     @Column(name = "zone_id", nullable = false)
     private UUID zoneId;
@@ -90,7 +102,8 @@ public class ParkingSession {
         // for JPA
     }
 
-    public ParkingSession(UUID id, UUID tenantId, UUID userId, UUID vehicleId, String plateSnapshot, UUID zoneId,
+    public ParkingSession(UUID id, UUID tenantId, UUID userId, UUID vehicleId, String plateSnapshot,
+                          VehicleType vehicleType, UUID zoneId,
                           UUID spaceId, Instant startedAt, Instant expiresAt, Money amount,
                           int creditMinutesApplied) {
         this.id = id;
@@ -98,6 +111,7 @@ public class ParkingSession {
         this.userId = userId;
         this.vehicleId = vehicleId;
         this.plateSnapshot = plateSnapshot;
+        this.vehicleType = vehicleType;
         this.zoneId = zoneId;
         this.spaceId = spaceId;
         this.startedAt = startedAt;
@@ -130,12 +144,23 @@ public class ParkingSession {
         return UserId.of(userId);
     }
 
+    /** Null for a stay opened with a plate typed on the spot: someone else's car, not a vehicle of ours. */
     public UUID getVehicleId() {
         return vehicleId;
     }
 
+    /** True when this stay is on a plate the citizen typed rather than on a vehicle they registered. */
+    public boolean isGuestVehicle() {
+        return vehicleId == null;
+    }
+
     public String getPlateSnapshot() {
         return plateSnapshot;
+    }
+
+    /** The kind of vehicle as it was when the stay started — a copy, like the plate, never a join. */
+    public VehicleType getVehicleType() {
+        return vehicleType;
     }
 
     public UUID getZoneId() {

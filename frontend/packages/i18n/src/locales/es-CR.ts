@@ -328,6 +328,13 @@ export const esCR = {
   'citizen.parking.step2.title': 'Vehículo',
   'citizen.parking.step2.selectLabel': 'Selecciona un vehículo',
   'citizen.parking.step2.empty': 'Agrega un vehículo antes de estacionar.',
+  'citizen.parking.step2.guestOption': 'Otro vehículo',
+  'citizen.parking.step2.guestOptionDetail': 'No es tuyo · la placa no se guarda',
+  'citizen.parking.step2.guestPlateLabel': 'Placa del vehículo',
+  'citizen.parking.step2.guestPlateHint':
+    'Se usa solo para este estacionamiento y queda en el comprobante. No se agrega a tus vehículos.',
+  'citizen.parking.step2.guestPlatePlaceholder': 'BHL019',
+  'citizen.parking.step2.guestTypeLabel': 'Tipo de vehículo',
   'citizen.parking.step2.addVehicleCta': 'Agregar vehículo',
   'citizen.parking.step3.title': 'Tiempo',
   'citizen.parking.step3.creditApplied': 'incluye {{minutes}} a favor',
@@ -364,6 +371,8 @@ export const esCR = {
   'citizen.parking.finish.confirmSubmit': 'Sí, finalizar',
 
   'citizen.parking.error.SESSION_ALREADY_ACTIVE_FOR_VEHICLE': 'Este vehículo ya tiene una sesión de estacionamiento activa.',
+  'citizen.parking.error.SESSION_ALREADY_ACTIVE_FOR_PLATE':
+    'Esta placa ya tiene un estacionamiento activo en esta municipalidad.',
   'citizen.parking.error.SPACE_OCCUPIED': 'Este espacio ya está ocupado.',
   'citizen.parking.error.INVALID_INCREMENT': 'La duración seleccionada no es válida.',
   'citizen.parking.error.INSUFFICIENT_BALANCE': 'Saldo insuficiente. Recarga tu billetera para continuar.',

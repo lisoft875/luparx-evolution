@@ -15,11 +15,21 @@ export interface CitizenShellProps {
   onBack?: () => void;
   /**
    * A bottom-tab root screen (Vehículos, Multas, Billetera, Mi cuenta):
-   * suppresses the app bar entirely — the page renders its own in-content
-   * "Título de pantalla" (28/700) heading instead, matching the reference
-   * mockup's plain content heading for these screens.
+   * suppresses the app bar entirely — the screen's own "Título de pantalla"
+   * (28/700) heading takes its place, matching the reference mockup's plain
+   * content heading for these screens.
    */
   bare?: boolean;
+  /**
+   * That heading, for a `bare` screen — the `<h1>` and anything that belongs on its line, such as
+   * Vehículos' "Agregar" button.
+   *
+   * <p>It is a prop rather than the first child because the running-stay bar goes <em>between</em>
+   * the heading and the content: on a screen with no app bar the title is what says where you are,
+   * and pushing it below a bar that is only sometimes there made the screen look like it belonged
+   * to the timer. Passing it up here is what lets the shell put the bar in the middle.</p>
+   */
+  heading?: React.ReactNode;
 }
 
 /**
@@ -28,7 +38,14 @@ export interface CitizenShellProps {
  * heading), or back+title(+subtitle) (drill-down screens) — plus the fixed
  * 5-destination bottom bar (DESIGN_SYSTEM.md §3).
  */
-export function CitizenShell({ children, title, subtitle, onBack, bare = false }: CitizenShellProps): React.JSX.Element {
+export function CitizenShell({
+  children,
+  title,
+  subtitle,
+  onBack,
+  bare = false,
+  heading,
+}: CitizenShellProps): React.JSX.Element {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
@@ -103,10 +120,14 @@ export function CitizenShell({ children, title, subtitle, onBack, bare = false }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: 'transparent' }}>
-      {/* Top chrome as one sticky group: the app bar (when the screen has one) and, above every
-          screen while a stay is running, the countdown (CONTRACT.md v0.2 rule 3 / v0.10). Grouping
-          them is what keeps the safe-area inset handled exactly once — the app bar already pays it,
-          and on `bare` screens the timer bar pays it instead as the group's only child (see
+      {/* On a `bare` screen the heading scrolls away like ordinary content and the timer bar below
+          it is what stays — so the screen is titled by its own name, not by whatever is parked
+          (CONTRACT.md v0.10). It sits outside `main` only so the bar can come between the two. */}
+      {bare && heading ? <div className="lx-screen-heading">{heading}</div> : null}
+      {/* Top chrome as one sticky group: the app bar (when the screen has one) and, on every screen
+          while a stay is running, the countdown (CONTRACT.md v0.2 rule 3 / v0.10). Grouping them is
+          what keeps the safe-area inset handled exactly once — the app bar already pays it, and on
+          `bare` screens the timer bar pays it instead as the group's only child (see
           `.lx-top-chrome > .lx-sticky-timer-bar:first-child` in tokens.css). */}
       <div className="lx-top-chrome">
         {bare ? null : (

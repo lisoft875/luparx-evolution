@@ -558,6 +558,7 @@ export const mockParkingSessions: MockParkingSessionRecord[] = [
     spaceCode: 'LUP-0001',
     vehicleId: 'vehicle-bhl019',
     plateSnapshot: 'BHL019',
+    vehicleType: 'CAR',
     minutes: 60,
     remainingMinutes: 55,
     amountMinor: 55020,

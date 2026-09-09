@@ -1065,3 +1065,72 @@ o un segundo de frontera menos —nunca al revés—.
 
 Aplica a la cuenta regresiva de la barra, a la de la tarjeta de sesión activa, al formateo del
 componente `Timer` y a los minutos que anuncia el diálogo de finalizar.
+
+# v0.11 — Estacionar el carro de otra persona (normativo)
+
+## El caso
+
+Un ciudadano le paga el parqueo a un amigo. Hasta aquí la única forma era registrar la placa ajena
+en su propia lista de vehículos y dejarla ahí para siempre; el favor de un día le ensuciaba la lista
+y le dejaba en la cuenta un carro que no es suyo.
+
+Ahora el paso «Vehículo» del flujo de estacionar ofrece, después de los vehículos propios, una opción
+más: **Otro vehículo**. Al escogerla se piden dos cosas —**placa** y **tipo (carro o moto)**— y con
+eso arranca la sesión.
+
+**La placa escrita no se guarda en ningún lado más que en la sesión.** Esa fue la decisión de
+producto y es la razón de ser de la función. La placa vive en `plate_snapshot`, que es exactamente lo
+que necesita el fiscalizador, el comprobante y una eventual multa, y desaparece del sistema con el
+historial de esa sesión. No hay casilla de «guardarlo»: quien quiera el carro en su lista lo registra
+por Vehículos, donde ya existe «soy el propietario» sin marcar para justamente ese caso.
+
+## Esquema
+
+`parking_sessions.vehicle_id` pasa a ser **opcional**. NULL significa una sola cosa —placa escrita, no
+hay vehículo del ciudadano detrás— y por eso no hay bandera aparte.
+
+`parking_sessions.vehicle_type` es nueva y se copia en la fila, igual que la placa y por la misma
+razón: es lo que el fiscalizador tiene enfrente en ese momento, el ciudadano puede editar su vehículo
+después, y para una placa ajena esa fila es el **único** lugar donde el dato existe.
+
+## API
+
+```
+POST /api/v1/citizen/parking/sessions
+{ zoneId, spaceCode, minutes,
+  vehicleId }                      // un vehículo propio
+{ zoneId, spaceCode, minutes,
+  plate, vehicleType }             // el carro de un tercero
+```
+
+Se manda **exactamente uno** de `vehicleId` y `plate`. Mandar los dos, o ninguno, es un error de
+validación y no se resuelve por precedencia: un cliente que quiere decir una cosa y manda dos tiene un
+error, y elegir un ganador lo escondería.
+
+La respuesta de sesión gana `vehicleType` y su `vehicleId` puede ser `null`. `plateSnapshot` y
+`vehicleType` siempre vienen, de modo que ninguna pantalla que sólo muestra el carro tiene que
+preguntar cuál de los dos casos es.
+
+La placa escrita se valida con **la misma regla** que una placa registrada: se normaliza (mayúsculas,
+sin separadores) y sólo se rechaza si no queda nada utilizable o no cabe. Ninguna forma nacional de
+placa se valida —eso es un hecho del registro vehicular de cada país, no de esta plataforma—.
+
+## Una placa, un estacionamiento
+
+`SESSION_ALREADY_ACTIVE_FOR_PLATE` (409) rechaza una segunda sesión activa sobre la misma placa en la
+misma municipalidad **cuando alguno de los dos lados es una placa escrita**. Una placa que alguien
+teclea es el carro que tiene enfrente, así que ahí la plataforma sí sabe que es el mismo vehículo y
+cobrarlo dos veces sería un error, no una coincidencia.
+
+Entre dos **vehículos registrados** la regla no cambia: las placas son únicas por ciudadano y no
+globalmente (v0.2, regla 2), dos personas pueden legítimamente tener la misma placa registrada, y
+estrechar eso ahora rechazaría estacionamientos que siempre se permitieron. En el esquema el índice
+único parcial cubre sólo las placas escritas; el traslape entre una escrita y una registrada lo
+rechaza el servicio dentro de la transacción. Cerrarlo también en el esquema exige primero revisar
+los datos de producción, y queda anotado como tal.
+
+## Lo que no cambia
+
+El precio no depende del tipo de vehículo. `vehicleType` se pide y se guarda porque es lo que el
+fiscalizador busca y porque es el dato por el que una municipalidad cobraría distinto el día que
+decida hacerlo —no porque hoy cambie el monto—.

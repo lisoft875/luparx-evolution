@@ -120,6 +120,12 @@ public final class ErrorCode {
     public static final String EXTENSION_EXCEEDS_MAX = "EXTENSION_EXCEEDS_MAX";
     public static final String INSUFFICIENT_BALANCE = "INSUFFICIENT_BALANCE";
     public static final String INVALID_INCREMENT = "INVALID_INCREMENT";
+    /**
+     * A stay is already running on this plate in this municipality, and one of the two was opened
+     * with a plate typed on the spot (CONTRACT.md v0.11) — so it is the same physical car, and
+     * paying twice for it is a mistake rather than a coincidence of two citizens sharing a plate.
+     */
+    public static final String SESSION_ALREADY_ACTIVE_FOR_PLATE = "SESSION_ALREADY_ACTIVE_FOR_PLATE";
 
     // --- account, locales and municipal operation (CONTRACT.md "v0.3") --------------------------
     /** The current password given to {@code POST /{portal}/me/password} did not match. */

@@ -179,6 +179,7 @@ public class ParkingMapper {
                 session.getId(),
                 session.getVehicleId(),
                 session.getPlateSnapshot(),
+                session.getVehicleType(),
                 session.getZoneId(),
                 zoneName,
                 session.getSpaceId(),

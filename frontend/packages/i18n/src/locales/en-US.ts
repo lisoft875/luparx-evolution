@@ -316,6 +316,13 @@ export const enUS: Record<TranslationKey, string> = {
   'citizen.parking.step2.title': 'Vehicle',
   'citizen.parking.step2.selectLabel': 'Select a vehicle',
   'citizen.parking.step2.empty': 'Add a vehicle before parking.',
+  'citizen.parking.step2.guestOption': 'Another vehicle',
+  'citizen.parking.step2.guestOptionDetail': "Not yours · the plate isn't saved",
+  'citizen.parking.step2.guestPlateLabel': 'Vehicle plate',
+  'citizen.parking.step2.guestPlateHint':
+    "Used for this stay only and kept on the receipt. It isn't added to your vehicles.",
+  'citizen.parking.step2.guestPlatePlaceholder': 'BHL019',
+  'citizen.parking.step2.guestTypeLabel': 'Vehicle type',
   'citizen.parking.step2.addVehicleCta': 'Add vehicle',
   'citizen.parking.step3.title': 'Time',
   'citizen.parking.step3.creditApplied': 'includes {{minutes}} of credit',
@@ -352,6 +359,8 @@ export const enUS: Record<TranslationKey, string> = {
   'citizen.parking.finish.confirmSubmit': 'Yes, finish',
 
   'citizen.parking.error.SESSION_ALREADY_ACTIVE_FOR_VEHICLE': 'This vehicle already has an active parking session.',
+  'citizen.parking.error.SESSION_ALREADY_ACTIVE_FOR_PLATE':
+    'This plate already has a running stay in this municipality.',
   'citizen.parking.error.SPACE_OCCUPIED': 'This space is already occupied.',
   'citizen.parking.error.INVALID_INCREMENT': 'The selected duration is not valid.',
   'citizen.parking.error.INSUFFICIENT_BALANCE': 'Insufficient balance. Top up your wallet to continue.',

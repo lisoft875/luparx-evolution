@@ -119,8 +119,11 @@ export function VehiclesPage(): React.JSX.Element {
   const [deleteTarget, setDeleteTarget] = useState<Vehicle | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
+  // Only stays on the citizen's own vehicles mark a row "En uso". A stay on a borrowed plate has no
+  // vehicle behind it (CONTRACT.md v0.11), and letting a null in here would mark nothing — or, if a
+  // vehicle id were ever null-ish, the wrong row.
   const activeVehicleIds = useMemo(
-    () => new Set((activeSessions ?? []).map((session) => session.vehicleId)),
+    () => new Set((activeSessions ?? []).map((session) => session.vehicleId).filter((id): id is string => id !== null)),
     [activeSessions],
   );
 
@@ -197,15 +200,18 @@ export function VehiclesPage(): React.JSX.Element {
   const isSaving = createVehicle.isPending || updateVehicle.isPending;
 
   return (
-    <CitizenShell bare>
-      <div className="lx-page-header">
-        {/* El titulo se queda en una linea: partido en dos ("Mis / vehiculos") se lee como un error. */}
-        <h1 className="lx-text-screen-title lx-page-header__title">{t('citizen.vehicles.title')}</h1>
-        <Button type="button" variant="solid" onClick={openAdd}>
-          <IconPlus size={16} /> {t('citizen.vehicles.addCta')}
-        </Button>
-      </div>
-
+    <CitizenShell
+      bare
+      heading={
+        <div className="lx-page-header">
+          {/* El titulo se queda en una linea: partido en dos ("Mis / vehiculos") se lee como un error. */}
+          <h1 className="lx-text-screen-title lx-page-header__title">{t('citizen.vehicles.title')}</h1>
+          <Button type="button" variant="solid" onClick={openAdd}>
+            <IconPlus size={16} /> {t('citizen.vehicles.addCta')}
+          </Button>
+        </div>
+      }
+    >
       <QueryBoundary
         query={vehiclesQuery}
         errorTitle={t('citizen.vehicles.title')}

@@ -32,8 +32,10 @@ export interface WireMoney {
 
 export interface WireParkingSession {
   id: string;
-  vehicleId: string;
+  /** Null when the stay was opened with a plate typed on the spot — somebody else's car (v0.11). */
+  vehicleId: string | null;
   plateSnapshot: string;
+  vehicleType: string;
   zoneId: string;
   zoneName: string;
   spaceId: string;
@@ -105,8 +107,9 @@ export function toParkingSession(wire: WireParkingSession): ParkingSession {
     zoneName: wire.zoneName,
     spaceId: wire.spaceId,
     spaceCode: wire.spaceCode,
-    vehicleId: wire.vehicleId,
+    vehicleId: wire.vehicleId ?? null,
     plateSnapshot: wire.plateSnapshot,
+    vehicleType: wire.vehicleType,
     minutes: wire.bookedMinutes,
     remainingMinutes: wire.remainingMinutes,
     amountMinor: wire.amount.amountMinor,

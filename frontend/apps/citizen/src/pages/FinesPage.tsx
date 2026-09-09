@@ -43,8 +43,7 @@ export function FinesPage(): React.JSX.Element {
   }, [query.data, tab]);
 
   return (
-    <CitizenShell bare>
-      <h1 className="lx-text-screen-title">{t('citizen.fines.title')}</h1>
+    <CitizenShell bare heading={<h1 className="lx-text-screen-title">{t('citizen.fines.title')}</h1>}>
       <ChipGroup
         variant="segmented"
         aria-label={t('citizen.fines.title')}

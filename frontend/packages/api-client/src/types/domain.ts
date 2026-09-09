@@ -696,9 +696,19 @@ export interface ParkingSession {
   zoneName: string;
   spaceId: string;
   spaceCode: string;
-  vehicleId: string;
+  /**
+   * The citizen's registered vehicle, or `null` when they parked somebody else's car by typing its
+   * plate (CONTRACT.md v0.11). `plateSnapshot` and `vehicleType` are filled in either case, so a
+   * screen that only shows the car never has to branch on this.
+   */
+  vehicleId: string | null;
   /** Copy of the plate at the moment the session started (CONTRACT.md v0.2 rule 2) — verified against this, never the vehicle's possibly-since-edited plate. */
   plateSnapshot: string;
+  /**
+   * Copy of the kind of vehicle, for the same reason as the plate. Catalog key from
+   * `GET /catalog/vehicle-types`, typed as a plain string like `Vehicle.type`.
+   */
+  vehicleType: string;
   /** Total booked time, session plus every extension. */
   minutes: number;
   /** Time left before it expires, as the server counted it. */
@@ -713,12 +723,19 @@ export interface ParkingSession {
   endedAt: string | null;
 }
 
-export interface StartParkingSessionRequest {
+/**
+ * Exactly one of `vehicleId` and `plate` is sent: a vehicle of the citizen's, or somebody else's
+ * car typed on the spot (CONTRACT.md v0.11). A typed plate is saved nowhere but on the stay, and
+ * carries its own `vehicleType` because there is no vehicle record to read it from.
+ */
+export type StartParkingSessionRequest = {
   zoneId: string;
   spaceCode: string;
-  vehicleId: string;
   minutes: number;
-}
+} & (
+  | { vehicleId: string; plate?: never; vehicleType?: never }
+  | { vehicleId?: never; plate: string; vehicleType: string }
+);
 
 export type ParkingSessionsQuery = {
   status?: ParkingSessionStatus | 'ALL';

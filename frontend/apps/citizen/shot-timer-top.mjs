@@ -54,7 +54,7 @@ for (const [width, height, tag] of sizes) {
   });
 
   // 3. Scrolled: the bar must still be pinned to the top of the viewport.
-  await page.mouse.wheel(0, 600);
+  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
   await page.waitForTimeout(400);
   await page.screenshot({ path: `${outDir}/03-vehicles-scrolled-${tag}.png` });
 
@@ -72,7 +72,7 @@ for (const [width, height, tag] of sizes) {
       mainTop: Math.round(main.top),
       inViewport: b.top >= 0 && b.bottom <= window.innerHeight,
       inTopHalf: b.bottom <= window.innerHeight / 2,
-      pinnedToTop: Math.round(b.top) === 0,
+      scrollY: Math.round(window.scrollY),
       readout: timer?.textContent ?? null,
       topChromeAttr: !!document.querySelector('[data-lx-top-chrome]'),
       bottomChromeAttr: [...document.querySelectorAll('[data-lx-bottom-chrome]')].length,
@@ -95,8 +95,13 @@ for (const [width, height, tag] of sizes) {
   }
 
   console.log(`\n== ${tag} ==`);
+  // The bar rides up with the page and stops at the top: its position is the resting one minus
+  // the scroll, clamped at zero. Asserting "top === 0" alone would fail on a viewport tall enough
+  // that this screen never scrolls past the heading, which is not a defect.
+  const expectedTop = Math.max(0, atRest.barTop - geom.scrollY);
   console.log('at rest:', atRest);
   console.log('scrolled:', geom);
+  console.log('sticks correctly:', geom.barTop === expectedTop, `(expected top ${expectedTop})`);
   if (barReadout) console.log('bar readout when the dialog opened:', barReadout);
   if (dialogText) console.log('dialog:', dialogText.replace(/\n/g, ' | '));
   if (errors.length) console.log('ERRORS:', errors);

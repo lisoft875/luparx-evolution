@@ -37,9 +37,7 @@ export function MorePage(): React.JSX.Element {
   const fullName = [profile?.givenName, profile?.familyName].filter(Boolean).join(' ');
 
   return (
-    <CitizenShell bare>
-      <h1 className="lx-text-screen-title">{t('nav.more')}</h1>
-
+    <CitizenShell bare heading={<h1 className="lx-text-screen-title">{t('nav.more')}</h1>}>
       <CardStack>
         <Card>
           <ListRow

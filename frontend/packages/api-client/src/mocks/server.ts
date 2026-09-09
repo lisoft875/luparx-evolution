@@ -1100,10 +1100,34 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
         if (!policy.sessionIncrementsMinutes.includes(payload.minutes)) {
           return problem(422, 'INVALID_INCREMENT', 'Invalid session duration');
         }
-        const vehicle = mockVehicles.find((v) => v.id === payload.vehicleId && v.userId === userId);
-        if (!vehicle) return problem(404, 'VEHICLE_NOT_FOUND', 'Vehicle not found');
-        if (mockParkingSessions.some((s) => s.vehicleId === payload.vehicleId && s.status === 'ACTIVE')) {
+        // A vehicle of the citizen's, or a plate typed for somebody else's car (CONTRACT.md v0.11).
+        // The mock mirrors the server's rules rather than accepting anything, so the flow can be
+        // driven end to end here: a plate that normalises to nothing is refused, and so is a second
+        // running stay on the same plate when either side of the clash is a typed one.
+        const guestPlate = payload.vehicleId ? null : normalizeMockPlate(payload.plate ?? '');
+        const vehicle = payload.vehicleId
+          ? mockVehicles.find((v) => v.id === payload.vehicleId && v.userId === userId)
+          : undefined;
+        if (payload.vehicleId && !vehicle) return problem(404, 'VEHICLE_NOT_FOUND', 'Vehicle not found');
+        if (!payload.vehicleId && !guestPlate) {
+          return problem(422, 'VALIDATION_FAILED', 'Invalid plate', undefined, [
+            { field: 'plate', code: 'VALIDATION_FAILED', message: 'Invalid plate' },
+          ]);
+        }
+        if (payload.vehicleId && mockParkingSessions.some((s) => s.vehicleId === payload.vehicleId && s.status === 'ACTIVE')) {
           return problem(409, 'SESSION_ALREADY_ACTIVE_FOR_VEHICLE', 'This vehicle already has an active session');
+        }
+        const plateSnapshot = guestPlate ?? normalizeMockPlate(vehicle!.plate);
+        if (
+          mockParkingSessions.some(
+            (s) =>
+              s.tenantId === tenantId &&
+              s.status === 'ACTIVE' &&
+              normalizeMockPlate(s.plateSnapshot) === plateSnapshot &&
+              (guestPlate !== null || s.vehicleId === null),
+          )
+        ) {
+          return problem(409, 'SESSION_ALREADY_ACTIVE_FOR_PLATE', 'This plate already has an active session here');
         }
         if (
           mockParkingSessions.some(
@@ -1133,8 +1157,9 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
             zoneId: payload.zoneId,
             zoneName: zoneNameForId(payload.zoneId),
             spaceCode: payload.spaceCode,
-            vehicleId: payload.vehicleId,
-            plateSnapshot: vehicle.plate,
+            vehicleId: payload.vehicleId ?? null,
+            plateSnapshot: plateSnapshot,
+            vehicleType: vehicle?.type ?? payload.vehicleType ?? 'CAR',
             spaceId: `space-${payload.spaceCode.toLowerCase()}`,
             minutes: payload.minutes,
             remainingMinutes: payload.minutes,
@@ -1154,7 +1179,7 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
             action: 'PARKING_SESSION_STARTED',
             resourceType: 'parking_session',
             resourceId: record.id,
-            metadata: { vehicleId: payload.vehicleId, zoneId: payload.zoneId, minutes: payload.minutes },
+            metadata: { vehicleId: payload.vehicleId ?? null, zoneId: payload.zoneId, minutes: payload.minutes },
           });
           return { data: toPublicSession(record), status: 201 };
         });
@@ -1623,12 +1648,14 @@ function mockTenantLocales(tenantId: string | null): MockTenantLocale[] {
 function toPublicSession(record: MockParkingSessionRecord): unknown {
   const remainingMinutes =
     record.status === 'ACTIVE'
-      ? Math.max(0, Math.round((new Date(record.expiresAt).getTime() - Date.now()) / 60_000))
+      // Floored, like the server: Duration.toMinutes() truncates (CONTRACT.md v0.10).
+      ? Math.max(0, Math.floor((new Date(record.expiresAt).getTime() - Date.now()) / 60_000))
       : 0;
   return {
     id: record.id,
     vehicleId: record.vehicleId,
     plateSnapshot: record.plateSnapshot,
+    vehicleType: record.vehicleType,
     zoneId: record.zoneId,
     zoneName: record.zoneName,
     spaceId: record.spaceId,
