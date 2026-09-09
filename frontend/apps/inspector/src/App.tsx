@@ -7,7 +7,6 @@ import { AuthProvider, RequireAuth, RequireTenant } from '@luparx/auth';
 import { mockFetch } from '@luparx/api-client/mocks';
 import { API_BASE_URL, PORTAL, USE_MOCKS } from './env';
 import { LoginPage } from './pages/LoginPage';
-import { RegisterPage } from './pages/RegisterPage';
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import { TenantSelectPage } from './pages/TenantSelectPage';
@@ -22,6 +21,12 @@ const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
 });
 
+/**
+ * No `/register` route: an inspector account is granted from the platform back-office, never opened by
+ * whoever fills in a form (CONTRACT.md v0.13). `POST /auth/inspector/register` answers 403
+ * `SELF_REGISTRATION_DISABLED`, so a route here would only lead to a form that cannot succeed.
+ * The catch-all below sends an old bookmark of it to the login screen.
+ */
 /**
  * Static single-file preview builds (opened from file:// or a static host) have no server
  * to rewrite deep links, so they opt into hash routing with VITE_ROUTER=hash.
@@ -40,7 +45,6 @@ export function App(): React.JSX.Element {
           <Router>
             <Routes>
               <Route path="/login" element={<LoginPage />} />
-              <Route path="/register" element={<RegisterPage />} />
               <Route path="/forgot-password" element={<ForgotPasswordPage />} />
               <Route path="/reset-password" element={<ResetPasswordPage />} />
               <Route path="/select-tenant" element={<TenantSelectPage />} />

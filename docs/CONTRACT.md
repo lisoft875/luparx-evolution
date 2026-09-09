@@ -1188,3 +1188,48 @@ Ampliar tiempo todavía ofrece sólo los incrementos de ampliación de la munici
 tiene sentido ahí y no se aplicó en esta versión: la ampliación tiene además el tope
 `extensionMaxTotalMinutes`, y cómo se combinan las dos cosas es una decisión de producto que no se
 inventa acá.
+
+# v0.13 — El auto-registro es sólo del portal de ciudadano (normativo)
+
+## La regla
+
+**Sólo el portal de ciudadano abre cuentas por sí mismo.** Administrador municipal, fiscalizador y
+plataforma responden `403 SELF_REGISTRATION_DISABLED` en `POST /api/v1/auth/{portal}/register`, y sus
+accesos se otorgan desde el back-office de plataforma.
+
+Una cuenta que puede multar, cerrarle la sesión a alguien o mover la plata de los libros de una
+municipalidad no es algo que se entregue a quien llene un formulario. Lo que había antes parecía
+seguro y no lo era: cualquiera podía registrarse en el portal de administrador contra cualquier
+municipalidad, y que quedara `ACTIVE` o `PENDING_APPROVAL` dependía de un ajuste por municipalidad
+(`selfRegistrationPolicy`) cuyo valor nadie revisa el día que se crea la municipalidad.
+
+En las apps de administrador y fiscalizador desaparecen la ruta `/register`, la pantalla y el enlace
+«Crear cuenta» del login. Un marcador viejo de esa ruta cae en el login, no en un formulario que no
+puede terminar.
+
+## Cómo entra entonces un administrador o un fiscalizador
+
+1. **La persona se registra como ciudadano**, igual que cualquiera. Las personas son globales en esta
+   plataforma (§1) y sus datos obligatorios (§2 — identificación, dirección, fecha de nacimiento) sólo
+   los puede dar ella; inventarlos desde el back-office es exactamente lo que no se debe hacer.
+2. **La plataforma le otorga la membresía**: `POST /api/v1/platform/tenants/{id}/admins` para el primer
+   administrador de una municipalidad, o `POST /api/v1/platform/memberships` para cualquier rol y
+   portal, incluido el de plataforma. Ahí es donde alguien decide qué rol recibe y en qué
+   municipalidad, que es la parte que es decisión de una persona.
+
+## Lo que queda pendiente
+
+**Invitación.** Hoy la plataforma sólo puede otorgarle membresía a alguien que **ya existe** como
+persona: `createAdmin` responde `NOT_IMPLEMENTED` (`error.notImplemented.tenantAdminInvitation`) para
+un correo desconocido, y esa negativa es deliberada —crear una cuenta a partir de un correo obligaría
+a inventar los datos obligatorios de §2—. El flujo que falta es el de invitación: la plataforma manda
+un correo, la persona completa sus propios datos y la membresía ya está esperando. Mientras no exista,
+el paso 1 de arriba es obligatorio y hay que decírselo a la municipalidad.
+
+**`selfRegistrationPolicy` quedó a medias.** `INVITE_ONLY` sigue vivo y es lo que mantiene a un
+ciudadano fuera de una municipalidad que no está abierta al público. Lo que ya no distingue nada es
+`OPEN` frente a `APPROVAL_REQUIRED`: existían para decidir si un administrador o un fiscalizador que
+se registraba solo quedaba activo o en espera de aprobación, y eso ya no ocurre. Son dos caminos:
+o los ciudadanos también pasan por aprobación en las municipalidades que lo pidan, o el ajuste colapsa
+a «abierta / sólo por invitación». Es decisión de producto y no se toma acá; mientras tanto el ajuste
+sigue apareciendo en el back-office y `APPROVAL_REQUIRED` se comporta como `OPEN`.

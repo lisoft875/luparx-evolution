@@ -277,11 +277,17 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
     const action = segments.slice(4).join('/');
 
     if (method === 'POST' && action === 'register') {
+      // Only the citizen portal opens accounts by itself (CONTRACT.md v0.13). The mock refuses the
+      // rest the way the server does, so a preview cannot demonstrate a flow production forbids.
+      if (portal !== 'citizen') {
+        return problem(403, 'SELF_REGISTRATION_DISABLED', 'Self-registration is disabled for this portal');
+      }
       const payload = await readBody<RegisterRequest>(init);
       if (findUserByEmail(payload.email)) {
         return problem(409, 'EMAIL_ALREADY_REGISTERED', 'Email already registered');
       }
-      const requiresApproval = portal !== 'citizen';
+      // A citizen membership is active on the spot; nothing self-registered waits for approval.
+      const requiresApproval = false;
       const id = nextMockUserId();
       const record: MockUserRecord = {
         profile: {

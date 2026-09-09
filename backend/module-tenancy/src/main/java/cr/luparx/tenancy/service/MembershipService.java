@@ -72,7 +72,7 @@ public class MembershipService {
                     throw ConflictException.of(ErrorCode.MEMBERSHIP_ALREADY_EXISTS, "error.membership.exists");
                 });
 
-        MembershipStatus status = resolveInitialStatus(portal, policy);
+        MembershipStatus status = resolveInitialStatus(portal);
         Role role = Role.defaultSelfRegistrationRole(portal);
         Instant now = clock.instant();
         TenantMembership membership = new TenantMembership(Uuid7.generate(), tenantId.value(), userId.value(),
@@ -150,14 +150,26 @@ public class MembershipService {
     }
 
     /**
-     * CONTRACT.md §1: citizens are active immediately; admin/inspector requests wait for approval
-     * unless the tenant explicitly opted into OPEN.
+     * A self-registration is now always a citizen's, and a citizen is active immediately
+     * (CONTRACT.md §1).
+     *
+     * <p>Until v0.13 this also decided whether an admin or inspector who registered themselves
+     * landed ACTIVE or PENDING_APPROVAL, on the strength of the tenant's
+     * {@link SelfRegistrationPolicy}. Those portals no longer self-register at all — the portal gate
+     * above refuses them — so the only branch that could still be taken is the citizen one, and the
+     * argument that used to select between them is gone rather than left in place looking as if it
+     * still decided something.</p>
+     *
+     * <p>The tenant policy itself is <b>not</b> dead: {@code INVITE_ONLY} is checked above and is
+     * what keeps a citizen out of a municipality that is not open to the public. What no longer has
+     * an effect is the distinction between {@code OPEN} and {@code APPROVAL_REQUIRED}, since the one
+     * portal left never waits for approval — see CONTRACT.md v0.13, "Lo que queda pendiente".</p>
      */
-    private MembershipStatus resolveInitialStatus(Portal portal, SelfRegistrationPolicy policy) {
-        if (portal == Portal.CITIZEN) {
-            return MembershipStatus.ACTIVE;
+    private MembershipStatus resolveInitialStatus(Portal portal) {
+        if (portal != Portal.CITIZEN) {
+            throw new IllegalStateException("self-registration is the citizen portal's only: " + portal.slug());
         }
-        return policy == SelfRegistrationPolicy.OPEN ? MembershipStatus.ACTIVE : MembershipStatus.PENDING_APPROVAL;
+        return MembershipStatus.ACTIVE;
     }
 
     /** Administrative creation of a membership (invitation / manual grant). */

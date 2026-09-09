@@ -11,8 +11,8 @@ import java.util.Optional;
 public enum Portal {
 
     CITIZEN("citizen", "luparx:portal:citizen", false, true),
-    ADMIN("admin", "luparx:portal:admin", true, true),
-    INSPECTOR("inspector", "luparx:portal:inspector", true, true),
+    ADMIN("admin", "luparx:portal:admin", true, false),
+    INSPECTOR("inspector", "luparx:portal:inspector", true, false),
     PLATFORM("platform", "luparx:portal:platform", true, false);
 
     private final String slug;
@@ -42,7 +42,21 @@ public enum Portal {
         return mfaMandatory;
     }
 
-    /** CONTRACT.md §4: {@code POST /auth/platform/register} does not exist. */
+    /**
+     * Whether anyone may open an account on this portal by themselves. Only the citizen portal may
+     * (CONTRACT.md v0.13).
+     *
+     * <p>An account that can fine you, close your session or move money out of a municipality's
+     * books is not a thing to hand out to whoever fills in a form. Since v0.13 those three portals
+     * answer {@code SELF_REGISTRATION_DISABLED} and their memberships are granted from the platform
+     * back-office instead — which is the one place that already knows which municipality the person
+     * belongs to and who authorised them.</p>
+     *
+     * <p>What the earlier arrangement actually did is worth recording, because it looked safe and
+     * was not: anybody could register on the admin portal against any municipality, and whether they
+     * landed ACTIVE or PENDING_APPROVAL depended on a per-tenant setting whose default nobody
+     * reviews on the day a municipality is created.</p>
+     */
     public boolean selfRegistrationAllowed() {
         return selfRegistrationAllowed;
     }

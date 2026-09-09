@@ -57,13 +57,19 @@ public enum Role {
         return Optional.empty();
     }
 
-    /** The role granted by default to a self-registering user on the given portal. */
+    /**
+     * The role granted by default to a self-registering user on the given portal.
+     *
+     * <p>Only the citizen portal has one. Since v0.13 an admin, an inspector and a platform operator
+     * are granted from the back-office, where a person decides which role the account gets; there is
+     * no default for those, and returning one here would be the quiet way back to handing out
+     * {@code TENANT_ADMIN} to whoever filled in a form.</p>
+     */
     public static Role defaultSelfRegistrationRole(Portal portal) {
         return switch (portal) {
             case CITIZEN -> CITIZEN;
-            case ADMIN -> TENANT_ADMIN;
-            case INSPECTOR -> INSPECTOR;
-            case PLATFORM -> throw new IllegalArgumentException("platform portal has no self-registration role");
+            case ADMIN, INSPECTOR, PLATFORM -> throw new IllegalArgumentException(
+                    portal.slug() + " portal has no self-registration role");
         };
     }
 }

@@ -9,7 +9,6 @@ import cr.luparx.core.audit.AuditAction;
 import cr.luparx.core.domain.Portal;
 import cr.luparx.core.error.ErrorCode;
 import cr.luparx.core.error.ForbiddenException;
-import cr.luparx.core.error.ValidationException;
 import cr.luparx.core.i18n.Locales;
 import cr.luparx.core.id.TenantId;
 import cr.luparx.core.id.UserId;
@@ -106,8 +105,13 @@ public class AuthController {
     }
 
     /**
-     * Self-registration. Not available on the platform portal, whose accounts are created from the
-     * back-office only (CONTRACT.md §4 → {@code SELF_REGISTRATION_DISABLED}).
+     * Self-registration — the citizen portal only (CONTRACT.md v0.13).
+     *
+     * <p>Admin, inspector and platform accounts are granted from the back-office and answer
+     * {@code SELF_REGISTRATION_DISABLED} here. A person who is to become a municipal admin or an
+     * inspector registers as themselves on the citizen portal, like anyone else: people are global
+     * on this platform and their mandatory data (§2) has to come from them. What the back-office
+     * then adds is the membership, which is the part that is somebody's decision to make.</p>
      */
     @PostMapping("/register")
     @Operation(summary = "Register a new person and request access to a municipality")
@@ -116,10 +120,6 @@ public class AuthController {
         Portal target = PortalPathVariable.require(portal);
         if (!target.selfRegistrationAllowed()) {
             throw ForbiddenException.of(ErrorCode.SELF_REGISTRATION_DISABLED, "error.registration.portal.disabled");
-        }
-        if (target != Portal.CITIZEN && request.tenantId() == null) {
-            // An admin or inspector account is meaningless without the municipality it belongs to.
-            throw new ValidationException("tenantId", ErrorCode.VALIDATION_FAILED, "error.registration.tenantRequired");
         }
 
         RegistrationCommand command = new RegistrationCommand(

@@ -22,7 +22,6 @@ export function LoginPage(): React.JSX.Element {
         subtitle={t('auth.portal.admin.title')}
         onSuccess={() => navigate('/')}
         forgotPasswordHref="/forgot-password"
-        registerHref="/register"
       />
     </AuthScreen>
   );
