@@ -958,3 +958,75 @@ campo, de modo que el monto que ve el funcionario es el que se cobra.
 `APPEAL_NOTICE_NOT_FOUND` (404), `APPEAL_NOTICE_OUTDATED` (409), `APPEAL_NOT_FOUND` (404),
 `APPEAL_ALREADY_FILED` (409), `APPEAL_ALREADY_RESOLVED` (409), `APPEAL_WINDOW_CLOSED` (409),
 `TOPUP_CODE_INVALID` (422), `TOPUP_CODE_NOT_FOUND` (404), `TOPUP_REFERENCE_ALREADY_USED` (409).
+
+---
+
+# v0.9 — Árbol territorial de Costa Rica y documento predeterminado (normativo)
+
+## El árbol completo
+
+`V19_0` carga la División Territorial Administrativa con los códigos oficiales — provincia `1`,
+cantón `101`, distrito `10101`, que concatenados son el código postal — resolviendo el padre **por
+código** y con `ON CONFLICT DO NOTHING`, de modo que se aplica igual sobre una base virgen que sobre
+una que ya tenía sembrada parte del árbol, sin pisar nombres existentes.
+
+`V19_1` corrige lo que la carga dejó duplicado: Monteverde (6-12, Ley 9903) y Puerto Jiménez (6-13,
+Ley 10276) se crearon **segregando un distrito que ya existía**, así que el mismo territorio quedaba
+ofrecido dos veces. Las dos filas viejas —`6-01-09 Monte Verde` y `6-07-02 Puerto Jiménez`— se
+**desactivan, no se borran**: el catálogo sólo ofrece filas activas, y la fila sobrevive porque puede
+haber direcciones guardadas que la referencian.
+
+Estado resultante, verificado contra PostgreSQL: **7 provincias, 84 cantones, 484 filas de distrito
+de las cuales 482 activas**; cero distritos sin cantón, cero cantones sin provincia, cero códigos con
+longitud equivocada, y cero divisiones llamadas «Central» — los cantones primeros llevan su nombre
+oficial (San José, Alajuela, Cartago, Heredia, Liberia, Puntarenas, Limón).
+
+**Faltan 12 territorios** respecto de los 494 que declara la DTA vigente, todos creados después de la
+instantánea de 2020 de la que salió la carga. No se nombran en el código: sin acceso a la fuente
+oficial, inventar nombres de distritos sería peor que la falta, porque quedarían escritos en
+direcciones reales. Se completan por el back-office de plataforma
+(`POST /api/v1/platform/countries/CR/divisions`), sin otra migración; el encabezado de `V19_1` trae
+la consulta que lista distritos por cantón para compararla con la DTA.
+
+**Lectura por niveles.** `GET /api/v1/catalog/countries/{code}/divisions?parentId=` devuelve los
+hijos de una división y `?level=` todas las de un nivel; cada llamada es **una consulta**, servida por
+`ix_administrative_divisions_country_parent`, con tope de 500 filas. El desplegable pide un nivel a la
+vez, así que un cantón de 15 distritos o una provincia de 20 cantones son una consulta y no una por
+elemento.
+
+## Tipo de documento predeterminado y orden de presentación
+
+`identity_document_types` gana dos columnas (`V20_0`):
+
+* `sort_order` — orden de presentación ascendente, **no alfabético**: el documento que porta la
+  mayoría va primero y `OTHER` al final;
+* `is_default` — el que el formulario trae marcado al abrir.
+
+**Dos columnas y no una** porque son dos hechos distintos —un país puede querer mostrar el pasaporte
+arriba y aun así preseleccionar la cédula— y porque con dos el invariante es verificable por la base:
+`uq_identity_document_types_default`, índice único parcial sobre `country_code WHERE is_default`,
+garantiza **como máximo un predeterminado por país**. Si alguien marca dos, falla el `INSERT`, no la
+interfaz. Cero predeterminados es legítimo: un país nuevo puede quedar sin preselección.
+
+Predeterminado sembrado: `NATIONAL_ID` para CR, ES, MX, PA y US — el documento que porta la mayoría
+residente, nunca el pasaporte, que es el de quien viene de visita. La salvedad está escrita en la
+migración: en Estados Unidos el documento de un trámite de tránsito es la licencia de conducir y el
+catálogo todavía no tiene ese tipo, así que esa fila hay que revisarla el día que sea un mercado real.
+
+```
+GET /api/v1/catalog/countries/CR/document-types
+-> [{type: "NATIONAL_ID", labelKey, pattern, example, default: true},
+    {type: "FOREIGN_RESIDENT_ID", …, default: false},
+    {type: "PASSPORT", …}, {type: "TAX_ID", …}, {type: "OTHER", …}]
+```
+
+La lista llega **ya ordenada** y con `default` marcado, de modo que el cliente sólo respeta lo que
+recibe: la regla «en Costa Rica, cédula» es dato, no código de frontend —escrita en el cliente sería
+la equivocada para el segundo país y no se podría corregir sin desplegar—. El miembro JSON se llama
+`default` porque es lo que significa para el formulario; en Java el componente no puede llamarse así
+(palabra reservada) y va mapeado.
+
+`PUT /api/v1/platform/countries/{code}/document-types` acepta `sortOrder` e `isDefault` (ambos
+opcionales: ausentes significan «dejalo como está»). Marcar un predeterminado **limpia el anterior en
+la misma transacción**, y un tipo inactivo no puede ser el predeterminado: preseleccionar una opción
+que el formulario no ofrece dejaría todo registro abriendo en algo que nadie puede elegir.

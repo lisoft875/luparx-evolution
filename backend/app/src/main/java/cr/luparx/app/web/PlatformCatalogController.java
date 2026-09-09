@@ -4,6 +4,7 @@ import cr.luparx.app.audit.AuditRecorder;
 import cr.luparx.app.web.dto.CatalogDtos;
 import cr.luparx.core.audit.AuditAction;
 import cr.luparx.core.error.ErrorCode;
+import cr.luparx.core.error.ValidationException;
 import cr.luparx.core.error.NotFoundException;
 import cr.luparx.core.i18n.CountryCodes;
 import cr.luparx.core.id.Uuid7;
@@ -20,6 +21,8 @@ import cr.luparx.geo.service.CountryCatalogService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -198,13 +201,20 @@ public class PlatformCatalogController {
 
     // --- identity document types -------------------------------------------------------------------
 
+    /**
+     * {@code sortOrder} and {@code isDefault} arrive as objects rather than primitives so that
+     * "leave it as it is" and "set it to zero / to false" are different requests: a caller correcting
+     * a regex must not silently reset the country's presentation order.
+     */
     public record DocumentTypeUpsertRequest(
             @NotNull IdentityDocumentTypeCode type,
             @NotBlank @Size(max = 128) String labelKey,
             @NotBlank @Size(max = 256) String pattern,
             @NotBlank @Size(max = 32) String normalizer,
             @NotBlank @Size(max = 64) String example,
-            boolean active) {
+            boolean active,
+            @Min(0) @Max(1000) Integer sortOrder,
+            Boolean isDefault) {
     }
 
     @PutMapping("/countries/{code}/document-types")
@@ -224,8 +234,45 @@ public class PlatformCatalogController {
         documentType.setNormalizer(request.normalizer());
         documentType.setExample(request.example());
         documentType.setActive(request.active());
+        if (request.sortOrder() != null) {
+            documentType.setSortOrder(request.sortOrder().intValue());
+        }
+        if (request.isDefault() != null) {
+            applyDefault(country.getCode(), documentType, request.isDefault().booleanValue());
+        }
         auditRecorder.record(AuditAction.CATALOG_UPDATED, "identityDocumentType",
-                country.getCode() + ":" + request.type(), Map.of("operation", "upsert"));
+                country.getCode() + ":" + request.type(), Map.of("operation", "upsert",
+                        "isDefault", String.valueOf(documentType.isDefaultType()),
+                        "sortOrder", String.valueOf(documentType.getSortOrder())));
         return mapper.toDocumentType(documentType);
+    }
+
+    /**
+     * Moves the country's default onto this row, clearing the previous one first.
+     *
+     * <p>The database allows at most one default per country, so setting a second without clearing
+     * the first would simply fail. Doing it here, inside the same transaction, means an administrator
+     * changing which document is preselected performs one action rather than two that can be
+     * interrupted halfway and leave a country with none.</p>
+     *
+     * <p>A row cannot be both inactive and the default: preselecting a type the form does not offer
+     * would open every registration on an option nobody can choose.</p>
+     */
+    private void applyDefault(String countryCode, IdentityDocumentType documentType, boolean makeDefault) {
+        if (!makeDefault) {
+            documentType.setDefaultType(false);
+            return;
+        }
+        if (!documentType.isActive()) {
+            throw new ValidationException("isDefault", ErrorCode.VALIDATION_FAILED,
+                    "error.document.default.inactive");
+        }
+        documentTypeRepository.findByCountryCodeAndDefaultTypeTrue(countryCode)
+                .filter(current -> !current.getType().equals(documentType.getType()))
+                .ifPresent(current -> {
+                    current.setDefaultType(false);
+                    documentTypeRepository.saveAndFlush(current);
+                });
+        documentType.setDefaultType(true);
     }
 }

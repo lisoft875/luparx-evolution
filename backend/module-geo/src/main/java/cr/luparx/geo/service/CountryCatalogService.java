@@ -56,6 +56,8 @@ public class CountryCatalogService {
 
     public List<IdentityDocumentType> documentTypes(String countryCode) {
         Country country = requireActiveCountry(countryCode);
-        return documentTypeRepository.findByCountryCodeAndActiveTrueOrderByTypeAsc(country.getCode());
+        // Ordered by the presentation order the country configured, so a client only has to render
+        // what arrives — the rule "in Costa Rica, the national id first" is data, not client code.
+        return documentTypeRepository.findByCountryCodeAndActiveTrueOrderBySortOrderAscTypeAsc(country.getCode());
     }
 }

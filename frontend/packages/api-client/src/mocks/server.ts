@@ -215,13 +215,23 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
     return json(MOCK_COUNTRIES);
   }
   // GET /api/v1/catalog/countries/{code}/admin-levels
-  if (method === 'GET' && segments[2] === 'catalog' && segments[4] === 'admin-levels') {
-    const code = segments[3]?.toUpperCase() ?? '';
+  if (
+    method === 'GET' &&
+    segments[2] === 'catalog' &&
+    segments[3] === 'countries' &&
+    segments[5] === 'admin-levels'
+  ) {
+    const code = segments[4]?.toUpperCase() ?? '';
     return json(MOCK_ADMIN_LEVELS[code] ?? []);
   }
   // GET /api/v1/catalog/countries/{code}/divisions?parentId=&level=
-  if (method === 'GET' && segments[2] === 'catalog' && segments[4] === 'divisions') {
-    const code = segments[3]?.toUpperCase() ?? '';
+  if (
+    method === 'GET' &&
+    segments[2] === 'catalog' &&
+    segments[3] === 'countries' &&
+    segments[5] === 'divisions'
+  ) {
+    const code = segments[4]?.toUpperCase() ?? '';
     const parentId = url.searchParams.get('parentId');
     const level = url.searchParams.get('level');
     const all = MOCK_DIVISIONS[code] ?? [];
@@ -233,8 +243,13 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
     return json(filtered);
   }
   // GET /api/v1/catalog/countries/{code}/document-types
-  if (method === 'GET' && segments[2] === 'catalog' && segments[4] === 'document-types') {
-    const code = segments[3]?.toUpperCase() ?? '';
+  if (
+    method === 'GET' &&
+    segments[2] === 'catalog' &&
+    segments[3] === 'countries' &&
+    segments[5] === 'document-types'
+  ) {
+    const code = segments[4]?.toUpperCase() ?? '';
     return json(MOCK_DOCUMENT_TYPES[code] ?? []);
   }
   // GET /api/v1/catalog/vehicle-types | /vehicle-colors — platform-wide enumerations, `{value, labelKey}`.

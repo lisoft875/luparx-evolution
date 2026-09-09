@@ -46,12 +46,33 @@ public class IdentityDocumentType {
     @Column(name = "active", nullable = false)
     private boolean active = true;
 
+    /**
+     * Presentation order, ascending (V20_0). Not alphabetical: the document the resident majority
+     * carries goes first and {@code OTHER} goes last, because a list ordered by accident puts the
+     * commonest option in the middle.
+     */
+    @Column(name = "sort_order", nullable = false)
+    private int sortOrder = 100;
+
+    /**
+     * The one the form opens with. At most one per country, guaranteed by a partial unique index —
+     * see V20_0 for why this is a column of its own instead of "whatever sorts first".
+     */
+    @Column(name = "is_default", nullable = false)
+    private boolean defaultType;
+
     protected IdentityDocumentType() {
         // for JPA
     }
 
     public IdentityDocumentType(String countryCode, IdentityDocumentTypeCode type, String labelKey, String pattern,
                                 String normalizer, String example, boolean active) {
+        this(countryCode, type, labelKey, pattern, normalizer, example, active, 100, false);
+    }
+
+    public IdentityDocumentType(String countryCode, IdentityDocumentTypeCode type, String labelKey, String pattern,
+                                String normalizer, String example, boolean active, int sortOrder,
+                                boolean defaultType) {
         this.countryCode = countryCode;
         this.type = type;
         this.labelKey = labelKey;
@@ -59,6 +80,8 @@ public class IdentityDocumentType {
         this.normalizer = normalizer;
         this.example = example;
         this.active = active;
+        this.sortOrder = sortOrder;
+        this.defaultType = defaultType;
     }
 
     public String getCountryCode() {
@@ -89,6 +112,14 @@ public class IdentityDocumentType {
         return active;
     }
 
+    public int getSortOrder() {
+        return sortOrder;
+    }
+
+    public boolean isDefaultType() {
+        return defaultType;
+    }
+
     public void setLabelKey(String labelKey) {
         this.labelKey = labelKey;
     }
@@ -107,5 +138,17 @@ public class IdentityDocumentType {
 
     public void setActive(boolean active) {
         this.active = active;
+    }
+
+    public void setSortOrder(int sortOrder) {
+        this.sortOrder = sortOrder;
+    }
+
+    /**
+     * Marks or unmarks this row as the country's default. The service is responsible for clearing
+     * the previous default first: the database refuses two, which is the point of the index.
+     */
+    public void setDefaultType(boolean defaultType) {
+        this.defaultType = defaultType;
     }
 }

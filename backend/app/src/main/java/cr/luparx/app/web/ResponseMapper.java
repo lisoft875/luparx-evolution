@@ -72,7 +72,7 @@ public class ResponseMapper {
 
     public CatalogDtos.DocumentTypeResponse toDocumentType(IdentityDocumentType type) {
         return new CatalogDtos.DocumentTypeResponse(type.getType(), type.getLabelKey(), type.getPattern(),
-                type.getExample());
+                type.getExample(), type.isDefaultType());
     }
 
     public CatalogDtos.TenantCatalogResponse toTenantCatalog(Tenant tenant) {

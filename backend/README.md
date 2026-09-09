@@ -777,6 +777,76 @@ the administration's, field for field: both come from the same entity through th
 amount on the officer's screen is the amount that is charged (verified by comparing the two responses,
 not by reading the code).
 
+## Costa Rica's full territorial tree, and the default document type (v0.9)
+
+**The tree.** `V19_0` loads the DTA with the official codes (province `1`, canton `101`, district
+`10101` — concatenated they are the postal code), resolving each parent **by code** and with
+`ON CONFLICT DO NOTHING`, so it applies identically to an empty database and to one that already had
+part of the tree seeded. Verified against real PostgreSQL, on both paths:
+
+| | fresh database | database that already had V9_1 + V13_0 |
+|---|---|---|
+| provinces / cantons / district rows | 7 / 84 / 484 | 7 / 84 / 484 |
+| districts without a canton | 0 | 0 |
+| cantons without a province | 0 | 0 |
+| divisions named "Central" | 0 | 0 |
+| pre-existing names overwritten | — | none (`Montes de Oca` kept, not `Montes De Oca`) |
+
+Running the file a second and a third time changes nothing (575 CR rows before and after), which is
+what `ON CONFLICT DO NOTHING` is there for.
+
+**`V19_1` fixes a duplication the load left behind.** Monteverde (6-12, Ley 9903/2021) and Puerto
+Jiménez (6-13, Ley 10276/2022) were created by segregating a district that already existed, so the
+tree ended up offering the same territory twice — `6-01-09 Monte Verde` under Puntarenas *and*
+`6-12-01 Monteverde`, `6-07-02 Puerto Jiménez` under Golfito *and* `6-13-01 Puerto Jiménez`. In an
+address form that means two neighbours of the same town end up with addresses that do not match. The
+two old rows are **deactivated, not deleted**: the catalogue only offers active rows, and the row
+survives because stored addresses may reference it by id. After it: **482 active districts**.
+
+**Twelve territories are still missing** (the DTA declares 494) and they are deliberately *not*
+invented. This container's egress allowlist reaches package registries and `raw.githubusercontent.com`
+but not the IGN, the INEC or Wikipedia, and the only Costa Rican dataset on npm is the very snapshot
+V19_0 came from — verified by downloading it: 7 provinces, 82 cantons, 482 districts, with six of the
+seven first cantons named "Central". A made-up district name would end up written into real addresses,
+which is worse than a gap. They are loaded through the platform back office
+(`POST /api/v1/platform/countries/CR/divisions`) with no further migration; the header of `V19_1`
+carries the query that lists districts per canton to diff against the DTA.
+
+**The divisions endpoint at this volume.** One request is **two SQL statements** — the country row and
+the children — regardless of how many rows come back (measured on a request returning 20 cantons), and
+it is served by `ix_administrative_divisions_country_parent`. A canton with 15 districts and a province
+with 20 cantons answer in 13–19 ms. One caveat worth knowing: `?level=` is capped at 500 rows and
+Costa Rica's district level now sits at 482, so a country with more districts would be **silently
+truncated** on that variant. The dropdown path (`?parentId=`) is unaffected, since it asks one level
+at a time.
+
+**The default document type.** `identity_document_types` gains `sort_order` (presentation order,
+ascending, not alphabetical) and `is_default` (what the form opens with). Two columns rather than one,
+for two reasons: they are two different facts — a country may want the passport shown first and the
+national id still preselected — and with two the invariant is enforceable by the database.
+`uq_identity_document_types_default`, a partial unique index on `country_code WHERE is_default`, makes
+**at most one default per country** a schema guarantee: marking a second one fails the `INSERT`
+(verified: `duplicate key value violates unique constraint`), not the interface. Zero defaults stays
+legal, because a newly added country may not have been decided yet.
+
+```
+GET /api/v1/catalog/countries/CR/document-types
+NATIONAL_ID (default: true) · FOREIGN_RESIDENT_ID · PASSPORT · TAX_ID · OTHER
+```
+
+The list arrives already ordered with `default` marked, so the client renders what it receives instead
+of hardcoding "in Costa Rica, preselect the national id" — a rule that, written in the client, is wrong
+for the second country and cannot be corrected without a release. Seeded defaults are `NATIONAL_ID`
+for CR, ES, MX, PA and US: the document the resident majority carries, never the passport, which
+belongs to a visitor and would make every resident change the field. The US row is marked with an
+honest caveat in the migration — there the document shown for a traffic matter is the driving licence,
+which the catalogue does not model yet — so it is a row to revisit when that market is real, and
+correcting it is a row and not a deployment.
+
+`PUT /api/v1/platform/countries/{code}/document-types` takes `sortOrder` and `isDefault`, both
+optional so that "leave it as it is" is expressible; setting a default clears the previous one in the
+same transaction, and an inactive type cannot be the default.
+
 ## Environment variables
 
 Secrets have **no usable default**: the application fails to start rather than run with a
@@ -931,6 +1001,9 @@ mistakes them for working features:
   chain). The contract is fixed above and the ledger columns it needs already exist (`source`,
   `external_reference`); what is missing is the machine-to-machine authentication, the per-merchant
   credential store and the settlement report.
+- The last **12 districts** of Costa Rica's territorial tree (494 declared, 482 active): they need
+  the official DTA, which this environment cannot reach, and they load through the platform back
+  office rather than a migration. See the header of `V19_1`.
 - The scheduled sweep that moves overdue citations to `EXPIRED` in bulk. The operation exists and is
   idempotent, bounded and tenant-scoped (`CitationService.expireOverdue`), and a citation read one at
   a time already corrects itself; only the schedule is missing.

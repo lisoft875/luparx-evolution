@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import {
   Controller,
   type Control,
@@ -63,6 +63,18 @@ export function PersonalDataFields<TValues extends PersonalDataValues>({
   const phoneCountryCode = String(watch(path('phoneCountryCode')) ?? '');
 
   const documentTypesQuery = useDocumentTypes(apiClient, identityDocumentCountryCode || undefined);
+
+  // The country decides which document its residents carry, and the catalogue says so; asking
+  // someone to pick "cédula" out of five options every single time is asking them to restate what
+  // the country already declared. Only ever fills an empty field: a saved profile, or a choice
+  // already made in this session, is never overwritten by the default.
+  const documentTypes = documentTypesQuery.data;
+  const selectedDocumentType = String(watch(path('identityDocumentType')) ?? '');
+  useEffect(() => {
+    if (selectedDocumentType || !documentTypes?.length) return;
+    const preferred = documentTypes.find((entry) => entry.default);
+    if (preferred) setValue(path('identityDocumentType'), preferred.type as never, { shouldDirty: false });
+  }, [documentTypes, selectedDocumentType, setValue]);
   const adminLevelsQuery = useAdminLevels(apiClient, addressCountryCode || undefined);
 
   const level1Id = String(watch(path('addressLevel1Id')) ?? '');

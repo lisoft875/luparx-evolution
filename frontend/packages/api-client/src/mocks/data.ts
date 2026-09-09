@@ -87,7 +87,14 @@ export const MOCK_DIVISIONS: Record<string, AdministrativeDivision[]> = {
 
 export const MOCK_DOCUMENT_TYPES: Record<string, DocumentTypeCatalogEntry[]> = {
   CR: [
-    { type: 'NATIONAL_ID', labelKey: 'document.type.NATIONAL_ID', pattern: '^\\d{9}$', example: '123456789' },
+    // El servidor declara cuál es el predeterminado del país; el simulado dice lo mismo.
+    {
+      type: 'NATIONAL_ID',
+      labelKey: 'document.type.NATIONAL_ID',
+      pattern: '^\\d{9}$',
+      example: '123456789',
+      default: true,
+    },
     {
       type: 'FOREIGN_RESIDENT_ID',
       labelKey: 'document.type.FOREIGN_RESIDENT_ID',

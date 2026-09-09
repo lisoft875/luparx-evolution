@@ -37,12 +37,23 @@ public final class CatalogDtos {
     public record AdministrativeDivisionResponse(UUID id, String code, String name, int level, UUID parentId) {
     }
 
-    /** {@code GET /catalog/countries/{code}/document-types}. */
+    /**
+     * {@code GET /catalog/countries/{code}/document-types}.
+     *
+     * <p>The list arrives <b>already ordered</b> for presentation and one entry carries
+     * {@code "default": true}, so a client renders what it receives instead of hardcoding "in Costa
+     * Rica, preselect the national id" — a rule that, written in the client, is wrong for the second
+     * country and cannot be corrected without a release.</p>
+     *
+     * <p>The JSON member is named {@code default} because that is what it is to the form. The Java
+     * component cannot be: {@code default} is a reserved word, hence the mapping.</p>
+     */
     public record DocumentTypeResponse(
             IdentityDocumentTypeCode type,
             String labelKey,
             String pattern,
-            String example) {
+            String example,
+            @com.fasterxml.jackson.annotation.JsonProperty("default") boolean defaultType) {
     }
 
     /**

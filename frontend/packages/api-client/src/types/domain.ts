@@ -111,6 +111,13 @@ export interface DocumentTypeCatalogEntry {
   labelKey: string;
   pattern: string;
   example: string;
+  /**
+   * The one type a resident of that country carries, pre-selected when the form opens
+   * (CONTRACT.md v0.9). At most one per country, enforced by a partial unique index in the
+   * database rather than by whoever writes the seed. Absent means "no opinion": the form then
+   * asks instead of guessing.
+   */
+  default?: boolean;
 }
 
 /**
