@@ -4,8 +4,10 @@ import cr.luparx.app.audit.AuditRecorder;
 import cr.luparx.app.outbox.OutboxRecorder;
 import cr.luparx.app.web.dto.AdminDtos;
 import cr.luparx.core.audit.AuditAction;
+import cr.luparx.core.domain.Role;
 import cr.luparx.core.error.ErrorCode;
 import cr.luparx.core.error.ForbiddenException;
+import cr.luparx.core.error.ValidationException;
 import cr.luparx.core.id.TenantId;
 import cr.luparx.core.id.UserId;
 import cr.luparx.core.outbox.OutboxEventType;
@@ -83,11 +85,28 @@ public class AdminMembershipController {
             // A municipal administrator may only grant access to their own municipality.
             throw ForbiddenException.of(ErrorCode.CROSS_TENANT_ACCESS_DENIED, "error.tenant.cross.access");
         }
+        requireGrantable(request.role());
         TenantMembership membership = membershipService.create(UserId.of(request.userId()), tenantId,
                 request.portal(), request.role(), MembershipStatus.ACTIVE);
         auditRecorder.record(AuditAction.MEMBERSHIP_CREATED, "membership", membership.getId().toString(),
                 Map.of("userId", request.userId().toString(), "role", request.role().name()));
         return mapper.toMembership(membership);
+    }
+
+    /**
+     * The roles a municipal administrator may hand out inside their own municipality
+     * (CONTRACT.md v0.14): inspectors, finance and support — never another administrator.
+     *
+     * <p>Without this the endpoint was a privilege escalation with no steps at all: {@code
+     * ROLE_ASSIGN} is held by {@code TENANT_ADMIN}, so one administrator could appoint a second, and
+     * a stolen admin session could quietly leave a permanent one behind. Who runs a municipality is
+     * the platform's decision.</p>
+     */
+    private static void requireGrantable(Role role) {
+        if (role == null || !role.grantableByTenantAdmin()) {
+            throw new ValidationException("role", ErrorCode.ROLE_NOT_ALLOWED_FOR_PORTAL,
+                    "error.membership.role.notGrantableByTenant");
+        }
     }
 
     @PutMapping("/{id}")
@@ -96,6 +115,11 @@ public class AdminMembershipController {
     public AdminDtos.MembershipResponse update(@PathVariable UUID id,
                                                @Valid @RequestBody AdminDtos.UpdateMembershipRequest request) {
         TenantId tenantId = TenantContextHolder.requireTenantId();
+        // Changing a role is granting one: the same ceiling applies, or the create rule would be a
+        // formality anybody could step around with a second request.
+        if (request.role() != null) {
+            requireGrantable(request.role());
+        }
         TenantMembership membership = membershipService.update(id, tenantId, request.role(), request.status());
         auditRecorder.record(AuditAction.MEMBERSHIP_ROLE_CHANGED, "membership", id.toString(),
                 Map.of("role", String.valueOf(request.role()), "status", String.valueOf(request.status())));

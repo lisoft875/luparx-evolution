@@ -213,6 +213,46 @@ export const esCR = {
   'admin.users.filter.allPortals': 'Todos los portales',
   'admin.users.empty': 'No se encontraron usuarios con esos criterios.',
   'admin.users.detail.title': 'Detalle de usuario',
+
+  // Roles, as a person reads them. The enum name is what the API speaks; this is what a screen shows.
+  'role.PLATFORM_ADMIN': 'Administrador de plataforma',
+  'role.PLATFORM_SUPPORT': 'Soporte de plataforma',
+  'role.TENANT_ADMIN': 'Administrador municipal',
+  'role.TENANT_FINANCE': 'Finanzas',
+  'role.TENANT_FINANCE.detail': 'Recargas y reportes financieros de la municipalidad',
+  'role.TENANT_SUPPORT': 'Soporte',
+  'role.TENANT_SUPPORT.detail': 'Consulta de usuarios, multas y bitácora, sin poder modificar',
+  'role.INSPECTOR': 'Fiscalizador',
+  'role.INSPECTOR.detail': 'Verifica placas y levanta boletas en campo',
+  'role.INSPECTOR_LEAD': 'Jefe de fiscalización',
+  'role.INSPECTOR_LEAD.detail': 'Lo mismo que un fiscalizador, y además puede anular boletas',
+  'role.CITIZEN': 'Ciudadano',
+
+  'admin.users.create.cta': 'Crear usuario',
+  'admin.users.create.title': 'Crear un usuario de la municipalidad',
+  'admin.users.create.description':
+    'La persona recibe un correo para elegir su propia contraseña. Hasta que lo haga no puede ingresar, y nadie más puede hacerlo por ella.',
+  'admin.users.create.access.label': 'Acceso',
+  'admin.users.create.access.description': 'Qué va a poder hacer esta persona y a qué correo se le avisa.',
+  'admin.users.create.roleLabel': 'Rol',
+  'admin.users.create.emailHint': 'A esta dirección llega el enlace para elegir la contraseña.',
+  'admin.users.create.personalData.label': 'Datos de la persona',
+  'admin.users.create.personalData.description':
+    'Los mismos datos que se le piden a cualquiera al registrarse. Escríbalos como aparecen en el expediente.',
+  'admin.users.create.submit': 'Crear y enviar el correo',
+  'admin.users.create.error.EMAIL_ALREADY_REGISTERED':
+    'Ya existe una cuenta con ese correo. Búsquela en la lista de usuarios y otórguele el acceso desde su ficha.',
+  'admin.users.create.error.DOCUMENT_ALREADY_REGISTERED':
+    'Ya existe una cuenta con esa identificación. Búsquela en la lista de usuarios y otórguele el acceso desde su ficha.',
+  'admin.users.create.error.ROLE_NOT_ALLOWED_FOR_PORTAL':
+    'Un administrador municipal no puede otorgar ese rol. Solicítelo a la plataforma.',
+
+  'admin.users.detail.grant.title': 'Otorgar acceso',
+  'admin.users.detail.grant.description':
+    'Para alguien que ya tiene cuenta: no se crea nada, sólo se le da acceso a esta municipalidad.',
+  'admin.users.detail.grant.roleLabel': 'Rol',
+  'admin.users.detail.grant.submit': 'Otorgar',
+  'admin.users.detail.grant.error': 'No se pudo otorgar el acceso. Puede que la persona ya lo tenga.',
   'admin.users.detail.actions.block': 'Bloquear',
   'admin.users.detail.actions.unblock': 'Desbloquear',
   'admin.users.detail.actions.forcePasswordReset': 'Forzar reseteo de contraseña',

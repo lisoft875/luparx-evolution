@@ -10,6 +10,7 @@ import cr.luparx.core.domain.Portal;
 import cr.luparx.core.domain.Role;
 import cr.luparx.core.error.ErrorCode;
 import cr.luparx.core.error.NotFoundException;
+import cr.luparx.core.error.ValidationException;
 import cr.luparx.core.i18n.Locales;
 import cr.luparx.core.id.TenantId;
 import cr.luparx.core.id.UserId;
@@ -22,15 +23,21 @@ import cr.luparx.identity.entity.User;
 import cr.luparx.identity.model.UserStatus;
 import cr.luparx.identity.port.NotificationSender;
 import cr.luparx.identity.service.PasswordResetService;
+import cr.luparx.identity.service.RegistrationCommand;
+import cr.luparx.identity.service.RegistrationResult;
 import cr.luparx.identity.service.UserDirectoryService;
+import cr.luparx.identity.service.UserRegistrationService;
 import cr.luparx.tenancy.entity.TenantMembership;
+import cr.luparx.tenancy.model.MembershipStatus;
 import cr.luparx.tenancy.repository.TenantMembershipRepository;
+import cr.luparx.tenancy.service.MembershipService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -67,6 +74,8 @@ public class AdminUserController {
     private final TenantScopedUserRepository tenantScopedUserRepository;
     private final TenantMembershipRepository membershipRepository;
     private final UserDirectoryService userDirectoryService;
+    private final UserRegistrationService registrationService;
+    private final MembershipService membershipService;
     private final PasswordResetService passwordResetService;
     private final NotificationSender notificationSender;
     private final SmtpNotificationSender portalUrls;
@@ -77,6 +86,8 @@ public class AdminUserController {
     public AdminUserController(TenantScopedUserRepository tenantScopedUserRepository,
                                TenantMembershipRepository membershipRepository,
                                UserDirectoryService userDirectoryService,
+                               UserRegistrationService registrationService,
+                               MembershipService membershipService,
                                PasswordResetService passwordResetService,
                                NotificationSender notificationSender,
                                SmtpNotificationSender portalUrls,
@@ -86,6 +97,8 @@ public class AdminUserController {
         this.tenantScopedUserRepository = tenantScopedUserRepository;
         this.membershipRepository = membershipRepository;
         this.userDirectoryService = userDirectoryService;
+        this.registrationService = registrationService;
+        this.membershipService = membershipService;
         this.passwordResetService = passwordResetService;
         this.notificationSender = notificationSender;
         this.portalUrls = portalUrls;
@@ -126,14 +139,102 @@ public class AdminUserController {
         return mapper.toUserDetail(user, memberships);
     }
 
+    /**
+     * Opens an account for somebody who works for this municipality — an inspector, most of the time
+     * (CONTRACT.md v0.14).
+     *
+     * <h2>Why the administrator types the person's data</h2>
+     *
+     * <p>Because they have it. Hiring an inspector means holding their identity document, their
+     * address and their date of birth in an employment file; §2 requires those fields and this is
+     * not the platform guessing them, it is the municipality entering what it already knows. That is
+     * the difference between this and inventing data, which is why {@code createAdmin} on the
+     * platform side still refuses to conjure an account out of an e-mail alone.</p>
+     *
+     * <h2>What the administrator does not get to do</h2>
+     *
+     * <p>Set the password. No credentials row is written at all: the person receives a link and
+     * chooses their own, and only then can the account be signed into. An operator who could set the
+     * password could sign in as that person and write fines in their name — the audit trail would
+     * say the inspector did it, and it would be wrong.</p>
+     *
+     * <p>Nor appoint another administrator: {@link Role#grantableByTenantAdmin()} allows inspectors,
+     * finance and support, and refuses {@code TENANT_ADMIN} and everything platform-scoped.</p>
+     *
+     * <p>Two permissions, because two things happen: a person is created ({@code USER_WRITE}) and a
+     * role is granted ({@code ROLE_ASSIGN}). Among municipal roles only {@code TENANT_ADMIN} holds
+     * both, which is the intended answer — but it is expressed as the two capabilities rather than
+     * as the role name, so a municipality that splits its staff differently keeps working.</p>
+     */
     @PostMapping
-    @PreAuthorize("hasAuthority('PERM_USER_WRITE')")
-    @Operation(summary = "Create or invite a user into the active municipality")
+    @PreAuthorize("hasAuthority('PERM_USER_WRITE') and hasAuthority('PERM_ROLE_ASSIGN')")
+    @Operation(summary = "Create a member of staff of the active municipality and grant their role")
     public ResponseEntity<AdminDtos.AdminUserDetail> create(@Valid @RequestBody AdminDtos.CreateUserRequest request) {
-        // Extension point (CONTRACT.md §4 "alta manual / invitación"): the invitation flow reuses the
-        // registration domain service plus a membership in INVITED state and is intentionally not
-        // improvised here — see backend/README.md, "Pending".
-        throw new cr.luparx.core.error.NotImplementedException("error.notImplemented.adminUserCreate");
+        TenantId tenantId = TenantContextHolder.requireTenantId();
+        Role role = request.role();
+        if (!role.grantableByTenantAdmin()) {
+            throw new ValidationException("role", ErrorCode.ROLE_NOT_ALLOWED_FOR_PORTAL,
+                    "error.membership.role.notGrantableByTenant");
+        }
+        if (request.portal() != role.portal()) {
+            // The portal is not a second opinion about the role: it is decided by the role, and a
+            // request where the two disagree is a client that means one thing and says another.
+            throw new ValidationException("portal", ErrorCode.ROLE_NOT_ALLOWED_FOR_PORTAL,
+                    "error.membership.role.portalMismatch");
+        }
+
+        RegistrationCommand command = new RegistrationCommand(
+                request.givenName(),
+                request.familyName(),
+                request.secondFamilyName(),
+                request.identityDocument().countryCode(),
+                request.identityDocument().type(),
+                request.identityDocument().number(),
+                request.address().countryCode(),
+                request.address().level1Id(),
+                request.address().level2Id(),
+                request.address().level3Id(),
+                request.address().line1(),
+                request.address().line2(),
+                request.address().postalCode(),
+                request.phone().countryCode(),
+                request.phone().nationalNumber(),
+                request.nationalityCode(),
+                request.email(),
+                request.birthDate(),
+                // No password: the person sets their own from the link below.
+                null,
+                request.locale(),
+                request.timeZone(),
+                null,
+                tenantId.value(),
+                role.portal());
+
+        RegistrationResult result = registrationService.createByOperator(command);
+        TenantMembership membership = membershipService.create(result.userId(), tenantId, role.portal(), role,
+                MembershipStatus.ACTIVE);
+
+        // The one mail this account gets. Following it proves the mailbox and activates the account,
+        // so no separate verification mail is sent — two mails saying "click here" is how people
+        // learn to click neither.
+        PasswordResetService.Issued issued = passwordResetService.forceReset(result.userId());
+        notificationSender.send(issued.user().getEmail(),
+                Locales.parse(issued.user().getLocale()).orElse(Locale.ROOT),
+                "email.accountCreated",
+                Map.of("name", issued.user().getGivenName(),
+                        "link", portalUrls.portalBaseUrl(role.portal().slug())
+                                + "/password/reset?token=" + issued.token()));
+
+        auditRecorder.record(AuditAction.USER_CREATED, "user", result.userId().toString(),
+                Map.of("role", role.name(), "portal", role.portal().slug(), "createdBy", "tenant-admin"));
+        auditRecorder.record(AuditAction.MEMBERSHIP_CREATED, "membership", membership.getId().toString(),
+                Map.of("userId", result.userId().toString(), "role", role.name()));
+        outboxRecorder.record("user", result.userId().toString(), tenantId, OutboxEventType.USER_REGISTERED,
+                Map.of("userId", result.userId().toString(), "portal", role.portal().slug()));
+
+        User created = userDirectoryService.require(result.userId());
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(mapper.toUserDetail(created, List.of(membership)));
     }
 
     @PutMapping("/{id}")

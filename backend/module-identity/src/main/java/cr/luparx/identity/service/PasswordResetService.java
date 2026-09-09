@@ -117,6 +117,14 @@ public class PasswordResetService {
                                 passwordService.algorithm(), now, false)));
 
         token.markUsed(now);
+        // Following a link sent to that address, and choosing a password with it, proves the person
+        // holds the mailbox — which is the same thing the verification link proves and nothing less.
+        // So an account still waiting on verification becomes ACTIVE here rather than staying locked
+        // out behind EMAIL_NOT_VERIFIED. It is what makes an operator-created account usable at all
+        // (CONTRACT.md v0.14: the only mail such an account is sent is this one), and for an
+        // ordinary account it removes a dead end nobody could get out of except by finding an old
+        // e-mail.
+        user.markEmailVerified(now);
         user.bumpCredentialsVersion(now);
         // A reset means "I may have been compromised": every existing session is destroyed.
         refreshTokenService.revokeAllForUser(UserId.of(user.getId()));

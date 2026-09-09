@@ -10,6 +10,13 @@ public final class AuditAction {
     }
 
     public static final String USER_REGISTERED = "USER_REGISTERED";
+    /**
+     * An account opened <em>for</em> somebody by an operator (CONTRACT.md v0.14), as opposed to
+     * {@link #USER_REGISTERED}, which somebody did for themselves. Kept apart on purpose: the
+     * question an auditor asks about a staff account is who created it, and one action name covering
+     * both would make that unanswerable.
+     */
+    public static final String USER_CREATED = "USER_CREATED";
     public static final String USER_UPDATED = "USER_UPDATED";
     public static final String USER_BLOCKED = "USER_BLOCKED";
     public static final String USER_UNBLOCKED = "USER_UNBLOCKED";

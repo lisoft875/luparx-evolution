@@ -1233,3 +1233,70 @@ se registraba solo quedaba activo o en espera de aprobación, y eso ya no ocurre
 o los ciudadanos también pasan por aprobación en las municipalidades que lo pidan, o el ajuste colapsa
 a «abierta / sólo por invitación». Es decisión de producto y no se toma acá; mientras tanto el ajuste
 sigue apareciendo en el back-office y `APPROVAL_REQUIRED` se comporta como `OPEN`.
+
+# v0.14 — El administrador municipal crea su personal (normativo)
+
+## La regla
+
+El administrador de una municipalidad crea las cuentas de su propio personal —fiscalizadores, sobre
+todo— sin pasar por la plataforma. Tener que pedirle a la plataforma cada contratación convierte a la
+plataforma en una mesa de ayuda.
+
+`POST /api/v1/admin/users` deja de responder `NOT_IMPLEMENTED`. Pide `PERM_USER_WRITE` **y**
+`PERM_ROLE_ASSIGN`, porque pasan dos cosas: nace una persona y se le otorga un rol. La municipalidad
+sale del contexto del llamante, nunca del cuerpo.
+
+## Qué roles puede otorgar
+
+| Rol | ¿El admin municipal lo otorga? |
+|---|---|
+| `INSPECTOR`, `INSPECTOR_LEAD` | Sí |
+| `TENANT_FINANCE`, `TENANT_SUPPORT` | Sí |
+| `TENANT_ADMIN` | **No** — lo otorga la plataforma |
+| `PLATFORM_ADMIN`, `PLATFORM_SUPPORT` | No |
+| `CITIZEN` | No: ciudadano se es al registrarse, o al estacionar en una municipalidad nueva |
+
+Un administrador que puede nombrar administradores puede nombrarse un sucesor, un colega o un
+desconocido, y de ahí en adelante nadie fuera de la municipalidad sabe quién tiene las llaves. Quién
+manda en una municipalidad sigue siendo decisión de la plataforma, y eso es además lo que le da
+sentido a la bitácora de ese nombramiento.
+
+La regla vive en `Role.grantableByTenantAdmin()` y la aplican **las tres** puertas: crear un usuario,
+otorgar una membresía (`POST /admin/memberships`) y cambiarle el rol a una (`PUT
+/admin/memberships/{id}`). Esta última faltaba y era una escalada de privilegios sin pasos
+intermedios: `ROLE_ASSIGN` lo tiene `TENANT_ADMIN`, así que un administrador podía nombrar un segundo
+—o una sesión robada podía dejar uno permanente— sin que nadie se enterara.
+
+## Quién escribe cada dato
+
+**El administrador escribe los datos de la persona.** Nombre, identificación, dirección, teléfono y
+fecha de nacimiento: los mismos campos del §2, en el mismo orden y con la misma validación que un
+registro. No es la plataforma adivinando —eso es lo que sigue prohibido— es la municipalidad
+escribiendo lo que ya tiene en el expediente de su empleado.
+
+**La persona escribe su contraseña.** El administrador no la fija y no puede: no se escribe ninguna
+fila de credenciales. La persona recibe un correo con un enlace de un solo uso, elige su contraseña y
+recién entonces puede ingresar. Un operador que pudiera fijar la contraseña podría entrar como esa
+persona y levantar boletas a su nombre, y la bitácora diría que fue el fiscalizador.
+
+Ese enlace **también verifica el correo**: seguir un enlace enviado a esa dirección demuestra que se
+tiene el buzón, que es exactamente lo que demuestra el enlace de verificación y ni un poco menos. Por
+eso `PasswordResetService.reset` activa una cuenta que estaba en `PENDING_VERIFICATION`. Sin eso, la
+cuenta creada por un operador quedaría bloqueada para siempre detrás de `EMAIL_NOT_VERIFIED`; de paso
+le quita una salida en falso a cualquier cuenta que nunca verificó su correo.
+
+Se manda **un solo correo**. Dos mensajes que dicen «haga clic aquí» es como se enseña a la gente a no
+hacer clic en ninguno.
+
+## Cuando la persona ya existe
+
+Es el caso frecuente: un fiscalizador probablemente ya se registró como ciudadano. Entonces no se crea
+nada, sólo se otorga el acceso, y eso se hace desde la ficha de la persona («Otorgar acceso»). Crear
+con un correo o una identificación que ya existen responde `EMAIL_ALREADY_REGISTERED` /
+`DOCUMENT_ALREADY_REGISTERED`, y la pantalla dice qué hacer en vez de sólo negarse.
+
+## Bitácora
+
+`USER_CREATED` es distinto de `USER_REGISTERED` a propósito. La pregunta que un auditor hace sobre una
+cuenta de personal es quién la creó, y un solo nombre de acción para las dos cosas la dejaría sin
+respuesta.

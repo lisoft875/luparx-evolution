@@ -37,6 +37,7 @@ import {
 import type { PagedResponse, PageParams } from './types/http';
 import type {
   AdminUserDetail,
+  CreateAdminUserRequest,
   AdminUserListItem,
   AdminCitationsQuery,
   AdminUsersQuery,
@@ -289,6 +290,11 @@ export class ApiClient {
     list: (query: AdminUsersQuery & PageParams): Promise<PagedResponse<AdminUserListItem>> =>
       this.http.request('GET', '/api/v1/admin/users', { query }),
     get: (id: string): Promise<AdminUserDetail> => this.http.request('GET', `/api/v1/admin/users/${id}`),
+    // Idempotent: a double submit of a staff form must not open two accounts, and the second call
+    // would otherwise land on EMAIL_ALREADY_REGISTERED and read to the administrator as their own
+    // mistake.
+    create: (payload: CreateAdminUserRequest): Promise<AdminUserDetail> =>
+      this.http.request('POST', '/api/v1/admin/users', { body: payload, idempotent: true }),
     block: (id: string, payload: BlockUserRequest): Promise<void> =>
       this.http.request('POST', `/api/v1/admin/users/${id}/block`, { body: payload, idempotent: true }),
     unblock: (id: string): Promise<void> =>

@@ -80,12 +80,39 @@ public class UserRegistrationService {
         this.clock = clock;
     }
 
+    /**
+     * Somebody opening their own account. Refused on any portal but the citizen's (CONTRACT.md
+     * v0.13), and the password is theirs and mandatory.
+     */
     @Transactional
     public RegistrationResult register(RegistrationCommand command) {
         if (!command.portal().selfRegistrationAllowed()) {
             throw ForbiddenException.of(ErrorCode.SELF_REGISTRATION_DISABLED, "error.registration.portal.disabled");
         }
+        return create(command, true);
+    }
 
+    /**
+     * An account opened <em>for</em> somebody by an operator — a municipal administrator hiring an
+     * inspector, or the platform back-office (CONTRACT.md v0.14).
+     *
+     * <p>Same validation, same uniqueness, same record: the difference is who typed it and what
+     * happens to the password. The operator never sets one. {@code command.password()} is null, no
+     * credentials row is written, and the account cannot be signed into until the person follows the
+     * link they are emailed and chooses their own. An operator who could set the password could sign
+     * in as that person and issue fines in their name.</p>
+     *
+     * <p>The portal gate above does not apply here, and that is the whole point: these are exactly
+     * the portals that no longer self-register. What replaces it is the caller's authority — the
+     * controller checks the permission and that the role is one a municipal administrator may
+     * grant.</p>
+     */
+    @Transactional
+    public RegistrationResult createByOperator(RegistrationCommand command) {
+        return create(command, false);
+    }
+
+    private RegistrationResult create(RegistrationCommand command, boolean selfService) {
         Instant now = clock.instant();
         ValidationException.Collector errors = new ValidationException.Collector();
 
@@ -156,8 +183,12 @@ public class UserRegistrationService {
         NormalizedPhone phone = phoneNumberService.validateAndNormalize(
                 command.phoneCountryCode(), command.phoneNationalNumber(), "phone.nationalNumber");
 
-        // account fields
-        passwordService.validatePolicy(command.password(), "password");
+        // account fields. An operator-created account arrives with no password at all; anything
+        // else that is sent is still held to the policy.
+        boolean withPassword = selfService || command.password() != null;
+        if (withPassword) {
+            passwordService.validatePolicy(command.password(), "password");
+        }
         String locale = Locales.parse(command.locale()).map(java.util.Locale::toLanguageTag)
                 .orElse(policy.defaultLocale());
         String timeZone = TimeZones.parse(command.timeZone()).map(java.time.ZoneId::getId)
@@ -203,12 +234,14 @@ public class UserRegistrationService {
                 now);
         userRepository.save(user);
 
-        credentialsRepository.save(new UserCredentials(
-                user.getId(),
-                passwordService.hash(command.password()),
-                passwordService.algorithm(),
-                now,
-                false));
+        if (withPassword) {
+            credentialsRepository.save(new UserCredentials(
+                    user.getId(),
+                    passwordService.hash(command.password()),
+                    passwordService.algorithm(),
+                    now,
+                    false));
+        }
 
         String verificationToken = emailVerificationService.issueToken(UserId.of(user.getId()));
 

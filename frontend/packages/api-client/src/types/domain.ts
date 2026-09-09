@@ -367,6 +367,42 @@ export type AdminUsersQuery = {
   tenantId?: string;
 };
 
+/**
+ * `POST /admin/users` — a member of staff of the active municipality, created by an administrator
+ * (CONTRACT.md v0.14).
+ *
+ * Every §2 field is here because the account is a real person's and the contract asks for all of
+ * them; the administrator is entering what the employment file already says, not what the platform
+ * guessed. There is deliberately **no password**: the person receives a link and sets their own, so
+ * nobody can sign in as them and write fines in their name.
+ *
+ * `role` is what decides the portal, and only the roles a municipal administrator may grant are
+ * accepted — inspectors, finance and support, never another administrator.
+ */
+export interface CreateAdminUserRequest {
+  email: string;
+  givenName: string;
+  familyName: string;
+  secondFamilyName?: string;
+  identityDocument: IdentityDocumentInput;
+  address: AddressInput;
+  phone: PhoneInput;
+  nationalityCode: string;
+  birthDate: string;
+  locale?: string;
+  timeZone?: string;
+  portal: Portal;
+  role: Role;
+}
+
+/** The roles a municipal administrator may grant inside their own municipality (CONTRACT.md v0.14). */
+export const TENANT_GRANTABLE_ROLES: readonly Role[] = [
+  'INSPECTOR',
+  'INSPECTOR_LEAD',
+  'TENANT_FINANCE',
+  'TENANT_SUPPORT',
+];
+
 export interface BlockUserRequest {
   reason: string;
 }

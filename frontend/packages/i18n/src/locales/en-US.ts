@@ -201,6 +201,46 @@ export const enUS: Record<TranslationKey, string> = {
   'admin.users.filter.allPortals': 'All portals',
   'admin.users.empty': 'No users matched those criteria.',
   'admin.users.detail.title': 'User detail',
+
+  // Roles, as a person reads them. The enum name is what the API speaks; this is what a screen shows.
+  'role.PLATFORM_ADMIN': 'Platform administrator',
+  'role.PLATFORM_SUPPORT': 'Platform support',
+  'role.TENANT_ADMIN': 'Municipal administrator',
+  'role.TENANT_FINANCE': 'Finance',
+  'role.TENANT_FINANCE.detail': "Top-ups and the municipality's financial reports",
+  'role.TENANT_SUPPORT': 'Support',
+  'role.TENANT_SUPPORT.detail': 'Reads users, fines and the audit log; changes nothing',
+  'role.INSPECTOR': 'Inspector',
+  'role.INSPECTOR.detail': 'Checks plates and issues citations in the field',
+  'role.INSPECTOR_LEAD': 'Lead inspector',
+  'role.INSPECTOR_LEAD.detail': 'Everything an inspector does, and may annul citations',
+  'role.CITIZEN': 'Citizen',
+
+  'admin.users.create.cta': 'Create user',
+  'admin.users.create.title': 'Create a user of the municipality',
+  'admin.users.create.description':
+    'The person is emailed a link to choose their own password. Until they do they cannot sign in, and nobody can sign in for them.',
+  'admin.users.create.access.label': 'Access',
+  'admin.users.create.access.description': 'What this person will be able to do, and where they are told about it.',
+  'admin.users.create.roleLabel': 'Role',
+  'admin.users.create.emailHint': 'The link to choose a password is sent to this address.',
+  'admin.users.create.personalData.label': "The person's details",
+  'admin.users.create.personalData.description':
+    'The same details anyone gives when registering. Enter them as they appear in the file.',
+  'admin.users.create.submit': 'Create and send the email',
+  'admin.users.create.error.EMAIL_ALREADY_REGISTERED':
+    'An account with that email already exists. Find them in the user list and grant the access from their record.',
+  'admin.users.create.error.DOCUMENT_ALREADY_REGISTERED':
+    'An account with that identity document already exists. Find them in the user list and grant the access from their record.',
+  'admin.users.create.error.ROLE_NOT_ALLOWED_FOR_PORTAL':
+    'A municipal administrator cannot grant that role. Ask the platform for it.',
+
+  'admin.users.detail.grant.title': 'Grant access',
+  'admin.users.detail.grant.description':
+    'For somebody who already has an account: nothing is created, they are simply given access to this municipality.',
+  'admin.users.detail.grant.roleLabel': 'Role',
+  'admin.users.detail.grant.submit': 'Grant',
+  'admin.users.detail.grant.error': 'The access could not be granted. They may already have it.',
   'admin.users.detail.actions.block': 'Block',
   'admin.users.detail.actions.unblock': 'Unblock',
   'admin.users.detail.actions.forcePasswordReset': 'Force password reset',

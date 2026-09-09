@@ -4,16 +4,19 @@ import { useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth, RequirePermission } from '@luparx/auth';
 import { useTranslation, formatDate, type TranslationKey } from '@luparx/i18n';
-import { Alert, Button, Input } from '@luparx/ui';
+import { TENANT_GRANTABLE_ROLES, type Role } from '@luparx/api-client';
+import { Alert, Button, Input, Select } from '@luparx/ui';
 import { AdminShell } from '../components/AdminShell';
 
 export function UserDetailPage(): React.JSX.Element {
   const { id } = useParams<{ id: string }>();
   const { t, locale } = useTranslation();
-  const { apiClient } = useAuth();
+  const { apiClient, activeTenant } = useAuth();
   const queryClient = useQueryClient();
   const [blockReason, setBlockReason] = useState('');
+  const [grantRole, setGrantRole] = useState<Role | ''>('');
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [grantError, setGrantError] = useState<string | null>(null);
 
   const userQuery = useQuery({
     queryKey: ['admin', 'users', id],
@@ -45,6 +48,26 @@ export function UserDetailPage(): React.JSX.Element {
   const approveMembershipMutation = useMutation({
     mutationFn: (membershipId: string) => apiClient.adminMemberships.approve(membershipId),
     onSuccess: invalidate,
+  });
+  // The other half of "the admin creates inspectors" (CONTRACT.md v0.14): most inspectors already
+  // exist as people — they registered as citizens like everyone else — and for them the account is
+  // not created, only the access is granted. Without this the administrator hit
+  // EMAIL_ALREADY_REGISTERED on the create form and had nowhere to go.
+  const grantMembershipMutation = useMutation({
+    mutationFn: (role: Role) =>
+      apiClient.adminMemberships.create({
+        userId: id as string,
+        tenantId: activeTenant?.id as string,
+        // Decided by the role, never asked separately: the server refuses a pair that disagrees.
+        portal: role === 'INSPECTOR' || role === 'INSPECTOR_LEAD' ? 'inspector' : 'admin',
+        role,
+      }),
+    onSuccess: () => {
+      setGrantError(null);
+      setGrantRole('');
+      invalidate();
+    },
+    onError: () => setGrantError(t('admin.users.detail.grant.error')),
   });
   const rejectMembershipMutation = useMutation({
     mutationFn: (membershipId: string) => apiClient.adminMemberships.reject(membershipId, { reason: t('admin.users.detail.rejectReasonLabel') }),
@@ -114,7 +137,37 @@ export function UserDetailPage(): React.JSX.Element {
               >
                 {t('admin.users.detail.actions.requireMfa')} ({user.mfaRequired ? t('common.yes') : t('common.no')})
               </Button>
-              {/* TODO(extension): role assignment UI — needs a role picker wired to POST /admin/memberships once zones/scopes are defined. */}
+            </section>
+          </RequirePermission>
+
+          <RequirePermission permission="ROLE_ASSIGN">
+            <section style={{ marginTop: 16 }}>
+              <h2>{t('admin.users.detail.grant.title')}</h2>
+              <p className="lx-text-meta">{t('admin.users.detail.grant.description')}</p>
+              {grantError ? <Alert tone="danger">{grantError}</Alert> : null}
+              <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                <div style={{ minWidth: 220 }}>
+                  <Select
+                    aria-label={t('admin.users.detail.grant.roleLabel')}
+                    value={grantRole}
+                    onChange={(value) => setGrantRole(value as Role)}
+                    placeholder={t('common.select.placeholder')}
+                    options={TENANT_GRANTABLE_ROLES.map((role) => ({
+                      value: role,
+                      label: t(`role.${role}` as TranslationKey),
+                      detail: t(`role.${role}.detail` as TranslationKey),
+                    }))}
+                  />
+                </div>
+                <Button
+                  type="button"
+                  disabled={!grantRole || !activeTenant}
+                  loading={grantMembershipMutation.isPending}
+                  onClick={() => grantRole && grantMembershipMutation.mutate(grantRole as Role)}
+                >
+                  {t('admin.users.detail.grant.submit')}
+                </Button>
+              </div>
             </section>
           </RequirePermission>
 

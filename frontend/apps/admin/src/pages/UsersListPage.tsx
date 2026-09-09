@@ -2,10 +2,10 @@ import * as React from 'react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { useAuth } from '@luparx/auth';
+import { RequirePermission, useAuth } from '@luparx/auth';
 import { useTranslation, type TranslationKey } from '@luparx/i18n';
 import type { Portal, Role, UserStatus } from '@luparx/api-client';
-import { Input, Pagination, Select, Table } from '@luparx/ui';
+import { Button, Input, Pagination, Select, Table } from '@luparx/ui';
 import { AdminShell } from '../components/AdminShell';
 
 const PAGE_SIZE = 20;
@@ -49,7 +49,16 @@ export function UsersListPage(): React.JSX.Element {
 
   return (
     <AdminShell>
-      <h1>{t('admin.users.title')}</h1>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <h1>{t('admin.users.title')}</h1>
+        {/* Granting a role is what this leads to, so it is `ROLE_ASSIGN` that decides whether the
+            button is there — the same permission the route and the endpoint check. */}
+        <RequirePermission permission="ROLE_ASSIGN">
+          <Button type="button" onClick={() => navigate('/users/new')}>
+            {t('admin.users.create.cta')}
+          </Button>
+        </RequirePermission>
+      </div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
         <Input
           placeholder={t('admin.users.searchPlaceholder')}

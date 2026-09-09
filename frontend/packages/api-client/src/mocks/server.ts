@@ -3,6 +3,7 @@ import type {
   AccessTokenClaims,
   AdminUserDetail,
   AdminUserListItem,
+  CreateAdminUserRequest,
   CreateVehicleRequest,
   ExtendParkingSessionRequest,
   LoginRequest,
@@ -18,6 +19,7 @@ import type {
   UpdateProfileRequest,
   UpdateVehicleRequest,
 } from '../types/domain';
+import { TENANT_GRANTABLE_ROLES } from '../types/domain';
 import {
   availableMockCreditMinutes,
   MOCK_ADMIN_LEVELS,
@@ -305,7 +307,7 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
           locale: payload.locale,
           timeZone: payload.timeZone,
           status: 'PENDING_VERIFICATION',
-          mfaRequired: portal !== 'citizen',
+          mfaRequired: false,
           mfaEnabled: false,
         },
         password: payload.password,
@@ -500,6 +502,13 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
   // ---- Admin: users, memberships, audit, reports, exports, tenants ---------------------------
   if (segments[2] === 'admin') {
     const resource = segments[3];
+    // The municipality being administered, from the caller's own token — never from the body, the
+    // same rule the server keeps.
+    const adminClaims = (() => {
+      const header = new Headers(init?.headers).get('Authorization');
+      return header ? decodeMockClaims(header) : null;
+    })();
+    const tenantId = adminClaims?.tid ?? null;
 
     // ---- Municipal operation settings (CONTRACT.md v0.3) --------------------------------------
     if (resource === 'settings' && segments[4] === 'locales') {
@@ -564,6 +573,63 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
         if (roleFilter) items = items.filter((u) => u.memberships.some((m) => m.role === roleFilter));
         if (portalFilter) items = items.filter((u) => u.memberships.some((m) => m.portal === portalFilter));
         return json(paginate(items.map(toListItem), page, size));
+      }
+      // POST /api/v1/admin/users — a member of staff created by an administrator (v0.14). The mock
+      // keeps the two refusals the screen has copy for: an address that is already somebody's, and
+      // a role a municipal administrator may not grant.
+      if (method === 'POST' && segments.length === 4) {
+        const payload = await readBody<CreateAdminUserRequest>(init);
+        if (!TENANT_GRANTABLE_ROLES.includes(payload.role)) {
+          return problem(403, 'ROLE_NOT_ALLOWED_FOR_PORTAL', 'A municipal administrator cannot grant that role');
+        }
+        if (findUserByEmail(payload.email)) {
+          return problem(409, 'EMAIL_ALREADY_REGISTERED', 'Email already registered');
+        }
+        const newId = nextMockUserId();
+        const record: MockUserRecord = {
+          profile: {
+            id: newId,
+            email: payload.email.toLowerCase(),
+            emailVerified: false,
+            givenName: payload.givenName,
+            familyName: payload.familyName,
+            secondFamilyName: payload.secondFamilyName,
+            birthDate: payload.birthDate,
+            nationalityCode: payload.nationalityCode,
+            phone: payload.phone,
+            identityDocument: payload.identityDocument,
+            address: payload.address,
+            locale: payload.locale ?? 'es-CR',
+            timeZone: payload.timeZone ?? 'America/Costa_Rica',
+            // Until they follow the emailed link and choose a password, exactly as on the server.
+            status: 'PENDING_VERIFICATION' as const,
+            mfaRequired: false,
+            mfaEnabled: false,
+          },
+          // No password at all: an operator never sets one.
+          password: null,
+          memberships: [
+            {
+              tenantId: tenantId ?? '',
+              tenantName: MOCK_TENANTS.find((x) => x.id === tenantId)?.name ?? (tenantId ?? ''),
+              portal: payload.portal,
+              role: payload.role,
+              status: 'ACTIVE',
+            },
+          ],
+          mfaEnabled: false,
+        };
+        mockUsersById.set(newId, record);
+        recordAuditEvent({
+          tenantId: tenantId ?? null,
+          actorUserId: 'mock-admin',
+          actorPortal: 'admin',
+          action: 'USER_CREATED',
+          resourceType: 'user',
+          resourceId: newId,
+          metadata: { role: payload.role, portal: payload.portal },
+        });
+        return json(toDetail(record), 201);
       }
       if (method === 'GET' && segments.length === 5) {
         const user = mockUsersById.get(segments[4] ?? '');

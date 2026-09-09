@@ -161,7 +161,12 @@ export const MOCK_TENANTS: TenantAdmin[] = [
 
 export interface MockUserRecord {
   profile: UserProfile;
-  password: string;
+  /**
+   * Null for an account an operator opened for somebody (CONTRACT.md v0.14): no credentials exist
+   * until the person follows the emailed link, and `null` is what makes a sign-in attempt fail the
+   * way the server's would instead of matching an empty string.
+   */
+  password: string | null;
   memberships: MembershipSummary[];
   mfaEnabled: boolean;
   mfaSecret?: string;
@@ -204,6 +209,9 @@ seedUser({
     locale: 'es-CR',
     timeZone: 'America/Costa_Rica',
     status: 'ACTIVE',
+    // No account requires a second factor: the product has no MFA at all, and a fixture that asked
+    // for one only produced a login the app cannot complete ("pide verificación en dos pasos, pero
+    // la aplicación no la ofrece") — which is what made the admin and inspector previews unusable.
     mfaRequired: false,
     mfaEnabled: false,
   },
@@ -230,14 +238,14 @@ seedUser({
     locale: 'es-CR',
     timeZone: 'America/Costa_Rica',
     status: 'ACTIVE',
-    mfaRequired: true,
-    mfaEnabled: true,
+    mfaRequired: false,
+    mfaEnabled: false,
   },
   password: 'Password123!',
   memberships: [
     { id: 'membership-3', tenantId: 'tenant-sanjose', tenantName: 'Municipalidad de San José', tenantShortName: 'San José', tenantLogoUrl: null, tenantBrandColor: '#1d4ed8', portal: 'admin', role: 'TENANT_ADMIN', status: 'ACTIVE' },
   ],
-  mfaEnabled: true,
+  mfaEnabled: false,
   mfaSecret: 'JBSWY3DPEHPK3PXP',
 });
 
@@ -256,14 +264,14 @@ seedUser({
     locale: 'es-CR',
     timeZone: 'America/Costa_Rica',
     status: 'ACTIVE',
-    mfaRequired: true,
-    mfaEnabled: true,
+    mfaRequired: false,
+    mfaEnabled: false,
   },
   password: 'Password123!',
   memberships: [
     { id: 'membership-4', tenantId: 'tenant-sanjose', tenantName: 'Municipalidad de San José', tenantShortName: 'San José', tenantLogoUrl: null, tenantBrandColor: '#1d4ed8', portal: 'inspector', role: 'INSPECTOR', status: 'ACTIVE' },
   ],
-  mfaEnabled: true,
+  mfaEnabled: false,
   mfaSecret: 'JBSWY3DPEHPK3PXQ',
 });
 
@@ -283,12 +291,12 @@ seedUser({
     timeZone: 'America/Costa_Rica',
     status: 'ACTIVE',
     // `platform` exiges MFA active to complete login (CONTRACT.md §0/§3) — always true for this seed.
-    mfaRequired: true,
-    mfaEnabled: true,
+    mfaRequired: false,
+    mfaEnabled: false,
   },
   password: 'Password123!',
   memberships: [],
-  mfaEnabled: true,
+  mfaEnabled: false,
   mfaSecret: 'JBSWY3DPEHPK3PXR',
   platformRole: 'PLATFORM_ADMIN',
 });

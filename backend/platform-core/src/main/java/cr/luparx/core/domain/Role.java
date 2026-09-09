@@ -39,6 +39,30 @@ public enum Role {
         return scope == RoleScope.PLATFORM;
     }
 
+    /**
+     * Whether a municipal administrator may grant this role inside their own municipality
+     * (CONTRACT.md v0.14).
+     *
+     * <p>Yes for the inspector portal and for the supporting admin roles — an administrator hires
+     * their own inspectors, their finance people and their support staff, and having to ask the
+     * platform for each one would make the platform a help desk.</p>
+     *
+     * <p>No for {@link #TENANT_ADMIN}: an administrator who can appoint administrators can appoint
+     * themselves a successor, a colleague or a stranger, and from then on nobody outside the
+     * municipality knows who holds the keys to it. Who runs a municipality stays a platform
+     * decision, which is also what makes the audit trail for it meaningful.</p>
+     *
+     * <p>No for platform roles — a tenant role that grants a platform-scoped one would be a
+     * privilege escalation with extra steps — and no for {@link #CITIZEN}, which nobody grants:
+     * people become citizens by registering, or by parking somewhere new.</p>
+     */
+    public boolean grantableByTenantAdmin() {
+        return switch (this) {
+            case INSPECTOR, INSPECTOR_LEAD, TENANT_FINANCE, TENANT_SUPPORT -> true;
+            case TENANT_ADMIN, PLATFORM_ADMIN, PLATFORM_SUPPORT, CITIZEN -> false;
+        };
+    }
+
     /** Authority name exposed to Spring Security expressions ({@code hasRole('TENANT_ADMIN')}). */
     public String authority() {
         return "ROLE_" + name();
