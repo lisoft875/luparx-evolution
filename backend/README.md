@@ -684,6 +684,99 @@ that are deliberately *not* all alike: issued, issued-with-photograph, annulled 
 appeal, paid, and one left as a draft with no number. One of them carries `SJP123`, the plate two
 citizens registered, so the "linked to nobody" case is visible on a screen instead of only in a test.
 
+## Defence, legal notice and money into the wallet (v0.8)
+
+**A defence is text plus photographs, and it is moderated.** A citizen files one against a fine of
+their own (`POST /citizen/fines/{id}/appeals`), the municipality accepts or rejects it with a
+mandatory reason (`POST /admin/enforcement/citations/{id}/appeal/resolve`), and both land in the
+citation's own history, which the citizen reads too. Accepting dismisses the citation; rejecting
+upholds it and it becomes payable again — the same transition table as everything else, so there is
+one account of what happened. One defence per citation; only the owner of the linked vehicle; only
+while the citation is payable and inside its due date; only if the infraction type admits a defence.
+
+The text is filed first and the images arrive on their own endpoint afterwards, because what makes
+the defence exist is what the person wrote and a citizen on a bad connection must not lose it because
+an upload failed.
+
+**Images: the client compresses, the server decides.** 1 MB per image, enforced server-side; the type
+read from the file's own header (`ImageSniffer`), never the filename or the declared `Content-Type`;
+and the *count* configurable per municipality (`PUT /admin/enforcement/settings`, default 4, and 0
+legitimately means "text only"). They go through the same `EvidenceStorage` port, into the same table,
+with the same SHA-256 — a citizen's photograph is evidence exactly as the officer's is — and carry
+`source = CITIZEN` so nobody has to infer who supplied what.
+
+**The legal notice is data, versioned, and its acceptance is recorded.** It warns that insulting a
+public official can be a crime. It is *not* a translation key: a message key has no version, no
+effective date, cannot be changed without a deployment, and leaves no record of what the person read.
+`appeal_notices` holds it at two scopes — a **country** row every municipality of that country
+inherits (the penal code is national) and a **municipality** row that overrides it — resolved
+municipality-then-country, always the newest version already in force. Publishing **inserts** a new
+version; nothing is edited, because `citation_appeals.notice_id` and `notice_version` point at the
+exact text each defence accepted. Filing sends `acceptedNoticeId` back and a stale one is
+`APPEAL_NOTICE_OUTDATED` (409) so the client re-displays the current wording.
+
+> The seeded Costa Rican wording cites articles 145–147 of the penal code (Ley 4573). **It must be
+> reviewed and approved by the client's lawyer before production.** We are not their legal counsel;
+> the text lives in a table, editable from the admin portal, precisely so their lawyer can correct it
+> without waiting for a release.
+
+**The top-up code, and why it is not the identity number** (ADR 0015). A code dictated at a
+supermarket till is heard by the queue, so it must be designed as if it leaks. An identity number
+fails that test twice over: it is personal data, and knowing somebody's would let a stranger probe
+their account. The code here is dedicated, one per (municipality, citizen), random, derived from
+nothing personal, and rotatable — rotation kills the old one immediately, with no grace period,
+because somebody rotates exactly when they think it was overheard.
+
+```
+8 random characters + 1 check character, shown as XXX-XXX-XXX      e.g. EBG-P30-GZD
+alphabet: Crockford base 32 — no I, L, O, U
+```
+
+No look-alikes survive (O, I and L are not in the alphabet, so 0 and 1 are unambiguous), and reading
+is forgiving: a cashier who types O gets 0, I or L gets 1, and case does not matter. The check
+character is **Luhn mod 32**: every single mistyped character is caught, and every adjacent
+transposition except a pair 16 apart in the alphabet — so a slip at the till fails locally instead of
+crediting a stranger. 32^8 ≈ 1.1×10^12 per municipality, so it cannot be enumerated; the resolution
+endpoint needs `PERM_WALLET_TOPUP` and is audited on top of that. The till gets back **only**
+`{givenName, familyInitial, tenantName, currencyCode}` — enough to say "Ana M., San José?" out loud,
+and nothing about the account behind it.
+
+**Crediting a wallet** is `POST /admin/wallets/topups`, guarded by its own `WALLET_TOPUP` permission
+rather than by a role: handing out credit is the cashier's job and a municipality must be able to give
+it to the person at the window without also giving them user administration (`TENANT_ADMIN` and
+`TENANT_FINANCE` hold it today). Two idempotency layers, because they fail differently: the
+`Idempotency-Key` header replays a repeated *request*, and `wallet_transactions.external_reference` —
+the till's receipt number, unique per municipality and source — stops a resend from another process,
+another shift or a reprinted receipt from crediting twice, answering `alreadyApplied: true` with the
+original transaction. Every movement now records `source` (`MUNICIPAL_COUNTER`, `PARTNER`, `CITIZEN`,
+`ADJUSTMENT`, `DEV`) and who keyed it, because "someone credited 10 000 colones" is not an answer an
+auditor accepts.
+
+**Why a supermarket chain cannot call that same endpoint.** A cashier is a *person* with an account in
+one municipality, authenticated through the admin portal, whose session carries a tenant and whose
+actions are attributable by name. A partner network is a *system*: no seat in any municipality, one
+integration across many of them, machine-to-machine credentials, and a settlement and dispute process
+that a portal session does not model. Serving both from one route would mean issuing portal sessions
+to a machine — the exact thing ADR 0004 separates. The reserved contract is
+`POST /api/v1/partner/wallets/topups`: mTLS or OAuth2 client-credentials with one credential per
+merchant, `tenantId` explicit in the body, `merchantReference` mandatory (idempotency key *and*
+reconciliation key), `source = PARTNER`, and a per-merchant daily settlement report. Nothing of it is
+implemented yet; the ledger columns it needs already exist, which is what makes it an integration and
+not a redesign.
+
+**Development shortcut.** `POST /citizen/wallet/topups` credits your own wallet and exists **only**
+under the `dev` profile — the controller is `@Profile("dev")`, so in any other profile the route does
+not exist at all and answers 404 rather than 403, which would at least confirm that a self-service
+money endpoint is in the build. Everything it writes is stamped `source = DEV`.
+
+**Two gaps closed.** `GET /inspector/zones` gives the officer's app the zones of its municipality with
+each zone's bay-code range — until now the plate lookup needed a zone and a bay while the app could
+only learn them from its own past citations, which leaves a new device with nothing. No tariff: an
+officer does not quote prices. And the officer's infraction catalogue is exactly the active subset of
+the administration's, field for field: both come from the same entity through the same mapper, so the
+amount on the officer's screen is the amount that is charged (verified by comparing the two responses,
+not by reading the code).
+
 ## Environment variables
 
 Secrets have **no usable default**: the application fails to start rather than run with a
@@ -834,6 +927,10 @@ mistakes them for working features:
   (see CONTRACT.md v0.7) because the client is built against it; the state machine already has
   `PAID` and the server already computes the amount payable, so the payments batch adds the provider,
   the receipt and the reconciliation rather than a new concept.
+- `POST /api/v1/partner/wallets/topups`: crediting a wallet from an external network (a supermarket
+  chain). The contract is fixed above and the ledger columns it needs already exist (`source`,
+  `external_reference`); what is missing is the machine-to-machine authentication, the per-merchant
+  credential store and the settlement report.
 - The scheduled sweep that moves overdue citations to `EXPIRED` in bulk. The operation exists and is
   idempotent, bounded and tenant-scoped (`CitationService.expireOverdue`), and a citation read one at
   a time already corrects itself; only the schedule is missing.

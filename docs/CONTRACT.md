@@ -820,3 +820,141 @@ proveedor, el recibo y la conciliación, no un concepto nuevo.
 `CITATION_NOT_EDITABLE` (409), `CITATION_APPEAL_NOT_ALLOWED` (409), `INFRACTION_TYPE_NOT_FOUND`
 (404), `INFRACTION_TYPE_INACTIVE` (422), `EVIDENCE_NOT_FOUND` (404), `EVIDENCE_TOO_LARGE` (422),
 `EVIDENCE_TYPE_NOT_ALLOWED` (422), `EVIDENCE_LIMIT_REACHED` (409).
+
+---
+
+# v0.8 — Descargo, aviso legal y recarga de saldo (normativo)
+
+## Descargo del ciudadano, con moderación
+
+```
+GET  /api/v1/citizen/fines/appeal-notice          aviso legal vigente (id + versión)
+POST /api/v1/citizen/fines/{id}/appeals           texto + id del aviso aceptado
+GET  /api/v1/citizen/fines/{id}/appeal            mi descargo y su estado
+POST /api/v1/citizen/fines/{id}/appeal/images     una imagen (multipart), máx. 1 MB
+GET  /api/v1/admin/enforcement/appeals?status=    cola de moderación (SUBMITTED por defecto)
+POST /api/v1/admin/enforcement/citations/{id}/appeal/resolve   {accept, reason}
+```
+
+Quién puede: **sólo la persona dueña del vehículo enlazado a la boleta** (la misma regla que el
+listado de multas, y por la misma razón: la placa es única por ciudadano, no globalmente); sólo si el
+tipo de infracción admite descargo; sólo mientras la boleta esté pendiente de pago y **antes de su
+fecha de vencimiento** — pasado eso es `APPEAL_WINDOW_CLOSED` (409), no un `403` mudo. **Uno por
+boleta**: un segundo intento es `APPEAL_ALREADY_FILED` (409), porque dos descargos abiertos sobre un
+mismo acto tendrían dos resoluciones posibles.
+
+El texto primero y las imágenes después, en su propio endpoint: lo que hace existir al descargo es lo
+que la persona escribió, y quien está en una conexión mala no debe perderlo porque falló una subida.
+Presentarlo mueve la boleta a `APPEALED` en la misma transacción.
+
+**Imágenes: el cliente comprime, el servidor decide.** Límite duro de **1 MB por imagen** verificado
+en el servidor (`EVIDENCE_TOO_LARGE`, 422); el tipo se determina **leyendo la cabecera del archivo**,
+nunca el nombre ni el `Content-Type` declarado (`EVIDENCE_TYPE_NOT_ALLOWED`); la **cantidad máxima es
+configurable por municipalidad** (`PUT /admin/enforcement/settings`, por defecto 4, `0` significa
+"sólo texto"). Se guardan en el mismo almacén y la misma tabla que la evidencia del funcionario, con
+su **SHA-256**, y con `source = CITIZEN` para que nunca haya duda de quién aportó qué.
+
+Resolver es **una** decisión: `accept: true` acepta el descargo y la boleta queda `DISMISSED`;
+`accept: false` lo rechaza y la boleta queda `UPHELD` y vuelve a ser pagable. El **motivo es
+obligatorio en ambos sentidos**, queda en el descargo y en el historial de la boleta, y se audita.
+Esto **sustituye** a las rutas `/appeal`, `/uphold` y `/dismiss` de v0.7, que permitían mover una
+boleta sin que existiera un descargo que responder.
+
+## Aviso legal, versionado y editable
+
+```
+GET /api/v1/admin/enforcement/appeal-notice[/versions]
+PUT /api/v1/admin/enforcement/appeal-notice        publica una versión NUEVA
+```
+
+**No es una clave de traducción.** Es un texto legal de una jurisdicción, lo reescribe el abogado de
+la municipalidad, y el día que alguien alegue "nadie me advirtió" la única respuesta que sirve es
+*este texto, esta versión, aceptada en este momento*. Vive en `appeal_notices` con dos alcances: fila
+de **país** (el valor por defecto que heredan sus municipalidades, porque el código penal es nacional)
+y fila de **municipalidad** (que lo sobrescribe sin esperar un despliegue). Resolución determinista:
+municipalidad + locale → municipalidad + locale del tenant → país + locale → país + locale del tenant.
+Una versión con `effective_from` futuro es invisible hasta su fecha.
+
+**Las versiones no se editan, se agregan.** `POST /citizen/fines/{id}/appeals` exige
+`acceptedNoticeId` y debe ser el vigente; cualquier otro es `APPEAL_NOTICE_OUTDATED` (409) y el
+cliente vuelve a mostrar el texto. `citation_appeals` guarda `notice_id` y `notice_version`.
+
+El texto sembrado para Costa Rica advierte que las expresiones injuriosas, difamatorias o
+calumniosas contra un funcionario público pueden constituir delito conforme a los **artículos 145 a
+147 del Código Penal (Ley 4573)**. **Ese texto debe ser revisado y aprobado por el abogado del
+cliente antes de producción**: no somos su asesor legal, y está en una tabla editable exactamente
+para que su abogado lo corrija sin un despliegue.
+
+## Código de recarga (ADR 0015)
+
+`GET /api/v1/citizen/wallet` devuelve `topupCode: {code, display, createdAt, rotatedAt}`.
+`POST /api/v1/citizen/wallet/topup-code/rotate` emite uno nuevo y **anula el anterior en el acto**.
+
+**No se usa la cédula.** Lo que se dicta en una caja lo escucha la fila, y el número de identificación
+es un dato personal que además permitiría sondear cuentas ajenas. El código es dedicado, uno por
+(municipalidad, persona), aleatorio, **no derivado de ningún dato personal** y rotable:
+
+* 8 caracteres aleatorios + 1 de verificación, mostrado `XXX-XXX-XXX`;
+* alfabeto base 32 de Crockford — sin **I, L, O, U** — para que no haya homógrafos al dictar; al leer,
+  `O`→`0` e `I`/`L`→`1`, y las minúsculas se aceptan;
+* **dígito verificador Luhn mod 32**: detecta todo error de un carácter y toda transposición adyacente
+  salvo un par que difiera en 16 posiciones. Un tecleo malo falla en la caja, no acredita a otro;
+* 32^8 ≈ 1.1×10^12 por municipalidad: no enumerable;
+* se crea la primera vez que el ciudadano abre su billetera en esa municipalidad.
+
+Resolución en el punto de venta:
+
+```
+GET /api/v1/admin/wallets/topup-codes/{code}   (PERM_WALLET_TOPUP)
+-> {givenName, familyInitial, tenantName, currencyCode}
+```
+
+**Sólo eso**: ni saldo, ni correo, ni teléfono, ni documento. Un código mal transcrito falla en el
+verificador antes de tocar la base (`TOPUP_CODE_INVALID`, 422 — "léalo de nuevo"); uno bien formado
+que no es de nadie es `TOPUP_CODE_NOT_FOUND` (404). Son cosas distintas en una caja.
+
+## Recarga de saldo
+
+```
+POST /api/v1/admin/wallets/topups        (PERM_WALLET_TOPUP, Idempotency-Key)
+  {topupCode | userId, amountMinor, externalReference, note}
+POST /api/v1/citizen/wallet/topups       (perfil dev únicamente)
+```
+
+Permiso propio, `WALLET_TOPUP`, nunca "lo que puede un administrador": entregar crédito es el trabajo
+del cajero y la primera pregunta de un auditor municipal, así que una municipalidad tiene que poder
+dárselo a quien está en la ventanilla sin darle además la administración de usuarios (lo tienen
+`TENANT_ADMIN` y `TENANT_FINANCE`).
+
+**Dos idempotencias, porque fallan distinto.** El header `Idempotency-Key` reproduce la respuesta
+guardada cuando llega dos veces la misma petición. `externalReference` (el número de comprobante de la
+caja) es único por municipalidad y origen, así que un reenvío desde otro proceso, otro turno o un
+comprobante reimpreso **no vuelve a acreditar**: la respuesta trae `alreadyApplied: true` y el mismo
+`transactionId`. El monto va en unidades menores con la moneda de la municipalidad, y cada movimiento
+guarda `source` (`MUNICIPAL_COUNTER`, `PARTNER`, `CITIZEN`, `ADJUSTMENT`, `DEV`) y quién lo registró.
+
+**Socio externo (contrato preparado, no implementado).** Una cadena de supermercados **no** puede usar
+el endpoint del cajero: aquél autentica a una *persona* con sesión de portal y municipalidad, éste es
+un *sistema* sin asiento en ninguna municipalidad. El contrato reservado es
+`POST /api/v1/partner/wallets/topups`, autenticación servidor a servidor (mTLS o client-credentials
+con una credencial por comercio), `merchantReference` obligatorio como llave de idempotencia y de
+conciliación, `tenantId` explícito en el cuerpo, `source = PARTNER` y un reporte de liquidación por
+comercio y día. Ver `backend/README.md`.
+
+## Catálogo de zonas para fiscalización
+
+`GET /api/v1/inspector/zones` (`PERM_CITATION_READ`) devuelve las zonas activas con `id`, `code`,
+`name`, `description` y `spaceCodes {first, last, count}`. Cierra el hueco de que la consulta de placa
+pide zona y bahía mientras la app sólo podía aprenderlas de sus propias boletas — un dispositivo nuevo
+no tenía ninguna. **Sin tarifa**: un fiscalizador no cotiza precios.
+
+El catálogo de infracciones del fiscalizador (`GET /inspector/enforcement/infraction-types`) y el de
+administración (`GET /admin/enforcement/infraction-types`) salen de la **misma entidad y el mismo
+mapper**; el del fiscalizador es exactamente el subconjunto activo del de administración, campo por
+campo, de modo que el monto que ve el funcionario es el que se cobra.
+
+## Códigos de error
+
+`APPEAL_NOTICE_NOT_FOUND` (404), `APPEAL_NOTICE_OUTDATED` (409), `APPEAL_NOT_FOUND` (404),
+`APPEAL_ALREADY_FILED` (409), `APPEAL_ALREADY_RESOLVED` (409), `APPEAL_WINDOW_CLOSED` (409),
+`TOPUP_CODE_INVALID` (422), `TOPUP_CODE_NOT_FOUND` (404), `TOPUP_REFERENCE_ALREADY_USED` (409).

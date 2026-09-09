@@ -158,4 +158,25 @@ public final class ErrorCode {
     /** The file is not one of the image types the platform accepts, judged by its own header. */
     public static final String EVIDENCE_TYPE_NOT_ALLOWED = "EVIDENCE_TYPE_NOT_ALLOWED";
     public static final String EVIDENCE_LIMIT_REACHED = "EVIDENCE_LIMIT_REACHED";
+
+    // --- appeals and wallet top-ups (CONTRACT.md "v0.8") ----------------------------------------
+    /** The municipality has published no legal notice, so it cannot accept defences yet. */
+    public static final String APPEAL_NOTICE_NOT_FOUND = "APPEAL_NOTICE_NOT_FOUND";
+    /**
+     * The citizen accepted a version of the notice that is no longer the one in force. Recording it
+     * as consent would make the notice worthless the day it matters, so the client re-displays the
+     * current wording instead.
+     */
+    public static final String APPEAL_NOTICE_OUTDATED = "APPEAL_NOTICE_OUTDATED";
+    public static final String APPEAL_NOT_FOUND = "APPEAL_NOT_FOUND";
+    public static final String APPEAL_ALREADY_FILED = "APPEAL_ALREADY_FILED";
+    public static final String APPEAL_ALREADY_RESOLVED = "APPEAL_ALREADY_RESOLVED";
+    /** The citation is settled or past its date: the channel is now the counter, not the app. */
+    public static final String APPEAL_WINDOW_CLOSED = "APPEAL_WINDOW_CLOSED";
+    /** What was typed is not a well-formed top-up code — the check character did not match. */
+    public static final String TOPUP_CODE_INVALID = "TOPUP_CODE_INVALID";
+    /** A well-formed code that belongs to nobody in this municipality. */
+    public static final String TOPUP_CODE_NOT_FOUND = "TOPUP_CODE_NOT_FOUND";
+    /** A payment with this external reference was already credited; the retry added nothing. */
+    public static final String TOPUP_REFERENCE_ALREADY_USED = "TOPUP_REFERENCE_ALREADY_USED";
 }

@@ -18,9 +18,14 @@ import java.util.Set;
  * @param maxPhotosPerCitation how many photographs one citation may carry; a bound exists because an
  *                            unbounded one is a way to fill a disk
  * @param maxNoteLength       longest written note
+ * @param maxAppealImageBytes largest image a <em>citizen</em> may attach to a defence. Lower than
+ *                            {@link #maxBytes} on purpose: the officer's device is municipal
+ *                            equipment on a known connection, while a defence is uploaded from any
+ *                            phone on any network, and the client is expected to compress before
+ *                            sending — but the client is not the one that decides, the server is
  */
 public record EvidencePolicy(long maxBytes, Set<String> allowedContentTypes, int maxPhotosPerCitation,
-                             int maxNoteLength) {
+                             int maxNoteLength, long maxAppealImageBytes) {
 
     public EvidencePolicy {
         if (maxBytes <= 0L) {
@@ -37,6 +42,9 @@ public record EvidencePolicy(long maxBytes, Set<String> allowedContentTypes, int
         }
         if (maxNoteLength <= 0) {
             throw new IllegalArgumentException("maxNoteLength must be positive");
+        }
+        if (maxAppealImageBytes <= 0L) {
+            throw new IllegalArgumentException("maxAppealImageBytes must be positive");
         }
     }
 

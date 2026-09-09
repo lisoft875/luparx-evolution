@@ -3,11 +3,14 @@ package cr.luparx.app.web.dto;
 import cr.luparx.core.domain.Portal;
 import cr.luparx.enforcement.model.CitationAction;
 import cr.luparx.enforcement.model.CitationStatus;
+import cr.luparx.enforcement.model.AppealStatus;
 import cr.luparx.enforcement.model.EvidenceKind;
+import cr.luparx.enforcement.model.EvidenceSource;
 import cr.luparx.enforcement.model.PlateVerdict;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
@@ -188,6 +191,7 @@ public final class EnforcementDtos {
      */
     public record EvidenceResponse(UUID id,
                                    EvidenceKind kind,
+                                   EvidenceSource source,
                                    String contentType,
                                    Long byteSize,
                                    String sha256,
@@ -241,6 +245,76 @@ public final class EnforcementDtos {
     /** The citizen's detail: the fine, its evidence and its history — the same history the office reads. */
     public record FineDetailResponse(FineResponse fine,
                                      List<EvidenceResponse> evidence,
-                                     List<CitationEventResponse> history) {
+                                     List<CitationEventResponse> history,
+                                     AppealResponse appeal) {
+    }
+
+    // --- appeals ------------------------------------------------------------------------------------
+
+    /**
+     * The legal notice shown before writing a defence.
+     *
+     * <p>{@code id} is not decoration: it is what the client sends back when filing, and the server
+     * refuses anything but the version currently in force. That is what turns "we warned them" from a
+     * claim into a record.</p>
+     */
+    public record AppealNoticeResponse(UUID id, int version, String locale, String body, Instant effectiveFrom,
+                                       boolean countryDefault) {
+    }
+
+    /** {@code POST /citizen/fines/{id}/appeals}. */
+    public record FileAppealRequest(
+            @NotBlank @Size(max = 4000) String body,
+            @NotNull UUID acceptedNoticeId) {
+    }
+
+    /** A defence, as the citizen and the municipality both read it. */
+    public record AppealResponse(UUID id,
+                                 UUID citationId,
+                                 AppealStatus status,
+                                 String statusLabelKey,
+                                 String body,
+                                 Instant submittedAt,
+                                 Instant resolvedAt,
+                                 String resolutionReason,
+                                 int noticeVersion,
+                                 int maxImages,
+                                 List<EvidenceResponse> images) {
+    }
+
+    /**
+     * {@code POST /admin/enforcement/citations/{id}/appeal/resolve}. The reason is mandatory in both
+     * directions: a citizen whose defence is rejected is entitled to read why, and a municipality
+     * that voids its own citation owes its auditor the same sentence.
+     */
+    public record ResolveAppealRequest(
+            @NotNull Boolean accept,
+            @NotBlank @Size(max = 1000) String reason) {
+    }
+
+    /** {@code PUT /admin/enforcement/appeal-notice} — publishes a NEW version; nothing is edited. */
+    public record PublishAppealNoticeRequest(
+            @Size(max = 35) String locale,
+            @NotBlank @Size(max = 8000) String body,
+            Instant effectiveFrom) {
+    }
+
+    /** Per-municipality enforcement settings. */
+    public record EnforcementSettingsResponse(int appealMaxImages) {
+    }
+
+    public record UpdateEnforcementSettingsRequest(@NotNull @Min(0) @Max(20) Integer appealMaxImages) {
+    }
+
+    // --- inspector catalogue --------------------------------------------------------------------------
+
+    /**
+     * A zone as the officer's device needs it: what to call it and which bay codes exist in it.
+     *
+     * <p>No tariff. An officer does not quote prices, and a screen that showed one would invite the
+     * question of whether they can negotiate it.</p>
+     */
+    public record InspectorZoneResponse(UUID id, String code, String name, String description,
+                                        ParkingDtos.SpaceCodeRange spaceCodes) {
     }
 }

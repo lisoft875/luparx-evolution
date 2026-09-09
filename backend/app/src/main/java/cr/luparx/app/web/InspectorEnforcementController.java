@@ -18,6 +18,10 @@ import cr.luparx.enforcement.service.CitationService;
 import cr.luparx.enforcement.service.EvidenceService;
 import cr.luparx.enforcement.service.InfractionTypeService;
 import cr.luparx.enforcement.service.PlateStatusService;
+import cr.luparx.app.web.dto.ParkingDtos;
+import cr.luparx.parking.entity.ParkingZone;
+import cr.luparx.parking.model.ParkingSpaceRange;
+import cr.luparx.parking.service.ParkingCatalogService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -43,6 +47,7 @@ import java.io.UncheckedIOException;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -75,10 +80,14 @@ public class InspectorEnforcementController {
      */
     private static final Duration CATALOGUE_CACHE_TTL = Duration.ofMinutes(5);
 
+    /** Zones change when a municipality reorganises its sectors, which is to say rarely. */
+    private static final Duration ZONES_CACHE_TTL = Duration.ofMinutes(5);
+
     private final PlateStatusService plateStatusService;
     private final CitationService citationService;
     private final EvidenceService evidenceService;
     private final InfractionTypeService infractionTypeService;
+    private final ParkingCatalogService catalogService;
     private final EnforcementMapper mapper;
     private final AuditRecorder auditRecorder;
 
@@ -86,12 +95,14 @@ public class InspectorEnforcementController {
                                           CitationService citationService,
                                           EvidenceService evidenceService,
                                           InfractionTypeService infractionTypeService,
+                                          ParkingCatalogService catalogService,
                                           EnforcementMapper mapper,
                                           AuditRecorder auditRecorder) {
         this.plateStatusService = plateStatusService;
         this.citationService = citationService;
         this.evidenceService = evidenceService;
         this.infractionTypeService = infractionTypeService;
+        this.catalogService = catalogService;
         this.mapper = mapper;
         this.auditRecorder = auditRecorder;
     }
@@ -120,6 +131,44 @@ public class InspectorEnforcementController {
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.noStore())
                 .body(mapper.toPlateStatus(status));
+    }
+
+    /**
+     * The zones of this municipality, with the range of bay codes each one has.
+     *
+     * <p>The gap this closes: the plate lookup takes a zone and a bay, and until now the officer's app
+     * had no way to obtain a zone identifier except by mining its own past citations — which leaves a
+     * device that has never written one with nothing to show, and an officer moved to a new sector
+     * unable to work.</p>
+     *
+     * <p>No tariff. An officer does not quote prices, and a screen that showed one would invite the
+     * question of whether they can negotiate it. The bay-code range is here for the same reason it is
+     * on the citizen's zone list: it lets the app validate what is typed instead of sending a code
+     * that cannot exist. Both come from the same services as the citizen's view, so the two cannot
+     * drift apart.</p>
+     *
+     * <p>Cacheable but private and short: it is a municipality's operating layout, resolved for an
+     * authenticated caller, and a zone that stops being operated has to disappear from the street
+     * quickly.</p>
+     */
+    @GetMapping("/zones")
+    @PreAuthorize("hasAuthority('PERM_CITATION_READ')")
+    @Operation(summary = "Zones of this municipality, with the bay codes each one has")
+    public ResponseEntity<List<EnforcementDtos.InspectorZoneResponse>> zones() {
+        TenantId tenantId = TenantContextHolder.requireTenantId();
+        List<ParkingZone> zones = catalogService.listActiveZones(tenantId);
+        Map<UUID, ParkingSpaceRange> ranges = catalogService.spaceRangesByZone(tenantId);
+        List<EnforcementDtos.InspectorZoneResponse> body = new ArrayList<>(zones.size());
+        for (ParkingZone zone : zones) {
+            ParkingSpaceRange range = ranges.get(zone.getId());
+            body.add(new EnforcementDtos.InspectorZoneResponse(zone.getId(), zone.getCode(), zone.getName(),
+                    zone.getDescription(),
+                    range == null ? null : new ParkingDtos.SpaceCodeRange(range.firstCode(), range.lastCode(),
+                            range.count())));
+        }
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.maxAge(ZONES_CACHE_TTL).cachePrivate())
+                .body(body);
     }
 
     /** What this municipality fines, for the officer's picker. Only the kinds still in force. */

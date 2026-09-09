@@ -7,10 +7,12 @@ import cr.luparx.core.error.ValidationException;
 import cr.luparx.core.id.TenantId;
 import cr.luparx.core.id.Uuid7;
 import cr.luparx.enforcement.entity.Citation;
+import cr.luparx.enforcement.entity.CitationAppeal;
 import cr.luparx.enforcement.entity.CitationEvidence;
 import cr.luparx.enforcement.model.EnforcementActor;
 import cr.luparx.enforcement.model.EvidenceKind;
 import cr.luparx.enforcement.model.EvidencePolicy;
+import cr.luparx.enforcement.model.EvidenceSource;
 import cr.luparx.enforcement.model.ImageSniffer;
 import cr.luparx.enforcement.port.EvidenceStorage;
 import cr.luparx.enforcement.repository.CitationEvidenceRepository;
@@ -89,8 +91,8 @@ public class EvidenceService {
                 .filter(policy::allows)
                 .orElseThrow(() -> new ValidationException("file", ErrorCode.EVIDENCE_TYPE_NOT_ALLOWED,
                         "error.enforcement.evidence.typeNotAllowed"));
-        long photos = evidenceRepository.countByTenantIdAndCitationIdAndKind(tenantId.value(), citationId,
-                EvidenceKind.PHOTO);
+        long photos = evidenceRepository.countByTenantIdAndCitationIdAndKindAndSource(tenantId.value(), citationId,
+                EvidenceKind.PHOTO, EvidenceSource.OFFICER);
         if (photos >= policy.maxPhotosPerCitation()) {
             throw ConflictException.of(ErrorCode.EVIDENCE_LIMIT_REACHED, "error.enforcement.evidence.limitReached");
         }
@@ -125,6 +127,55 @@ public class EvidenceService {
                 citationId, note.trim(), actor.userIdValue(), now));
         citationService.recordEvidenceAttached(citation, actor, now);
         return evidence;
+    }
+
+    /**
+     * A photograph the citizen attached to their defence.
+     *
+     * <p>Same store, same digest, same header-based type check as the officer's — it is the same kind
+     * of proof — with two differences that are deliberate. The size limit is <b>lower</b>
+     * ({@link EvidencePolicy#maxAppealImageBytes()}, 1 MB): the client is expected to compress, but
+     * the client is not the one that decides, and a defence arrives from any phone on any network.
+     * And the count allowed is the <b>municipality's</b> setting, not a platform constant, because the
+     * people who read these images are the ones who should say how many they want.</p>
+     */
+    @Transactional
+    public CitationEvidence attachAppealPhoto(TenantId tenantId, EnforcementActor actor, CitationAppeal appeal,
+                                              int maxImages, byte[] content, String originalFilename,
+                                              Instant capturedAt, BigDecimal latitude, BigDecimal longitude) {
+        if (content == null || content.length == 0) {
+            throw new ValidationException("file", ErrorCode.VALIDATION_FAILED, "error.enforcement.evidence.empty");
+        }
+        if (content.length > policy.maxAppealImageBytes()) {
+            throw new ValidationException("file", ErrorCode.EVIDENCE_TOO_LARGE,
+                    "error.enforcement.evidence.appealTooLarge");
+        }
+        String contentType = ImageSniffer.sniff(content)
+                .filter(policy::allows)
+                .orElseThrow(() -> new ValidationException("file", ErrorCode.EVIDENCE_TYPE_NOT_ALLOWED,
+                        "error.enforcement.evidence.typeNotAllowed"));
+        long attached = evidenceRepository.countByTenantIdAndAppealIdAndKind(tenantId.value(), appeal.getId(),
+                EvidenceKind.PHOTO);
+        if (attached >= maxImages) {
+            throw ConflictException.of(ErrorCode.EVIDENCE_LIMIT_REACHED, "error.enforcement.evidence.limitReached");
+        }
+
+        Instant now = clock.instant();
+        Instant captured = capturedAt == null ? now : capturedAt;
+        EvidenceStorage.Stored stored = storage.store(tenantId, appeal.getCitationId(),
+                new EvidenceStorage.Upload(content, contentType, originalFilename, captured,
+                        latitude == null ? null : latitude.doubleValue(),
+                        longitude == null ? null : longitude.doubleValue()));
+        CitationEvidence evidence = CitationEvidence.appealPhoto(Uuid7.generate(), tenantId.value(),
+                appeal.getCitationId(), appeal.getId(), stored.storageKey(), stored.contentType(),
+                stored.byteSize(), stored.sha256(), captured, latitude, longitude, actor.userIdValue(), now);
+        return evidenceRepository.save(evidence);
+    }
+
+    /** Everything the citizen attached to one defence. */
+    @Transactional(readOnly = true)
+    public List<CitationEvidence> listForAppeal(TenantId tenantId, UUID appealId) {
+        return evidenceRepository.findByTenantIdAndAppealIdOrderByCreatedAtAsc(tenantId.value(), appealId);
     }
 
     @Transactional(readOnly = true)

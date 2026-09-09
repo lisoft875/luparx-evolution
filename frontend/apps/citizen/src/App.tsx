@@ -13,7 +13,6 @@ import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import { TenantSelectPage } from './pages/TenantSelectPage';
 import { HomePage } from './pages/HomePage';
 import { ProfilePage } from './pages/ProfilePage';
-import { AccountPersonalDataPage } from './pages/AccountPersonalDataPage';
 import { ParkingPage } from './pages/ParkingPage';
 import { VehiclesPage } from './pages/VehiclesPage';
 import { FinesPage } from './pages/FinesPage';
@@ -66,19 +65,13 @@ export function App(): React.JSX.Element {
                   </RequireAuth>
                 }
               />
-              <Route
-                path="/profile/personal"
-                element={
-                  <RequireAuth loginPath="/login">
-                    <AccountPersonalDataPage />
-                  </RequireAuth>
-                }
-              />
-              {/* The e-mail and the password used to have a screen each. They are now edited from
-                  the personal-data screen, in place; these paths stay as redirects so a link that
-                  was bookmarked, mailed or written into a test still lands somewhere real. */}
-              <Route path="/profile/email" element={<Navigate to="/profile/personal" replace />} />
-              <Route path="/profile/password" element={<Navigate to="/profile/personal" replace />} />
+              {/* Personal data, e-mail and password used to have a screen each, reached from an
+                  index that was itself a screen. They are now all edited on /profile, in place;
+                  these paths stay as redirects so a bookmarked, mailed or scripted link still
+                  lands somewhere real. */}
+              <Route path="/profile/personal" element={<Navigate to="/profile" replace />} />
+              <Route path="/profile/email" element={<Navigate to="/profile" replace />} />
+              <Route path="/profile/password" element={<Navigate to="/profile" replace />} />
               <Route
                 path="/park"
                 element={

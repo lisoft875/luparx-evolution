@@ -18,16 +18,22 @@ import java.util.List;
  * @param allowedImageTypes   canonical image types accepted, as verified from the file's own header
  * @param maxPhotosPerCitation how many photographs one citation may carry
  * @param maxNoteLength       longest written note
+ * @param maxAppealImageBytes hard limit for an image attached to a citizen's defence (1 MB). The
+ *                            client compresses; the server decides
  */
 @ConfigurationProperties(prefix = "luparx.enforcement")
 public record EnforcementProperties(String evidenceRoot,
                                     Long maxEvidenceBytes,
                                     List<String> allowedImageTypes,
                                     Integer maxPhotosPerCitation,
-                                    Integer maxNoteLength) {
+                                    Integer maxNoteLength,
+                                    Long maxAppealImageBytes) {
 
     /** 10 MB: a phone photograph with room to spare, and far below what would fill a disk by accident. */
     private static final long DEFAULT_MAX_BYTES = 10L * 1024L * 1024L;
+
+    /** 1 MB, as the product asked: a compressed phone photograph of a windscreen fits comfortably. */
+    private static final long DEFAULT_MAX_APPEAL_BYTES = 1024L * 1024L;
 
     private static final List<String> DEFAULT_TYPES = List.of("image/jpeg", "image/png", "image/webp", "image/heic");
 
@@ -39,5 +45,8 @@ public record EnforcementProperties(String evidenceRoot,
                 : List.copyOf(allowedImageTypes);
         maxPhotosPerCitation = maxPhotosPerCitation == null || maxPhotosPerCitation <= 0 ? 6 : maxPhotosPerCitation;
         maxNoteLength = maxNoteLength == null || maxNoteLength <= 0 ? 2000 : maxNoteLength;
+        maxAppealImageBytes = maxAppealImageBytes == null || maxAppealImageBytes <= 0L
+                ? DEFAULT_MAX_APPEAL_BYTES
+                : maxAppealImageBytes;
     }
 }

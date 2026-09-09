@@ -73,4 +73,13 @@ public final class AuditAction {
     public static final String CITATION_STATUS_CHANGED = "CITATION_STATUS_CHANGED";
     public static final String CITATION_CANCELLED = "CITATION_CANCELLED";
     public static final String INFRACTION_TYPES_UPDATED = "INFRACTION_TYPES_UPDATED";
+
+    // --- appeals, notices and wallet top-ups (CONTRACT.md "v0.8") -------------------------------
+    public static final String CITATION_APPEAL_FILED = "CITATION_APPEAL_FILED";
+    public static final String CITATION_APPEAL_RESOLVED = "CITATION_APPEAL_RESOLVED";
+    public static final String APPEAL_NOTICE_PUBLISHED = "APPEAL_NOTICE_PUBLISHED";
+    public static final String ENFORCEMENT_SETTINGS_UPDATED = "ENFORCEMENT_SETTINGS_UPDATED";
+    public static final String WALLET_TOPUP_RECORDED = "WALLET_TOPUP_RECORDED";
+    public static final String WALLET_TOPUP_CODE_ROTATED = "WALLET_TOPUP_CODE_ROTATED";
+    public static final String WALLET_TOPUP_CODE_RESOLVED = "WALLET_TOPUP_CODE_RESOLVED";
 }

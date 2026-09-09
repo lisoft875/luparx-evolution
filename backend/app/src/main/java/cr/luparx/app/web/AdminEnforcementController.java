@@ -7,13 +7,18 @@ import cr.luparx.core.id.TenantId;
 import cr.luparx.core.page.PageRequest;
 import cr.luparx.core.page.PageResponse;
 import cr.luparx.core.tenant.TenantContextHolder;
+import cr.luparx.enforcement.entity.AppealNotice;
 import cr.luparx.enforcement.entity.Citation;
+import cr.luparx.enforcement.entity.CitationAppeal;
 import cr.luparx.enforcement.entity.CitationEvidence;
 import cr.luparx.enforcement.entity.InfractionType;
+import cr.luparx.enforcement.model.AppealStatus;
 import cr.luparx.enforcement.model.CitationAction;
 import cr.luparx.enforcement.model.CitationStatus;
 import cr.luparx.enforcement.model.EnforcementActor;
 import cr.luparx.enforcement.port.EvidenceStorage;
+import cr.luparx.enforcement.service.AppealNoticeService;
+import cr.luparx.enforcement.service.AppealService;
 import cr.luparx.enforcement.service.CitationService;
 import cr.luparx.enforcement.service.EvidenceService;
 import cr.luparx.enforcement.service.InfractionTypeService;
@@ -62,19 +67,29 @@ public class AdminEnforcementController {
     private final CitationService citationService;
     private final EvidenceService evidenceService;
     private final InfractionTypeService infractionTypeService;
+    private final AppealService appealService;
+    private final AppealNoticeService noticeService;
     private final EnforcementMapper mapper;
     private final AuditRecorder auditRecorder;
 
     public AdminEnforcementController(CitationService citationService,
                                       EvidenceService evidenceService,
                                       InfractionTypeService infractionTypeService,
+                                      AppealService appealService,
+                                      AppealNoticeService noticeService,
                                       EnforcementMapper mapper,
                                       AuditRecorder auditRecorder) {
         this.citationService = citationService;
         this.evidenceService = evidenceService;
         this.infractionTypeService = infractionTypeService;
+        this.appealService = appealService;
+        this.noticeService = noticeService;
         this.mapper = mapper;
         this.auditRecorder = auditRecorder;
+    }
+
+    private String appealBasePath(UUID citationId) {
+        return "/api/v1/admin/enforcement/citations/" + citationId + "/evidence";
     }
 
     // --- citations ---------------------------------------------------------------------------------
@@ -148,43 +163,133 @@ public class AdminEnforcementController {
         return detail(tenantId, citation);
     }
 
-    /** Record that the citizen filed a defence. Refused when the infraction type admits none. */
-    @PostMapping("/citations/{id}/appeal")
+    // --- appeals ------------------------------------------------------------------------------------
+
+    /**
+     * The moderation queue: defences waiting for a decision, oldest first.
+     *
+     * <p>Oldest first and not newest: a queue that shows the most recent at the top is a queue where
+     * the oldest case is never reached.</p>
+     */
+    @GetMapping("/appeals")
     @PreAuthorize("hasAuthority('PERM_CITATION_READ')")
-    @Operation(summary = "Record an appeal filed against a citation")
-    public EnforcementDtos.CitationDetailResponse appeal(@PathVariable UUID id,
-                                                         @Valid @RequestBody EnforcementDtos.CitationReasonRequest request) {
+    @Operation(summary = "Defences filed against this municipality's citations")
+    public PageResponse<EnforcementDtos.AppealResponse> appeals(
+            @RequestParam(required = false, defaultValue = "SUBMITTED") String status,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size) {
         TenantId tenantId = TenantContextHolder.requireTenantId();
-        Citation citation = citationService.transition(tenantId, actor(), id, CitationStatus.APPEALED,
-                CitationAction.APPEALED, request.reason(), true);
-        auditStatus(AuditAction.CITATION_STATUS_CHANGED, citation, request.reason());
-        return detail(tenantId, citation);
+        PageRequest request = PageRequest.parse(page, size, null);
+        AppealStatus filter = "ALL".equalsIgnoreCase(status) ? null : AppealStatus.parse(status).orElse(null);
+        PageResponse<CitationAppeal> appeals = appealService.list(tenantId, filter, request);
+        int maxImages = appealService.appealMaxImages(tenantId);
+        List<EnforcementDtos.AppealResponse> items = new ArrayList<>(appeals.items().size());
+        for (CitationAppeal appeal : appeals.items()) {
+            items.add(mapper.toAppeal(appeal, evidenceService.listForAppeal(tenantId, appeal.getId()), maxImages,
+                    appealBasePath(appeal.getCitationId())));
+        }
+        return new PageResponse<>(items, appeals.page(), appeals.size(), appeals.totalElements(),
+                appeals.totalPages());
     }
 
-    /** Resolve an appeal against the citizen: the citation stands and is payable again. */
-    @PostMapping("/citations/{id}/uphold")
+    /**
+     * Decides a defence: accept it and the citation is void, reject it and the citation stands.
+     *
+     * <p>One endpoint for both outcomes because they are one decision, and it replaces the separate
+     * {@code /appeal}, {@code /uphold} and {@code /dismiss} routes of v0.7: those could move a
+     * citation without there being a defence to answer, which left the citizen reading a resolution
+     * to something they never filed. The reason is mandatory in both directions, it lands on the
+     * defence and in the citation's own history, and the whole thing is audited.</p>
+     */
+    @PostMapping("/citations/{id}/appeal/resolve")
     @PreAuthorize("hasAuthority('PERM_CITATION_VOID')")
-    @Operation(summary = "Reject an appeal; the citation stands")
-    public EnforcementDtos.CitationDetailResponse uphold(@PathVariable UUID id,
-                                                         @Valid @RequestBody EnforcementDtos.CitationReasonRequest request) {
+    @Operation(summary = "Accept or reject the defence filed against a citation, with a reason")
+    public EnforcementDtos.CitationDetailResponse resolveAppeal(
+            @PathVariable UUID id,
+            @Valid @RequestBody EnforcementDtos.ResolveAppealRequest request) {
         TenantId tenantId = TenantContextHolder.requireTenantId();
-        Citation citation = citationService.transition(tenantId, actor(), id, CitationStatus.UPHELD,
-                CitationAction.APPEAL_UPHELD, request.reason(), true);
-        auditStatus(AuditAction.CITATION_STATUS_CHANGED, citation, request.reason());
-        return detail(tenantId, citation);
+        CitationAppeal appeal = appealService.resolve(tenantId, actor(), id, request.accept(), request.reason());
+        auditRecorder.record(AuditAction.CITATION_APPEAL_RESOLVED, "citation-appeal", appeal.getId().toString(),
+                Map.of("citationId", id.toString(),
+                        "outcome", appeal.getStatus().name(),
+                        "reason", request.reason()));
+        return detail(tenantId, citationService.require(tenantId, id));
     }
 
-    /** Resolve an appeal in the citizen's favour: the citation is void. */
-    @PostMapping("/citations/{id}/dismiss")
-    @PreAuthorize("hasAuthority('PERM_CITATION_VOID')")
-    @Operation(summary = "Accept an appeal; the citation is void")
-    public EnforcementDtos.CitationDetailResponse dismiss(@PathVariable UUID id,
-                                                          @Valid @RequestBody EnforcementDtos.CitationReasonRequest request) {
+    // --- the legal notice, and what a defence may carry -----------------------------------------------
+
+    /**
+     * The notice currently in force here, with the version number a client must send back.
+     *
+     * <p>Falls back to the country default, which is what a municipality that has not written its own
+     * is actually showing its citizens.</p>
+     */
+    @GetMapping("/appeal-notice")
+    @PreAuthorize("hasAuthority('PERM_CITATION_READ')")
+    @Operation(summary = "The legal notice shown to a citizen before writing a defence")
+    public EnforcementDtos.AppealNoticeResponse appealNotice(@RequestParam(required = false) String locale) {
         TenantId tenantId = TenantContextHolder.requireTenantId();
-        Citation citation = citationService.transition(tenantId, actor(), id, CitationStatus.DISMISSED,
-                CitationAction.APPEAL_DISMISSED, request.reason(), true);
-        auditStatus(AuditAction.CITATION_STATUS_CHANGED, citation, request.reason());
-        return detail(tenantId, citation);
+        return mapper.toNotice(noticeService.require(tenantId, locale));
+    }
+
+    /** Every version this municipality has published, newest first. Nothing is ever removed. */
+    @GetMapping("/appeal-notice/versions")
+    @PreAuthorize("hasAuthority('PERM_CITATION_READ')")
+    @Operation(summary = "Published versions of this municipality's legal notice")
+    public List<EnforcementDtos.AppealNoticeResponse> appealNoticeVersions(
+            @RequestParam(required = false) String locale) {
+        TenantId tenantId = TenantContextHolder.requireTenantId();
+        List<EnforcementDtos.AppealNoticeResponse> body = new ArrayList<>();
+        for (AppealNotice notice : noticeService.history(tenantId, locale)) {
+            body.add(mapper.toNotice(notice));
+        }
+        return body;
+    }
+
+    /**
+     * Publishes a new version of the notice.
+     *
+     * <p>{@code PUT} that <b>inserts</b>, deliberately: editing the text in place would rewrite what
+     * citizens accepted in the past, and {@code citation_appeals} points at the exact version each of
+     * them read. An {@code effectiveFrom} in the future is allowed and is how a municipality prepares
+     * a change without it appearing on screens today.</p>
+     *
+     * <p><b>The seeded Costa Rican wording is a starting point, not legal advice.</b> This endpoint
+     * exists so the client's lawyer can replace it without a deployment, and it should be reviewed by
+     * them before production.</p>
+     */
+    @PutMapping("/appeal-notice")
+    @PreAuthorize("hasAuthority('PERM_ENFORCEMENT_MANAGE')")
+    @Operation(summary = "Publish a new version of the legal notice shown before a defence")
+    public EnforcementDtos.AppealNoticeResponse publishAppealNotice(
+            @Valid @RequestBody EnforcementDtos.PublishAppealNoticeRequest request) {
+        TenantId tenantId = TenantContextHolder.requireTenantId();
+        AppealNotice notice = noticeService.publish(tenantId, request.locale(), request.body(),
+                request.effectiveFrom(), TenantContextHolder.requireUserId());
+        auditRecorder.record(AuditAction.APPEAL_NOTICE_PUBLISHED, "appeal-notice", notice.getId().toString(),
+                Map.of("version", String.valueOf(notice.getVersion()), "locale", notice.getLocale()));
+        return mapper.toNotice(notice);
+    }
+
+    @GetMapping("/settings")
+    @PreAuthorize("hasAuthority('PERM_CITATION_READ')")
+    @Operation(summary = "Enforcement settings of this municipality")
+    public EnforcementDtos.EnforcementSettingsResponse settings() {
+        TenantId tenantId = TenantContextHolder.requireTenantId();
+        return new EnforcementDtos.EnforcementSettingsResponse(appealService.appealMaxImages(tenantId));
+    }
+
+    /** How many photographs a defence may carry here. Zero is legal and means "text only". */
+    @PutMapping("/settings")
+    @PreAuthorize("hasAuthority('PERM_ENFORCEMENT_MANAGE')")
+    @Operation(summary = "Change how many images a defence may carry in this municipality")
+    public EnforcementDtos.EnforcementSettingsResponse updateSettings(
+            @Valid @RequestBody EnforcementDtos.UpdateEnforcementSettingsRequest request) {
+        TenantId tenantId = TenantContextHolder.requireTenantId();
+        appealService.updateSettings(tenantId, request.appealMaxImages().intValue());
+        auditRecorder.record(AuditAction.ENFORCEMENT_SETTINGS_UPDATED, "enforcement-settings",
+                tenantId.value().toString(), Map.of("appealMaxImages", String.valueOf(request.appealMaxImages())));
+        return new EnforcementDtos.EnforcementSettingsResponse(appealService.appealMaxImages(tenantId));
     }
 
     /**
@@ -259,8 +364,7 @@ public class AdminEnforcementController {
         List<CitationEvidence> evidence = evidenceService.list(tenantId, citation.getId());
         return new EnforcementDtos.CitationDetailResponse(
                 mapper.toCitation(citation, mapper.zonesOf(tenantId.value()), evidence.size()),
-                mapper.toEvidenceList(evidence,
-                        "/api/v1/admin/enforcement/citations/" + citation.getId() + "/evidence"),
+                mapper.toEvidenceList(evidence, appealBasePath(citation.getId())),
                 mapper.toHistory(citationService.history(tenantId, citation.getId())));
     }
 

@@ -2,6 +2,7 @@ package cr.luparx.enforcement.repository;
 
 import cr.luparx.enforcement.entity.CitationEvidence;
 import cr.luparx.enforcement.model.EvidenceKind;
+import cr.luparx.enforcement.model.EvidenceSource;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
@@ -15,5 +16,15 @@ public interface CitationEvidenceRepository extends JpaRepository<CitationEviden
 
     Optional<CitationEvidence> findByTenantIdAndCitationIdAndId(UUID tenantId, UUID citationId, UUID id);
 
-    long countByTenantIdAndCitationIdAndKind(UUID tenantId, UUID citationId, EvidenceKind kind);
+    List<CitationEvidence> findByTenantIdAndAppealIdOrderByCreatedAtAsc(UUID tenantId, UUID appealId);
+
+    /**
+     * Counted by source, always. "Does this citation have a photograph" means the officer's: a
+     * photograph the citizen attached to their defence cannot retroactively satisfy the evidence the
+     * infraction type demanded, and the citizen's own limit is a different number.
+     */
+    long countByTenantIdAndCitationIdAndKindAndSource(UUID tenantId, UUID citationId, EvidenceKind kind,
+                                                      EvidenceSource source);
+
+    long countByTenantIdAndAppealIdAndKind(UUID tenantId, UUID appealId, EvidenceKind kind);
 }

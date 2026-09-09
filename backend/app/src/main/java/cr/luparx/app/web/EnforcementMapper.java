@@ -3,7 +3,9 @@ package cr.luparx.app.web;
 import cr.luparx.app.web.dto.EnforcementDtos;
 import cr.luparx.app.web.dto.ParkingDtos;
 import cr.luparx.core.money.Money;
+import cr.luparx.enforcement.entity.AppealNotice;
 import cr.luparx.enforcement.entity.Citation;
+import cr.luparx.enforcement.entity.CitationAppeal;
 import cr.luparx.enforcement.entity.CitationEvent;
 import cr.luparx.enforcement.entity.CitationEvidence;
 import cr.luparx.enforcement.entity.InfractionType;
@@ -194,6 +196,7 @@ public class EnforcementMapper {
         return new EnforcementDtos.EvidenceResponse(
                 evidence.getId(),
                 evidence.getKind(),
+                evidence.getSource(),
                 evidence.getContentType(),
                 evidence.getByteSize(),
                 evidence.getSha256(),
@@ -216,6 +219,35 @@ public class EnforcementMapper {
             body.add(toEvidence(item, basePath + "/" + item.getId()));
         }
         return body;
+    }
+
+    // --- appeals ---------------------------------------------------------------------------------
+
+    public EnforcementDtos.AppealNoticeResponse toNotice(AppealNotice notice) {
+        return new EnforcementDtos.AppealNoticeResponse(notice.getId(), notice.getVersion(), notice.getLocale(),
+                notice.getBody(), notice.getEffectiveFrom(), notice.isCountryDefault());
+    }
+
+    /**
+     * A defence with the images attached to it.
+     *
+     * <p>The image URLs are built from a base path the caller supplies, so the citizen's route and
+     * the administration's each hand out their own and neither can hand out the other's.</p>
+     */
+    public EnforcementDtos.AppealResponse toAppeal(CitationAppeal appeal, List<CitationEvidence> images,
+                                                   int maxImages, String evidenceBasePath) {
+        return new EnforcementDtos.AppealResponse(
+                appeal.getId(),
+                appeal.getCitationId(),
+                appeal.getStatus(),
+                appeal.getStatus().labelKey(),
+                appeal.getBody(),
+                appeal.getSubmittedAt(),
+                appeal.getResolvedAt(),
+                appeal.getResolutionReason(),
+                appeal.getNoticeVersion(),
+                maxImages,
+                toEvidenceList(images, evidenceBasePath));
     }
 
     public List<EnforcementDtos.CitationEventResponse> toHistory(List<CitationEvent> events) {

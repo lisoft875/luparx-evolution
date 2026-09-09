@@ -16,6 +16,7 @@ import cr.luparx.enforcement.model.CitationAction;
 import cr.luparx.enforcement.model.CitationStatus;
 import cr.luparx.enforcement.model.EnforcementActor;
 import cr.luparx.enforcement.model.EvidenceKind;
+import cr.luparx.enforcement.model.EvidenceSource;
 import cr.luparx.enforcement.port.ParkingStatusPort;
 import cr.luparx.enforcement.repository.CitationEventRepository;
 import cr.luparx.enforcement.repository.CitationEvidenceRepository;
@@ -200,8 +201,8 @@ public class CitationService {
         InfractionType type = infractionTypeService.require(TenantId.of(citation.getTenantId()),
                 citation.getInfractionTypeId());
         if (type.isRequiresPhoto()
-                && evidenceRepository.countByTenantIdAndCitationIdAndKind(citation.getTenantId(), citation.getId(),
-                        EvidenceKind.PHOTO) == 0L) {
+                && evidenceRepository.countByTenantIdAndCitationIdAndKindAndSource(citation.getTenantId(),
+                        citation.getId(), EvidenceKind.PHOTO, EvidenceSource.OFFICER) == 0L) {
             throw ConflictException.of(ErrorCode.CITATION_EVIDENCE_REQUIRED,
                     "error.enforcement.citation.evidenceRequired");
         }

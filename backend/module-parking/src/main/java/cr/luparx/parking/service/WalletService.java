@@ -10,17 +10,20 @@ import cr.luparx.core.page.PageRequest;
 import cr.luparx.core.page.PageResponse;
 import cr.luparx.parking.entity.WalletAccount;
 import cr.luparx.parking.entity.WalletTransaction;
+import cr.luparx.parking.model.WalletTopupSource;
 import cr.luparx.parking.model.WalletTransactionType;
 import cr.luparx.parking.repository.WalletAccountRepository;
 import cr.luparx.parking.repository.WalletTransactionRepository;
 import cr.luparx.tenancy.entity.Tenant;
 import cr.luparx.tenancy.service.TenantService;
 import org.springframework.data.domain.Page;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -116,17 +119,55 @@ public class WalletService {
      */
     @Transactional
     public WalletTransaction topUp(TenantId tenantId, UserId userId, Money amount, String idempotencyKey) {
+        return topUp(tenantId, userId, amount, idempotencyKey, null, null, null);
+    }
+
+    /**
+     * Credits the wallet and records where the money came from (V18_0).
+     *
+     * <p><b>Idempotent by the payer's own reference.</b> When {@code externalReference} is given, a
+     * movement already credited under the same municipality, source and reference is returned
+     * unchanged and nothing is added. That is the layer that survives what the HTTP header cannot: a
+     * till that reprints a receipt through a different process, or a partner replaying a whole batch
+     * with new request identifiers. The unique index is what makes it hold with several instances —
+     * the check below is the fast path, the index is the guarantee.</p>
+     *
+     * @param source            which channel produced it; null only for the legacy call above
+     * @param externalReference the payer's own reference, or null when there is none
+     * @param createdBy         the operator who keyed it, when a person did
+     */
+    @Transactional
+    public WalletTransaction topUp(TenantId tenantId, UserId userId, Money amount, String idempotencyKey,
+                                   WalletTopupSource source, String externalReference, UserId createdBy) {
         if (!amount.isPositive()) {
             throw new IllegalArgumentException("a top-up is a positive amount");
+        }
+        String reference = externalReference == null || externalReference.isBlank()
+                ? null
+                : externalReference.trim();
+        if (reference != null && source != null) {
+            Optional<WalletTransaction> already = transactionRepository
+                    .findByTenantIdAndSourceAndExternalReference(tenantId.value(), source, reference);
+            if (already.isPresent()) {
+                return already.get();
+            }
         }
         WalletAccount account = lock(tenantId, userId);
         requireSameCurrency(account, amount);
         Instant now = clock.instant();
         account.apply(amount, now);
         accountRepository.save(account);
-        return transactionRepository.save(new WalletTransaction(Uuid7.generate(), tenantId.value(),
-                account.getId(), userId.value(), WalletTransactionType.TOP_UP, amount, account.getBalanceMinor(),
-                null, idempotencyKey, now));
+        try {
+            return transactionRepository.saveAndFlush(new WalletTransaction(Uuid7.generate(), tenantId.value(),
+                    account.getId(), userId.value(), WalletTransactionType.TOP_UP, amount,
+                    account.getBalanceMinor(), null, idempotencyKey, source, reference,
+                    createdBy == null ? null : createdBy.value(), now));
+        } catch (DataIntegrityViolationException duplicate) {
+            // Two tills raced on the same reference. The index decided; the loser must not credit,
+            // and the transaction is rolled back by the caller's boundary rather than half-applied.
+            throw ConflictException.of(ErrorCode.TOPUP_REFERENCE_ALREADY_USED,
+                    "error.wallet.topup.referenceUsed");
+        }
     }
 
     @Transactional(readOnly = true)

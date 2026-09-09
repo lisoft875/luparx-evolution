@@ -1,6 +1,7 @@
 package cr.luparx.enforcement.entity;
 
 import cr.luparx.enforcement.model.EvidenceKind;
+import cr.luparx.enforcement.model.EvidenceSource;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -42,6 +43,19 @@ public class CitationEvidence {
     @Enumerated(EnumType.STRING)
     @Column(name = "kind", nullable = false, length = 16)
     private EvidenceKind kind;
+
+    /**
+     * Who supplied it. The officer's proof and the citizen's live in the same table because legally
+     * they are the same kind of thing, but which side produced a given file is a column and never an
+     * inference (V18_0).
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "source", nullable = false, length = 16)
+    private EvidenceSource source;
+
+    /** The defence this file belongs to; null for everything the officer attached. */
+    @Column(name = "appeal_id")
+    private UUID appealId;
 
     /** Opaque key in the evidence store. Never a URL and never a path a client may construct. */
     @Column(name = "storage_key", length = 400)
@@ -86,6 +100,7 @@ public class CitationEvidence {
         evidence.tenantId = tenantId;
         evidence.citationId = citationId;
         evidence.kind = EvidenceKind.PHOTO;
+        evidence.source = EvidenceSource.OFFICER;
         evidence.storageKey = storageKey;
         evidence.contentType = contentType;
         evidence.byteSize = byteSize;
@@ -105,6 +120,7 @@ public class CitationEvidence {
         evidence.tenantId = tenantId;
         evidence.citationId = citationId;
         evidence.kind = EvidenceKind.NOTE;
+        evidence.source = EvidenceSource.OFFICER;
         evidence.note = note;
         evidence.uploadedBy = uploadedBy;
         evidence.capturedAt = now;
@@ -112,8 +128,43 @@ public class CitationEvidence {
         return evidence;
     }
 
+    /**
+     * A photograph the citizen attached to their defence. Same table, same digest, same rules as the
+     * officer's — what changes is who offered it and which case it belongs to.
+     */
+    public static CitationEvidence appealPhoto(UUID id, UUID tenantId, UUID citationId, UUID appealId,
+                                               String storageKey, String contentType, long byteSize, String sha256,
+                                               Instant capturedAt, BigDecimal latitude, BigDecimal longitude,
+                                               UUID uploadedBy, Instant now) {
+        CitationEvidence evidence = new CitationEvidence();
+        evidence.id = id;
+        evidence.tenantId = tenantId;
+        evidence.citationId = citationId;
+        evidence.appealId = appealId;
+        evidence.kind = EvidenceKind.PHOTO;
+        evidence.source = EvidenceSource.CITIZEN;
+        evidence.storageKey = storageKey;
+        evidence.contentType = contentType;
+        evidence.byteSize = byteSize;
+        evidence.sha256 = sha256;
+        evidence.capturedAt = capturedAt;
+        evidence.latitude = latitude;
+        evidence.longitude = longitude;
+        evidence.uploadedBy = uploadedBy;
+        evidence.createdAt = now;
+        return evidence;
+    }
+
     public UUID getId() {
         return id;
+    }
+
+    public EvidenceSource getSource() {
+        return source;
+    }
+
+    public UUID getAppealId() {
+        return appealId;
     }
 
     public UUID getTenantId() {

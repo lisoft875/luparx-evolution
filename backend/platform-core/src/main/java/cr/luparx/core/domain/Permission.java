@@ -28,7 +28,16 @@ public enum Permission {
     /** Annul an issued citation, always with a reason. */
     CITATION_VOID,
     /** Configure what the municipality fines and for how much. */
-    ENFORCEMENT_MANAGE;
+    ENFORCEMENT_MANAGE,
+
+    /**
+     * Credit a citizen's wallet at the municipality's counter.
+     *
+     * <p>Its own capability rather than "whatever an administrator may do": handing out money is the
+     * cashier's job and the auditor's first question, and a municipality must be able to give it to
+     * the person at the window without also giving them user administration.
+     */
+    WALLET_TOPUP;
 
     /** Authority name exposed to Spring Security expressions ({@code hasAuthority('PERM_USER_READ')}). */
     public String authority() {

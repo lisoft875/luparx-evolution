@@ -197,7 +197,8 @@ public class DomainBeansConfiguration {
         return new EvidencePolicy(properties.maxEvidenceBytes(),
                 Set.copyOf(properties.allowedImageTypes()),
                 properties.maxPhotosPerCitation(),
-                properties.maxNoteLength());
+                properties.maxNoteLength(),
+                properties.maxAppealImageBytes());
     }
 
     @Bean

@@ -20,7 +20,8 @@ de rollback, estado y fecha.
 | [0012](0012-idempotency-transactional-outbox.md) | Idempotencia y outbox transaccional para pagos, webhooks y eventos | Aceptado |
 | [0013](0013-audit-trail.md) | Auditoría y trazabilidad de accesos | Aceptado |
 | [0014](0014-enforcement-bounded-context.md) | Fiscalización como contexto propio (`module-enforcement`), con puerto hacia parqueo | Aceptado |
+| [0015](0015-wallet-topup-code.md) | Código de recarga dedicado (en vez de la cédula) para acreditar saldo en caja | Aceptado |
 
-Las decisiones 0001–0013 datan del scaffold inicial (2026-09-07); 0014 se tomó al construir el
-módulo de fiscalización (2026-09-09). Todas se revisan cuando cambian los supuestos que las
+Las decisiones 0001–0013 datan del scaffold inicial (2026-09-07); 0014 y 0015 se tomaron al construir
+el módulo de fiscalización y el flujo de recargas (2026-09-09). Todas se revisan cuando cambian los supuestos que las
 motivaron (volumen, número de tenants, regulación por país, etc.).

@@ -14,12 +14,14 @@ import cr.luparx.parking.entity.ParkingSpaceFormat;
 import cr.luparx.parking.entity.ParkingTimeCreditEntry;
 import cr.luparx.parking.entity.ParkingZone;
 import cr.luparx.parking.entity.Vehicle;
+import cr.luparx.parking.entity.WalletTopupCode;
 import cr.luparx.parking.entity.WalletTransaction;
 import cr.luparx.parking.model.ChargingBand;
 import cr.luparx.parking.model.ExtensionOption;
 import cr.luparx.parking.model.ChargingSchedule;
 import cr.luparx.parking.model.ParkingQuote;
 import cr.luparx.parking.model.ParkingSpaceRange;
+import cr.luparx.parking.model.TopupCodeFormat;
 import cr.luparx.parking.repository.ParkingSpaceRepository;
 import cr.luparx.parking.repository.ParkingZoneRepository;
 import org.springframework.stereotype.Component;
@@ -216,6 +218,15 @@ public class ParkingMapper {
     }
 
     // --- wallet and credits ----------------------------------------------------------------------
+
+    /**
+     * The code both ways: canonical for the client to send back, grouped for a person to read aloud.
+     * The grouping is the server's, so changing it later does not need every app to be updated.
+     */
+    public ParkingDtos.TopupCodeResponse toTopupCode(WalletTopupCode code) {
+        return new ParkingDtos.TopupCodeResponse(code.getCode(), TopupCodeFormat.display(code.getCode()),
+                code.getCreatedAt(), code.getRotatedAt());
+    }
 
     public ParkingDtos.WalletTransactionResponse toWalletTransaction(WalletTransaction transaction) {
         return new ParkingDtos.WalletTransactionResponse(

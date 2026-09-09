@@ -241,3 +241,9 @@ luparx:
     allowed-image-types: ${EVIDENCE_ALLOWED_TYPES:image/jpeg,image/png,image/webp,image/heic}
     max-photos-per-citation: ${EVIDENCE_MAX_PHOTOS:6}
     max-note-length: ${EVIDENCE_MAX_NOTE_LENGTH:2000}
+    # Hard limit for an image a CITIZEN attaches to a defence (CONTRACT.md v0.8). Lower than the
+    # officer's: their device is municipal equipment on a known connection, a defence arrives from any
+    # phone on any network, and the client is expected to compress — but the client does not decide,
+    # this does. How MANY images a defence may carry is the municipality's decision instead, and lives
+    # in `enforcement_settings`, editable from the admin portal.
+    max-appeal-image-bytes: ${EVIDENCE_MAX_APPEAL_BYTES:1048576}

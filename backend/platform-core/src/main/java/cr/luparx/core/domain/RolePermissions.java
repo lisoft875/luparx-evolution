@@ -43,14 +43,19 @@ public final class RolePermissions {
                 Permission.TENANT_MANAGE,
                 Permission.CITATION_READ,
                 Permission.CITATION_VOID,
-                Permission.ENFORCEMENT_MANAGE));
+                Permission.ENFORCEMENT_MANAGE,
+                Permission.WALLET_TOPUP));
         // Finance reads citations because collecting on them is its job; it cannot annul one, which
         // is precisely the separation of duties a municipality's own auditor asks about.
+        // Finance is the counter: it credits wallets and reads citations, and it still cannot annul
+        // one. Endpoints authorise on PERM_WALLET_TOPUP, never on a role name, so a municipality that
+        // wants a dedicated cashier role gets it by editing this table and nothing else.
         table.put(Role.TENANT_FINANCE, EnumSet.of(
                 Permission.USER_READ,
                 Permission.AUDIT_READ,
                 Permission.EXPORT_RUN,
-                Permission.CITATION_READ));
+                Permission.CITATION_READ,
+                Permission.WALLET_TOPUP));
         table.put(Role.TENANT_SUPPORT, EnumSet.of(
                 Permission.USER_READ,
                 Permission.AUDIT_READ,

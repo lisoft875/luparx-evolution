@@ -276,8 +276,51 @@ public final class ParkingDtos {
 
     // --- wallet ----------------------------------------------------------------------------------
 
-    /** {@code GET /citizen/wallet} — the balance in THIS municipality; there is no global one. */
-    public record WalletResponse(MoneyDto balance, PageResponse<WalletTransactionResponse> transactions) {
+    /**
+     * {@code GET /citizen/wallet} — the balance in THIS municipality; there is no global one.
+     *
+     * <p>{@code topupCode} travels with it because that is where a citizen looks for it: the code is
+     * what they read out at a till to have this same balance credited (CONTRACT.md v0.8).</p>
+     */
+    public record WalletResponse(MoneyDto balance, TopupCodeResponse topupCode,
+                                 PageResponse<WalletTransactionResponse> transactions) {
+    }
+
+    /**
+     * The code a citizen dictates at a counter.
+     *
+     * <p>Both forms travel: {@code code} is what the client sends back and compares, {@code display}
+     * is the grouped form a person reads aloud. The client must not invent the grouping itself — the
+     * server owns the format, so changing it later does not need every app to be updated.</p>
+     */
+    public record TopupCodeResponse(String code, String display, Instant createdAt, Instant rotatedAt) {
+    }
+
+    /**
+     * What a till gets back when it resolves a dictated code: <b>only</b> enough to confirm out loud
+     * that it is the right person. No balance, no email, no telephone, no document — a cashier
+     * confirming a name does not need, and must not be shown, the account behind it.
+     */
+    public record TopupCodeResolutionResponse(String givenName, String familyInitial, String tenantName,
+                                              String currencyCode) {
+    }
+
+    /** {@code POST /admin/wallets/topups} — crediting a wallet at the municipality's own counter. */
+    public record AdminTopupRequest(
+            @Size(max = 20) String topupCode,
+            UUID userId,
+            @NotNull @Min(1) Long amountMinor,
+            @Size(max = 120) String externalReference,
+            @Size(max = 200) String note) {
+    }
+
+    /** {@code POST /citizen/wallet/topups} — the development shortcut, dev profile only. */
+    public record DevTopupRequest(@NotNull @Min(1) Long amountMinor) {
+    }
+
+    /** The movement a top-up produced, with the balance it left behind. */
+    public record TopupResponse(UUID transactionId, MoneyDto amount, MoneyDto balanceAfter, String source,
+                                String externalReference, Instant createdAt, boolean alreadyApplied) {
     }
 
     /** Signed: a negative amount is money that left the wallet. */

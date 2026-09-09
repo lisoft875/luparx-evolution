@@ -87,7 +87,11 @@ public class IdempotencyFilter extends OncePerRequestFilter {
             // header protects the request; `deviceCitationId` protects the act itself, for the
             // retry that arrives from a reinstalled app with a brand-new key.
             "/api/v1/inspector/citations",
-            "/api/v1/inspector/citations/*/issue");
+            "/api/v1/inspector/citations/*/issue",
+            // Money entering a wallet at a counter (CONTRACT.md v0.8). The header protects the
+            // request; wallet_transactions.external_reference protects the payment when the retry
+            // comes from another till, another shift or a reprinted receipt.
+            "/api/v1/admin/wallets/topups");
 
     private final IdempotencyKeyRepository repository;
     private final ObjectMapper objectMapper;

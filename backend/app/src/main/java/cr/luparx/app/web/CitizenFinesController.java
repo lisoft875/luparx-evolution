@@ -1,6 +1,8 @@
 package cr.luparx.app.web;
 
+import cr.luparx.app.audit.AuditRecorder;
 import cr.luparx.app.web.dto.EnforcementDtos;
+import cr.luparx.core.audit.AuditAction;
 import cr.luparx.core.error.NotImplementedException;
 import cr.luparx.core.id.TenantId;
 import cr.luparx.core.id.UserId;
@@ -8,16 +10,22 @@ import cr.luparx.core.page.PageRequest;
 import cr.luparx.core.page.PageResponse;
 import cr.luparx.core.tenant.TenantContextHolder;
 import cr.luparx.enforcement.entity.Citation;
+import cr.luparx.enforcement.entity.CitationAppeal;
 import cr.luparx.enforcement.entity.CitationEvidence;
 import cr.luparx.enforcement.entity.InfractionType;
 import cr.luparx.enforcement.model.CitationStatus;
+import cr.luparx.enforcement.model.EnforcementActor;
 import cr.luparx.enforcement.port.EvidenceStorage;
+import cr.luparx.enforcement.service.AppealNoticeService;
+import cr.luparx.enforcement.service.AppealService;
 import cr.luparx.enforcement.service.CitationService;
 import cr.luparx.enforcement.service.EvidenceService;
 import cr.luparx.enforcement.service.InfractionTypeService;
 import cr.luparx.parking.entity.Vehicle;
 import cr.luparx.parking.service.VehicleService;
+import cr.luparx.tenancy.service.EffectiveLocaleService;
 import io.swagger.v3.oas.annotations.Operation;
+import jakarta.validation.Valid;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpHeaders;
@@ -28,8 +36,11 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -63,19 +74,31 @@ public class CitizenFinesController {
     private final CitationService citationService;
     private final EvidenceService evidenceService;
     private final InfractionTypeService infractionTypeService;
+    private final AppealService appealService;
+    private final AppealNoticeService noticeService;
+    private final EffectiveLocaleService localeService;
     private final VehicleService vehicleService;
     private final EnforcementMapper mapper;
+    private final AuditRecorder auditRecorder;
 
     public CitizenFinesController(CitationService citationService,
                                   EvidenceService evidenceService,
                                   InfractionTypeService infractionTypeService,
+                                  AppealService appealService,
+                                  AppealNoticeService noticeService,
+                                  EffectiveLocaleService localeService,
                                   VehicleService vehicleService,
-                                  EnforcementMapper mapper) {
+                                  EnforcementMapper mapper,
+                                  AuditRecorder auditRecorder) {
         this.citationService = citationService;
         this.evidenceService = evidenceService;
         this.infractionTypeService = infractionTypeService;
+        this.appealService = appealService;
+        this.noticeService = noticeService;
+        this.localeService = localeService;
         this.vehicleService = vehicleService;
         this.mapper = mapper;
+        this.auditRecorder = auditRecorder;
     }
 
     /**
@@ -120,7 +143,13 @@ public class CitizenFinesController {
         return new EnforcementDtos.FineDetailResponse(
                 mapper.toFine(citation, mapper.zonesOf(tenantId.value()), appealable, evidence.size()),
                 mapper.toEvidenceList(evidence, "/api/v1/citizen/fines/" + citation.getId() + "/evidence"),
-                mapper.toHistory(citationService.history(tenantId, citation.getId())));
+                mapper.toHistory(citationService.history(tenantId, citation.getId())),
+                appealService.findForCitation(tenantId, citation.getId())
+                        .map(appeal -> mapper.toAppeal(appeal,
+                                evidenceService.listForAppeal(tenantId, appeal.getId()),
+                                appealService.appealMaxImages(tenantId),
+                                "/api/v1/citizen/fines/" + citation.getId() + "/evidence"))
+                        .orElse(null));
     }
 
     /**
@@ -146,6 +175,100 @@ public class CitizenFinesController {
                 .body(content.content());
     }
 
+    // --- defence ---------------------------------------------------------------------------------
+
+    /**
+     * The legal notice the citizen must read before writing a defence.
+     *
+     * <p>A literal path segment, so it never collides with {@code /{id}}. The response carries the
+     * notice's identifier, and filing a defence requires sending that identifier back: the point of
+     * the whole mechanism is being able to prove afterwards which exact wording was on screen. It is
+     * resolved for the caller's effective locale, falling back to the municipality's and then to the
+     * country default (CONTRACT.md v0.8).</p>
+     *
+     * <p>Never cached. A municipality that publishes a corrected wording — because its lawyer changed
+     * it — must not have citizens accepting yesterday's from a cache.</p>
+     */
+    @GetMapping("/appeal-notice")
+    @PreAuthorize("hasRole('CITIZEN')")
+    @Operation(summary = "The legal notice to accept before filing a defence")
+    public ResponseEntity<EnforcementDtos.AppealNoticeResponse> appealNotice() {
+        TenantId tenantId = TenantContextHolder.requireTenantId();
+        // The caller's effective locale, resolved by the same deterministic rule as everything else
+        // the citizen reads (CONTRACT.md v0.3): what the request asked for, then the municipality's,
+        // then the platform default.
+        String locale = localeService.resolveTag(null, tenantId);
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .body(mapper.toNotice(noticeService.require(tenantId, locale)));
+    }
+
+    /**
+     * Files a defence against one of my fines.
+     *
+     * <p>Text first, images afterwards on their own endpoint: what makes the defence exist is what
+     * the person wrote, and a citizen on a bad connection must not lose it because an upload failed.
+     * The citation moves to {@code APPEALED} in the same transaction, so the municipality sees the
+     * case and the citizen sees the state at the same moment.</p>
+     *
+     * <p>{@code acceptedNoticeId} must be the notice currently in force; anything else is
+     * {@code APPEAL_NOTICE_OUTDATED} (409) and the client re-displays the text.</p>
+     */
+    @PostMapping("/{id}/appeals")
+    @PreAuthorize("hasRole('CITIZEN')")
+    @Operation(summary = "File a defence against one of my fines")
+    public EnforcementDtos.AppealResponse fileAppeal(@PathVariable UUID id,
+                                                     @Valid @RequestBody EnforcementDtos.FileAppealRequest request) {
+        TenantId tenantId = TenantContextHolder.requireTenantId();
+        UserId userId = TenantContextHolder.requireUserId();
+        String locale = localeService.resolveTag(null, tenantId);
+        CitationAppeal appeal = appealService.file(tenantId, actor(), ownVehicleIds(userId), id, request.body(),
+                request.acceptedNoticeId(), locale);
+        auditRecorder.record(AuditAction.CITATION_APPEAL_FILED, "citation-appeal", appeal.getId().toString(),
+                Map.of("citationId", id.toString(),
+                        "noticeId", appeal.getNoticeId().toString(),
+                        "noticeVersion", String.valueOf(appeal.getNoticeVersion())));
+        return toAppeal(tenantId, appeal);
+    }
+
+    /** My defence and where it stands, including the municipality's reason once it is decided. */
+    @GetMapping("/{id}/appeal")
+    @PreAuthorize("hasRole('CITIZEN')")
+    @Operation(summary = "The defence I filed against one of my fines")
+    public EnforcementDtos.AppealResponse appeal(@PathVariable UUID id) {
+        TenantId tenantId = TenantContextHolder.requireTenantId();
+        UserId userId = TenantContextHolder.requireUserId();
+        CitationAppeal appeal = appealService.requireOwn(tenantId, ownVehicleIds(userId), id);
+        appealService.requireAuthor(appeal, userId);
+        return toAppeal(tenantId, appeal);
+    }
+
+    /**
+     * Attaches a photograph to my defence.
+     *
+     * <p><b>The server decides, not the client.</b> The app is expected to compress before sending,
+     * but the limit that counts is checked here: 1 MB per image, the type read from the file's own
+     * header, and a count the municipality configures. Only while the defence is still open — adding
+     * evidence to a case already decided would be editing history.</p>
+     */
+    @PostMapping(value = "/{id}/appeal/images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasRole('CITIZEN')")
+    @Operation(summary = "Attach a photograph to my defence (1 MB per image, server-enforced)")
+    public EnforcementDtos.EvidenceResponse appealImage(@PathVariable UUID id,
+                                                        @RequestPart("file") MultipartFile file) {
+        TenantId tenantId = TenantContextHolder.requireTenantId();
+        UserId userId = TenantContextHolder.requireUserId();
+        CitationAppeal appeal = appealService.requireOpenOwn(tenantId, userId, ownVehicleIds(userId), id);
+        CitationEvidence evidence = evidenceService.attachAppealPhoto(tenantId, actor(), appeal,
+                appealService.appealMaxImages(tenantId), bytesOf(file), file.getOriginalFilename(), null, null,
+                null);
+        auditRecorder.record(AuditAction.CITATION_EVIDENCE_ATTACHED, "citation-appeal", appeal.getId().toString(),
+                Map.of("evidenceId", evidence.getId().toString(),
+                        "source", "CITIZEN",
+                        "sha256", evidence.getSha256() == null ? "-" : evidence.getSha256()));
+        return mapper.toEvidence(evidence, "/api/v1/citizen/fines/" + id + "/evidence/" + evidence.getId());
+    }
+
     /**
      * Paying a fine online — declared, not implemented.
      *
@@ -165,6 +288,25 @@ public class CitizenFinesController {
     @Operation(summary = "Pay a fine — reserved, arrives with the payments batch")
     public void pay(@PathVariable UUID id) {
         throw new NotImplementedException("error.notImplemented.finePayment");
+    }
+
+    private EnforcementDtos.AppealResponse toAppeal(TenantId tenantId, CitationAppeal appeal) {
+        return mapper.toAppeal(appeal, evidenceService.listForAppeal(tenantId, appeal.getId()),
+                appealService.appealMaxImages(tenantId),
+                "/api/v1/citizen/fines/" + appeal.getCitationId() + "/evidence");
+    }
+
+    private EnforcementActor actor() {
+        return EnforcementActor.of(TenantContextHolder.requireUserId(), TenantContextHolder.require().portal(),
+                auditRecorder.currentIpHash());
+    }
+
+    private byte[] bytesOf(MultipartFile file) {
+        try {
+            return file.getBytes();
+        } catch (java.io.IOException failure) {
+            throw new java.io.UncheckedIOException("Could not read the uploaded image", failure);
+        }
     }
 
     private List<UUID> ownVehicleIds(UserId userId) {
