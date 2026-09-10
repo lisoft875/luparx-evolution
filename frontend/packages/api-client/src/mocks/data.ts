@@ -179,7 +179,59 @@ export interface MockUserRecord {
 }
 
 export const mockUsersById = new Map<string, MockUserRecord>();
-export const mockAuditEvents: AuditEvent[] = [];
+/**
+ * La bitácora del simulador.
+ *
+ * Se siembran tres entradas CON el antes y el después (v0.32), porque la pantalla nueva tiene que
+ * tener algo que enseñar la primera vez que se abre —y porque las tres formas que importan son
+ * distintas: un cambio de números, uno de rol y uno con identificador personal enmascarado.
+ */
+export const mockAuditEvents: AuditEvent[] = [
+  {
+    id: 'audit-seed-3',
+    tenantId: 'tenant-sanjose',
+    actorUserId: 'user-admin-sanjose',
+    actorPortal: 'admin',
+    action: 'PARKING_ZONE_RULES_UPDATED',
+    resourceType: 'parking-zone',
+    resourceId: 'zone-centro',
+    occurredAt: new Date(Date.now() - 2 * 3600_000).toISOString(),
+    metadata: { zone: 'SJ-CENTRO' },
+    changes: [
+      { field: 'sessionMaxMinutes', oldValue: '480', newValue: '120', masked: false },
+      { field: 'freeMinutes', oldValue: '10', newValue: '15', masked: false },
+      { field: 'ownSchedule', oldValue: 'false', newValue: 'true', masked: false },
+    ],
+  },
+  {
+    id: 'audit-seed-2',
+    tenantId: 'tenant-sanjose',
+    actorUserId: 'user-admin-sanjose',
+    actorPortal: 'admin',
+    action: 'MEMBERSHIP_ROLE_CHANGED',
+    resourceType: 'membership',
+    resourceId: 'membership-4',
+    occurredAt: new Date(Date.now() - 26 * 3600_000).toISOString(),
+    metadata: { userId: 'user-inspector-1' },
+    // El cambio que más se audita en una plataforma de gobierno: quién le dio a quién qué poderes.
+    changes: [{ field: 'role', oldValue: 'INSPECTOR', newValue: 'INSPECTOR_LEAD', masked: false }],
+  },
+  {
+    id: 'audit-seed-1',
+    tenantId: 'tenant-sanjose',
+    actorUserId: 'user-admin-sanjose',
+    actorPortal: 'admin',
+    action: 'USER_UPDATED',
+    resourceType: 'user',
+    resourceId: 'user-inspector-1',
+    occurredAt: new Date(Date.now() - 3 * 86400_000).toISOString(),
+    metadata: {},
+    // Enmascarado: que cambió el correo es lo auditable, cuál era no.
+    changes: [
+      { field: 'email', oldValue: 'j***@gmail.com', newValue: 'j***@msj.go.cr', masked: true },
+    ],
+  },
+];
 
 function seedUser(record: MockUserRecord): void {
   mockUsersById.set(record.profile.id, record);
@@ -711,6 +763,31 @@ export const mockParkingSessions: MockParkingSessionRecord[] = [
     status: 'EXPIRED',
     startedAt: new Date(now - 42 * 60_000).toISOString(),
     expiresAt: new Date(now - 12 * 60_000).toISOString(),
+    endedAt: null,
+  },
+  {
+    // Una estadía DE CORTESÍA vigente (v0.31/v0.32). Se siembra porque es la mitad interesante de la
+    // consulta: el fiscalizador tiene que poder distinguir «no se cobró porque es cortesía» de «no
+    // pagó», y un simulador que sólo tuviera estadías pagadas nunca ejercitaría esa distinción.
+    id: 'session-3',
+    userId: 'user-citizen-1',
+    tenantId: 'tenant-sanjose',
+    zoneId: 'zone-centro',
+    zoneName: 'Centro',
+    spaceId: 'space-lup-0003',
+    spaceCode: 'LUP-0003',
+    vehicleId: null,
+    plateSnapshot: 'SJB4402',
+    vehicleType: 'CAR',
+    minutes: 15,
+    remainingMinutes: 9,
+    amountMinor: 0,
+    currencyCode: 'CRC',
+    creditMinutesApplied: 0,
+    courtesy: true,
+    status: 'ACTIVE',
+    startedAt: new Date(now - 6 * 60_000).toISOString(),
+    expiresAt: new Date(now + 9 * 60_000).toISOString(),
     endedAt: null,
   },
 ];

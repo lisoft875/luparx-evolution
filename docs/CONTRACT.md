@@ -2773,3 +2773,128 @@ convertiría el feriado único de alguien en uno anual que nadie pidió.
 
 Los índices únicos de fecha pasan a ser parciales, uno por forma: sólo pueden hablar de las filas que
 tienen fecha.
+
+---
+
+# v0.32 — El registro apunta al pago, y la auditoría no se puede borrar en silencio (normativo)
+
+Dos puntos del producto en una versión, porque son sobre lo mismo: que lo que pasó quede escrito de
+una manera que se pueda enseñar.
+
+## 7 — El registro de estacionamiento
+
+La estadía ya guardaba placa, zona, inicio, fin y monto. Le faltaban las dos cosas que la unen con la
+plata, y sin ellas «fiscalización consulta el mismo origen de datos que genera el pago» era una
+aspiración: la consulta contestaba si había estadía vigente, no si estaba pagada.
+
+**`payment_status` es sobre el DINERO y `status` es sobre la ESTADÍA.** Ninguno se deduce del otro:
+una estadía puede estar vigente y no haberse cobrado, y una terminada hace un mes sigue estando
+pagada. Mezclarlos en una columna es lo que obliga a deducir el cobro a partir del monto, que es
+exactamente lo que no se debe hacer con plata.
+
+**`no_charge_reason` existe porque «no se cobró» sin motivo deja al funcionario sin qué decir.** Son
+tres hechos distintos y ninguno es una falta de pago: la cortesía de la zona, los minutos que el
+ciudadano ya se había ganado, y una hora que esta municipalidad no cobra.
+
+`PENDING` y `FAILED` están en el modelo aunque hoy no sobrevivan a un *commit*: la estadía se escribe
+y se vacía a la base *antes* de tocar la billetera —es lo que deja que los índices únicos parciales
+resuelvan una carrera entre réplicas mientras la transacción todavía puede deshacerse limpiamente—,
+así que por unas sentencias la verdad sobre la plata es «no ha cerrado», y decirlo es mejor que un
+`PAID` provisional. El día que entre un proveedor asíncrono son estados que duran, y tenerlos ahora
+significa que ese día es una rama nueva y no una alteración de la tabla más grande del dominio con
+datos vivos adentro.
+
+**La transacción va en las dos filas.** `parking_sessions.payment_transaction_id` es el *primer*
+movimiento que cobró algo por la estadía; cada extensión lleva además el suyo. Una sola columna para
+todos los cobros de una estadía extendida sería una media verdad, y esto es el registro contra el que
+se concilia la plata.
+
+Al fiscalizador le llega todo: si se pagó, cuánto, por qué no cuando no, y con cuál movimiento —
+para que un reclamo en la bahía se pueda rastrear sin que el funcionario se vaya de la calle. Lo que
+no le llega es **quién**: lo que trae en la mano es el recibo de una bahía, no el estado de cuenta de
+una persona.
+
+## 8 — Auditoría
+
+### Valor anterior y valor nuevo
+
+`audit_events.changes`, un arreglo de `{field, old, new}` con **únicamente los campos que
+cambiaron**. Guardar la fila entera antes y después duplica datos personales que nadie tocó, en una
+tabla que no se borra nunca, y obliga a quien audita a comparar dos fotografías para encontrar el
+campo que importa.
+
+Se construye con `AuditChanges`, que es un constructor y no una comparación por reflexión, y eso es
+deliberado: la reflexión anotaría cada campo que una entidad casualmente tenga —contadores de
+versión, marcas de tiempo, identificadores internos— y copiaría datos personales a esa tabla el día
+que alguien agregue una columna. Nombrar los campos en el sitio de la llamada es lo que hace que la
+traza diga exactamente aquello por lo que los que escribieron la funcionalidad se hacen responsables.
+
+Los **identificadores personales van enmascarados**: `j***@gmail.com → j***@msj.go.cr`. Que cambió el
+correo es lo auditable; cuál era es una copia de los datos de alguien en una tabla sin retención
+(SECURITY.md §11). Reducir en vez de omitir también es a propósito: una entrada que sólo dijera
+«cambió el correo» no se distingue de la corrección de un dedazo, y ésta sí.
+
+Hay una trampa que costó encontrarla y queda escrita para que no se repita: los servicios de este
+código **mutan la fila administrada**, así que guardar una referencia a la entidad y leerla después
+del cambio devuelve los valores NUEVOS. Una traza así reportaría «480 → 480» en cada cambio, que es
+peor que no tener traza, porque se lee como evidencia de que no cambió nada. Por eso se copia el
+antes a un registro propio (`ParkingPolicySnapshot`) o a variables locales, nunca a una referencia.
+
+### Que no se pueda borrar en silencio
+
+Dos mecanismos, y ninguno alcanza solo.
+
+**Un disparador en PostgreSQL rechaza `UPDATE`, `DELETE` y `TRUNCATE`** sobre `audit_events`,
+`audit_seals`, `wallet_transactions` y `citation_events`. V1_0 ya decía «append-only», pero eso
+describía lo que la aplicación hace, no lo que la base permite: cualquiera con una consola —y un
+administrador de municipalidad con una integración la tiene— podía borrar la fila que lo incriminaba.
+El mensaje del disparador dice qué hacer en su lugar, porque quien se topa con él casi siempre está
+tratando de arreglar algo de buena fe.
+
+`enforcement_checks` **no** lleva disparador, a propósito: tiene una política de retención que lo
+depura (v0.29, ADR 0013), y prohibir el `DELETE` ahí rompería el trabajo que cumple esa política.
+
+**Una cadena de sellos lo hace demostrable**, que no es lo mismo: un superusuario puede desactivar un
+disparador, y entonces lo único que queda es que las cuentas no cuadren y que cualquiera lo pueda
+comprobar. Un sello cubre un rango de tiempo de una municipalidad y lleva el resumen de sus filas más
+el resumen del sello anterior; borrar, cambiar o insertar una fila en un rango ya sellado cambia ese
+resumen, y como cada sello encadena al anterior no se arregla recalculando uno solo — habría que
+rehacer la cadena entera, y el ente contralor tiene su propia copia de los sellos que le entregaron
+antes.
+
+Tres decisiones dentro de eso:
+
+* **Los sellos viven en su propia tabla**, y es lo que hace que todo lo demás funcione: si el resumen
+  fuera una columna de `audit_events`, sellar sería un `UPDATE` sobre `audit_events` — y entonces el
+  disparador no podría prohibir el `UPDATE`, que es justo lo que hay que prohibir.
+* **La cadena es por municipalidad**, porque es por municipalidad que se audita: a un cantón le
+  entregan la suya y la verifica sin ver la de nadie más. Lo que no tiene municipalidad tiene su
+  cadena con una llave centinela.
+* **Se sella después, no al escribir.** Encadenar cada entrada al escribirla obligaría a cada acción
+  auditada a tomar un candado sobre la cabeza de la cadena de su municipalidad. Los ingresos, los
+  inicios de estacionamiento y las consultas de placa se auditan todos, así que ese candado sería la
+  fila más disputada de la plataforma — y una cadena de resúmenes que hiciera el producto más lento
+  terminaría apagada, que es peor que no tenerla. Sellar después cuesta una ventana en la que una
+  fila podría desaparecer antes de quedar cubierta: esa ventana es exactamente la que el disparador
+  está protegiendo. Los dos mecanismos se tapan el hueco mutuamente, y por eso la respuesta es los
+  dos y no cualquiera de ellos.
+
+El sellado **espera cinco minutos**. Una entrada se marca con su instante al escribirse y se hace
+visible al confirmarse la transacción, así que un rango sellado apenas cierra podría dejar fuera una
+fila que todavía venía en camino — y la cadena acusaría a la plataforma de perder una fila que nunca
+perdió. Una fila que aparezca después dentro de un rango ya sellado se **reporta** como hallazgo, no
+se acomoda en silencio: si eso es un problema de reloj o algo peor es un juicio de una persona, y
+esconderlo convertiría la cadena en un adorno.
+
+`GET /admin/enforcement/../audit-events/chain` recalcula y devuelve el veredicto, los hallazgos
+—separados en tres, porque significan cosas distintas— y los últimos sellos, que es lo que un
+auditor se lleva para volver a comprobarlo el trimestre siguiente. Va detrás de `AUDIT_READ`: quien
+puede leer la traza puede comprobarla, y quien no, no tiene por qué saber si está íntegra. Es una
+lectura y no cambia nada — una verificación que pudiera reparar la cadena sería una cadena que se
+repara sola, y eso no prueba nada.
+
+El trabajo de sellado **no se audita a sí mismo**, a diferencia de la depuración por retención. No
+escribe estado que perjudique a nadie ni lee nada personal, y una entrada por corrida sería una fila
+cada pocos minutos para siempre en la tabla que este trabajo existe para proteger: la cadena
+terminaría registrando sobre todo que corrió. Los sellos son su propio registro — sus consecutivos,
+sus rangos y sus fechas dicen exactamente cuándo funcionó y cuándo no.

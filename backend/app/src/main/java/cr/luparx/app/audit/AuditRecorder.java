@@ -2,6 +2,7 @@ package cr.luparx.app.audit;
 
 import cr.luparx.app.config.SecurityProperties;
 import cr.luparx.app.security.RequestCorrelationFilter;
+import cr.luparx.core.audit.AuditChange;
 import cr.luparx.core.audit.AuditEvent;
 import cr.luparx.core.domain.Portal;
 import cr.luparx.core.id.TenantId;
@@ -17,6 +18,7 @@ import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.time.Clock;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -43,12 +45,25 @@ public class AuditRecorder {
     /** Records an action performed by the caller of the current request. */
     @Transactional
     public void record(String action, String resourceType, String resourceId, Map<String, Object> metadata) {
+        record(action, resourceType, resourceId, metadata, List.of());
+    }
+
+    /**
+     * The same, carrying what changed field by field (CONTRACT.md v0.32).
+     *
+     * <p>Built with {@code AuditChanges}, which drops anything that did not actually change and masks
+     * personal identifiers. Passing a hand-built list is allowed and rare; the builder exists because
+     * the two rules above are easy to forget and expensive to forget in a table nobody may delete.</p>
+     */
+    @Transactional
+    public void record(String action, String resourceType, String resourceId, Map<String, Object> metadata,
+                       List<AuditChange> changes) {
         Optional<TenantContext> context = TenantContextHolder.current();
         record(action, resourceType, resourceId,
                 context.map(TenantContext::tenantId).orElse(null),
                 context.map(TenantContext::userId).orElse(null),
                 context.map(TenantContext::portal).orElse(null),
-                metadata);
+                metadata, changes);
     }
 
     /**
@@ -58,6 +73,13 @@ public class AuditRecorder {
     @Transactional
     public void record(String action, String resourceType, String resourceId, TenantId tenantId, UserId actor,
                        Portal portal, Map<String, Object> metadata) {
+        record(action, resourceType, resourceId, tenantId, actor, portal, metadata, List.of());
+    }
+
+    /** The same, with the field-by-field changes. */
+    @Transactional
+    public void record(String action, String resourceType, String resourceId, TenantId tenantId, UserId actor,
+                       Portal portal, Map<String, Object> metadata, List<AuditChange> changes) {
         HttpServletRequest request = currentRequest();
         AuditEvent event = new AuditEvent(
                 Uuid7.generate(),
@@ -70,6 +92,7 @@ public class AuditRecorder {
                 request == null ? null : Hashing.ipHash(clientIp(request), securityProperties.ipHashPepper()),
                 request == null ? null : truncate(request.getHeader("User-Agent")),
                 metadata == null ? Map.of() : metadata,
+                changes == null ? List.of() : changes,
                 clock.instant());
         repository.save(new AuditEventEntity(
                 event.id(),
@@ -82,6 +105,7 @@ public class AuditRecorder {
                 event.ipHash(),
                 event.userAgent(),
                 event.metadata(),
+                event.changes(),
                 RequestCorrelationFilter.currentTraceId(),
                 event.occurredAt()));
     }

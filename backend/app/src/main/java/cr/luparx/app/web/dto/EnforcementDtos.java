@@ -192,9 +192,28 @@ public final class EnforcementDtos {
                                            Instant occurredAt) {
     }
 
-    /** A running stay as enforcement sees it: where and until when. Never who paid for it. */
+    /**
+     * A stay as enforcement sees it: where, until when, and what was paid. Never <b>who</b> paid.
+     *
+     * <p>Since v0.32 it carries the payment, which is the point of the whole flow: the officer reads
+     * whether the stay was paid from the same record that produced the payment, rather than inferring
+     * it from the fact that a stay exists. A stay can exist and have cost nothing — courtesy, the
+     * citizen's own saved minutes, an hour this municipality does not charge for — and an officer who
+     * cannot tell those from a payment has nothing to say to the person arguing with them.</p>
+     *
+     * <p>The amount and the movement travel; the <b>citizen</b> does not. What is in the officer's
+     * hand is a receipt for a bay, not an account statement: it answers a complaint at the bay, and
+     * it names nobody.</p>
+     *
+     * @param paymentStatus  {@code PAID}, {@code NO_CHARGE}, {@code PENDING} or {@code FAILED}
+     * @param noChargeReason {@code COURTESY}, {@code CREDIT} or {@code OUTSIDE_HOURS}; null unless
+     *                       nothing was charged, and null too on stays written before V31_0 whose
+     *                       reason could not be reconstructed
+     */
     public record ActiveStayResponse(UUID sessionId, UUID zoneId, String zoneCode, String zoneName, UUID spaceId,
-                                     String spaceCode, Instant startedAt, Instant expiresAt) {
+                                     String spaceCode, Instant startedAt, Instant expiresAt,
+                                     String paymentStatus, String noChargeReason,
+                                     ParkingDtos.MoneyDto amount, UUID paymentTransactionId) {
     }
 
     // --- plate exemptions (CONTRACT.md v0.28) ------------------------------------------------------

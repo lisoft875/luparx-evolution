@@ -34,6 +34,7 @@ public class JpaAuditEventPublisher implements AuditEventPublisher {
                 event.ipHash(),
                 event.userAgent(),
                 event.metadata(),
+                event.changes(),
                 null,
                 event.occurredAt()));
     }

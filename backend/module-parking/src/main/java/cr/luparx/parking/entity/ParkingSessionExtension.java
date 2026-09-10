@@ -52,6 +52,15 @@ public class ParkingSessionExtension {
     @Column(name = "idempotency_key", length = 200)
     private String idempotencyKey;
 
+    /**
+     * The wallet movement that paid for <b>this</b> extension (V31_0 — CONTRACT.md v0.32).
+     *
+     * <p>On the extension and not on the session, because the session has one column and an extended
+     * stay has several charges. Null when this extension cost nothing.</p>
+     */
+    @Column(name = "payment_transaction_id")
+    private UUID paymentTransactionId;
+
     protected ParkingSessionExtension() {
         // for JPA
     }
@@ -67,6 +76,15 @@ public class ParkingSessionExtension {
         this.creditMinutesApplied = creditMinutesApplied;
         this.extendedAt = extendedAt;
         this.idempotencyKey = idempotencyKey;
+    }
+
+    public UUID getPaymentTransactionId() {
+        return paymentTransactionId;
+    }
+
+    /** Set once, after the money actually moved. An extension never becomes paid afterwards. */
+    public void markPaid(UUID transactionId) {
+        this.paymentTransactionId = transactionId;
     }
 
     public UUID getId() {

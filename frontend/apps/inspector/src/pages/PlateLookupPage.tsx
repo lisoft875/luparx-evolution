@@ -1,7 +1,14 @@
 import * as React from 'react';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { formatDate, formatDateTime, formatTime, useTranslation, type TranslationKey } from '@luparx/i18n';
+import {
+  formatCurrencyMinor,
+  formatDate,
+  formatDateTime,
+  formatTime,
+  useTranslation,
+  type TranslationKey,
+} from '@luparx/i18n';
 import { plateVerdictKey } from '@luparx/features';
 import type { PlateVerdict } from '@luparx/api-client';
 import { Alert, Button, Card, FormField, Input, ListRow, SectionHeader, Select, type CardTone } from '@luparx/ui';
@@ -141,6 +148,39 @@ export function PlateLookupPage(): React.JSX.Element {
                         </>
                       ) : null}
                     </span>
+                    {/* The payment (v0.32). The whole reason the officer's lookup and the money read
+                        from the same record: a stay can exist and have cost nothing —courtesy, the
+                        citizen's own minutes, an hour this municipality does not charge for— and an
+                        officer who cannot tell those from a payment has nothing to say to the person
+                        arguing with them. */}
+                    {stay.paymentStatus ? (
+                      <span className="lx-text-meta" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                        {stay.paymentStatus === 'PAID'
+                          ? t('inspector.lookup.stay.paid', {
+                              amount: formatCurrencyMinor(
+                                stay.amountMinor ?? 0,
+                                stay.currencyCode ?? '',
+                                locale,
+                              ),
+                            })
+                          : stay.noChargeReason
+                            ? t(
+                                `inspector.lookup.stay.noCharge.${stay.noChargeReason}` as TranslationKey,
+                              )
+                            : t('inspector.lookup.stay.noCharge')}
+                        {/* The movement, so a complaint at the bay traces to the money without the
+                            officer leaving the street. Shortened: it is a reference to read out, not
+                            an identifier to retype. */}
+                        {stay.paymentTransactionId ? (
+                          <>
+                            {' · '}
+                            {t('inspector.lookup.stay.transaction', {
+                              id: stay.paymentTransactionId.slice(0, 8),
+                            })}
+                          </>
+                        ) : null}
+                      </span>
+                    ) : null}
                   </div>
                 ) : null}
                 {/* The tolerance, said out loud. The municipality's grace is applied by the server —

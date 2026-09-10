@@ -1,5 +1,6 @@
 package cr.luparx.app.audit;
 
+import cr.luparx.core.audit.AuditChange;
 import cr.luparx.core.domain.Portal;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -11,6 +12,7 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -58,6 +60,17 @@ public class AuditEventEntity {
     @Column(name = "metadata", nullable = false, columnDefinition = "jsonb")
     private Map<String, Object> metadata;
 
+    /**
+     * What changed, field by field (V31_0 — CONTRACT.md v0.32).
+     *
+     * <p>A JSON array and not a child table: an audit entry is read whole or not at all, and
+     * splitting it in two would force a join in the one screen that uses it — and would make the
+     * seal chain have to cover both tables to mean anything.</p>
+     */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "changes", nullable = false, columnDefinition = "jsonb")
+    private List<AuditChange> changes;
+
     @Column(name = "trace_id", length = 64)
     private String traceId;
 
@@ -70,7 +83,8 @@ public class AuditEventEntity {
 
     public AuditEventEntity(UUID id, UUID tenantId, UUID actorUserId, Portal actorPortal, String action,
                             String resourceType, String resourceId, String ipHash, String userAgent,
-                            Map<String, Object> metadata, String traceId, Instant occurredAt) {
+                            Map<String, Object> metadata, List<AuditChange> changes, String traceId,
+                            Instant occurredAt) {
         this.id = id;
         this.tenantId = tenantId;
         this.actorUserId = actorUserId;
@@ -81,6 +95,7 @@ public class AuditEventEntity {
         this.ipHash = ipHash;
         this.userAgent = userAgent;
         this.metadata = metadata;
+        this.changes = changes == null ? List.of() : List.copyOf(changes);
         this.traceId = traceId;
         this.occurredAt = occurredAt;
     }
@@ -123,6 +138,10 @@ public class AuditEventEntity {
 
     public Map<String, Object> getMetadata() {
         return metadata;
+    }
+
+    public List<AuditChange> getChanges() {
+        return changes == null ? List.of() : changes;
     }
 
     public String getTraceId() {

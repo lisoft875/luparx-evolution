@@ -1542,6 +1542,13 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
       }
     }
 
+    // La cadena de sellos (CONTRACT.md v0.32). El simulador la recalcula de verdad sobre sus propias
+    // entradas: uno que devolviera «íntegra» siempre dejaría pasar justo el error que esto existe
+    // para detectar.
+    if (resource === 'audit-events' && segments[4] === 'chain' && method === 'GET') {
+      return json(mockAuditChain(tenantId));
+    }
+
     if (resource === 'audit-events' && method === 'GET') {
       const page = Number(url.searchParams.get('page') ?? '0');
       const size = Number(url.searchParams.get('size') ?? '20');
@@ -2291,16 +2298,7 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
       }
       const stays = mockParkingSessions
         .filter((s) => s.tenantId === tenantId && s.status === 'ACTIVE' && normalizeMockPlate(s.plateSnapshot) === plate)
-        .map((s) => ({
-          sessionId: s.id,
-          zoneId: s.zoneId,
-          zoneCode: s.zoneId,
-          zoneName: s.zoneName,
-          spaceId: s.spaceId,
-          spaceCode: s.spaceCode,
-          startedAt: s.startedAt,
-          expiresAt: s.expiresAt,
-        }));
+        .map(toEnforcementStay);
       const bay = zoneId && spaceCode
         ? { spaceId: `${zoneId}:${spaceCode}`, spaceCode, zoneId, zoneCode: zoneId, zoneName: zoneNameForId(zoneId) }
         : null;
@@ -2315,16 +2313,7 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
             && normalizeMockPlate(s.plateSnapshot) === plate
             && new Date(s.expiresAt).getTime() >= since,
         )
-        .map((s) => ({
-          sessionId: s.id,
-          zoneId: s.zoneId,
-          zoneCode: s.zoneId,
-          zoneName: s.zoneName,
-          spaceId: s.spaceId,
-          spaceCode: s.spaceCode,
-          startedAt: s.startedAt,
-          expiresAt: s.expiresAt,
-        }));
+        .map(toEnforcementStay);
 
       type MockStay = (typeof stays)[number];
       const graceMinutes = mockParkingPolicyForTenant(tenantId).graceMinutes ?? 0;
@@ -3109,6 +3098,133 @@ function toWireQuote(quote: ParkingQuoteResponse): unknown {
     creditMinutesApplied: quote.creditMinutesApplied,
     payableMinutes: quote.payableMinutes,
     payable: { amountMinor: quote.payableMinor, currencyCode: quote.currencyCode },
+  };
+}
+
+/**
+ * Los sellos que el simulador tiene «entregados», con su resumen ya calculado.
+ *
+ * Se guardan aparte de las entradas, igual que en el servidor, y por la misma razón: si el resumen
+ * viviera con la entrada, sellar sería modificar la entrada — y modificar la entrada es exactamente
+ * lo que no se puede hacer.
+ */
+const mockAuditSeals = new Map<string, { seq: number; coversFrom: string; coversTo: string;
+  rowCount: number; digest: string; createdAt: string }[]>();
+
+/** Un resumen determinista y barato. No es SHA-256: es un simulador, y lo dice aquí. */
+function mockDigest(value: string): string {
+  let h1 = 0x811c9dc5;
+  let h2 = 0x01000193;
+  for (let i = 0; i < value.length; i++) {
+    h1 = Math.imul(h1 ^ value.charCodeAt(i), 0x01000193) >>> 0;
+    h2 = Math.imul(h2 + value.charCodeAt(i), 0x85ebca6b) >>> 0;
+  }
+  return (h1.toString(16).padStart(8, '0') + h2.toString(16).padStart(8, '0')).repeat(4);
+}
+
+/**
+ * Recalcula la cadena de esta municipalidad y reporta lo que no cuadre.
+ *
+ * Sella de verdad lo que ya tiene cinco minutos y verifica de verdad lo sellado, para que la pantalla
+ * se ejercite contra un resultado que puede fallar. La primera vez sella todo lo que hay; de ahí en
+ * adelante sólo lo nuevo, que es como se comporta el servidor.
+ */
+function mockAuditChain(tenantId: string | null): unknown {
+  const key = tenantId ?? 'platform';
+  const seals = mockAuditSeals.get(key) ?? [];
+  const horizon = new Date(Date.now() - 5 * 60_000).toISOString();
+  const mine = mockAuditEvents.filter((e) => e.tenantId === tenantId);
+
+  const from = seals.length > 0 ? seals[seals.length - 1]!.coversTo
+    : mine.map((e) => e.occurredAt).sort()[0];
+  if (from && from < horizon) {
+    const covered = mine.filter((e) => e.occurredAt >= from && e.occurredAt < horizon);
+    const previous = seals.length > 0 ? seals[seals.length - 1]!.digest : '-';
+    seals.push({
+      seq: seals.length + 1,
+      coversFrom: from,
+      coversTo: horizon,
+      rowCount: covered.length,
+      digest: mockDigest(previous + covered.map((e) => e.id + e.action).join('|')),
+      createdAt: new Date().toISOString(),
+    });
+    mockAuditSeals.set(key, seals);
+  }
+
+  const problems: { seq: number; kind: string; detail: string }[] = [];
+  let previous = '-';
+  let rows = 0;
+  for (const seal of seals) {
+    const covered = mine.filter((e) => e.occurredAt >= seal.coversFrom && e.occurredAt < seal.coversTo);
+    rows += covered.length;
+    if (mockDigest(previous + covered.map((e) => e.id + e.action).join('|')) !== seal.digest) {
+      problems.push({
+        seq: seal.seq,
+        kind: 'DIGEST_MISMATCH',
+        detail: `sealed ${seal.rowCount} entries, found ${covered.length}`,
+      });
+    }
+    previous = seal.digest;
+  }
+
+  return {
+    sealCount: seals.length,
+    entryCount: rows,
+    sealedThrough: seals.length > 0 ? seals[seals.length - 1]!.coversTo : null,
+    intact: problems.length === 0,
+    problems,
+    recentSeals: [...seals].reverse().slice(0, 20),
+  };
+}
+
+/** Lo que el simulador devuelve por cada estadía en la consulta de placa. */
+interface MockEnforcementStay {
+  sessionId: string;
+  zoneId: string;
+  zoneCode: string;
+  zoneName: string | undefined;
+  spaceId: string;
+  spaceCode: string | undefined;
+  startedAt: string;
+  expiresAt: string;
+  paymentStatus: 'PAID' | 'NO_CHARGE';
+  noChargeReason: 'COURTESY' | 'CREDIT' | 'OUTSIDE_HOURS' | null;
+  amountMinor: number;
+  currencyCode: string;
+  paymentTransactionId: string | null;
+}
+
+/**
+ * Una estadía como la ve fiscalización, CON EL PAGO (CONTRACT.md v0.32).
+ *
+ * El estado de pago se deduce aquí de lo que el simulador ya sabe —cortesía, minutos aplicados,
+ * monto— porque las sesiones sembradas son anteriores a la versión. En el servidor la columna se
+ * escribe cuando la plata se mueve y no se deduce nunca: deducir el cobro del monto es justamente lo
+ * que v0.32 vino a quitar, y esto es la reconstrucción de un dato viejo, no la regla.
+ */
+function toEnforcementStay(session: MockParkingSessionRecord): MockEnforcementStay {
+  const paid = (session.amountMinor ?? 0) > 0;
+  const noChargeReason = paid
+    ? null
+    : session.courtesy
+      ? 'COURTESY'
+      : (session.creditMinutesApplied ?? 0) > 0
+        ? 'CREDIT'
+        : 'OUTSIDE_HOURS';
+  return {
+    sessionId: session.id,
+    zoneId: session.zoneId,
+    zoneCode: session.zoneId,
+    zoneName: session.zoneName,
+    spaceId: session.spaceId,
+    spaceCode: session.spaceCode,
+    startedAt: session.startedAt,
+    expiresAt: session.expiresAt,
+    paymentStatus: paid ? 'PAID' : 'NO_CHARGE',
+    noChargeReason,
+    amountMinor: session.amountMinor ?? 0,
+    currencyCode: session.currencyCode ?? 'CRC',
+    paymentTransactionId: paid ? `txn-${session.id}` : null,
   };
 }
 

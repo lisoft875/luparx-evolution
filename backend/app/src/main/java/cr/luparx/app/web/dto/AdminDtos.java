@@ -330,7 +330,45 @@ public final class AdminDtos {
             String resourceType,
             String resourceId,
             Instant occurredAt,
-            Map<String, Object> metadata) {
+            Map<String, Object> metadata,
+            /**
+             * What changed, field by field (v0.32), and only the fields that changed.
+             *
+             * <p>Kept apart from {@code metadata}: metadata is context somebody chose to note, this
+             * is the answer to "what did they alter". A reader treats them differently and so does
+             * the screen.</p>
+             */
+            List<AuditChangeDto> changes) {
+    }
+
+    /**
+     * One field that changed.
+     *
+     * @param masked the two values were reduced before being stored because the field is a personal
+     *               identifier. Without this flag a reader takes {@code a***@x.com} for the address
+     */
+    public record AuditChangeDto(String field, String oldValue, String newValue, boolean masked) {
+    }
+
+    /**
+     * What a verification of the audit chain found (v0.32).
+     *
+     * <p>The answer somebody wants is {@code intact} with an empty {@code problems}. Everything else
+     * is a finding a person has to look at: the platform reports, it does not adjudicate.</p>
+     *
+     * @param sealedThrough the instant the chain is proven up to. Entries after it are protected by
+     *                      the database trigger but not yet covered by a seal — normal, and it is
+     *                      why the screen shows the moment rather than only a verdict
+     */
+    public record AuditChainResponse(int sealCount, long entryCount, Instant sealedThrough, boolean intact,
+                                     List<AuditChainProblem> problems, List<AuditSealDto> recentSeals) {
+    }
+
+    public record AuditChainProblem(long seq, String kind, String detail) {
+    }
+
+    public record AuditSealDto(long seq, Instant coversFrom, Instant coversTo, int rowCount, String digest,
+                               Instant createdAt) {
     }
 
     public record RegisteredUsersRow(String group, long count) {

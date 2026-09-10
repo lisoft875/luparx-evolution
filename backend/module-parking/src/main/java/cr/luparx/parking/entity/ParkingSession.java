@@ -3,7 +3,9 @@ package cr.luparx.parking.entity;
 import cr.luparx.core.id.TenantId;
 import cr.luparx.core.id.UserId;
 import cr.luparx.core.money.Money;
+import cr.luparx.parking.model.NoChargeReason;
 import cr.luparx.parking.model.ParkingSessionStatus;
+import cr.luparx.parking.model.PaymentStatus;
 import cr.luparx.parking.model.VehicleType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -96,6 +98,35 @@ public class ParkingSession {
     @Column(name = "credit_minutes_applied", nullable = false)
     private int creditMinutesApplied;
 
+    /**
+     * Whether this stay was paid for (V31_0 — CONTRACT.md v0.32).
+     *
+     * <p>About the <b>money</b>, where {@link #status} is about the stay. Both are needed and neither
+     * can be derived from the other: a running stay may be uncharged, and one that ended last month
+     * is still paid.</p>
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "payment_status", nullable = false, length = 16)
+    private PaymentStatus paymentStatus;
+
+    /** Why nothing was charged. Null unless {@link #paymentStatus} is {@code NO_CHARGE}. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "no_charge_reason", length = 24)
+    private NoChargeReason noChargeReason;
+
+    /**
+     * The <b>first</b> wallet movement that charged anything for this stay.
+     *
+     * <p>Usually the start's. When the start was a courtesy and an extension was the first thing
+     * actually charged, it is that one — a stay with money in it must name where the money is, and
+     * "the start's payment" would be null for a stay that was in fact paid.</p>
+     *
+     * <p>Each extension also carries its own on its own row: one column here for every charge would
+     * be a half-truth, and this is the record an auditor reconciles the money against.</p>
+     */
+    @Column(name = "payment_transaction_id")
+    private UUID paymentTransactionId;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -135,6 +166,11 @@ public class ParkingSession {
         this.startedAt = startedAt;
         this.expiresAt = expiresAt;
         this.status = ParkingSessionStatus.ACTIVE;
+        // In flight until the charge answers. The row is flushed before the wallet is touched — that
+        // is what lets the partial unique indexes decide a race between two replicas while the
+        // transaction can still roll back cleanly — so for those few statements the truth about the
+        // money is "not settled yet", and saying so is better than a provisional PAID.
+        this.paymentStatus = PaymentStatus.PENDING;
         this.amountMinor = amount.minorUnits();
         this.currencyCode = amount.currencyCode();
         this.creditMinutesApplied = creditMinutesApplied;
@@ -237,6 +273,37 @@ public class ParkingSession {
 
     public Instant getUpdatedAt() {
         return updatedAt;
+    }
+
+    public PaymentStatus getPaymentStatus() {
+        return paymentStatus;
+    }
+
+    public NoChargeReason getNoChargeReason() {
+        return noChargeReason;
+    }
+
+    public UUID getPaymentTransactionId() {
+        return paymentTransactionId;
+    }
+
+    /**
+     * Records that money moved for this stay.
+     *
+     * <p>Called after the charge has actually gone through, never before: a stay that says it is paid
+     * while the charge is still in flight is the one lie these columns exist to prevent.</p>
+     */
+    public void markPaid(UUID transactionId) {
+        this.paymentStatus = PaymentStatus.PAID;
+        this.noChargeReason = null;
+        this.paymentTransactionId = transactionId;
+    }
+
+    /** Records that nothing was charged, and why. */
+    public void markNotCharged(NoChargeReason reason) {
+        this.paymentStatus = PaymentStatus.NO_CHARGE;
+        this.noChargeReason = reason;
+        this.paymentTransactionId = null;
     }
 
     public boolean isCourtesy() {

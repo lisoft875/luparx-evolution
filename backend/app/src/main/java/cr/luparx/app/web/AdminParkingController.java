@@ -3,6 +3,7 @@ package cr.luparx.app.web;
 import cr.luparx.app.audit.AuditRecorder;
 import cr.luparx.app.web.dto.ParkingDtos;
 import cr.luparx.core.audit.AuditAction;
+import cr.luparx.core.audit.AuditChanges;
 import cr.luparx.core.id.TenantId;
 import cr.luparx.core.page.PageRequest;
 import cr.luparx.core.page.PageResponse;
@@ -114,6 +115,11 @@ public class AdminParkingController {
     public ParkingDtos.ParkingPolicyResponse updatePolicy(
             @Valid @RequestBody ParkingDtos.UpdateParkingPolicyRequest request) {
         TenantId tenantId = TenantContextHolder.requireTenantId();
+        // Read before the change, so the entry can say what each number WAS. This is the whole point
+        // of v0.32: "the policy was updated" is not auditable, "sessionMaxMinutes 480 → 120, by
+        // Carlos, on Tuesday" is.
+        ParkingPolicy before = policyService.require(tenantId);
+        ParkingPolicySnapshot previous = ParkingPolicySnapshot.of(before);
         ParkingPolicy policy = policyService.replace(
                 tenantId,
                 request.sessionIncrementsMinutes(),
@@ -128,13 +134,10 @@ public class AdminParkingController {
                 request.creditExpiryDays().intValue(),
                 request.graceMinutes().intValue(),
                 // Absent keeps what the municipality has, which for one that has never set it is 0.
-                request.freeMinutes() == null
-                        ? policyService.require(tenantId).getFreeMinutes()
-                        : request.freeMinutes().intValue());
+                request.freeMinutes() == null ? before.getFreeMinutes() : request.freeMinutes().intValue());
         auditRecorder.record(AuditAction.PARKING_POLICY_UPDATED, "parking-policy", tenantId.toString(),
-                Map.of("sessionIncrements", policy.getSessionIncrementsMinutes(),
-                        "extensionEnabled", String.valueOf(policy.isExtensionEnabled()),
-                        "earlyFinishEnabled", String.valueOf(policy.isEarlyFinishEnabled())));
+                Map.of("sessionIncrements", policy.getSessionIncrementsMinutes()),
+                previous.diff(policy));
         return mapper.toPolicy(policy);
     }
 
@@ -180,10 +183,21 @@ public class AdminParkingController {
             @PathVariable UUID id,
             @Valid @RequestBody ParkingDtos.UpdateParkingZoneRequest request) {
         TenantId tenantId = TenantContextHolder.requireTenantId();
+        ParkingZone before = catalogService.requireZone(tenantId, id);
+        String previousName = before.getName();
+        String previousDescription = before.getDescription();
+        boolean previousActive = before.isActive();
+        UUID previousDivision = before.getDivisionId();
         ParkingZone zone = catalogService.updateZone(tenantId, id, request.name(), request.description(),
                 request.divisionId(), request.active().booleanValue());
         auditRecorder.record(AuditAction.PARKING_ZONE_UPDATED, "parking-zone", id.toString(),
-                Map.of("code", zone.getCode(), "active", String.valueOf(zone.isActive())));
+                Map.of("code", zone.getCode()),
+                AuditChanges.builder()
+                        .compare("name", previousName, zone.getName())
+                        .compare("description", previousDescription, zone.getDescription())
+                        .compare("divisionId", previousDivision, zone.getDivisionId())
+                        .compare("active", Boolean.valueOf(previousActive), Boolean.valueOf(zone.isActive()))
+                        .build());
         return mapper.toZone(zone, catalogService.countSpaces(tenantId, zone.getId()));
     }
 
@@ -331,12 +345,19 @@ public class AdminParkingController {
         TenantId tenantId = TenantContextHolder.requireTenantId();
         // Read before the change so the audit entry can name the code the bay used to carry: that
         // string is what every printed receipt and every officer's memory still says.
-        String previousCode = catalogService.requireSpace(tenantId, id).getCode();
+        ParkingSpace beforeSpace = catalogService.requireSpace(tenantId, id);
+        String previousCode = beforeSpace.getCode();
+        String previousStatus = beforeSpace.getStatus().name();
+        UUID previousZone = beforeSpace.getZoneId();
         ParkingSpace space = catalogService.updateSpace(tenantId, id, request.status(), request.zoneId(),
                 request.code());
         auditRecorder.record(AuditAction.PARKING_SPACE_UPDATED, "parking-space", id.toString(),
-                Map.of("code", space.getCode(), "status", space.getStatus().name(),
-                        "zoneId", space.getZoneId().toString()));
+                Map.of("code", space.getCode()),
+                AuditChanges.builder()
+                        .compare("code", previousCode, space.getCode())
+                        .compare("status", previousStatus, space.getStatus().name())
+                        .compare("zoneId", previousZone, space.getZoneId())
+                        .build());
         if (!previousCode.equals(space.getCode())) {
             auditRecorder.record(AuditAction.PARKING_SPACE_RENAMED, "parking-space", id.toString(),
                     Map.of("previousCode", previousCode, "code", space.getCode()));
@@ -401,11 +422,21 @@ public class AdminParkingController {
                         exceptionBands));
             }
         }
+        // A timetable is replaced whole, so the useful "before" is its shape rather than a list of
+        // every band: an auditor asks whether the municipality started charging on Sundays or moved
+        // closing time, and "Mon 07:00-18:00; Sun —" answers that where forty rows do not.
+        boolean previousAllDay = scheduleService.require(tenantId).isChargesAllDay();
+        String previousWeek = ScheduleShape.of(scheduleService.slots(tenantId));
+        int previousExceptions = scheduleService.exceptions(tenantId).size();
         scheduleService.replace(tenantId, request.chargesAllDay().booleanValue(), bands, exceptions);
         auditRecorder.record(AuditAction.PARKING_SCHEDULE_UPDATED, "parking-schedule", tenantId.toString(),
-                Map.of("chargesAllDay", String.valueOf(request.chargesAllDay()),
-                        "bands", String.valueOf(bands.size()),
-                        "exceptions", String.valueOf(exceptions.size())));
+                Map.of("bands", String.valueOf(bands.size())),
+                AuditChanges.builder()
+                        .compare("chargesAllDay", Boolean.valueOf(previousAllDay), request.chargesAllDay())
+                        .compare("week", previousWeek, ScheduleShape.of(scheduleService.slots(tenantId)))
+                        .compare("exceptions", Integer.valueOf(previousExceptions),
+                                Integer.valueOf(exceptions.size()))
+                        .build());
         return readSchedule(tenantId);
     }
 
@@ -498,6 +529,14 @@ public class AdminParkingController {
                                                          ParkingDtos.UpdateZoneRulesRequest request) {
         TenantId tenantId = TenantContextHolder.requireTenantId();
         ParkingZone zone = catalogService.requireZone(tenantId, id);
+        // The RESOLVED numbers before and after, not the override row: an auditor asks what applied
+        // in this zone, and "sessionMaxMinutes: (inherited) → 120" and "480 → 120" are the same
+        // change to them. Reporting the override row would make an inheritance change invisible.
+        ZoneRules previous = policyService.rulesFor(tenantId, id);
+        boolean previousOwnSchedule = scheduleService.zoneSchedule(tenantId, id).isPresent();
+        String previousWeek = previousOwnSchedule
+                ? ZoneScheduleShape.of(scheduleService.zoneSlots(id))
+                : null;
         policyService.replaceZone(tenantId, id,
                 request.sessionIncrementsMinutes(),
                 request.sessionMinMinutes(),
@@ -522,11 +561,26 @@ public class AdminParkingController {
         scheduleService.replaceZone(tenantId, id, ownSchedule,
                 request.chargesAllDay() != null && request.chargesAllDay().booleanValue(), bands);
 
+        ZoneRules now = policyService.rulesFor(tenantId, id);
         auditRecorder.record(AuditAction.PARKING_ZONE_RULES_UPDATED, "parking-zone", id.toString(),
-                Map.of("zone", zone.getCode(),
-                        "ownSchedule", String.valueOf(ownSchedule),
-                        "sessionMax", String.valueOf(request.sessionMaxMinutes()),
-                        "freeMinutes", String.valueOf(request.freeMinutes())));
+                Map.of("zone", zone.getCode()),
+                AuditChanges.builder()
+                        .compare("sessionIncrementsMinutes", previous.sessionIncrements().values(),
+                                now.sessionIncrements().values())
+                        .compare("sessionMinMinutes", Integer.valueOf(previous.sessionMinMinutes()),
+                                Integer.valueOf(now.sessionMinMinutes()))
+                        .compare("sessionMaxMinutes", Integer.valueOf(previous.sessionMaxMinutes()),
+                                Integer.valueOf(now.sessionMaxMinutes()))
+                        .compare("extensionMaxTotalMinutes",
+                                Integer.valueOf(previous.extensionMaxTotalMinutes()),
+                                Integer.valueOf(now.extensionMaxTotalMinutes()))
+                        .compare("freeMinutes", Integer.valueOf(previous.freeMinutes()),
+                                Integer.valueOf(now.freeMinutes()))
+                        .compare("ownSchedule", Boolean.valueOf(previousOwnSchedule),
+                                Boolean.valueOf(ownSchedule))
+                        .compare("week", previousWeek,
+                                ownSchedule ? ZoneScheduleShape.of(scheduleService.zoneSlots(id)) : null)
+                        .build());
         return readZoneRules(tenantId, id);
     }
 

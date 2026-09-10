@@ -5,6 +5,7 @@ import cr.luparx.app.notification.SmtpNotificationSender;
 import cr.luparx.app.outbox.OutboxRecorder;
 import cr.luparx.app.web.dto.AdminDtos;
 import cr.luparx.core.audit.AuditAction;
+import cr.luparx.core.audit.AuditChanges;
 import cr.luparx.core.domain.Role;
 import cr.luparx.core.error.ErrorCode;
 import cr.luparx.core.error.ForbiddenException;
@@ -192,9 +193,21 @@ public class AdminMembershipController {
         if (request.role() != null) {
             requireGrantable(request.role());
         }
+        // Read before the change, and copied out of the entity rather than held as a reference: the
+        // service mutates the managed row, so a reference read afterwards yields the NEW values and
+        // the trail would report "INSPECTOR → INSPECTOR" for every promotion ever made.
+        TenantMembership before = membershipService.requireInScope(id, tenantId);
+        String previousRole = String.valueOf(before.getRole());
+        String previousStatus = String.valueOf(before.getStatus());
         TenantMembership membership = membershipService.update(id, tenantId, request.role(), request.status());
+        // The single most audited change in a government platform: who gave whom which powers, and
+        // what they had before.
         auditRecorder.record(AuditAction.MEMBERSHIP_ROLE_CHANGED, "membership", id.toString(),
-                Map.of("role", String.valueOf(request.role()), "status", String.valueOf(request.status())));
+                Map.of("userId", String.valueOf(membership.getUserId())),
+                AuditChanges.builder()
+                        .compare("role", previousRole, String.valueOf(membership.getRole()))
+                        .compare("status", previousStatus, String.valueOf(membership.getStatus()))
+                        .build());
         return mapper.toMembership(membership);
     }
 

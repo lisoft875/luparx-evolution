@@ -45,18 +45,24 @@ public class AdminOperationsController {
 
     private static final int DEFAULT_REPORT_WINDOW_DAYS = 365;
 
+    /** How many links of the chain the verification hands back. Enough to keep; not an export. */
+    private static final int RECENT_SEALS = 20;
+
     private final AuditEventRepository auditEventRepository;
     private final TenantReportService tenantReportService;
     private final AuditRecorder auditRecorder;
+    private final cr.luparx.app.audit.AuditSealService sealService;
     private final ResponseMapper mapper;
 
     public AdminOperationsController(AuditEventRepository auditEventRepository,
                                      TenantReportService tenantReportService,
                                      AuditRecorder auditRecorder,
+                                     cr.luparx.app.audit.AuditSealService sealService,
                                      ResponseMapper mapper) {
         this.auditEventRepository = auditEventRepository;
         this.tenantReportService = tenantReportService;
         this.auditRecorder = auditRecorder;
+        this.sealService = sealService;
         this.mapper = mapper;
     }
 
@@ -79,6 +85,28 @@ public class AdminOperationsController {
                 tenantId.value(), actor, action, start, end, pageable);
         return PageResponse.of(result.getContent().stream().map(mapper::toAuditEvent).toList(),
                 request.page(), request.size(), result.getTotalElements());
+    }
+
+    /**
+     * Recomputes this municipality's audit chain and reports what does not add up
+     * (CONTRACT.md v0.32).
+     *
+     * <p>Behind {@code AUDIT_READ}, the permission that already governs reading the trail: somebody
+     * who may read it may check it, and somebody who may not has no business knowing whether it is
+     * intact. It is a read and it changes nothing — verification that could repair a chain would be
+     * a chain that repairs itself, which proves nothing.</p>
+     *
+     * <p>The recent seals travel with the verdict so an auditor can take them away and compare them
+     * against what the platform reports next quarter. That is what makes the proof independent of
+     * whatever the platform says about itself today.</p>
+     */
+    @GetMapping("/audit-events/chain")
+    @PreAuthorize("hasAuthority('PERM_AUDIT_READ')")
+    @Operation(summary = "Verify the audit chain of this municipality and report any break")
+    public AdminDtos.AuditChainResponse auditChain() {
+        TenantId tenantId = TenantContextHolder.requireTenantId();
+        return mapper.toAuditChain(sealService.verify(tenantId.value()),
+                sealService.recent(tenantId.value(), RECENT_SEALS));
     }
 
     @GetMapping("/reports/registered-users")

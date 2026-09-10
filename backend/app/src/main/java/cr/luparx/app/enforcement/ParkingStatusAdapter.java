@@ -94,7 +94,11 @@ public class ParkingStatusAdapter implements ParkingStatusPort {
             stays.add(new ActiveStay(session.getId(), session.getZoneId(),
                     zone == null ? null : zone.getCode(), zone == null ? null : zone.getName(),
                     session.getSpaceId(), space == null ? null : space.getCode(),
-                    session.getStartedAt(), session.getExpiresAt()));
+                    session.getStartedAt(), session.getExpiresAt(),
+                    session.getPaymentStatus().name(),
+                    session.getNoChargeReason() == null ? null : session.getNoChargeReason().name(),
+                    session.getAmountMinor(), session.getCurrencyCode(),
+                    session.getPaymentTransactionId()));
         }
         return stays;
     }
@@ -126,7 +130,11 @@ public class ParkingStatusAdapter implements ParkingStatusPort {
                     // The code the stay was PAID under (V25_0), not the one the bay carries today:
                     // a bay repainted since then must not make an old receipt name another space.
                     session.getSpaceCodeSnapshot(),
-                    session.getStartedAt(), session.getExpiresAt()));
+                    session.getStartedAt(), session.getExpiresAt(),
+                    session.getPaymentStatus().name(),
+                    session.getNoChargeReason() == null ? null : session.getNoChargeReason().name(),
+                    session.getAmountMinor(), session.getCurrencyCode(),
+                    session.getPaymentTransactionId()));
         }
         return stays;
     }

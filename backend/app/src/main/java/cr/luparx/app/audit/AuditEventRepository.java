@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -57,4 +58,38 @@ public interface AuditEventRepository extends JpaRepository<AuditEventEntity, UU
                                         @Param("from") Instant from,
                                         @Param("to") Instant to,
                                         Pageable pageable);
+
+    /**
+     * Every entry of one chain inside a window, in the exact order the seal digests them
+     * (CONTRACT.md v0.32).
+     *
+     * <p>{@code tenantKey} being the platform sentinel means "the entries with no municipality"; a
+     * null cannot be compared with {@code =}, so the caller passes a flag rather than the service
+     * building two queries that could drift apart.</p>
+     *
+     * <p>Ordered by {@code (occurredAt, id)} and never by insertion: two entries can share an instant,
+     * and a digest whose order depends on how PostgreSQL happened to return the rows would fail to
+     * verify on a replica for no reason at all.</p>
+     */
+    @Query("""
+            select a from AuditEventEntity a
+            where ((:platform = true and a.tenantId is null) or a.tenantId = :tenantId)
+              and a.occurredAt >= :from and a.occurredAt < :to
+            order by a.occurredAt asc, a.id asc
+            """)
+    List<AuditEventEntity> findForSeal(@Param("tenantId") UUID tenantId,
+                                       @Param("platform") boolean platform,
+                                       @Param("from") Instant from,
+                                       @Param("to") Instant to);
+
+    /** The oldest entry of a chain, which is where a chain that has none yet has to start. */
+    @Query("""
+            select min(a.occurredAt) from AuditEventEntity a
+            where (:platform = true and a.tenantId is null) or a.tenantId = :tenantId
+            """)
+    Instant findEarliest(@Param("tenantId") UUID tenantId, @Param("platform") boolean platform);
+
+    /** Every municipality that has written anything, so the sealing job knows which chains exist. */
+    @Query("select distinct a.tenantId from AuditEventEntity a")
+    List<UUID> findTenantsWithEvents();
 }

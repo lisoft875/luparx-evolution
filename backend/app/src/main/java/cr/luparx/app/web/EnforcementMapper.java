@@ -313,7 +313,10 @@ public class EnforcementMapper {
 
     private EnforcementDtos.ActiveStayResponse toStay(ParkingStatusPort.ActiveStay stay) {
         return new EnforcementDtos.ActiveStayResponse(stay.sessionId(), stay.zoneId(), stay.zoneCode(),
-                stay.zoneName(), stay.spaceId(), stay.spaceCode(), stay.startedAt(), stay.expiresAt());
+                stay.zoneName(), stay.spaceId(), stay.spaceCode(), stay.startedAt(), stay.expiresAt(),
+                stay.paymentStatus(), stay.noChargeReason(),
+                new ParkingDtos.MoneyDto(stay.amountMinor(), stay.currencyCode()),
+                stay.paymentTransactionId());
     }
 
     // --- citations ------------------------------------------------------------------------------------

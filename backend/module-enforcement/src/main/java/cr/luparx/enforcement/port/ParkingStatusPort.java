@@ -76,9 +76,34 @@ public interface ParkingStatusPort {
      */
     Optional<RegisteredVehicle> findUniqueVehicleByPlate(String plateNormalized);
 
-    /** A parking session as enforcement sees it: where it is, until when, and nothing personal. */
+    /**
+     * A parking session as enforcement sees it: where it is, until when, what was paid, and nothing
+     * personal.
+     *
+     * <p>Since v0.32 it carries the <b>payment</b>, which is the point of the whole port: the officer
+     * reads whether the stay was paid from the same row that produced the payment, instead of
+     * inferring it from the fact that a stay exists. A stay can exist and have cost nothing —
+     * courtesy, the citizen's own saved minutes, an hour this municipality does not charge for — and
+     * an officer who cannot tell those apart from a payment has nothing to say to the person arguing
+     * with them.</p>
+     *
+     * <p>The two enumerations travel as <b>strings</b> and not as types. This module does not depend
+     * on {@code module-parking}, and importing its enums here to save a cast would be exactly the
+     * dependency the port exists to avoid — the day this becomes an HTTP client, a string is what
+     * comes over the wire anyway.</p>
+     *
+     * @param paymentStatus       {@code PAID}, {@code NO_CHARGE}, {@code PENDING} or {@code FAILED}
+     * @param noChargeReason      {@code COURTESY}, {@code CREDIT} or {@code OUTSIDE_HOURS}; null
+     *                            unless nothing was charged, and null too on rows written before
+     *                            V31_0 where the reason could not be reconstructed
+     * @param amountMinor         what the stay cost, in minor units of {@code currencyCode}
+     * @param paymentTransactionId the wallet movement that settled it, so a complaint at the bay can
+     *                            be traced to the money without leaving the street
+     */
     record ActiveStay(UUID sessionId, UUID zoneId, String zoneCode, String zoneName, UUID spaceId,
-                      String spaceCode, Instant startedAt, Instant expiresAt) {
+                      String spaceCode, Instant startedAt, Instant expiresAt,
+                      String paymentStatus, String noChargeReason, long amountMinor, String currencyCode,
+                      UUID paymentTransactionId) {
     }
 
     /** A numbered bay and the zone it belongs to. */

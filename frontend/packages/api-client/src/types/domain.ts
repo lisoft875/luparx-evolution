@@ -583,6 +583,66 @@ export interface AuditEvent {
   resourceId: string;
   occurredAt: string;
   metadata: Record<string, unknown>;
+  /**
+   * What changed, field by field (v0.32), and only the fields that changed.
+   *
+   * Kept apart from `metadata`: metadata is context somebody chose to note, this is the answer to
+   * "what did they alter". Absent from servers older than v0.32.
+   */
+  changes?: AuditChange[];
+}
+
+/**
+ * One field that changed, with what it was and what it became.
+ *
+ * `masked` means the two values were reduced before being stored because the field is a personal
+ * identifier — that the email changed is auditable, what it was is not. Without the flag a reader
+ * takes `a***@x.com` for the address itself.
+ */
+export interface AuditChange {
+  field: string;
+  oldValue: string | null;
+  newValue: string | null;
+  masked: boolean;
+}
+
+/**
+ * What a verification of the audit chain found (v0.32).
+ *
+ * The answer somebody wants is `intact` with no `problems`. Everything else is a finding a person
+ * has to look at — the platform reports, it does not adjudicate.
+ */
+export interface AuditChain {
+  sealCount: number;
+  entryCount: number;
+  /**
+   * The instant the chain is proven up to. Entries after it are protected by the database trigger
+   * but not yet covered by a seal — normal, and why the screen shows the moment and not only a
+   * verdict.
+   */
+  sealedThrough: string | null;
+  intact: boolean;
+  problems: AuditChainProblem[];
+  /** The most recent links. An auditor takes these away and checks them again next quarter. */
+  recentSeals: AuditSeal[];
+}
+
+/** The three ways a chain can be wrong, kept apart because they mean different things. */
+export type AuditChainProblemKind = 'DIGEST_MISMATCH' | 'BROKEN_LINK' | 'MISSING_SEAL';
+
+export interface AuditChainProblem {
+  seq: number;
+  kind: AuditChainProblemKind;
+  detail: string;
+}
+
+export interface AuditSeal {
+  seq: number;
+  coversFrom: string;
+  coversTo: string;
+  rowCount: number;
+  digest: string;
+  createdAt: string;
 }
 
 export type AuditEventsQuery = {
@@ -1469,6 +1529,15 @@ export interface EnforcementBay {
 }
 
 /** A running stay as enforcement sees it: where, and until when. Never who paid for it. */
+/**
+ * Whether a stay was paid for (v0.32). About the **money**, where the stay's own status is about the
+ * stay: one can be running and uncharged, and one that ended a month ago is still paid.
+ */
+export type PaymentStatus = 'PAID' | 'NO_CHARGE' | 'PENDING' | 'FAILED';
+
+/** Why a stay cost nothing. None of the three is a failure to pay, which is the point of having them. */
+export type NoChargeReason = 'COURTESY' | 'CREDIT' | 'OUTSIDE_HOURS';
+
 export interface EnforcementStay {
   sessionId: string;
   zoneId: string;
@@ -1478,6 +1547,17 @@ export interface EnforcementStay {
   spaceCode: string;
   startedAt: string;
   expiresAt: string;
+  /**
+   * Whether it was paid (v0.32). Absent from servers older than that, which is why every reader
+   * treats it as optional instead of assuming a stay without it was unpaid.
+   */
+  paymentStatus?: PaymentStatus;
+  /** Why nothing was charged. Null unless `paymentStatus` is `NO_CHARGE`. */
+  noChargeReason?: NoChargeReason | null;
+  amountMinor?: number;
+  currencyCode?: string;
+  /** The wallet movement that settled it, so a complaint at the bay traces to the money. */
+  paymentTransactionId?: string | null;
 }
 
 export interface PlateStatus {

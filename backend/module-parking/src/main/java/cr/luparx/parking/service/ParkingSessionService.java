@@ -19,6 +19,8 @@ import cr.luparx.parking.entity.Vehicle;
 import cr.luparx.core.money.Money;
 import cr.luparx.parking.model.ExtensionOption;
 import cr.luparx.parking.model.ParkingQuote;
+import cr.luparx.parking.entity.WalletTransaction;
+import cr.luparx.parking.model.NoChargeReason;
 import cr.luparx.parking.model.ZonePriceBook;
 import cr.luparx.parking.model.ZoneRules;
 import cr.luparx.parking.model.ParkingSessionStatus;
@@ -281,10 +283,36 @@ public class ParkingSessionService {
         }
         if (quote.payable().isPositive()) {
             // Throws INSUFFICIENT_BALANCE, which rolls back the session and the consumed minutes too.
-            walletService.charge(tenantId, userId, quote.payable(), WalletTransactionType.SESSION_CHARGE,
-                    session.getId(), idempotencyKey);
+            WalletTransaction payment = walletService.charge(tenantId, userId, quote.payable(),
+                    WalletTransactionType.SESSION_CHARGE, session.getId(), idempotencyKey);
+            // Marked paid only AFTER the money actually moved, and pointing at the movement that
+            // moved it: this is what lets fiscalisation read the payment from the same row that
+            // produced it, instead of inferring it from an amount (CONTRACT.md v0.32).
+            session.markPaid(payment.getId());
+        } else {
+            session.markNotCharged(noChargeReason(courtesy, quote));
         }
         return session;
+    }
+
+    /**
+     * Why a stay cost nothing.
+     *
+     * <p>Three different facts and none of them is a failure to pay, which is exactly why the reason
+     * is recorded rather than left for somebody to guess from a zero: the officer in the street has
+     * to be able to say <em>which</em> of the three it was to the citizen arguing with them.</p>
+     *
+     * <p>Courtesy first, because when it applies the stay was never priced at all — the other two are
+     * about a price that came out to nothing.</p>
+     */
+    private static NoChargeReason noChargeReason(boolean courtesy, ParkingQuote quote) {
+        if (courtesy) {
+            return NoChargeReason.COURTESY;
+        }
+        if (quote.chargeableMinutes() == 0) {
+            return NoChargeReason.OUTSIDE_HOURS;
+        }
+        return NoChargeReason.CREDIT;
     }
 
     /**
@@ -377,16 +405,24 @@ public class ParkingSessionService {
 
         session.extend(minutes, quote.payable(), quote.creditMinutesApplied(), now);
         sessionRepository.save(session);
-        extensionRepository.save(new ParkingSessionExtension(Uuid7.generate(), tenantId.value(), session.getId(),
-                minutes, quote.payable(), quote.creditMinutesApplied(), now, idempotencyKey));
+        ParkingSessionExtension extension = extensionRepository.save(new ParkingSessionExtension(
+                Uuid7.generate(), tenantId.value(), session.getId(), minutes, quote.payable(),
+                quote.creditMinutesApplied(), now, idempotencyKey));
 
         if (quote.creditMinutesApplied() > 0) {
             timeCreditService.consume(tenantId, userId, quote.creditMinutesApplied(), TimeCreditSource.EXTENSION,
                     session.getId());
         }
         if (quote.payable().isPositive()) {
-            walletService.charge(tenantId, userId, quote.payable(), WalletTransactionType.EXTENSION_CHARGE,
-                    session.getId(), idempotencyKey);
+            WalletTransaction payment = walletService.charge(tenantId, userId, quote.payable(),
+                    WalletTransactionType.EXTENSION_CHARGE, session.getId(), idempotencyKey);
+            extension.markPaid(payment.getId());
+            // An extension that was paid for makes the whole stay paid, even when the start was free:
+            // a courtesy quarter of an hour that somebody then extended by an hour is a stay with
+            // money in it, and reading it as NO_CHARGE would hide that money from a reconciliation.
+            if (session.getPaymentStatus() != cr.luparx.parking.model.PaymentStatus.PAID) {
+                session.markPaid(payment.getId());
+            }
         }
         return session;
     }

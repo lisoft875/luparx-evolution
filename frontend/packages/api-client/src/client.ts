@@ -92,6 +92,7 @@ import type {
   AdminLevelCatalogEntry,
   AuditEvent,
   AuditEventsQuery,
+  AuditChain,
   BlockUserRequest,
   CountryCatalogEntry,
   CreateExportRequest,
@@ -496,6 +497,13 @@ export class ApiClient {
   readonly adminAudit = {
     list: (query: AuditEventsQuery & PageParams): Promise<PagedResponse<AuditEvent>> =>
       this.http.request('GET', '/api/v1/admin/audit-events', { query }),
+    /**
+     * Recomputes this municipality's audit chain and reports any break (v0.32).
+     *
+     * A read that changes nothing: verification that could repair a chain would be a chain that
+     * repairs itself, which proves nothing.
+     */
+    chain: (): Promise<AuditChain> => this.http.request('GET', '/api/v1/admin/audit-events/chain'),
   };
 
   readonly adminReports = {

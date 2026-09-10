@@ -1,6 +1,8 @@
 package cr.luparx.app.web;
 
 import cr.luparx.app.audit.AuditEventEntity;
+import cr.luparx.app.audit.AuditSeal;
+import cr.luparx.app.audit.AuditSealService;
 import cr.luparx.app.web.dto.AdminDtos;
 import cr.luparx.app.web.dto.AuthDtos;
 import cr.luparx.app.web.dto.CatalogDtos;
@@ -278,7 +280,35 @@ public class ResponseMapper {
                 event.getResourceType(),
                 event.getResourceId(),
                 event.getOccurredAt(),
-                event.getMetadata());
+                event.getMetadata(),
+                event.getChanges().stream()
+                        .map(change -> new AdminDtos.AuditChangeDto(change.field(), change.oldValue(),
+                                change.newValue(), change.masked()))
+                        .toList());
+    }
+
+    /**
+     * What a verification of the audit chain found (CONTRACT.md v0.32).
+     *
+     * <p>The recent seals travel with the verdict on purpose: an auditor takes them away, and next
+     * quarter they check the ones they hold against the ones the platform reports. That is what makes
+     * the proof independent of anything the platform says about itself today.</p>
+     */
+    public AdminDtos.AuditChainResponse toAuditChain(AuditSealService.Verification verification,
+                                                     java.util.List<AuditSeal> recentSeals) {
+        return new AdminDtos.AuditChainResponse(
+                verification.sealCount(),
+                verification.entryCount(),
+                verification.sealedThrough(),
+                verification.intact(),
+                verification.problems().stream()
+                        .map(problem -> new AdminDtos.AuditChainProblem(problem.seq(), problem.kind().name(),
+                                problem.detail()))
+                        .toList(),
+                recentSeals.stream()
+                        .map(seal -> new AdminDtos.AuditSealDto(seal.getSeq(), seal.getCoversFrom(),
+                                seal.getCoversTo(), seal.getRowCount(), seal.getDigest(), seal.getCreatedAt()))
+                        .toList());
     }
 
     public PlatformDtos.TenantResponse toTenant(Tenant tenant) {
