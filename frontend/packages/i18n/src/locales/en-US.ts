@@ -247,6 +247,20 @@ export const enUS: Record<TranslationKey, string> = {
   'admin.tariffs.saved.base': 'Base tariff updated in {{zone}}.',
   'admin.tariffs.saved.rung': '{{duration}} in {{zone}} now has its own price.',
   'admin.tariffs.cleared': '{{duration}} in {{zone}} goes back to the base price.',
+  'admin.tariffs.action.other': 'Another duration…',
+  'admin.tariffs.field.duration': 'Duration (minutes)',
+  'admin.tariffs.field.durationHint': 'Any number of minutes.',
+  'admin.tariffs.set.newTitle': 'Another duration in {{zone}}',
+  'admin.tariffs.set.newNotice':
+    'On saving, this duration also goes on sale across the municipality: a price for something nobody can buy is charged to nobody.',
+  'admin.tariffs.error.generic': 'The server refused the change.',
+  'admin.tariffs.error.network': 'The server could not be reached.',
+  'admin.tariffs.error.unknownRoute':
+    'The server does not recognise this operation. It may be running a build older than this screen.',
+  'admin.tariffs.error.zoneGone': 'That zone no longer exists in this municipality.',
+  'admin.tariffs.error.noRung': 'That duration no longer has a price of its own.',
+  'admin.tariffs.error.invalid': 'The amount or the duration is not valid.',
+  'admin.tariffs.error.forbidden': 'Your account cannot change tariffs in this municipality.',
   'admin.tariffs.title': 'Tariffs',
   'admin.tariffs.description':
     'What each duration costs in each zone. Any of them can have its own price; the ones that do not are priced by the zone\u2019s base tariff, per started block.',

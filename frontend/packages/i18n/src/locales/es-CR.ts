@@ -259,6 +259,20 @@ export const esCR = {
   'admin.tariffs.saved.base': 'Tarifa base actualizada en {{zone}}.',
   'admin.tariffs.saved.rung': '{{duration}} en {{zone}} ya tiene precio propio.',
   'admin.tariffs.cleared': '{{duration}} en {{zone}} vuelve a cobrarse con la base.',
+  'admin.tariffs.action.other': 'Otra duración…',
+  'admin.tariffs.field.duration': 'Duración (minutos)',
+  'admin.tariffs.field.durationHint': 'Cualquier número de minutos.',
+  'admin.tariffs.set.newTitle': 'Otra duración en {{zone}}',
+  'admin.tariffs.set.newNotice':
+    'Al guardar, esta duración también se pone a la venta en toda la municipalidad: un precio para algo que nadie puede comprar no se le cobra a nadie.',
+  'admin.tariffs.error.generic': 'El servidor rechazó el cambio.',
+  'admin.tariffs.error.network': 'No se pudo hablar con el servidor.',
+  'admin.tariffs.error.unknownRoute':
+    'El servidor no reconoce esta operación. Puede que esté corriendo una versión anterior a la que tiene esta pantalla.',
+  'admin.tariffs.error.zoneGone': 'Esa zona ya no existe en esta municipalidad.',
+  'admin.tariffs.error.noRung': 'Esa duración ya no tiene precio propio.',
+  'admin.tariffs.error.invalid': 'El monto o la duración no son válidos.',
+  'admin.tariffs.error.forbidden': 'Su cuenta no puede cambiar tarifas en esta municipalidad.',
   'admin.tariffs.title': 'Tarifas',
   'admin.tariffs.description':
     'Cuánto cuesta cada duración en cada zona. Cada una puede tener su propio precio; la que no tenga la cobra la tarifa base de la zona, por bloque empezado.',

@@ -72,6 +72,24 @@ console.log('y explica que el monto ES el precio, sin multiplicar:', /sin multip
 console.log('tras ponerle precio propio deja de decir «de la base» en esa celda:', afterPrice.split('SJ-CENTRO')[1]?.indexOf('de la base') !== 0);
 console.log('el diálogo de una propia ofrece quitarla:', /Quitar precio propio/.test(ownDialog), '·', clearLabel);
 console.log('tras quitarla vuelve a heredar:', /de la base/.test(afterClear));
+// Otra duración: se le pone precio y queda a la venta en la municipalidad.
+await centro.locator('button:has-text("Otra duración")').click();
+await page.waitForTimeout(600);
+const newDialog = await page.locator('.lx-modal').innerText();
+// La duración va primero en el diálogo, el monto después.
+const durationField = page.locator('.lx-field', { hasText: 'Duración (minutos)' }).locator('input');
+const amountField = page.locator('.lx-field', { hasText: 'Monto (' }).locator('input');
+await durationField.fill('90');
+await amountField.fill('700');
+await page.waitForTimeout(200);
+await submit().click();
+await page.waitForTimeout(1400);
+await page.screenshot({ path: `${outDir}/05-new-duration.png`, fullPage: true });
+const afterNew = await page.locator('body').innerText();
+
+console.log('«Otra duración» avisa que la pone a la venta:', /se pone a la venta/.test(newDialog));
+console.log('y aparece como columna nueva:', /90 minutos/i.test(afterNew));
+console.log('con su precio propio:', /₡700/.test(afterNew));
 console.log('la base se muestra bajo la zona:', /Base: ₡/.test(initial));
 console.log('el historial distingue base de duración:', /Tarifa base/.test(initial));
 if (errors.length) console.log('ERRORS:', errors);

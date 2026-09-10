@@ -682,6 +682,23 @@ body {
   outline-offset: 2px;
 }
 
+/* The row's own label, pinned while the row scrolls sideways.
+   A grid of zones by duration is wider than the screen the moment a municipality sells five
+   durations and operates eight sectors — which is the ordinary case, not the big one — and a row
+   whose name has scrolled off is a row of numbers belonging to nobody. */
+.lx-table-sticky-first th:first-child,
+.lx-table-sticky-first td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  /* Opaque: the cells sliding under it must not show through. */
+  background-color: var(--lx-bg-elevated);
+  border-right: 1px solid var(--lx-border);
+}
+.lx-table-sticky-first th:first-child {
+  background-color: var(--lx-surface-2);
+}
+
 /* Prose inside a table. Cells are `nowrap` by default — right for dates, codes and amounts,
    which must never break — but a column of sentences on one unbreakable line is wider than any
    layout and pushes the columns after it off the right edge. This clamps to two lines and caps

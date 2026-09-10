@@ -1,16 +1,20 @@
 import * as React from 'react';
 import { useMemo, useState } from 'react';
-import type { AdminParkingZone, ParkingRate } from '@luparx/api-client';
+import { ApiError, type AdminParkingZone, type ParkingRate } from '@luparx/api-client';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { RequirePermission, useAuth } from '@luparx/auth';
 import { formatDurationLabel } from '@luparx/features';
 import { useTranslation, formatCurrencyMinor, formatDateTime, majorToMinor } from '@luparx/i18n';
 import { Alert, Badge, Button, Card, FormField, Input, Modal, SectionHeader, Table } from '@luparx/ui';
 import { AdminShell } from '../components/AdminShell';
-import { useParkingPolicy } from '../lib/queries';
+import { useParkingPolicy, useUpdateParkingPolicy } from '../lib/queries';
 
 /** What is being priced: a zone's linear base, or one duration of its ladder. */
-type Target = { zone: AdminParkingZone; minutes: number | null };
+type Target = {
+  zone: AdminParkingZone;
+  /** A duration column, `null` for the zone's base, or `'new'` when the administrator is naming one. */
+  minutes: number | null | 'new';
+};
 
 /**
  * What each sector costs (CONTRACT.md v0.16, rebuilt in v0.21, ladder added in v0.24).
@@ -41,12 +45,15 @@ export function TariffsPage(): React.JSX.Element {
   const [editing, setEditing] = useState<Target | null>(null);
   const [amount, setAmount] = useState('');
   const [baseMinutes, setBaseMinutes] = useState('60');
+  /** When a duration is being invented here rather than picked from a column. */
+  const [newMinutes, setNewMinutes] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
 
   const zonesQuery = useQuery({ queryKey: ['admin', 'zones'], queryFn: () => apiClient.adminParking.zones() });
   const ratesQuery = useQuery({ queryKey: ['admin', 'rates'], queryFn: () => apiClient.adminParking.rates() });
   const policyQuery = useParkingPolicy();
+  const updatePolicy = useUpdateParkingPolicy();
 
   const zones = useMemo(() => zonesQuery.data ?? [], [zonesQuery.data]);
   const rates = useMemo(() => ratesQuery.data ?? [], [ratesQuery.data]);
@@ -57,6 +64,27 @@ export function TariffsPage(): React.JSX.Element {
   );
 
   const format = (minutes: number): string => formatDurationLabel(minutes, tPlural);
+
+  /**
+   * What actually went wrong, in words.
+   *
+   * <p>This used to be one sentence for every failure — "the change could not be saved" — which is
+   * the least useful thing a screen can say. It hid a real case in testing: the endpoint answering
+   * 404 because the server was still running the previous build, which reads as "the tariff is
+   * rejected" when it means "this server does not have this operation yet".</p>
+   */
+  function describe(err: unknown): string {
+    if (!(err instanceof ApiError)) return t('admin.tariffs.error.network');
+    if (err.status === 404 && err.code !== 'PARKING_RATE_NOT_FOUND') return t('admin.tariffs.error.unknownRoute');
+    if (err.status === 405) return t('admin.tariffs.error.unknownRoute');
+    if (err.code === 'PARKING_ZONE_NOT_FOUND') return t('admin.tariffs.error.zoneGone');
+    if (err.code === 'PARKING_RATE_NOT_FOUND') return t('admin.tariffs.error.noRung');
+    if (err.code === 'VALIDATION_FAILED') {
+      return err.fieldError('amountMinor') ?? err.fieldError('minutes') ?? t('admin.tariffs.error.invalid');
+    }
+    if (err.status === 403) return t('admin.tariffs.error.forbidden');
+    return t('admin.tariffs.error.generic');
+  }
 
   /** The base of each zone: the window with no closing date. At most one per zone. */
   const baseByZone = useMemo(() => {
@@ -103,11 +131,32 @@ export function TariffsPage(): React.JSX.Element {
   );
 
   const saveMutation = useMutation({
-    mutationFn: (target: Target) => {
+    mutationFn: async (target: Target) => {
       const amountMinor = majorToMinor(Number(amount), currencyCode ?? 'CRC');
-      return target.minutes === null
-        ? apiClient.adminParking.setRate({ zoneId: target.zone.id, amountMinor, minutes: Number(baseMinutes) })
-        : apiClient.adminParking.setRateRung({ zoneId: target.zone.id, amountMinor, minutes: target.minutes });
+      if (target.minutes === null) {
+        return apiClient.adminParking.setRate({
+          zoneId: target.zone.id,
+          amountMinor,
+          minutes: Number(baseMinutes),
+        });
+      }
+      const minutes = target.minutes === 'new' ? Number(newMinutes) : target.minutes;
+      // A duration nobody can buy is a price nobody will ever be charged, so pricing one the
+      // municipality does not sell yet puts it on sale in the same act. The policy goes FIRST: if it
+      // fails, nothing happened; if the rung failed after it, the municipality would merely be
+      // selling a duration its base already prices, which is a state it can sit in safely.
+      const policy = policyQuery.data;
+      if (policy && !policy.sessionIncrementsMinutes.includes(minutes)) {
+        const sold = [...new Set([...policy.sessionIncrementsMinutes, minutes])].sort((a, b) => a - b);
+        await updatePolicy.mutateAsync({
+          ...policy,
+          sessionIncrementsMinutes: sold,
+          sessionMinMinutes: sold[0] as number,
+          sessionMaxMinutes: sold[sold.length - 1] as number,
+          extensionMaxTotalMinutes: Math.max(policy.extensionMaxTotalMinutes, sold[sold.length - 1] as number),
+        });
+      }
+      return apiClient.adminParking.setRateRung({ zoneId: target.zone.id, amountMinor, minutes });
     },
     onSuccess: (_result, target) => {
       setError(null);
@@ -118,14 +167,14 @@ export function TariffsPage(): React.JSX.Element {
           ? t('admin.tariffs.saved.base', { zone: `${target.zone.code} — ${target.zone.name}` })
           : t('admin.tariffs.saved.rung', {
               zone: `${target.zone.code} — ${target.zone.name}`,
-              duration: format(target.minutes),
+              duration: format(target.minutes === 'new' ? Number(newMinutes) : target.minutes),
             }),
       );
       void queryClient.invalidateQueries({ queryKey: ['admin', 'rates'] });
     },
-    onError: () => {
+    onError: (err: unknown) => {
       setFeedback(null);
-      setError(t('admin.zones.error.generic'));
+      setError(describe(err));
     },
   });
 
@@ -143,13 +192,13 @@ export function TariffsPage(): React.JSX.Element {
       );
       void queryClient.invalidateQueries({ queryKey: ['admin', 'rates'] });
     },
-    onError: () => {
+    onError: (err: unknown) => {
       setFeedback(null);
-      setError(t('admin.zones.error.generic'));
+      setError(describe(err));
     },
   });
 
-  function openFor(zone: AdminParkingZone, minutes: number | null): void {
+  function openFor(zone: AdminParkingZone, minutes: number | null | 'new'): void {
     setError(null);
     const base = baseByZone.get(zone.id);
     if (minutes === null) {
@@ -158,13 +207,14 @@ export function TariffsPage(): React.JSX.Element {
       setBaseMinutes(String(base?.minutes ?? 60));
     } else {
       setAmount('');
+      if (minutes === 'new') setNewMinutes('');
     }
     setEditing({ zone, minutes });
   }
 
   const loading = zonesQuery.isLoading || ratesQuery.isLoading || policyQuery.isLoading;
-  const editingRung = editing !== null && editing.minutes !== null;
-  const editingHasRung = editingRung && rungs.has(`${editing.zone.id}:${editing.minutes}`);
+  const editingRung = editing !== null && typeof editing.minutes === 'number';
+  const editingHasRung = editingRung && rungs.has(`${editing.zone.id}:${editing.minutes as number}`);
 
   return (
     <AdminShell>
@@ -186,6 +236,7 @@ export function TariffsPage(): React.JSX.Element {
           loading={loading}
           loadingLabel={t('common.loading')}
           emptyLabel={t('admin.tariffs.noZones')}
+          stickyFirstColumn
           rows={zones}
           rowKey={(zone) => zone.id}
           columns={[
@@ -241,6 +292,22 @@ export function TariffsPage(): React.JSX.Element {
                 );
               },
             })),
+            {
+              key: 'other',
+              header: '',
+              render: (zone: AdminParkingZone) => (
+                <RequirePermission permission="TENANT_MANAGE">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    disabled={!zone.active}
+                    onClick={() => openFor(zone, 'new')}
+                  >
+                    {t('admin.tariffs.action.other')}
+                  </Button>
+                </RequirePermission>
+              ),
+            },
           ]}
         />
         {durations.length === 0 && !loading ? (
@@ -304,10 +371,12 @@ export function TariffsPage(): React.JSX.Element {
             ? ''
             : editing.minutes === null
               ? t('admin.tariffs.set.baseTitle', { zone: `${editing.zone.code} — ${editing.zone.name}` })
-              : t('admin.tariffs.set.rungTitle', {
-                  duration: format(editing.minutes),
-                  zone: `${editing.zone.code} — ${editing.zone.name}`,
-                })
+              : editing.minutes === 'new'
+                ? t('admin.tariffs.set.newTitle', { zone: `${editing.zone.code} — ${editing.zone.name}` })
+                : t('admin.tariffs.set.rungTitle', {
+                    duration: format(editing.minutes),
+                    zone: `${editing.zone.code} — ${editing.zone.name}`,
+                  })
         }
         closeLabel={t('common.close')}
       >
@@ -316,7 +385,7 @@ export function TariffsPage(): React.JSX.Element {
             <p className="lx-text-body" style={{ margin: 0 }}>
               {t(editing?.minutes === null ? 'admin.tariffs.set.baseBody' : 'admin.tariffs.set.rungBody')}
             </p>
-            {editing !== null && editing.minutes !== null && !editingHasRung ? (
+            {editing !== null && typeof editing.minutes === 'number' && !editingHasRung ? (
               <Alert tone="info">
                 {t('admin.tariffs.set.inheriting', {
                   price: formatCurrencyMinor(
@@ -326,6 +395,27 @@ export function TariffsPage(): React.JSX.Element {
                   ),
                 })}
               </Alert>
+            ) : null}
+            {/* Naming a duration here puts it on sale: a price for something nobody can buy is
+                money nobody will ever be charged, so the two happen together and the screen says
+                so rather than leaving the administrator to discover it. */}
+            {editing?.minutes === 'new' ? (
+              <>
+                <Alert tone="info">{t('admin.tariffs.set.newNotice')}</Alert>
+                <FormField label={t('admin.tariffs.field.duration')} hint={t('admin.tariffs.field.durationHint')}>
+                  {({ inputId, describedBy }) => (
+                    <Input
+                      id={inputId}
+                      aria-describedby={describedBy}
+                      type="number"
+                      min={1}
+                      inputMode="numeric"
+                      value={newMinutes}
+                      onChange={(e) => setNewMinutes(e.target.value)}
+                    />
+                  )}
+                </FormField>
+              </>
             ) : null}
             <div style={{ display: 'flex', gap: 'var(--lx-space-3)' }}>
               <div style={{ flex: 1 }}>
@@ -378,7 +468,7 @@ export function TariffsPage(): React.JSX.Element {
                   loading={clearMutation.isPending}
                   onClick={() =>
                     editing &&
-                    editing.minutes !== null &&
+                    typeof editing.minutes === 'number' &&
                     clearMutation.mutate({ zone: editing.zone, minutes: editing.minutes })
                   }
                 >
@@ -392,9 +482,11 @@ export function TariffsPage(): React.JSX.Element {
               <Button
                 type="button"
                 fullWidth
-                loading={saveMutation.isPending}
+                loading={saveMutation.isPending || updatePolicy.isPending}
                 disabled={
-                  Number(amount) <= 0 || (editing?.minutes === null && Number(baseMinutes) <= 0)
+                  Number(amount) <= 0 ||
+                  (editing?.minutes === null && Number(baseMinutes) <= 0) ||
+                  (editing?.minutes === 'new' && !(Number(newMinutes) > 0))
                 }
                 onClick={() => editing && saveMutation.mutate(editing)}
               >

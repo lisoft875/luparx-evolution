@@ -1929,3 +1929,35 @@ en la resolución por duración; es la misma razón que la referencia da para la
 
 El selector del ciudadano todavía no dibuja los precios que ahora recibe: la app muestra las
 duraciones sin monto. Es lo siguiente, y es la mitad visible de esta tanda.
+
+## v0.24.1 — Qué salió mal, dicho en palabras, y precios sin salir de la pantalla
+
+Dos correcciones sobre la escalera, ambas salidas de usarla contra un servidor real.
+
+### El error decía «no se pudo guardar» y nada más
+
+Toda falla al poner una tarifa se convertía en una sola frase. Es lo menos útil que una pantalla
+puede decir, y escondió un caso real: el servidor respondiendo **404 porque estaba corriendo la
+compilación anterior**, que se lee como «la tarifa fue rechazada» cuando significa «este servidor
+todavía no tiene esta operación».
+
+Ahora la pantalla traduce el `code` de Problem Details: ruta desconocida, zona que ya no existe,
+peldaño que ya no está, monto o duración inválidos —usando el mensaje por campo cuando el servidor lo
+manda—, permiso insuficiente, y sólo entonces un genérico.
+
+### «Otra duración…»: precificar cualquier duración desde aquí
+
+Las columnas salen de la política, y eso está bien —qué se vende se decide una vez— pero obligaba a
+salir de la pantalla para poner precio a una duración que la municipalidad todavía no vendía.
+
+Ahora hay una acción por zona que pide la duración y el monto. Al guardar hace **las dos cosas**: la
+pone a la venta en la municipalidad y le pone precio en esa zona. El diálogo lo dice; no es un efecto
+que alguien descubra después. **La política se actualiza primero**: si eso falla, no pasó nada; si
+fallara el peldaño después, la municipalidad quedaría vendiendo una duración que su base ya sabe
+cobrar, que es un estado en el que puede quedarse sin daño.
+
+### La columna de la zona queda fija
+
+Una municipalidad con ocho sectores y cinco duraciones tiene una grilla más ancha que la pantalla —el
+caso corriente, no el grande— y una fila cuyo nombre se fue por la izquierda es una fila de números
+que no son de nadie. `Table` gana `stickyFirstColumn`.

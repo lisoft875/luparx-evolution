@@ -13,12 +13,26 @@ export interface TableProps<T> {
   loading?: boolean;
   loadingLabel: string;
   emptyLabel: string;
+  /**
+   * Pins the first column while the rest scrolls sideways. For a grid wide enough to need it — a
+   * row of prices per zone, say — a row whose name has scrolled off is a row of numbers belonging
+   * to nobody.
+   */
+  stickyFirstColumn?: boolean;
 }
 
-export function Table<T>({ columns, rows, rowKey, loading, loadingLabel, emptyLabel }: TableProps<T>): React.JSX.Element {
+export function Table<T>({
+  columns,
+  rows,
+  rowKey,
+  loading,
+  loadingLabel,
+  emptyLabel,
+  stickyFirstColumn,
+}: TableProps<T>): React.JSX.Element {
   return (
     <div className="lx-table-wrapper">
-      <table className="lx-table">
+      <table className={stickyFirstColumn ? 'lx-table lx-table-sticky-first' : 'lx-table'}>
         <thead>
           <tr>
             {columns.map((column) => (
