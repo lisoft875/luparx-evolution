@@ -93,6 +93,8 @@ import type {
   AuditEvent,
   AuditEventsQuery,
   AuditChain,
+  AuditOriginProbe,
+  AuditOriginProbeRequest,
   BlockUserRequest,
   CountryCatalogEntry,
   CreateExportRequest,
@@ -504,6 +506,19 @@ export class ApiClient {
      * repairs itself, which proves nothing.
      */
     chain: (): Promise<AuditChain> => this.http.request('GET', '/api/v1/admin/audit-events/chain'),
+    /**
+     * Checks an address against this municipality's trail without the platform ever storing one
+     * (v0.33).
+     *
+     * POST with the address in the body, deliberately, even though it changes nothing and would
+     * otherwise be a GET: an address is personal data and personal data does not go in a URL. What
+     * comes back is a hash, which is safe to pass to `list` as `ipHash`.
+     *
+     * Bounded per person like the directory lookup, and audited — it answers a yes-or-no about
+     * somebody, so who asked it is itself part of the record.
+     */
+    checkOrigin: (payload: AuditOriginProbeRequest): Promise<AuditOriginProbe> =>
+      this.http.request('POST', '/api/v1/admin/audit-events/ip-fingerprint', { body: payload }),
   };
 
   readonly adminReports = {

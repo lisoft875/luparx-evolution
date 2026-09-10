@@ -1,6 +1,7 @@
 import type { PagedResponse } from '../types/http';
 import type {
   AccessTokenClaims,
+  AuditEvent,
   AdminUserDetail,
   AdminUserListItem,
   CreateAdminUserRequest,
@@ -45,6 +46,8 @@ import {
   MOCK_SYSTEM_JOBS,
   MOCK_TENANTS,
   mockAuditEvents,
+  mockIpHash,
+  type MockAuditEvent,
   mockIdempotencyResponses,
   mockParkingPolicyForTenant,
   mockZoneRules,
@@ -1549,10 +1552,54 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
       return json(mockAuditChain(tenantId));
     }
 
+    // El cotejo de una dirección (CONTRACT.md v0.33). El cuerpo lleva la dirección; la respuesta,
+    // nunca. Igual que el backend: se calcula la huella y se cuenta, y la dirección no se guarda en
+    // ninguna parte —ni siquiera en la entrada de bitácora que el propio cotejo escribe.
+    if (resource === 'audit-events' && segments[4] === 'ip-fingerprint' && method === 'POST') {
+      const payload = await readBody<{ ip?: string }>(init);
+      const address = (payload.ip ?? '').trim();
+      if (!address) {
+        return problem(422, 'VALIDATION_FAILED', 'error.audit.originProbe.address');
+      }
+      const ipHash = mockIpHash(address);
+      const matches = mockAuditEvents.filter(
+        (event) => event.tenantId === tenantId && event.ipHash === ipHash,
+      ).length;
+      recordAuditEvent({
+        tenantId,
+        actorUserId: adminClaims?.sub ?? null,
+        actorPortal: 'admin',
+        action: 'AUDIT_ORIGIN_PROBED',
+        resourceType: 'audit',
+        resourceId: '',
+        metadata: { fingerprint: ipHash.slice(0, 12), matches: String(matches) },
+        changes: [],
+      });
+      return json({ fingerprint: ipHash.slice(0, 12), ipHash, matches });
+    }
+
     if (resource === 'audit-events' && method === 'GET') {
       const page = Number(url.searchParams.get('page') ?? '0');
       const size = Number(url.searchParams.get('size') ?? '20');
-      return json(paginate(mockAuditEvents, page, size));
+      // Los filtros se aplican de verdad. Un simulador que devolviera siempre la lista entera
+      // dejaría pasar exactamente el error que se nota hasta producción: la pantalla se ve bien,
+      // el filtro no filtra, y nadie se entera hasta que un auditor pregunta por una persona.
+      const actor = url.searchParams.get('actor');
+      const action = url.searchParams.get('action');
+      const ipHash = url.searchParams.get('ipHash');
+      const from = url.searchParams.get('from');
+      const to = url.searchParams.get('to');
+      const filtered = mockAuditEvents.filter((event) => {
+        if (actor && event.actorUserId !== actor) return false;
+        if (action && event.action !== action) return false;
+        if (ipHash && event.ipHash !== ipHash) return false;
+        // La misma ventana semiabierta del backend: >= desde, < hasta.
+        if (from && event.occurredAt < from) return false;
+        if (to && event.occurredAt >= to) return false;
+        return true;
+      });
+      const listed = paginate(filtered, page, size);
+      return json({ ...listed, items: listed.items.map(toAuditEventResponse) });
     }
 
     if (resource === 'reports' && segments[4] === 'registered-users' && method === 'GET') {
@@ -1789,7 +1836,9 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
       const page = Number(url.searchParams.get('page') ?? '0');
       const size = Number(url.searchParams.get('size') ?? '20');
       const items = tenantId ? mockAuditEvents.filter((e) => e.tenantId === tenantId) : mockAuditEvents;
-      return json(paginate(items, page, size));
+      const listed = paginate(items, page, size);
+      // La misma proyección que la vista municipal: el hash no sale, la huella sí.
+      return json({ ...listed, items: listed.items.map(toAuditEventResponse) });
     }
 
     if (resource === 'reports' && segments[4] === 'registered-users' && method === 'GET') {
@@ -3129,6 +3178,63 @@ function mockDigest(value: string): string {
  * se ejercite contra un resultado que puede fallar. La primera vez sella todo lo que hay; de ahí en
  * adelante sólo lo nuevo, que es como se comporta el servidor.
  */
+/**
+ * Una entrada tal como la ve el cliente (CONTRACT.md v0.33).
+ *
+ * El nombre de la persona se resuelve al leer, igual que en el backend, y por la misma razón: la
+ * tabla no se puede actualizar, así que un nombre copiado adentro sería un nombre imposible de
+ * corregir. `ipHash` se queda del lado del servidor —el cliente ve la huella, nunca el valor
+ * completo ni la dirección.
+ */
+function toAuditEventResponse(event: MockAuditEvent): AuditEvent {
+  const { ipHash, ...visible } = event;
+  const person = event.actorUserId ? mockUsersById.get(event.actorUserId) : undefined;
+  return {
+    ...visible,
+    actorName: person
+      ? [person.profile.givenName, person.profile.familyName].filter(Boolean).join(' ')
+      : null,
+    actorActive: person ? person.profile.status === 'ACTIVE' : null,
+    ipFingerprint: ipHash ? ipHash.slice(0, 12) : null,
+    device: mockDeviceSummary(event.userAgent ?? null),
+    userAgent: event.userAgent ?? null,
+  };
+}
+
+/** El mismo resumen que hace DeviceSummary en el backend, con las mismas trampas en el mismo orden. */
+function mockDeviceSummary(userAgent: string | null): string | null {
+  if (!userAgent) return null;
+  // Edge y Opera dicen «Chrome», y Chrome dice «Safari»: lo específico se prueba primero.
+  const browser = /Edg\/(\d+)/.exec(userAgent)
+    ? `Edge ${/Edg\/(\d+)/.exec(userAgent)![1]}`
+    : /OPR\/(\d+)/.exec(userAgent)
+      ? `Opera ${/OPR\/(\d+)/.exec(userAgent)![1]}`
+      : /Chrome\/(\d+)/.exec(userAgent)
+        ? `Chrome ${/Chrome\/(\d+)/.exec(userAgent)![1]}`
+        : /Firefox\/(\d+)/.exec(userAgent)
+          ? `Firefox ${/Firefox\/(\d+)/.exec(userAgent)![1]}`
+          : /Safari\//.test(userAgent)
+            ? 'Safari'
+            : null;
+  // Android antes que Linux: toda cabecera de Android dice Linux también.
+  const platform = /Android/.test(userAgent)
+    ? 'Android'
+    : /iPhone/.test(userAgent)
+      ? 'iPhone'
+      : /iPad/.test(userAgent)
+        ? 'iPad'
+        : /Windows/.test(userAgent)
+          ? 'Windows'
+          : /Mac OS X|Macintosh/.test(userAgent)
+            ? 'macOS'
+            : /Linux/.test(userAgent)
+              ? 'Linux'
+              : null;
+  if (!browser && !platform) return null;
+  if (!browser) return platform;
+  return platform ? `${browser} · ${platform}` : browser;
+}
+
 function mockAuditChain(tenantId: string | null): unknown {
   const key = tenantId ?? 'platform';
   const seals = mockAuditSeals.get(key) ?? [];

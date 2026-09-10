@@ -55,6 +55,24 @@ public class DirectoryLookupRateLimiter {
      */
     @Transactional(readOnly = true)
     public void checkAllowed(UserId actor) {
+        checkAllowed(actor, AuditAction.USER_DIRECTORY_LOOKUP, "error.directory.lookup.rateLimited");
+    }
+
+    /**
+     * The same ceiling applied to any other lookup that answers a yes-or-no about a person
+     * (CONTRACT.md v0.33).
+     *
+     * <p>The second caller is the audit origin probe, which has the same shape as the directory
+     * lookup and therefore the same failure mode: harmless once, an enumeration tool if it can be run
+     * ten thousand times. Sharing the mechanism rather than copying it means the two cannot drift, and
+     * counting each action separately means one does not exhaust the other's allowance — an
+     * administrator hiring staff should not be locked out of the trail.</p>
+     *
+     * @param action     the audited action that counts against the ceiling
+     * @param messageKey what the caller is told, so the message names the thing they were doing
+     */
+    @Transactional(readOnly = true)
+    public void checkAllowed(UserId actor, String action, String messageKey) {
         if (actor == null) {
             // No actor means no request context, which is a scheduled job and not a person browsing.
             return;
@@ -62,10 +80,9 @@ public class DirectoryLookupRateLimiter {
         Duration window = properties.effectiveDirectoryLookupWindow();
         Instant since = clock.instant().minus(window);
         long used = auditEventRepository.countByActorUserIdAndActionAndOccurredAtAfter(
-                actor.value(), AuditAction.USER_DIRECTORY_LOOKUP, since);
+                actor.value(), action, since);
         if (used >= properties.effectiveDirectoryLookupMaxPerActor()) {
-            throw new TooManyRequestsException(ErrorCode.RATE_LIMITED, "error.directory.lookup.rateLimited",
-                    window);
+            throw new TooManyRequestsException(ErrorCode.RATE_LIMITED, messageKey, window);
         }
     }
 }

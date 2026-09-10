@@ -17,20 +17,53 @@ import java.util.UUID;
  */
 public interface AuditEventRepository extends JpaRepository<AuditEventEntity, UUID> {
 
+    /**
+     * @param ipHash restricts to the entries that came from one connection (CONTRACT.md v0.33). The
+     *               <em>hash</em> and never an address: the caller obtains it from
+     *               {@code POST /admin/audit-events/ip-fingerprint}, which is the only place an
+     *               address is ever handled, and it is handled in a request body
+     */
     @Query("""
             select a from AuditEventEntity a
             where a.tenantId = :tenantId
               and (:actor is null or a.actorUserId = :actor)
               and (:action is null or a.action = :action)
+              and (:ipHash is null or a.ipHash = :ipHash)
               and a.occurredAt >= :from and a.occurredAt < :to
             order by a.occurredAt desc
             """)
     Page<AuditEventEntity> searchInTenant(@Param("tenantId") UUID tenantId,
                                           @Param("actor") UUID actor,
                                           @Param("action") String action,
+                                          @Param("ipHash") String ipHash,
                                           @Param("from") Instant from,
                                           @Param("to") Instant to,
                                           Pageable pageable);
+
+    /**
+     * How many entries of this municipality came from one connection inside a window.
+     *
+     * <p>The answer to "was this address here at all", which is the question the probe endpoint is
+     * really being asked. Counting is cheaper than fetching and, more to the point, a count can be
+     * given to somebody who then decides whether to go and look — a zero ends the enquiry without
+     * anybody reading a single entry.</p>
+     *
+     * <p>Written out rather than derived from the method name so the window is bounded exactly as
+     * {@link #searchInTenant} bounds it: {@code >= from} and {@code < to}. A derived {@code Between}
+     * is inclusive at both ends, and a count that disagreed with the list by one entry at a boundary
+     * is precisely the sort of discrepancy that costs an afternoon on the one screen where a
+     * discrepancy is alarming.</p>
+     */
+    @Query("""
+            select count(a) from AuditEventEntity a
+            where a.tenantId = :tenantId
+              and a.ipHash = :ipHash
+              and a.occurredAt >= :from and a.occurredAt < :to
+            """)
+    long countFromOrigin(@Param("tenantId") UUID tenantId,
+                         @Param("ipHash") String ipHash,
+                         @Param("from") Instant from,
+                         @Param("to") Instant to);
 
     /**
      * How many times one actor performed one action recently.

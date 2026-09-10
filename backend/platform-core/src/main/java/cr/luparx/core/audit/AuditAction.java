@@ -141,6 +141,19 @@ public final class AuditAction {
      */
     public static final String RETENTION_PURGE_RAN = "RETENTION_PURGE_RAN";
 
+    /**
+     * Somebody checked an address against the trail (CONTRACT.md v0.33).
+     *
+     * <p>Audited because it is a lookup about a person even though it reads nobody's record: it turns
+     * "I suspect this address" into a yes or a no. The entry carries the fingerprint and the number of
+     * matches, and deliberately never the address — recording it here would put in the permanent table
+     * exactly the value the whole hashing design exists to keep out of it.</p>
+     *
+     * <p>It is also the counter that bounds the probe, the same way {@code USER_DIRECTORY_LOOKUP}
+     * bounds the person lookup.</p>
+     */
+    public static final String AUDIT_ORIGIN_PROBED = "AUDIT_ORIGIN_PROBED";
+
     // --- account, locales and municipal operation (CONTRACT.md "v0.3") --------------------------
     public static final String USER_EMAIL_CHANGE_REQUESTED = "USER_EMAIL_CHANGE_REQUESTED";
     public static final String USER_EMAIL_CHANGED = "USER_EMAIL_CHANGED";

@@ -22,7 +22,9 @@ de rollback, estado y fecha.
 | [0014](0014-enforcement-bounded-context.md) | Fiscalización como contexto propio (`module-enforcement`), con puerto hacia parqueo | Aceptado |
 | [0015](0015-wallet-topup-code.md) | Código de recarga dedicado (en vez de la cédula) para acreditar saldo en caja | Aceptado |
 | [0016](0016-remove-mfa.md) | Retirar el segundo factor (MFA/TOTP) del producto | Aceptado |
+| [0017](0017-audit-actor-and-origin.md) | Identidad del actor y origen en la bitácora: nombre resuelto al leer, dirección cotejada sin guardarse | Aceptado |
 
 Las decisiones 0001–0013 datan del scaffold inicial (2026-09-07); 0014 y 0015 se tomaron al construir
-el módulo de fiscalización y el flujo de recargas (2026-09-09). Todas se revisan cuando cambian los supuestos que las
+el módulo de fiscalización y el flujo de recargas (2026-09-09); 0017 amplía la 0013 al hacer legible la
+bitácora (2026-09-10). Todas se revisan cuando cambian los supuestos que las
 motivaron (volumen, número de tenants, regulación por país, etc.).

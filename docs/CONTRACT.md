@@ -2898,3 +2898,101 @@ escribe estado que perjudique a nadie ni lee nada personal, y una entrada por co
 cada pocos minutos para siempre en la tabla que este trabajo existe para proteger: la cadena
 terminaría registrando sobre todo que corrió. Los sellos son su propio registro — sus consecutivos,
 sus rangos y sus fechas dicen exactamente cuándo funcionó y cuándo no.
+
+---
+
+# v0.33 — La bitácora en palabras: quién, y desde dónde
+
+La v0.32 dejó guardado el antes, el después y la prueba de que nadie borró nada. Faltaban dos de las
+cinco cosas que pide el pliego, y faltaban donde más se nota: en la pantalla.
+
+La columna «actor» mostraba un UUID. El origen —`ip_hash` y `user_agent`— estaba guardado desde la
+v0.1 y **no salía del API**. Es decir: el dato estaba, la respuesta no. Esta versión no agrega
+columnas a la tabla; hace legible lo que ya se registraba.
+
+## Quién
+
+`GET /admin/audit-events` y `GET /platform/audit-events` agregan `actorName` y `actorActive`.
+
+El nombre se **resuelve al leer**, en una consulta por página (`AuditActorResolver`), no se copia
+dentro de la fila. La razón es la v0.32: la tabla no se puede actualizar, así que un nombre copiado
+adentro sería un nombre imposible de corregir —ni un cambio de nombre legal, ni uno escrito mal—, y
+la plataforma quedaría permanentemente incapaz de corregir su propio registro de una persona. Una
+boleta sí congela el nombre porque es un documento **notificado a alguien**; una entrada de bitácora
+no lo es. La regla de que **un funcionario nunca se borra al desactivarlo** (v0.28) es lo que hace
+segura esta resolución, y no es casualidad: existe para que la historia conserve a sus autores.
+El costo aceptado es que se ve el nombre de hoy y no el del día del acto; para «quién hizo esto», el
+de hoy es el que sirve, porque es con el que se le encuentra. Ver ADR 0017.
+
+`actorActive: false` marca a quien ya no tiene acceso, y se **muestra**: «esto lo hizo alguien que
+hoy está inactivo» es un hecho distinto de «lo hizo un empleado actual», y suele ser el más
+interesante de los dos. Sin actor —la purga de retención, el sellado— la pantalla dice **Sistema**,
+que no es lo mismo que una celda vacía. Un id que no resuelve se muestra abreviado: la entrada sigue
+siendo rastreable.
+
+## Desde dónde
+
+`ipFingerprint`, `device` y `userAgent` salen ahora en la respuesta. Los tres son nulos para un
+trabajo programado, que es lo que «cuando aplique» significa en la práctica.
+
+- `device` es `DeviceSummary`: `Chrome 128 · Android`. Deliberadamente tosco y sin librería —una
+  cabecera `User-Agent` la escribe el cliente y puede decir cualquier cosa, así que un analizador que
+  pretendiera ser autoritativo estaría mintiendo sobre un valor que no controla. Reconoce las
+  familias en las que corren las aplicaciones propias y devuelve nulo para el resto, y entonces la
+  pantalla muestra la cabecera cruda en vez de inventar un nombre. El orden importa y no es
+  alfabético: Edge y Opera dicen «Chrome», Chrome dice «Safari», y Android dice «Linux».
+- `userAgent` sigue viajando entero: es la evidencia, `device` es sólo cómo se lee.
+- `ipFingerprint` son los primeros 12 hexadecimales del hash, **nunca una dirección**: la plataforma
+  no las guarda (`SECURITY.md` §11). Alcanza para ver que cuarenta consultas salieron del mismo
+  lugar, que es la pregunta real de esa columna.
+
+Ni `device` ni la huella entran en el digest del sello. Son derivados al leer, así que mejorarlos
+cambia lo que dice la pantalla y no puede cambiar lo que la cadena demuestra.
+
+## Cotejar una dirección
+
+Una huella sola no responde la pregunta que la municipalidad va a hacer de verdad: *la denuncia dice
+que salió de esta dirección, ¿fue así?* Y sin respuesta, la presión natural es empezar a guardar
+direcciones en claro, con lo que la bitácora se vuelve una lista de dónde estuvo cada persona.
+
+```
+POST /api/v1/admin/audit-events/ip-fingerprint
+{ "ip": "190.113.24.7" }
+→ { "fingerprint": "19f11378f039", "ipHash": "…64 hex…", "matches": 2 }
+```
+
+La dirección va **en el cuerpo**. Cambia nada y por método debería ser GET; una dirección es dato
+personal y el dato personal no viaja en una URL, donde queda escrito en cada log de proxy, en el
+historial y en el `Referer`. La regla de privacidad gana sobre el verbo. La dirección no se guarda en
+ninguna parte —tampoco en la entrada `AUDIT_ORIGIN_PROBED` que el propio cotejo escribe, que registra
+la huella y el número de coincidencias.
+
+Sólo confirma o descarta una dirección que el consultante **ya traía**; nunca produce una. Es la
+misma forma que la búsqueda exacta de personas de la v0.26, con el mismo modo de fallo —inofensiva
+una vez, herramienta de enumeración si se corre diez mil veces—, así que se acota con el mismo techo
+por persona y contando su propia acción, de modo que quien está contratando gente no se quede sin
+poder leer la traza.
+
+El listado acepta `ipHash` (64 hexadecimales) como filtro. Ese sí puede ir en la URL: está
+apimentado por instalación, es irreversible y no identifica a nadie.
+
+## Filtros
+
+`GET /admin/audit-events` ya aceptaba `actor`, `action`, `from` y `to`; la pantalla sólo usaba
+`action`. Ahora usa las cuatro y `ipHash`. El nombre del actor es un botón: **ver sólo lo de esta
+persona**, que es como se pregunta de verdad, en vez de teclear un UUID.
+
+Las fechas se escriben como día y el API recibe instantes, con la ventana semiabierta de siempre
+(`>= desde`, `< hasta`), así que el día de cierre se incluye pidiendo el comienzo del siguiente: un
+«hasta el 9» que dejara fuera lo del 9 sería una mentira silenciosa. Todo filtro que no se tecleó en
+una casilla —la persona, la conexión— se dice en voz alta con su forma de quitarlo: una pantalla que
+en silencio muestra los actos de una sola persona es como alguien concluye que la bitácora está
+vacía.
+
+## Simulador
+
+El listado del simulador **filtra de verdad** (actor, acción, huella y rango) y resuelve los nombres
+igual que el backend. Uno que devolviera siempre la lista entera dejaría pasar exactamente el error
+que no se nota hasta producción: la pantalla se ve bien, el filtro no filtra, y nadie se entera hasta
+que un auditor pregunta por una persona. Las semillas incluyen dos actos desde la misma conexión y
+uno desde otra, para que la huella se vea haciendo su trabajo, y una entrada sin persona.

@@ -186,11 +186,78 @@ export const mockUsersById = new Map<string, MockUserRecord>();
  * tener algo que enseñar la primera vez que se abre —y porque las tres formas que importan son
  * distintas: un cambio de números, uno de rol y uno con identificador personal enmascarado.
  */
-export const mockAuditEvents: AuditEvent[] = [
+/**
+ * Una entrada de la bitácora tal como la guarda el simulador.
+ *
+ * `ipHash` no viaja nunca al cliente —el API sólo devuelve la huella— pero el simulador tiene que
+ * guardarlo para que el cotejo de direcciones sea de verdad: uno que comparara la huella dejaría
+ * pasar justo el error que el cotejo existe para no cometer.
+ */
+export interface MockAuditEvent extends AuditEvent {
+  ipHash?: string | null;
+}
+
+/**
+ * Huella de una dirección, con la misma forma que la del backend (64 hexadecimales) pero sin
+ * pretender ser criptográfica: esto es el simulador, y lo único que tiene que cumplir es que la
+ * misma dirección dé siempre el mismo valor y direcciones distintas den valores distintos.
+ */
+export function mockIpHash(ip: string): string {
+  let a = 0x811c9dc5;
+  let b = 0x01000193;
+  for (const char of ip.trim()) {
+    a = Math.imul(a ^ char.charCodeAt(0), 0x01000193) >>> 0;
+    b = Math.imul(b + char.charCodeAt(0), 0x85ebca6b) >>> 0;
+  }
+  let out = '';
+  for (let i = 0; i < 8; i += 1) {
+    a = Math.imul(a ^ (b + i), 0x27d4eb2d) >>> 0;
+    out += a.toString(16).padStart(8, '0');
+  }
+  return out.slice(0, 64);
+}
+
+const DEMO_DESKTOP =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36';
+const DEMO_HANDHELD =
+  'Mozilla/5.0 (Linux; Android 14; SM-A546E) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Mobile Safari/537.36';
+const DEMO_OFFICE_IP = '190.113.24.7';
+const DEMO_FIELD_IP = '201.203.88.140';
+
+/**
+ * La bitácora del simulador.
+ *
+ * Se siembran cuatro entradas y cada una enseña una cosa distinta, porque la pantalla tiene que
+ * tener algo real que mostrar la primera vez que se abre:
+ *
+ * - un cambio de números, con el antes y el después (v0.32);
+ * - un cambio de rol hecho desde un teléfono en la calle, o sea desde otra conexión;
+ * - un identificador personal enmascarado, desde la misma conexión de la primera —que es lo que
+ *   hace visible para qué sirve la huella;
+ * - y una entrada sin persona: la purga de retención, que la escribe la plataforma sola.
+ */
+export const mockAuditEvents: MockAuditEvent[] = [
+  {
+    id: 'audit-seed-4',
+    tenantId: 'tenant-sanjose',
+    actorUserId: null,
+    actorPortal: 'admin',
+    action: 'RETENTION_PURGE_RAN',
+    resourceType: 'retention',
+    resourceId: 'enforcement_checks',
+    occurredAt: new Date(Date.now() - 3600_000).toISOString(),
+    metadata: { removed: '412' },
+    changes: [],
+    // Sin persona y sin origen: es la plataforma actuando sobre su propia política de retención.
+    ipHash: null,
+    ipFingerprint: null,
+    device: null,
+    userAgent: null,
+  },
   {
     id: 'audit-seed-3',
     tenantId: 'tenant-sanjose',
-    actorUserId: 'user-admin-sanjose',
+    actorUserId: 'user-admin-1',
     actorPortal: 'admin',
     action: 'PARKING_ZONE_RULES_UPDATED',
     resourceType: 'parking-zone',
@@ -202,11 +269,13 @@ export const mockAuditEvents: AuditEvent[] = [
       { field: 'freeMinutes', oldValue: '10', newValue: '15', masked: false },
       { field: 'ownSchedule', oldValue: 'false', newValue: 'true', masked: false },
     ],
+    ipHash: mockIpHash(DEMO_OFFICE_IP),
+    userAgent: DEMO_DESKTOP,
   },
   {
     id: 'audit-seed-2',
     tenantId: 'tenant-sanjose',
-    actorUserId: 'user-admin-sanjose',
+    actorUserId: 'user-inspector-1',
     actorPortal: 'admin',
     action: 'MEMBERSHIP_ROLE_CHANGED',
     resourceType: 'membership',
@@ -215,11 +284,13 @@ export const mockAuditEvents: AuditEvent[] = [
     metadata: { userId: 'user-inspector-1' },
     // El cambio que más se audita en una plataforma de gobierno: quién le dio a quién qué poderes.
     changes: [{ field: 'role', oldValue: 'INSPECTOR', newValue: 'INSPECTOR_LEAD', masked: false }],
+    ipHash: mockIpHash(DEMO_FIELD_IP),
+    userAgent: DEMO_HANDHELD,
   },
   {
     id: 'audit-seed-1',
     tenantId: 'tenant-sanjose',
-    actorUserId: 'user-admin-sanjose',
+    actorUserId: 'user-admin-1',
     actorPortal: 'admin',
     action: 'USER_UPDATED',
     resourceType: 'user',
@@ -230,6 +301,9 @@ export const mockAuditEvents: AuditEvent[] = [
     changes: [
       { field: 'email', oldValue: 'j***@gmail.com', newValue: 'j***@msj.go.cr', masked: true },
     ],
+    // La misma conexión que la entrada de arriba: dos actos distintos, un solo lugar.
+    ipHash: mockIpHash(DEMO_OFFICE_IP),
+    userAgent: DEMO_DESKTOP,
   },
 ];
 
@@ -379,6 +453,11 @@ export function nextMockUserId(): string {
 
 export function recordAuditEvent(event: Omit<AuditEvent, 'id' | 'occurredAt'>): void {
   mockAuditEvents.unshift({
+    // El origen se estampa aquí, igual que el backend lo estampa en AuditRecorder: quien registra
+    // un acto sólo dice *qué* pasó, nunca desde dónde. En el simulador es siempre la misma
+    // conexión, que es lo que de verdad ocurre cuando alguien está usando la demostración.
+    ipHash: mockIpHash(DEMO_OFFICE_IP),
+    userAgent: DEMO_DESKTOP,
     ...event,
     id: `audit-${mockAuditEvents.length + 1}`,
     occurredAt: new Date().toISOString(),

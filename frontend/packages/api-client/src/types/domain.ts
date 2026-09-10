@@ -576,12 +576,40 @@ export interface RejectMembershipRequest {
 export interface AuditEvent {
   id: string;
   tenantId: string | null;
-  actorUserId: string;
+  /**
+   * Null when nobody performed the act: the retention purge and the sealing job write entries with
+   * no actor at all. The screen says "Sistema" for that, which is a different statement from an
+   * empty cell.
+   */
+  actorUserId: string | null;
+  /**
+   * The actor's name as it stands today (v0.33), or null when there is nobody to name — a scheduled
+   * job, or a caller who was still anonymous, such as a failed sign-in.
+   *
+   * Resolved on every read rather than copied into the entry when it was written: the trail cannot
+   * be updated, so a name stored in it could never be corrected. Absent from servers older
+   * than v0.33.
+   */
+  actorName?: string | null;
+  /** False when that account is deactivated or blocked. Shown rather than hidden: it is often the point. */
+  actorActive?: boolean | null;
   actorPortal: Portal;
   action: string;
   resourceType: string;
   resourceId: string;
   occurredAt: string;
+  /**
+   * Where the act came from (v0.33). Both null for a scheduled job — which is what "cuando aplique"
+   * means in practice.
+   *
+   * `ipFingerprint` is the readable head of a hash and never an address: the platform does not store
+   * addresses. Two entries from one connection carry the same fingerprint, which is the whole use.
+   */
+  ipFingerprint?: string | null;
+  /** `Chrome 128 · Android`, derived from the header. Null when the header is a shape we don't parse. */
+  device?: string | null;
+  /** The header as stored. It is the evidence; `device` is only a rendering of it. */
+  userAgent?: string | null;
   metadata: Record<string, unknown>;
   /**
    * What changed, field by field (v0.32), and only the fields that changed.
@@ -648,9 +676,39 @@ export interface AuditSeal {
 export type AuditEventsQuery = {
   actor?: string;
   action?: string;
+  /**
+   * Restricts to the entries that came from one connection (v0.33).
+   *
+   * The hash and never an address — it comes from `checkOrigin`, which is the only call that ever
+   * handles one, and handles it in a request body.
+   */
+  ipHash?: string;
   from?: string;
   to?: string;
 };
+
+/**
+ * An address to check against the trail (v0.33).
+ *
+ * The address travels in the body and never in the URL: it is personal data, and a query string is
+ * written to every proxy log and browser history on the way.
+ */
+export interface AuditOriginProbeRequest {
+  ip: string;
+}
+
+/**
+ * What that address looks like in this trail.
+ *
+ * `matches` of zero is a real and useful answer — it is how somebody rules an address out without
+ * reading a single entry.
+ */
+export interface AuditOriginProbe {
+  fingerprint: string;
+  /** Safe to put in a filter: peppered per deployment, and not reversible into an address. */
+  ipHash: string;
+  matches: number;
+}
 
 export type RegisteredUsersGroupBy = 'tenant' | 'country' | 'portal' | 'month';
 

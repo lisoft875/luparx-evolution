@@ -1,5 +1,6 @@
 package cr.luparx.app.web;
 
+import cr.luparx.app.audit.AuditActorResolver;
 import cr.luparx.app.audit.AuditEventEntity;
 import cr.luparx.app.audit.AuditSeal;
 import cr.luparx.app.audit.AuditSealService;
@@ -8,6 +9,8 @@ import cr.luparx.app.web.dto.AuthDtos;
 import cr.luparx.app.web.dto.CatalogDtos;
 import cr.luparx.app.web.dto.PlatformDtos;
 import cr.luparx.app.web.dto.SessionDtos;
+import cr.luparx.core.audit.DeviceSummary;
+import cr.luparx.core.audit.IpFingerprint;
 import cr.luparx.core.i18n.CountryCodes;
 import cr.luparx.core.id.UserId;
 import cr.luparx.geo.entity.AdministrativeDivision;
@@ -270,16 +273,32 @@ public class ResponseMapper {
 
     // --- audit and tenants -----------------------------------------------------------------------
 
-    public AdminDtos.AuditEventResponse toAuditEvent(AuditEventEntity event) {
+    /**
+     * One audit entry, with the person and the origin filled in (CONTRACT.md v0.33).
+     *
+     * <p>{@code actors} is the map the caller resolved for the whole page. Passing it in rather than
+     * looking the person up here is what keeps this an N+1-free screen: a mapper that could query
+     * would eventually query once per row, and this is the one table that grows without limit.</p>
+     */
+    public AdminDtos.AuditEventResponse toAuditEvent(AuditEventEntity event,
+                                                     Map<UUID, AuditActorResolver.Actor> actors) {
+        AuditActorResolver.Actor actor = event.getActorUserId() == null
+                ? null
+                : actors.get(event.getActorUserId());
         return new AdminDtos.AuditEventResponse(
                 event.getId(),
                 event.getTenantId(),
                 event.getActorUserId(),
+                actor == null ? null : actor.name(),
+                actor == null ? null : Boolean.valueOf(actor.active()),
                 event.getActorPortal(),
                 event.getAction(),
                 event.getResourceType(),
                 event.getResourceId(),
                 event.getOccurredAt(),
+                IpFingerprint.of(event.getIpHash()),
+                DeviceSummary.of(event.getUserAgent()),
+                event.getUserAgent(),
                 event.getMetadata(),
                 event.getChanges().stream()
                         .map(change -> new AdminDtos.AuditChangeDto(change.field(), change.oldValue(),

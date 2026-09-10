@@ -325,11 +325,33 @@ public final class AdminDtos {
             UUID id,
             UUID tenantId,
             UUID actorUserId,
+            /**
+             * The actor's name as it stands today, or null when nobody could be resolved — a
+             * scheduled job, or an anonymous caller such as a failed sign-in (v0.33). The client
+             * says "Sistema" for the first and shows the short id for the second; the backend does
+             * not put Spanish in a field.
+             */
+            String actorName,
+            /** False when that person's account is deactivated or blocked. Shown, not hidden. */
+            Boolean actorActive,
             Portal actorPortal,
             String action,
             String resourceType,
             String resourceId,
             Instant occurredAt,
+            /**
+             * Where the act came from (v0.33), and both of these are null for a scheduled job —
+             * which is what "cuando aplique" means in practice.
+             *
+             * <p>{@code ipFingerprint} is the readable head of the stored hash, never an address:
+             * the platform does not keep addresses. Two entries from one connection carry the same
+             * fingerprint, which is what makes the column worth having.</p>
+             */
+            String ipFingerprint,
+            /** {@code Chrome 128 · Android}, derived from the header at read time. */
+            String device,
+            /** The header as stored. It is the evidence; {@code device} is only a rendering of it. */
+            String userAgent,
             Map<String, Object> metadata,
             /**
              * What changed, field by field (v0.32), and only the fields that changed.
@@ -369,6 +391,29 @@ public final class AdminDtos {
 
     public record AuditSealDto(long seq, Instant coversFrom, Instant coversTo, int rowCount, String digest,
                                Instant createdAt) {
+    }
+
+    /**
+     * An address somebody wants to check against the trail (v0.33).
+     *
+     * <p>A POST with a body and not a query parameter, and that is a rule rather than a preference:
+     * an address is personal data and personal data never travels in a URL, where it would be
+     * written to every proxy log, every browser history and every referrer on the way
+     * (SECURITY.md §11). The reply carries no address either — only the hash it produced.</p>
+     */
+    public record AuditIpProbeRequest(@NotBlank @Size(max = 64) String ip) {
+    }
+
+    /**
+     * What that address looks like in this trail.
+     *
+     * @param fingerprint what the screen shows next to each entry, so a person can compare by eye
+     * @param ipHash      the full value, which is what the filter compares. Safe in a URL: it is
+     *                    peppered per deployment and cannot be turned back into an address
+     * @param matches     how many entries in the requested window came from it. Zero is a real and
+     *                    useful answer — it is how somebody rules an address out
+     */
+    public record AuditIpProbeResponse(String fingerprint, String ipHash, long matches) {
     }
 
     public record RegisteredUsersRow(String group, long count) {

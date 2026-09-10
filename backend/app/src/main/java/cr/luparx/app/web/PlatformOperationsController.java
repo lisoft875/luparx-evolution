@@ -47,15 +47,18 @@ public class PlatformOperationsController {
     private final AuditEventRepository auditEventRepository;
     private final TenantReportService tenantReportService;
     private final UserReportService userReportService;
+    private final cr.luparx.app.audit.AuditActorResolver actorResolver;
     private final ResponseMapper mapper;
 
     public PlatformOperationsController(AuditEventRepository auditEventRepository,
                                         TenantReportService tenantReportService,
                                         UserReportService userReportService,
+                                        cr.luparx.app.audit.AuditActorResolver actorResolver,
                                         ResponseMapper mapper) {
         this.auditEventRepository = auditEventRepository;
         this.tenantReportService = tenantReportService;
         this.userReportService = userReportService;
+        this.actorResolver = actorResolver;
         this.mapper = mapper;
     }
 
@@ -76,7 +79,12 @@ public class PlatformOperationsController {
         Pageable pageable = org.springframework.data.domain.PageRequest.of(request.page(), request.size());
         Page<AuditEventEntity> result = auditEventRepository.searchGlobal(tenantId, actor, action, start, end,
                 pageable);
-        return PageResponse.of(result.getContent().stream().map(mapper::toAuditEvent).toList(),
+        // The platform view names its actors too (v0.33). It reads across municipalities, so it is
+        // the one screen where "who" is the whole question — an operator's own crossings are in here.
+        java.util.Map<UUID, cr.luparx.app.audit.AuditActorResolver.Actor> actors =
+                actorResolver.resolve(result.getContent());
+        return PageResponse.of(
+                result.getContent().stream().map(event -> mapper.toAuditEvent(event, actors)).toList(),
                 request.page(), request.size(), result.getTotalElements());
     }
 

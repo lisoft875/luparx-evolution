@@ -52,17 +52,26 @@ public class AdminOperationsController {
     private final TenantReportService tenantReportService;
     private final AuditRecorder auditRecorder;
     private final cr.luparx.app.audit.AuditSealService sealService;
+    private final cr.luparx.app.audit.AuditActorResolver actorResolver;
+    private final cr.luparx.app.security.DirectoryLookupRateLimiter probeRateLimiter;
+    private final cr.luparx.app.config.SecurityProperties securityProperties;
     private final ResponseMapper mapper;
 
     public AdminOperationsController(AuditEventRepository auditEventRepository,
                                      TenantReportService tenantReportService,
                                      AuditRecorder auditRecorder,
                                      cr.luparx.app.audit.AuditSealService sealService,
+                                     cr.luparx.app.audit.AuditActorResolver actorResolver,
+                                     cr.luparx.app.security.DirectoryLookupRateLimiter probeRateLimiter,
+                                     cr.luparx.app.config.SecurityProperties securityProperties,
                                      ResponseMapper mapper) {
         this.auditEventRepository = auditEventRepository;
         this.tenantReportService = tenantReportService;
         this.auditRecorder = auditRecorder;
         this.sealService = sealService;
+        this.actorResolver = actorResolver;
+        this.probeRateLimiter = probeRateLimiter;
+        this.securityProperties = securityProperties;
         this.mapper = mapper;
     }
 
@@ -72,6 +81,7 @@ public class AdminOperationsController {
     public PageResponse<AdminDtos.AuditEventResponse> auditEvents(
             @RequestParam(required = false) UUID actor,
             @RequestParam(required = false) String action,
+            @RequestParam(required = false) String ipHash,
             @RequestParam(required = false) Instant from,
             @RequestParam(required = false) Instant to,
             @RequestParam(required = false) Integer page,
@@ -82,9 +92,71 @@ public class AdminOperationsController {
         Instant end = to == null ? Instant.now() : to;
         Pageable pageable = org.springframework.data.domain.PageRequest.of(request.page(), request.size());
         Page<cr.luparx.app.audit.AuditEventEntity> result = auditEventRepository.searchInTenant(
-                tenantId.value(), actor, action, start, end, pageable);
-        return PageResponse.of(result.getContent().stream().map(mapper::toAuditEvent).toList(),
+                tenantId.value(), actor, action, blankToNull(ipHash), start, end, pageable);
+        // One lookup for the whole page, before the mapping loop rather than inside it (v0.33).
+        Map<UUID, cr.luparx.app.audit.AuditActorResolver.Actor> actors =
+                actorResolver.resolve(result.getContent());
+        return PageResponse.of(
+                result.getContent().stream().map(event -> mapper.toAuditEvent(event, actors)).toList(),
                 request.page(), request.size(), result.getTotalElements());
+    }
+
+    /**
+     * Turns an address into the fingerprint this trail would have written for it (CONTRACT.md v0.33).
+     *
+     * <h2>Why this exists</h2>
+     *
+     * <p>The platform stores hashed addresses and shows fingerprints, which is right and which makes
+     * the column useless on its own the day a municipality has an actual question: <em>this complaint
+     * says the lookups came from this address — was it?</em> Without an answer, the pressure is to
+     * start storing raw addresses, and the trail becomes a list of where people were. This answers it
+     * without the platform ever keeping one: the caller supplies the address they already suspect,
+     * the platform hashes it with the same pepper, and says how many entries match.</p>
+     *
+     * <h2>What it gives away</h2>
+     *
+     * <p>Only what the caller already had. It confirms or denies an address the asker brought with
+     * them and can never produce one, which is the same shape as the exact-match person lookup of
+     * v0.26 — and it is bounded the same way and for the same reason, by the same per-actor ceiling,
+     * so that it cannot be fed a list. The probe is itself audited, with the fingerprint and never the
+     * address, so "who has been checking addresses" is as answerable as everything else here.</p>
+     *
+     * <p>A POST because an address is personal data and personal data does not go in a URL
+     * (SECURITY.md §11). It changes nothing, which would ordinarily make it a GET; the privacy rule
+     * wins over the verb.</p>
+     */
+    @PostMapping("/audit-events/ip-fingerprint")
+    @PreAuthorize("hasAuthority('PERM_AUDIT_READ')")
+    @Operation(summary = "Check an address against this municipality's trail without storing it")
+    public AdminDtos.AuditIpProbeResponse auditIpFingerprint(
+            @Valid @RequestBody AdminDtos.AuditIpProbeRequest body,
+            @RequestParam(required = false) Instant from,
+            @RequestParam(required = false) Instant to) {
+        TenantId tenantId = TenantContextHolder.requireTenantId();
+        probeRateLimiter.checkAllowed(TenantContextHolder.current()
+                        .map(cr.luparx.core.tenant.TenantContext::userId).orElse(null),
+                AuditAction.AUDIT_ORIGIN_PROBED, "error.audit.originProbe.rateLimited");
+
+        String address = body.ip().trim();
+        if (address.isEmpty()) {
+            throw new ValidationException("ip", ErrorCode.VALIDATION_FAILED, "error.audit.originProbe.address");
+        }
+        String hash = cr.luparx.identity.service.Hashing.ipHash(address, securityProperties.ipHashPepper());
+        Instant start = from == null ? Instant.now().minus(DEFAULT_REPORT_WINDOW_DAYS, ChronoUnit.DAYS) : from;
+        Instant end = to == null ? Instant.now() : to;
+        long matches = auditEventRepository.countFromOrigin(tenantId.value(), hash, start, end);
+
+        // The fingerprint, never the address. An audit entry that recorded the address would defeat
+        // the entire design of the column it is about.
+        auditRecorder.record(AuditAction.AUDIT_ORIGIN_PROBED, "audit", null,
+                Map.of("fingerprint", String.valueOf(cr.luparx.core.audit.IpFingerprint.of(hash)),
+                        "matches", String.valueOf(matches)));
+        return new AdminDtos.AuditIpProbeResponse(cr.luparx.core.audit.IpFingerprint.of(hash), hash, matches);
+    }
+
+    /** A filter that was typed and then cleared is no filter; "" must not mean "entries with no origin". */
+    private static String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 
     /**

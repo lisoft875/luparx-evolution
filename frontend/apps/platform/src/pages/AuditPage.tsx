@@ -57,9 +57,27 @@ export function AuditPage(): React.JSX.Element {
         rows={data?.items ?? []}
         rowKey={(row) => row.id}
         columns={[
-          { key: 'actor', header: t('admin.audit.column.actor'), render: (row) => row.actorUserId },
+          {
+            key: 'actor',
+            header: t('admin.audit.column.actor'),
+            // Named here too (v0.33). This is the screen that reads across municipalities, so "who"
+            // is the whole question: an operator's own crossings into a council's data are in here.
+            render: (row) =>
+              row.actorUserId
+                ? (row.actorName ?? row.actorUserId.slice(0, 8))
+                : t('admin.audit.actor.system'),
+          },
           { key: 'action', header: t('admin.audit.column.action'), render: (row) => row.action },
-          { key: 'resource', header: t('admin.audit.column.resource'), render: (row) => `${row.resourceType}/${row.resourceId}` },
+          {
+            key: 'resource',
+            header: t('admin.audit.column.resource'),
+            render: (row) => (row.resourceId ? `${row.resourceType}/${row.resourceId}` : row.resourceType),
+          },
+          {
+            key: 'origin',
+            header: t('admin.audit.column.origin'),
+            render: (row) => row.device ?? t('admin.audit.origin.system'),
+          },
           { key: 'tenant', header: t('platform.audit.filter.tenant'), render: (row) => row.tenantId ?? '—' },
           { key: 'occurredAt', header: t('admin.audit.column.occurredAt'), render: (row) => formatDateTime(row.occurredAt, locale) },
         ]}
