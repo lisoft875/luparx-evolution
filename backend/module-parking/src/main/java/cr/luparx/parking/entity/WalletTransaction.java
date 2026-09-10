@@ -74,6 +74,19 @@ public class WalletTransaction {
     @Column(name = "external_reference", length = 120)
     private String externalReference;
 
+    /**
+     * The payment that produced this movement, when money came in from outside (V33_0 — v0.35).
+     *
+     * <p>Nullable for ever, and not for compatibility: a charge for parking has <b>no</b> payment.
+     * It spends balance that was already there, and requiring a payment on it would mean inventing
+     * one to satisfy a column — which is how a ledger stops being evidence.</p>
+     *
+     * <p>Written by the composition root, which opens the payment and credits the wallet in one
+     * transaction. This module does not know what a gateway is and should not learn.</p>
+     */
+    @Column(name = "payment_id")
+    private UUID paymentId;
+
     /** The operator who keyed it, when a person did. Null for anything the citizen did themselves. */
     @Column(name = "created_by")
     private UUID createdBy;
@@ -116,6 +129,15 @@ public class WalletTransaction {
 
     public WalletTopupSource getSource() {
         return source;
+    }
+
+    public UUID getPaymentId() {
+        return paymentId;
+    }
+
+    /** Set once, when the payment that funded this movement is known. */
+    public void linkPayment(UUID paymentId) {
+        this.paymentId = paymentId;
     }
 
     public String getExternalReference() {

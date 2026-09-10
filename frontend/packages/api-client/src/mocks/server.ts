@@ -2286,6 +2286,107 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
   // plate verdicts with the bay as the discriminator, a catalogue, and citations that are
   // append-only and idempotent by `deviceCitationId`. Everything a screen can reach is here; the
   // parts a screen never sees (storage of the bytes, the SHA-256, the numbering lock) are not.
+  // ---- Conciliación de pagos (CONTRACT.md v0.35) -----------------------------------------
+  if (segments[2] === 'admin' && segments[3] === 'billing') {
+    // La municipalidad del token, como en toda rama de administración: sin esto la conciliación de
+    // un municipio mostraría los pagos de otro, que en dinero no es una fuga de información sino
+    // una fuga de ingresos.
+    const billingAuth = new Headers(init?.headers).get('Authorization');
+    const billingClaims = billingAuth ? decodeMockClaims(billingAuth) : null;
+    if (!billingClaims) return problem(401, 'UNAUTHORIZED', 'Missing or invalid session');
+    const tenantId = billingClaims.tid ?? '';
+    const money = (amountMinor: number) => ({ amountMinor, currencyCode: 'CRC' });
+
+    if (segments[4] === 'totals' && method === 'GET') {
+      let capturedGross = 0;
+      let capturedNet = 0;
+      let settledGross = 0;
+      let unsettledGross = 0;
+      let capturedCount = 0;
+      let failedCount = 0;
+      for (const payment of mockPayments.filter((p) => p.tenantId === tenantId)) {
+        if (payment.status === 'FAILED' || payment.status === 'CANCELLED') {
+          failedCount += 1;
+          continue;
+        }
+        if (payment.status !== 'CAPTURED') continue;
+        capturedCount += 1;
+        capturedGross += payment.grossMinor;
+        capturedNet += payment.netMinor ?? payment.grossMinor;
+        if (payment.reconciliationStatus === 'MATCHED' || payment.reconciliationStatus === 'AMOUNT_MISMATCH') {
+          settledGross += payment.grossMinor;
+        } else if (payment.reconciliationStatus !== 'NOT_APPLICABLE') {
+          // NOT_APPLICABLE no es ni confirmado ni pendiente: nadie va a reportar el efectivo de
+          // caja en un corte, y contarlo como pendiente dejaría la cifra que importa —lo que un
+          // proveedor todavía debe— mal para siempre por el tamaño del día de la caja.
+          unsettledGross += payment.grossMinor;
+        }
+      }
+      const now = new Date();
+      return json({
+        capturedGross: money(capturedGross),
+        capturedNet: money(capturedNet),
+        settledGross: money(settledGross),
+        unsettledGross: money(unsettledGross),
+        capturedCount,
+        failedCount,
+        from: new Date(now.getTime() - 30 * 86_400_000).toISOString(),
+        to: now.toISOString(),
+      });
+    }
+
+    if (segments[4] === 'payments' && segments[5] === 'unsettled' && method === 'GET') {
+      return json(
+        mockPayments
+          .filter(
+            (p) =>
+              p.tenantId === tenantId &&
+              p.status === 'CAPTURED' &&
+              (p.reconciliationStatus === 'PENDING' || p.reconciliationStatus === 'MISSING_IN_SETTLEMENT'),
+          )
+          .map(toWirePayment),
+      );
+    }
+
+    if (segments[4] === 'payments' && method === 'GET') {
+      const page = Number(url.searchParams.get('page') ?? '0');
+      const size = Number(url.searchParams.get('size') ?? '20');
+      const rows = mockPayments
+        .filter((p) => p.tenantId === tenantId)
+        .sort((a, b) => b.requestedAt.localeCompare(a.requestedAt));
+      const paged = paginate(rows, page, size);
+      return json({ ...paged, items: paged.items.map(toWirePayment) });
+    }
+
+    if (segments[4] === 'settlements' && segments[5] && segments[6] === 'findings' && method === 'GET') {
+      return json(
+        mockSettlementLines
+          .filter((l) => l.settlementId === segments[5] && l.matchStatus !== 'MATCHED')
+          .map(toWireSettlementLine),
+      );
+    }
+
+    if (segments[4] === 'settlements' && method === 'GET') {
+      return json(
+        mockSettlements
+          .filter((sett) => sett.tenantId === tenantId)
+          .sort((a, b) => b.periodEnd.localeCompare(a.periodEnd))
+          .map(toWireSettlement),
+      );
+    }
+
+    if (segments[4] === 'settlements' && method === 'POST') {
+      const payload = await readBody<MockImportSettlement>(init);
+      if (mockSettlements.some((sett) => sett.tenantId === tenantId
+          && sett.provider === payload.provider
+          && sett.externalReference === payload.externalReference)) {
+        return problem(409, 'SETTLEMENT_ALREADY_IMPORTED', 'error.settlement.alreadyImported');
+      }
+      return json(reconcileMockSettlement(tenantId, payload), 200);
+    }
+  }
+
+
   if (segments[2] === 'inspector' || (segments[2] === 'admin' && segments[3] === 'enforcement')) {
     const authHeader = new Headers(init?.headers).get('Authorization');
     const claims = authHeader ? decodeMockClaims(authHeader) : null;
@@ -3816,6 +3917,328 @@ interface MockInfractionType {
   requiresPhoto: boolean;
   allowsAppeal: boolean;
   active: boolean;
+}
+
+// ---- Conciliación de pagos (CONTRACT.md v0.35) ------------------------------------------------
+
+interface MockPayment {
+  id: string;
+  tenantId: string;
+  userId: string | null;
+  method: string;
+  provider: string | null;
+  providerReference: string | null;
+  status: string;
+  purpose: string;
+  grossMinor: number;
+  feeMinor: number | null;
+  netMinor: number | null;
+  reconciliationStatus: string;
+  requestedAt: string;
+  confirmedAt: string | null;
+  settledAt: string | null;
+  failureCode: string | null;
+  failureReason: string | null;
+  targetType: string | null;
+  targetId: string | null;
+}
+
+interface MockSettlement {
+  id: string;
+  tenantId: string;
+  provider: string;
+  externalReference: string;
+  periodStart: string;
+  periodEnd: string;
+  declaredGrossMinor: number;
+  declaredFeeMinor: number;
+  declaredNetMinor: number;
+  depositExpectedOn: string | null;
+  depositReference: string | null;
+  status: string;
+  importedAt: string;
+  reconciledAt: string | null;
+}
+
+interface MockSettlementLine {
+  id: string;
+  settlementId: string;
+  providerReference: string;
+  grossMinor: number;
+  feeMinor: number;
+  netMinor: number;
+  occurredAt: string | null;
+  paymentId: string | null;
+  matchStatus: string;
+}
+
+interface MockImportSettlement {
+  provider: string;
+  externalReference: string;
+  periodStart: string;
+  periodEnd: string;
+  declaredGrossMinor: number;
+  declaredFeeMinor: number;
+  declaredNetMinor: number;
+  currencyCode: string;
+  depositExpectedOn?: string;
+  depositReference?: string;
+  lines: {
+    providerReference: string;
+    grossAmountMinor: number;
+    feeAmountMinor: number;
+    netAmountMinor: number;
+    occurredAt?: string;
+  }[];
+}
+
+const DAY = 86_400_000;
+
+/**
+ * Pagos sembrados.
+ *
+ * Cada uno enseña una cosa distinta, porque son los casos que sólo se ven cuando existen: dos por
+ * tarjeta que un corte va a confirmar, uno por tarjeta que el corte NO va a mencionar —la plata que
+ * la municipalidad cobró y no ha recibido—, uno de caja que nadie va a liquidar nunca, y uno
+ * fallido, que es la respuesta a «yo pagué y no me subió el saldo».
+ */
+const mockPayments: MockPayment[] = [
+  {
+    id: 'pay-1', tenantId: 'tenant-sanjose', userId: 'user-citizen-1', method: 'CARD',
+    provider: 'CITIZEN', providerReference: 'GW-88301', status: 'CAPTURED', purpose: 'WALLET_TOPUP',
+    grossMinor: 1000000, feeMinor: 29000, netMinor: 971000, reconciliationStatus: 'PENDING',
+    requestedAt: new Date(Date.now() - 6 * DAY).toISOString(),
+    confirmedAt: new Date(Date.now() - 6 * DAY).toISOString(),
+    settledAt: null, failureCode: null, failureReason: null,
+    targetType: 'WALLET_TRANSACTION', targetId: 'wtx-1',
+  },
+  {
+    id: 'pay-2', tenantId: 'tenant-sanjose', userId: 'user-citizen-1', method: 'CARD',
+    provider: 'CITIZEN', providerReference: 'GW-88414', status: 'CAPTURED', purpose: 'WALLET_TOPUP',
+    grossMinor: 500000, feeMinor: 14500, netMinor: 485500, reconciliationStatus: 'PENDING',
+    requestedAt: new Date(Date.now() - 5 * DAY).toISOString(),
+    confirmedAt: new Date(Date.now() - 5 * DAY).toISOString(),
+    settledAt: null, failureCode: null, failureReason: null,
+    targetType: 'WALLET_TRANSACTION', targetId: 'wtx-2',
+  },
+  {
+    id: 'pay-3', tenantId: 'tenant-sanjose', userId: 'user-citizen-1', method: 'CARD',
+    provider: 'CITIZEN', providerReference: 'GW-88520', status: 'CAPTURED', purpose: 'WALLET_TOPUP',
+    grossMinor: 2500000, feeMinor: 72500, netMinor: 2427500, reconciliationStatus: 'PENDING',
+    requestedAt: new Date(Date.now() - 4 * DAY).toISOString(),
+    confirmedAt: new Date(Date.now() - 4 * DAY).toISOString(),
+    settledAt: null, failureCode: null, failureReason: null,
+    targetType: 'WALLET_TRANSACTION', targetId: 'wtx-3',
+  },
+  {
+    id: 'pay-4', tenantId: 'tenant-sanjose', userId: 'user-citizen-1', method: 'COUNTER_CASH',
+    provider: 'MUNICIPAL_COUNTER', providerReference: 'CAJA-4471', status: 'CAPTURED',
+    purpose: 'WALLET_TOPUP', grossMinor: 300000, feeMinor: 0, netMinor: 300000,
+    // Nadie va a reportar el efectivo de la caja en un corte de pasarela.
+    reconciliationStatus: 'NOT_APPLICABLE',
+    requestedAt: new Date(Date.now() - 3 * DAY).toISOString(),
+    confirmedAt: new Date(Date.now() - 3 * DAY).toISOString(),
+    settledAt: null, failureCode: null, failureReason: null,
+    targetType: 'WALLET_TRANSACTION', targetId: 'wtx-4',
+  },
+  {
+    id: 'pay-5', tenantId: 'tenant-sanjose', userId: 'user-citizen-1', method: 'CARD',
+    provider: 'CITIZEN', providerReference: 'GW-88611', status: 'FAILED', purpose: 'WALLET_TOPUP',
+    grossMinor: 1500000, feeMinor: null, netMinor: null, reconciliationStatus: 'PENDING',
+    requestedAt: new Date(Date.now() - 2 * DAY).toISOString(),
+    confirmedAt: null, settledAt: null,
+    failureCode: '51', failureReason: 'Fondos insuficientes',
+    targetType: null, targetId: null,
+  },
+];
+
+const mockSettlements: MockSettlement[] = [];
+const mockSettlementLines: MockSettlementLine[] = [];
+
+function toWirePayment(payment: MockPayment): unknown {
+  const money = (amountMinor: number | null) =>
+    amountMinor == null ? null : { amountMinor, currencyCode: 'CRC' };
+  return {
+    id: payment.id,
+    method: payment.method,
+    methodLabelKey: `payment.method.${payment.method.toLowerCase()}`,
+    provider: payment.provider,
+    providerReference: payment.providerReference,
+    status: payment.status,
+    statusLabelKey: `payment.state.${payment.status.toLowerCase()}`,
+    purpose: payment.purpose,
+    gross: money(payment.grossMinor),
+    fee: money(payment.feeMinor),
+    net: money(payment.netMinor),
+    reconciliationStatus: payment.reconciliationStatus,
+    reconciliationLabelKey: `payment.reconciliation.${payment.reconciliationStatus.toLowerCase()}`,
+    requestedAt: payment.requestedAt,
+    confirmedAt: payment.confirmedAt,
+    settledAt: payment.settledAt,
+    failureCode: payment.failureCode,
+    failureReason: payment.failureReason,
+    userId: payment.userId,
+    targetType: payment.targetType,
+    targetId: payment.targetId,
+  };
+}
+
+function toWireSettlement(settlement: MockSettlement): unknown {
+  const money = (amountMinor: number) => ({ amountMinor, currencyCode: 'CRC' });
+  return {
+    id: settlement.id,
+    provider: settlement.provider,
+    externalReference: settlement.externalReference,
+    periodStart: settlement.periodStart,
+    periodEnd: settlement.periodEnd,
+    declaredGross: money(settlement.declaredGrossMinor),
+    declaredFee: money(settlement.declaredFeeMinor),
+    declaredNet: money(settlement.declaredNetMinor),
+    depositExpectedOn: settlement.depositExpectedOn,
+    depositReference: settlement.depositReference,
+    status: settlement.status,
+    statusLabelKey: `settlement.status.${settlement.status.toLowerCase()}`,
+    importedAt: settlement.importedAt,
+    reconciledAt: settlement.reconciledAt,
+  };
+}
+
+function toWireSettlementLine(line: MockSettlementLine): unknown {
+  const money = (amountMinor: number) => ({ amountMinor, currencyCode: 'CRC' });
+  return {
+    id: line.id,
+    providerReference: line.providerReference,
+    gross: money(line.grossMinor),
+    fee: money(line.feeMinor),
+    net: money(line.netMinor),
+    occurredAt: line.occurredAt,
+    paymentId: line.paymentId,
+    matchStatus: line.matchStatus,
+    matchLabelKey: `settlement.line.${line.matchStatus.toLowerCase()}`,
+  };
+}
+
+/**
+ * El cotejo, de verdad.
+ *
+ * Los cuatro hallazgos se calculan igual que en el servidor, y —lo que más importa— también se
+ * marcan los pagos que el corte NO mencionó. Un simulador que sólo mirara las líneas contestaría
+ * «¿cuadra lo que mandaron?» dejando sin preguntar «¿mandaron todo?», que es la mitad cara.
+ */
+function reconcileMockSettlement(tenantId: string, payload: MockImportSettlement): unknown {
+  const now = new Date().toISOString();
+  const settlement: MockSettlement = {
+    id: `settlement-${mockSettlements.length + 1}`,
+    tenantId,
+    provider: payload.provider,
+    externalReference: payload.externalReference,
+    periodStart: payload.periodStart,
+    periodEnd: payload.periodEnd,
+    declaredGrossMinor: payload.declaredGrossMinor,
+    declaredFeeMinor: payload.declaredFeeMinor,
+    declaredNetMinor: payload.declaredNetMinor,
+    depositExpectedOn: payload.depositExpectedOn ?? null,
+    depositReference: payload.depositReference ?? null,
+    status: 'RECONCILED',
+    importedAt: now,
+    reconciledAt: now,
+  };
+  mockSettlements.push(settlement);
+
+  const seen = new Set<string>();
+  let lineGross = 0;
+  let lineFee = 0;
+  let lineNet = 0;
+  let matched = 0;
+  let unknown = 0;
+  let mismatched = 0;
+  let duplicates = 0;
+
+  for (const line of payload.lines) {
+    lineGross += line.grossAmountMinor;
+    lineFee += line.feeAmountMinor;
+    lineNet += line.netAmountMinor;
+    const payment = mockPayments.find(
+      (p) => p.tenantId === tenantId && p.provider === payload.provider
+        && p.providerReference === line.providerReference,
+    );
+    let matchStatus: string;
+    let linked: MockPayment | undefined = payment;
+    if (seen.has(line.providerReference)) {
+      matchStatus = 'DUPLICATE';
+      duplicates += 1;
+      linked = undefined;
+    } else if (!payment) {
+      matchStatus = 'UNKNOWN_PAYMENT';
+      unknown += 1;
+    } else if (payment.grossMinor !== line.grossAmountMinor) {
+      matchStatus = 'AMOUNT_MISMATCH';
+      mismatched += 1;
+    } else {
+      matchStatus = 'MATCHED';
+      matched += 1;
+    }
+    seen.add(line.providerReference);
+
+    const stored: MockSettlementLine = {
+      id: `sline-${mockSettlementLines.length + 1}`,
+      settlementId: settlement.id,
+      providerReference: line.providerReference,
+      grossMinor: line.grossAmountMinor,
+      feeMinor: line.feeAmountMinor,
+      netMinor: line.netAmountMinor,
+      occurredAt: line.occurredAt ?? null,
+      paymentId: linked?.id ?? null,
+      matchStatus,
+    };
+    mockSettlementLines.push(stored);
+
+    if (linked) {
+      linked.reconciliationStatus = matchStatus === 'MATCHED' ? 'MATCHED' : 'AMOUNT_MISMATCH';
+      // El corte manda sobre lo que se estimó al cobrar: es la autoridad sobre lo que llegó.
+      linked.feeMinor = line.feeAmountMinor;
+      linked.netMinor = line.netAmountMinor;
+      linked.settledAt = line.occurredAt ?? now;
+    }
+  }
+
+  let missing = 0;
+  for (const payment of mockPayments) {
+    if (
+      payment.tenantId === tenantId &&
+      payment.provider === payload.provider &&
+      payment.status === 'CAPTURED' &&
+      payment.reconciliationStatus === 'PENDING' &&
+      payment.confirmedAt !== null &&
+      payment.confirmedAt >= payload.periodStart &&
+      payment.confirmedAt < payload.periodEnd
+    ) {
+      payment.reconciliationStatus = 'MISSING_IN_SETTLEMENT';
+      missing += 1;
+    }
+  }
+
+  const money = (amountMinor: number) => ({ amountMinor, currencyCode: 'CRC' });
+  const declaredTotalsDisagree =
+    lineGross !== payload.declaredGrossMinor || lineNet !== payload.declaredNetMinor;
+  return {
+    settlement: toWireSettlement(settlement),
+    lineCount: payload.lines.length,
+    matched,
+    unknownPayments: unknown,
+    amountMismatches: mismatched,
+    duplicates,
+    missingPayments: missing,
+    lineGross: money(lineGross),
+    lineFee: money(lineFee),
+    lineNet: money(lineNet),
+    declaredTotalsDisagree,
+    hasFindings:
+      unknown > 0 || mismatched > 0 || duplicates > 0 || missing > 0 || declaredTotalsDisagree,
+    findings: mockSettlementLines
+      .filter((l) => l.settlementId === settlement.id && l.matchStatus !== 'MATCHED')
+      .map(toWireSettlementLine),
+  };
 }
 
 const mockCitations: MockCitationRecord[] = [

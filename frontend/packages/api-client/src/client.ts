@@ -33,6 +33,18 @@ import {
   type WirePlateStatus,
 } from './wireEnforcement';
 import {
+  toBillingTotals,
+  toPayment as toBillingPayment,
+  toReconciliation,
+  toSettlement as toBillingSettlement,
+  toSettlementLine,
+  type WireBillingTotals,
+  type WirePayment,
+  type WireReconciliation,
+  type WireSettlement,
+  type WireSettlementLine,
+} from './wireBilling';
+import {
   withResolvedMeLogos,
   withResolvedMembershipLogo,
   withResolvedSwitchTenantLogo,
@@ -94,6 +106,13 @@ import type {
   AuditEventsQuery,
   AuditChain,
   AuditOriginProbe,
+  BillingPaymentsQuery,
+  BillingTotals,
+  ImportSettlementRequest,
+  Payment,
+  Reconciliation,
+  Settlement,
+  SettlementLine,
   CitationIngestRequest,
   CitationIngestResult,
   ExternalInfractionMapping,
@@ -525,6 +544,60 @@ export class ApiClient {
      */
     checkOrigin: (payload: AuditOriginProbeRequest): Promise<AuditOriginProbe> =>
       this.http.request('POST', '/api/v1/admin/audit-events/ip-fingerprint', { body: payload }),
+  };
+
+  /**
+   * What was charged, what the provider confirmed, and what is still owed (v0.35).
+   *
+   * The chain the checklist asks for — stay → payment → movement → settlement — is readable from
+   * here in both directions: a payment says what it was applied to, and a movement says which
+   * payment funded it.
+   */
+  readonly adminBilling = {
+    totals: async (query: { from?: string; to?: string } = {}): Promise<BillingTotals> =>
+      toBillingTotals(
+        await this.http.request<WireBillingTotals>('GET', '/api/v1/admin/billing/totals', { query }),
+      ),
+    payments: async (query: BillingPaymentsQuery & PageParams = {}): Promise<PagedResponse<Payment>> => {
+      const page = await this.http.request<PagedResponse<WirePayment>>(
+        'GET',
+        '/api/v1/admin/billing/payments',
+        { query },
+      );
+      return { ...page, items: (page.items ?? []).map(toBillingPayment) };
+    },
+    /** Captured and unconfirmed: the list worth opening every week. */
+    unsettled: async (query: { from?: string; to?: string } = {}): Promise<Payment[]> =>
+      (
+        await this.http.request<WirePayment[]>('GET', '/api/v1/admin/billing/payments/unsettled', { query })
+      ).map(toBillingPayment),
+    settlements: async (limit = 20): Promise<Settlement[]> =>
+      (
+        await this.http.request<WireSettlement[]>('GET', '/api/v1/admin/billing/settlements', {
+          query: { limit },
+        })
+      ).map(toBillingSettlement),
+    /** Imports a statement and reconciles it in the same call — two half-answers help nobody. */
+    importSettlement: async (payload: ImportSettlementRequest): Promise<Reconciliation> =>
+      toReconciliation(
+        await this.http.request<WireReconciliation>('POST', '/api/v1/admin/billing/settlements', {
+          body: payload,
+        }),
+      ),
+    findings: async (settlementId: string): Promise<SettlementLine[]> =>
+      (
+        await this.http.request<WireSettlementLine[]>(
+          'GET',
+          `/api/v1/admin/billing/settlements/${settlementId}/findings`,
+        )
+      ).map(toSettlementLine),
+    dispute: async (settlementId: string): Promise<Settlement> =>
+      toBillingSettlement(
+        await this.http.request<WireSettlement>(
+          'POST',
+          `/api/v1/admin/billing/settlements/${settlementId}/dispute`,
+        ),
+      ),
   };
 
   readonly adminReports = {

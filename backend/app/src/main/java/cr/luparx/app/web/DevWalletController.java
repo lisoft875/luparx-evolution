@@ -52,11 +52,15 @@ public class DevWalletController {
     private static final long MAX_DEV_TOPUP_MINOR = 1_000_000_00L;
 
     private final WalletService walletService;
+    private final cr.luparx.app.billing.TopupPaymentService topupPaymentService;
     private final TenantService tenantService;
     private final ParkingMapper mapper;
 
-    public DevWalletController(WalletService walletService, TenantService tenantService, ParkingMapper mapper) {
+    public DevWalletController(WalletService walletService,
+                               cr.luparx.app.billing.TopupPaymentService topupPaymentService,
+                               TenantService tenantService, ParkingMapper mapper) {
         this.walletService = walletService;
+        this.topupPaymentService = topupPaymentService;
         this.tenantService = tenantService;
         this.mapper = mapper;
         LOGGER.warn("Development profile: POST /api/v1/citizen/wallet/topups is enabled and lets any citizen "
@@ -72,8 +76,12 @@ public class DevWalletController {
         Tenant tenant = tenantService.requireActive(tenantId);
         long minor = Math.min(request.amountMinor().longValue(), MAX_DEV_TOPUP_MINOR);
         Money amount = Money.ofMinor(minor, tenant.getCurrencyCode());
-        WalletTransaction transaction = walletService.topUp(tenantId, userId, amount, null,
-                WalletTopupSource.DEV, null, userId);
+        // Through the payment as well (v0.35), even here. The development shortcut standing in for
+        // the citizen paying by card is exactly the path a demonstration exercises, and one that
+        // credited a wallet without recording a payment would show a reconciliation screen that
+        // cannot see half of its own data.
+        WalletTransaction transaction = topupPaymentService.topUp(tenantId, userId, amount, null,
+                WalletTopupSource.DEV, "DEV-" + java.util.UUID.randomUUID(), userId, null).transaction();
         return new ParkingDtos.TopupResponse(transaction.getId(), mapper.toMoney(transaction.getAmount()),
                 new ParkingDtos.MoneyDto(transaction.getBalanceAfterMinor(), transaction.getCurrencyCode()),
                 WalletTopupSource.DEV.name(), null, transaction.getCreatedAt(), false);

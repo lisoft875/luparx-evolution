@@ -116,6 +116,9 @@ export function AdminShell({ children }: AdminShellProps): React.JSX.Element {
             <strong className="lx-nav-heading">{t('nav.group.oversight')}</strong>
             <NavItem to="/audit">{t('nav.audit')}</NavItem>
             <NavItem to="/reports">{t('nav.reports')}</NavItem>
+            {/* Under oversight rather than under settings: reconciliation is not something a
+                municipality configures, it is something it checks. */}
+            {permissions.has('WALLET_TOPUP') ? <NavItem to="/billing">{t('nav.billing')}</NavItem> : null}
           </div>
 
           {/* Municipal operation settings (CONTRACT.md v0.3) — everything a municipality tunes for

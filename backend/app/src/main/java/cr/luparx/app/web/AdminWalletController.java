@@ -2,6 +2,7 @@ package cr.luparx.app.web;
 
 import cr.luparx.app.audit.AuditRecorder;
 import cr.luparx.app.idempotency.IdempotencyFilter;
+import cr.luparx.app.billing.TopupPaymentService;
 import cr.luparx.app.web.dto.ParkingDtos;
 import cr.luparx.core.audit.AuditAction;
 import cr.luparx.core.error.ErrorCode;
@@ -62,6 +63,7 @@ import java.util.Map;
 public class AdminWalletController {
 
     private final WalletService walletService;
+    private final cr.luparx.app.billing.TopupPaymentService topupPaymentService;
     private final WalletTopupCodeService topupCodeService;
     private final UserRepository userRepository;
     private final TenantService tenantService;
@@ -69,12 +71,14 @@ public class AdminWalletController {
     private final AuditRecorder auditRecorder;
 
     public AdminWalletController(WalletService walletService,
+                                 cr.luparx.app.billing.TopupPaymentService topupPaymentService,
                                  WalletTopupCodeService topupCodeService,
                                  UserRepository userRepository,
                                  TenantService tenantService,
                                  ParkingMapper mapper,
                                  AuditRecorder auditRecorder) {
         this.walletService = walletService;
+        this.topupPaymentService = topupPaymentService;
         this.topupCodeService = topupCodeService;
         this.userRepository = userRepository;
         this.tenantService = tenantService;
@@ -138,14 +142,19 @@ public class AdminWalletController {
         UserId beneficiary = resolveBeneficiary(tenantId, request);
 
         Money amount = Money.ofMinor(request.amountMinor().longValue(), tenant.getCurrencyCode());
-        WalletTransaction transaction = walletService.topUp(tenantId, beneficiary, amount, idempotencyKey,
-                WalletTopupSource.MUNICIPAL_COUNTER, request.externalReference(),
-                TenantContextHolder.requireUserId());
+        // Through the payment now (v0.35): the counter takes real money, and money that entered
+        // without a Payment is money the treasurer cannot prove came in. The cash keeps nothing, so
+        // there is no fee.
+        TopupPaymentService.Result received = topupPaymentService.topUp(tenantId, beneficiary, amount,
+                idempotencyKey, WalletTopupSource.MUNICIPAL_COUNTER, request.externalReference(),
+                TenantContextHolder.requireUserId(), null);
+        WalletTransaction transaction = received.transaction();
         // The movement came back with somebody else's request key: it was credited earlier under the
         // same external reference, and this call added nothing. Saying so is the difference between a
         // till that reprints a receipt and a till that charges twice.
-        boolean alreadyApplied = transaction.getIdempotencyKey() != null && idempotencyKey != null
-                && !idempotencyKey.equals(transaction.getIdempotencyKey());
+        boolean alreadyApplied = received.alreadyApplied()
+                || (transaction.getIdempotencyKey() != null && idempotencyKey != null
+                    && !idempotencyKey.equals(transaction.getIdempotencyKey()));
 
         auditRecorder.record(AuditAction.WALLET_TOPUP_RECORDED, "wallet-transaction",
                 transaction.getId().toString(),
@@ -153,6 +162,7 @@ public class AdminWalletController {
                         "amountMinor", String.valueOf(amount.minorUnits()),
                         "source", WalletTopupSource.MUNICIPAL_COUNTER.name(),
                         "externalReference", request.externalReference() == null ? "-" : request.externalReference(),
+                        "paymentId", received.paymentId().toString(),
                         "alreadyApplied", String.valueOf(alreadyApplied)));
 
         return new ParkingDtos.TopupResponse(transaction.getId(), mapper.toMoney(transaction.getAmount()),

@@ -225,6 +225,19 @@ public final class ErrorCode {
 
     /** An ingest tried to rewrite the act itself — plate, causal, place or moment (v0.34). */
     public static final String CITATION_EXTERNAL_IMMUTABLE = "CITATION_EXTERNAL_IMMUTABLE";
+
+    // --- payments and reconciliation (CONTRACT.md v0.35) -----------------------------------------
+    public static final String PAYMENT_NOT_FOUND = "PAYMENT_NOT_FOUND";
+    /** The attempt cannot move that way — capturing a failure, failing a capture. */
+    public static final String PAYMENT_INVALID_TRANSITION = "PAYMENT_INVALID_TRANSITION";
+    public static final String SETTLEMENT_NOT_FOUND = "SETTLEMENT_NOT_FOUND";
+    /**
+     * That statement is already here.
+     *
+     * <p>Refused rather than merged: a provider that corrects a statement issues another one, and
+     * overwriting the first would erase the evidence that it was corrected.</p>
+     */
+    public static final String SETTLEMENT_ALREADY_IMPORTED = "SETTLEMENT_ALREADY_IMPORTED";
     public static final String INFRACTION_TYPE_NOT_FOUND = "INFRACTION_TYPE_NOT_FOUND";
     /** The kind exists but the municipality retired it, so no new citation may be written under it. */
     public static final String INFRACTION_TYPE_INACTIVE = "INFRACTION_TYPE_INACTIVE";

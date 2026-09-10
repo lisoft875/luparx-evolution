@@ -191,6 +191,19 @@ public final class AuditAction {
     /** A foreign causal was pointed at one of the municipality's own (v0.34). */
     public static final String EXTERNAL_CAUSAL_MAPPED = "EXTERNAL_CAUSAL_MAPPED";
 
+    // --- payments and reconciliation (CONTRACT.md v0.35) -----------------------------------------
+    /**
+     * A provider's statement was imported and matched (v0.35).
+     *
+     * <p>The entry carries the <b>findings</b> and not only the fact that somebody imported
+     * something: "who imported the statement where forty payments went missing" is a question asked
+     * three months later, and it has to be answerable without re-running the reconciliation.</p>
+     */
+    public static final String SETTLEMENT_IMPORTED = "SETTLEMENT_IMPORTED";
+
+    /** The municipality is claiming against a statement, so it stops counting as settled income. */
+    public static final String SETTLEMENT_DISPUTED = "SETTLEMENT_DISPUTED";
+
     // --- appeals, notices and wallet top-ups (CONTRACT.md "v0.8") -------------------------------
     public static final String CITATION_APPEAL_FILED = "CITATION_APPEAL_FILED";
     public static final String CITATION_APPEAL_RESOLVED = "CITATION_APPEAL_RESOLVED";

@@ -3136,3 +3136,132 @@ suelto mientras el adaptador leía `wire.fine.amountMinor`, así que **el catál
 caía con «Ocurrió un error» en toda build de demostración** —y con él la captura del inspector.
 `replaceMockInfractionTypes` ya envolvía el monto; la rama del `GET` no. Es la lección de siempre con
 otra cara: el simulador no era más amable, era distinto (ADR 0009).
+
+---
+
+# v0.35 — Conciliación de pagos: la cadena completa
+
+Punto 10: *«Separar claramente ParkingSession → Payment → Transaction → Settlement/Reconciliation.
+LUPARX necesita poder demostrar qué se cobró, qué confirmó la pasarela/banco y qué corresponde a la
+Municipalidad.»*
+
+De esa cadena existían dos eslabones: la estadía y el movimiento de billetera, unidos desde la v0.32.
+Faltaban los dos extremos, y son los dos que miran hacia afuera de la plataforma.
+
+## Lo que faltaba, dicho con precisión
+
+**Payment no existía.** `wallet_transactions` tiene `source` y `external_reference`, que es un muñón:
+no hay intento, ni estado, ni comisión, ni fallo, ni reintento. **Un cobro que falló no dejaba rastro
+en ninguna parte** — y «qué se cobró» no se contesta con una tabla donde sólo están los que salieron
+bien.
+
+**Settlement no existía en ninguna forma.** «Qué confirmó la pasarela» era una hoja de cálculo que
+alguien cuadraba a mano.
+
+## Un módulo propio
+
+`module-billing`, que depende de `platform-core` y `module-tenancy` y **no de parqueo**. La plata que
+entra es una pregunta distinta de en qué se gasta después: las multas van a cobrarse por aquí, y un
+permiso. Un módulo que dependiera de parqueo habría que reescribirlo la primera vez que algo distinto
+de parqueo recibiera dinero, y dejaría «qué recaudó la municipalidad» como una pregunta que sólo el
+módulo de parqueo puede contestar. Lo que sabe de la billetera es un identificador que le entregaron
+(`payments.target_id`, sin llave foránea, a propósito).
+
+Quien une los dos contextos es `TopupPaymentService`, en el `app`: abre el pago, acredita la
+billetera y captura el pago, en una transacción y en ese orden. Una billetera acreditada antes de que
+existiera el pago es plata regalada contra nada.
+
+## Payment: un intento, no un éxito
+
+Fila desde que alguien lo intenta, y se queda si falla. **«Yo pagué y no me subió el saldo» tiene que
+poder contestarse**, y una tabla con sólo los intentos exitosos convierte un problema del banco en la
+palabra del ciudadano contra la de la municipalidad.
+
+Tres montos y no dos:
+
+- **bruto** — lo que pagó el ciudadano. El número que él ve en su estado de cuenta y el único que
+  puede citar, así que es el que manda;
+- **comisión** — lo que se quedó el proveedor. Nulo hasta que lo diga, que en tarjeta suele ser el
+  corte y no el momento del cobro. **Nulo no es cero**: mostrar una comisión desconocida como cero le
+  diría a la municipalidad que recibió todo cuando nadie lo ha dicho;
+- **neto** — lo que llegó a la cuenta. Se **guarda** en vez de calcularse: los proveedores redondean
+  a su manera, y un neto derivado que difiera del depositado por un colón convierte cada conciliación
+  en una investigación.
+
+Todos los canales, no sólo la tarjeta: caja, socio, transferencia, SINPE y ajuste. En una
+municipalidad pequeña la caja es la mitad del dinero.
+
+Doble idempotencia, porque los dos identificadores llegan en momentos distintos: la clave del
+llamador existe antes de hablar con nadie, y la referencia del proveedor sólo después. Un reintento
+puede traer cualquiera de las dos y ambas resuelven a la misma fila en vez de a un segundo cargo.
+
+## Dos decisiones de negocio, escritas
+
+**El ingreso se reconoce a la recarga** (decisión de Javier). La recomendación técnica era la
+contraria —recarga como pasivo, ingreso al prestarse el servicio— y queda anotada en la ADR 0019 para
+que sea revisable. La consecuencia a tener presente: el saldo sin consumir figura como ingreso ya
+devengado, así que una devolución o un cierre de cuenta se resta de algo ya reportado. Lo que sí se
+hizo fue **no cerrar la otra lectura**: el libro de billetera no se toca, así que «cuánto de lo
+recaudado todavía no se ha prestado» sigue siendo calculable.
+
+**Cada municipalidad recauda en su cuenta** (decisión de Javier). El corte es del proveedor **hacia**
+la municipalidad; aquí no hay liquidaciones salientes ni comisión de plataforma. Menos riesgo
+regulatorio, y la comisión de LupaRX se factura aparte.
+
+## El corte y los cuatro hallazgos
+
+`POST /admin/billing/settlements` importa y concilia **en la misma llamada**. Importar sin cotejar
+dejaría a la municipalidad con dos medias respuestas y un paso manual entre ellas, que es la
+situación que esto viene a terminar.
+
+Los totales del corte se guardan **como los declaró el proveedor** y no se recalculan de sus líneas.
+Si el encabezado no cuadra con ellas, eso es un hallazgo sobre el proveedor —`declaredTotalsDisagree`—
+y recalcularlo borraría la única evidencia de que mandó algo mal.
+
+| Hallazgo | Significa | De quién es el problema |
+|---|---|---|
+| `AMOUNT_MISMATCH` | El mismo pago por otro monto | Reclamo al proveedor |
+| `UNKNOWN_PAYMENT` | Liquidaron algo que aquí no existe | ¿De quién es esa plata? |
+| `DUPLICATE` | La misma referencia dos veces en un corte | Error en su exportación |
+| `MISSING_IN_SETTLEMENT` | Se cobró y el corte no lo menciona | **Plata que no llegó** |
+
+El cuarto es el que cuesta, y sólo aparece si además de revisar las líneas se revisa el otro sentido:
+qué se cobró dentro del período que el corte **nunca mencionó**. Mirar sólo las líneas contesta
+«¿cuadra lo que mandaron?» y deja sin preguntar «¿mandaron todo?».
+
+Una línea que no casa se guarda igual, y nunca se resuelve creando el pago que falta: una fila
+inventada para que un total cuadre es lo que hace inútil un libro como evidencia. Reimportar el mismo
+corte se rechaza en vez de mezclarse — un proveedor que corrige emite otro, y sobrescribir el primero
+borraría que fue corregido.
+
+`NOT_APPLICABLE` existe para el efectivo de caja, los ajustes y todo lo anterior a este módulo. Sin
+ese valor se quedarían para siempre en «cobrado y no liquidado» — una alarma permanente por algo que
+no es un problema, que es como se aprende a no mirar una lista.
+
+## La pantalla
+
+Ordenada por lo que le preocupa a un tesorero y no por lo que es fácil de calcular: primero **sin
+confirmar**, la única cifra de la página que cuesta plata y la única que cambia de color; después los
+pagos que hay detrás, con nombre; después los cortes con sus hallazgos. Una pantalla que abriera con
+«recaudado este mes» se mira una vez al mes; ésta está hecha para abrirse un lunes.
+
+Los intentos fallidos se cuentan a la vista en vez de esconderse, y el número de referencia bancaria
+del depósito está en la tabla de cortes: sin él la cadena se queda a un paso del banco y el tesorero
+sigue siendo quien pone el corte al lado del estado de cuenta.
+
+## Migración
+
+`V33_0` crea `payments`, `settlements` y `settlement_lines`, y agrega `wallet_transactions.payment_id`
+—nulable para siempre, porque **un cargo por estacionar no tiene pago**: gasta saldo que ya estaba, y
+exigirlo obligaría a inventar pagos falsos para cuadrar una columna.
+
+Las recargas anteriores se reconstruyen como `payments` capturados y `NOT_APPLICABLE`: son plata real
+que entró, así que sin ellas el primer corte mostraría un hueco que no existe.
+
+## Defecto encontrado de paso
+
+La tabla de permisos del cliente (`packages/auth/src/permissions.ts`) llevaba desde la v0.8 sin
+`WALLET_TOPUP`, mientras el servidor sí se lo concedía a `TENANT_ADMIN` y a `TENANT_FINANCE`. El
+efecto es el que advierte su propio comentario: una capacidad que la persona tiene y una pantalla que
+el cliente no le muestra. Corregida, junto con `CITATION_INGEST` y el rol `TENANT_INTEGRATION` de la
+v0.34.

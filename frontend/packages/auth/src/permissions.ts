@@ -39,15 +39,24 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     'CITATION_READ',
     'CITATION_VOID',
     'ENFORCEMENT_MANAGE',
+    // Mirror citations from another system, and map their causals (v0.34).
+    'CITATION_INGEST',
+    // The counter, and since v0.35 the reconciliation screen with it. This was missing from this
+    // table while the server had granted it since v0.8 — a stale copy costs exactly this: a
+    // capability somebody holds and a screen the client will not show them.
+    'WALLET_TOPUP',
   ],
   // Finance reads citations because collecting on them is its job, and cannot annul one — the
-  // separation of duties a municipal auditor asks about first (ADR 0014).
-  TENANT_FINANCE: ['USER_READ', 'AUDIT_READ', 'EXPORT_RUN', 'CITATION_READ'],
+  // separation of duties a municipal auditor asks about first (ADR 0014). It credits wallets at the
+  // counter and reconciles what came in, which is the whole of the finance job here.
+  TENANT_FINANCE: ['USER_READ', 'AUDIT_READ', 'EXPORT_RUN', 'CITATION_READ', 'WALLET_TOPUP'],
   TENANT_SUPPORT: ['USER_READ', 'AUDIT_READ', 'CITATION_READ'],
   // The officer writes citations and reads what they wrote. `CITATION_VOID` is deliberately absent:
   // whoever issues an administrative act is not who should be able to erase it.
   INSPECTOR: ['CITATION_ISSUE', 'CITATION_READ'],
   INSPECTOR_LEAD: ['CITATION_ISSUE', 'CITATION_READ', 'CITATION_VOID'],
+  // A machine, not a person (v0.34): it mirrors citations in and reads them back, and nothing else.
+  TENANT_INTEGRATION: ['CITATION_INGEST', 'CITATION_READ'],
   CITIZEN: [],
 };
 

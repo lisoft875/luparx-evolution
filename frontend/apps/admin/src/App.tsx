@@ -32,6 +32,7 @@ import { AppealsPage } from './pages/AppealsPage';
 import { EnforcementChecksPage } from './pages/EnforcementChecksPage';
 import { ExemptionsPage } from './pages/ExemptionsPage';
 import { SettingsInfractionTypesPage } from './pages/SettingsInfractionTypesPage';
+import { BillingReconciliationPage } from './pages/BillingReconciliationPage';
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
@@ -300,6 +301,20 @@ export function App(): React.JSX.Element {
                     <RequireTenant selectTenantPath="/select-tenant">
                       <RequirePermission permission="ENFORCEMENT_MANAGE" fallback={<Navigate to="/" replace />}>
                         <SettingsInfractionTypesPage />
+                      </RequirePermission>
+                    </RequireTenant>
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/billing"
+                element={
+                  <RequireAuth loginPath="/login">
+                    <RequireTenant selectTenantPath="/select-tenant">
+                      {/* The capability the cashier and the finance role already hold: the person
+                          who reconciles the money is the person who handles it. */}
+                      <RequirePermission permission="WALLET_TOPUP" fallback={<Navigate to="/" replace />}>
+                        <BillingReconciliationPage />
                       </RequirePermission>
                     </RequireTenant>
                   </RequireAuth>

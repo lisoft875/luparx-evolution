@@ -17,6 +17,8 @@ export type Role =
   | 'TENANT_ADMIN'
   | 'TENANT_FINANCE'
   | 'TENANT_SUPPORT'
+  /** The other system's account (v0.34): a machine that mirrors citations in and reads them back. */
+  | 'TENANT_INTEGRATION'
   | 'INSPECTOR'
   | 'INSPECTOR_LEAD'
   | 'CITIZEN';
@@ -37,7 +39,21 @@ export type Permission =
   | 'CITATION_ISSUE'
   | 'CITATION_READ'
   | 'CITATION_VOID'
-  | 'ENFORCEMENT_MANAGE';
+  | 'ENFORCEMENT_MANAGE'
+  /**
+   * Mirror citations raised in another system (v0.34).
+   *
+   * Deliberately not `CITATION_ISSUE`: mirroring somebody else's act is not the authority to raise
+   * one in this municipality's name.
+   */
+  | 'CITATION_INGEST'
+  /**
+   * Credit a wallet at the counter — and, since v0.35, read the reconciliation.
+   *
+   * The person who reconciles the money is the person who handles it, so this capability governs
+   * both rather than a fourth one being invented for reading what they themselves produce.
+   */
+  | 'WALLET_TOPUP';
 
 export type MembershipStatus = 'ACTIVE' | 'PENDING_APPROVAL' | 'REJECTED' | 'REVOKED' | 'SUSPENDED';
 
@@ -2220,3 +2236,178 @@ export interface FineDetail {
    */
   appeal: CitationAppeal | null;
 }
+
+
+// ---- Billing: payments, settlements and reconciliation (v0.35) ------------------------------
+
+/**
+ * How the money arrived.
+ *
+ * Every channel, not only the ones with a gateway behind them: a municipality's counter takes a real
+ * share of a small council's money, and a model covering only the card would leave half of what came
+ * in outside the one place income is proved.
+ */
+export type PaymentMethod = 'CARD' | 'SINPE' | 'BANK_TRANSFER' | 'COUNTER_CASH' | 'PARTNER' | 'ADJUSTMENT';
+
+/**
+ * The life of one attempt to receive money.
+ *
+ * `FAILED` is a state and not an absence: "I paid and my balance did not go up" has to be answerable,
+ * and a table holding only the successes turns a problem at the bank into the citizen's word against
+ * the municipality's.
+ */
+export type PaymentState =
+  | 'PENDING'
+  | 'AUTHORIZED'
+  | 'CAPTURED'
+  | 'FAILED'
+  | 'CANCELLED'
+  | 'REFUNDED'
+  | 'CHARGED_BACK';
+
+export type PaymentPurpose = 'WALLET_TOPUP' | 'FINE' | 'PERMIT' | 'OTHER';
+
+/**
+ * Where one payment stands against the provider's statements.
+ *
+ * `NOT_APPLICABLE` is cash and adjustments — nobody will ever report the counter's day in a
+ * provider's statement, and leaving those pending would put them in the "charged and never settled"
+ * list for ever, which is how a municipality learns to ignore the list.
+ */
+export type ReconciliationStatus =
+  | 'PENDING'
+  | 'MATCHED'
+  | 'MISSING_IN_SETTLEMENT'
+  | 'AMOUNT_MISMATCH'
+  | 'NOT_APPLICABLE';
+
+export type SettlementStatus = 'IMPORTED' | 'RECONCILED' | 'DISPUTED';
+
+/** What became of one line of a statement. Four outcomes, four different people's problems. */
+export type LineMatchStatus = 'MATCHED' | 'UNKNOWN_PAYMENT' | 'AMOUNT_MISMATCH' | 'DUPLICATE';
+
+export interface Payment {
+  id: string;
+  method: PaymentMethod;
+  methodLabelKey: string;
+  provider: string | null;
+  providerReference: string | null;
+  status: PaymentState;
+  statusLabelKey: string;
+  purpose: PaymentPurpose;
+  /** What the citizen paid — the number on their own statement, the only one they can quote. */
+  grossMinor: number;
+  /** What the provider kept. Null until it says so, which for a card is usually the statement. */
+  feeMinor: number | null;
+  /** What reached the municipality. Null while the fee is unknown. */
+  netMinor: number | null;
+  currencyCode: string;
+  reconciliationStatus: ReconciliationStatus;
+  reconciliationLabelKey: string;
+  requestedAt: string;
+  confirmedAt: string | null;
+  settledAt: string | null;
+  failureCode: string | null;
+  failureReason: string | null;
+  userId: string | null;
+  targetType: string | null;
+  targetId: string | null;
+}
+
+/** The three numbers a treasurer opens the screen for. */
+export interface BillingTotals {
+  capturedGrossMinor: number;
+  capturedNetMinor: number;
+  settledGrossMinor: number;
+  /** Of what was charged, what no statement has confirmed. The figure that matters. */
+  unsettledGrossMinor: number;
+  currencyCode: string;
+  capturedCount: number;
+  failedCount: number;
+  from: string;
+  to: string;
+}
+
+export interface Settlement {
+  id: string;
+  provider: string;
+  externalReference: string;
+  periodStart: string;
+  periodEnd: string;
+  /** As the provider declared them. Never recomputed from the lines — a difference is a finding. */
+  declaredGrossMinor: number;
+  declaredFeeMinor: number;
+  declaredNetMinor: number;
+  currencyCode: string;
+  depositExpectedOn: string | null;
+  depositReference: string | null;
+  status: SettlementStatus;
+  statusLabelKey: string;
+  importedAt: string;
+  reconciledAt: string | null;
+}
+
+export interface SettlementLine {
+  id: string;
+  providerReference: string;
+  grossMinor: number;
+  feeMinor: number;
+  netMinor: number;
+  currencyCode: string;
+  occurredAt: string | null;
+  paymentId: string | null;
+  matchStatus: LineMatchStatus;
+  matchLabelKey: string;
+}
+
+/**
+ * What the reconciliation found.
+ *
+ * `missingPayments` is money the municipality charged and has not received; `declaredTotalsDisagree`
+ * means the provider's own header does not equal the sum of its own lines.
+ */
+export interface Reconciliation {
+  settlement: Settlement;
+  lineCount: number;
+  matched: number;
+  unknownPayments: number;
+  amountMismatches: number;
+  duplicates: number;
+  missingPayments: number;
+  lineGrossMinor: number;
+  lineFeeMinor: number;
+  lineNetMinor: number;
+  currencyCode: string;
+  declaredTotalsDisagree: boolean;
+  hasFindings: boolean;
+  findings: SettlementLine[];
+}
+
+export interface ImportSettlementRequest {
+  provider: string;
+  externalReference: string;
+  periodStart: string;
+  periodEnd: string;
+  declaredGrossMinor: number;
+  declaredFeeMinor: number;
+  declaredNetMinor: number;
+  currencyCode: string;
+  depositExpectedOn?: string;
+  depositReference?: string;
+  lines: ImportSettlementLine[];
+}
+
+export interface ImportSettlementLine {
+  providerReference: string;
+  grossAmountMinor: number;
+  feeAmountMinor: number;
+  netAmountMinor: number;
+  occurredAt?: string;
+}
+
+export type BillingPaymentsQuery = {
+  status?: PaymentState;
+  reconciliation?: ReconciliationStatus;
+  from?: string;
+  to?: string;
+};

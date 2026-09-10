@@ -13,6 +13,7 @@
       module-tenancy -> platform-core
       module-parking -> platform-core, module-tenancy
       module-enforcement -> platform-core, module-tenancy
+      module-billing -> platform-core, module-tenancy
       app            -> every module
   -->
   <parent>
@@ -36,6 +37,7 @@
     <module>module-tenancy</module>
     <module>module-parking</module>
     <module>module-enforcement</module>
+    <module>module-billing</module>
     <module>app</module>
   </modules>
 
@@ -87,6 +89,11 @@
       <dependency>
         <groupId>cr.luparx</groupId>
         <artifactId>luparx-module-enforcement</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>cr.luparx</groupId>
+        <artifactId>luparx-module-billing</artifactId>
         <version>${project.version}</version>
       </dependency>
 
