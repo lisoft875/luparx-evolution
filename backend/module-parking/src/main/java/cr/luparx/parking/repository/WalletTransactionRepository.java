@@ -31,4 +31,21 @@ public interface WalletTransactionRepository extends JpaRepository<WalletTransac
      */
     Optional<WalletTransaction> findByTenantIdAndSourceAndExternalReference(UUID tenantId, WalletTopupSource source,
                                                                            String externalReference);
+
+    /**
+     * Movements of a period grouped by kind, with their signed total (CONTRACT.md v0.36).
+     *
+     * <p>Signed, deliberately: a charge is negative in this ledger, and summing absolute values to
+     * make a bigger number would be the first lie a financial dashboard tells.</p>
+     */
+    @org.springframework.data.jpa.repository.Query("""
+            select t.type, count(t), coalesce(sum(t.amountMinor), 0)
+            from WalletTransaction t
+            where t.tenantId = :tenantId and t.createdAt >= :from and t.createdAt < :to
+            group by t.type
+            """)
+    java.util.List<Object[]> countByType(
+            @org.springframework.data.repository.query.Param("tenantId") java.util.UUID tenantId,
+            @org.springframework.data.repository.query.Param("from") java.time.Instant from,
+            @org.springframework.data.repository.query.Param("to") java.time.Instant to);
 }

@@ -2411,3 +2411,103 @@ export type BillingPaymentsQuery = {
   from?: string;
   to?: string;
 };
+
+
+// ---- Dashboard (v0.36) -----------------------------------------------------------------------
+
+/**
+ * Everything the municipality can consult, in one read.
+ *
+ * Two clocks on purpose: `occupancy` is **now** (`now`), everything else covers `from`–`to`. Mixing
+ * them is how a screen ends up putting a live count next to a monthly total where the two count
+ * different things and nobody notices.
+ *
+ * Every group carries its enumerated value as well as its label key, because the value is what the
+ * link uses: the screen a figure opens is the same list filtered by the very value it was counted
+ * from. That is what makes it a dashboard somebody can check.
+ */
+export interface Dashboard {
+  from: string;
+  to: string;
+  /** The moment the live blocks refer to. */
+  now: string;
+  currencyCode: string;
+  revenue: DashboardRevenue;
+  transactions: DashboardGroup[];
+  parking: DashboardGroup[];
+  occupancy: DashboardOccupancy;
+  checks: DashboardCount[];
+  citations: DashboardGroup[];
+  exemptions: DashboardCount[];
+  inspectors: DashboardInspector[];
+  paymentFailures: DashboardPaymentFailures;
+}
+
+export interface DashboardRevenue {
+  capturedGrossMinor: number;
+  capturedNetMinor: number;
+  settledGrossMinor: number;
+  /** Charged and unconfirmed by any provider statement. The figure that costs money. */
+  unsettledGrossMinor: number;
+  capturedCount: number;
+}
+
+/** A count with money behind it. `type`/`status`/`paymentStatus` all arrive as `key`. */
+export interface DashboardGroup {
+  type?: string;
+  status?: string;
+  paymentStatus?: string | null;
+  labelKey: string;
+  count: number;
+  /** Signed for wallet movements: a charge is negative. */
+  totalMinor: number;
+}
+
+export interface DashboardCount {
+  verdict?: string;
+  status?: string;
+  labelKey: string;
+  count: number;
+}
+
+export interface DashboardOccupancy {
+  activeSessions: number;
+  /** Stays running outside every zone. Reported rather than folded away. */
+  unzonedActive: number;
+  zones: DashboardZoneOccupancy[];
+}
+
+export interface DashboardZoneOccupancy {
+  zoneId: string;
+  code: string;
+  name: string;
+  activeSessions: number;
+  /** Only bays in service: one closed for roadworks is not capacity. */
+  baysInService: number;
+  /** Null when the zone has no numbered bays — absent, which is not 0%. */
+  percent: number | null;
+}
+
+export interface DashboardInspector {
+  inspectorUserId: string;
+  /** Resolved on read; somebody who has left still appears, because their work happened. */
+  name: string | null;
+  checks: number;
+  citations: number;
+  /** Null for an officer who wrote citations and looked nothing up in the window. */
+  lastCheckAt: string | null;
+}
+
+export interface DashboardPaymentFailures {
+  count: number;
+  amountMinor: number;
+  byReason: DashboardFailureReason[];
+}
+
+export interface DashboardFailureReason {
+  /** The provider's own code, verbatim. */
+  code: string;
+  reason: string;
+  count: number;
+  amountMinor: number;
+}

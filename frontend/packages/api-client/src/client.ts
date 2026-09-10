@@ -44,6 +44,7 @@ import {
   type WireSettlement,
   type WireSettlementLine,
 } from './wireBilling';
+import { toDashboard, type WireDashboard } from './wireDashboard';
 import {
   withResolvedMeLogos,
   withResolvedMembershipLogo,
@@ -106,6 +107,7 @@ import type {
   AuditEventsQuery,
   AuditChain,
   AuditOriginProbe,
+  Dashboard,
   BillingPaymentsQuery,
   BillingTotals,
   ImportSettlementRequest,
@@ -598,6 +600,18 @@ export class ApiClient {
           `/api/v1/admin/billing/settlements/${settlementId}/dispute`,
         ),
       ),
+  };
+
+  /**
+   * Everything the municipality can consult, in one read (v0.36).
+   *
+   * One call and not nine: a dashboard assembled from nine requests renders in nine steps and each
+   * can fail on its own, leaving a screen that is half true — worse than one honestly still loading,
+   * because nobody can tell which half.
+   */
+  readonly adminDashboard = {
+    get: async (query: { from?: string; to?: string } = {}): Promise<Dashboard> =>
+      toDashboard(await this.http.request<WireDashboard>('GET', '/api/v1/admin/dashboard', { query })),
   };
 
   readonly adminReports = {

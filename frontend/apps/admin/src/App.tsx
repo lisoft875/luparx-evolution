@@ -33,6 +33,7 @@ import { EnforcementChecksPage } from './pages/EnforcementChecksPage';
 import { ExemptionsPage } from './pages/ExemptionsPage';
 import { SettingsInfractionTypesPage } from './pages/SettingsInfractionTypesPage';
 import { BillingReconciliationPage } from './pages/BillingReconciliationPage';
+import { DashboardPage } from './pages/DashboardPage';
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
@@ -315,6 +316,21 @@ export function App(): React.JSX.Element {
                           who reconciles the money is the person who handles it. */}
                       <RequirePermission permission="WALLET_TOPUP" fallback={<Navigate to="/" replace />}>
                         <BillingReconciliationPage />
+                      </RequirePermission>
+                    </RequireTenant>
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/dashboard"
+                element={
+                  <RequireAuth loginPath="/login">
+                    <RequireTenant selectTenantPath="/select-tenant">
+                      {/* AUDIT_READ: «puede ver lo que hizo esta municipalidad». No TENANT_MANAGE —
+                          leer las cifras no es la misma autoridad que cambiar la configuración, y un
+                          panel que sólo abre el administrador es un panel que nadie consulta. */}
+                      <RequirePermission permission="AUDIT_READ" fallback={<Navigate to="/" replace />}>
+                        <DashboardPage />
                       </RequirePermission>
                     </RequireTenant>
                   </RequireAuth>

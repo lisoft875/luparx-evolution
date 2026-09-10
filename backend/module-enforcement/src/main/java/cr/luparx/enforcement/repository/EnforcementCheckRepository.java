@@ -10,6 +10,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -69,4 +70,40 @@ public interface EnforcementCheckRepository extends JpaRepository<EnforcementChe
 
     /** How much is due for deletion, for the job to say something true in its audit entry. */
     long countByOccurredAtBefore(Instant cutoff);
+
+    /**
+     * Lookups of a period grouped by what they concluded (CONTRACT.md v0.36).
+     *
+     * <p>Grouped in the database. This is the platform's largest table, and a dashboard that pulled
+     * a month of it into memory to count would get slower every single day the product succeeded —
+     * which is the one kind of slowness a municipality notices personally.</p>
+     */
+    @Query("""
+            select c.verdict, count(c)
+            from EnforcementCheck c
+            where c.tenantId = :tenantId and c.occurredAt >= :from and c.occurredAt < :to
+            group by c.verdict
+            """)
+    List<Object[]> countByVerdict(@Param("tenantId") UUID tenantId,
+                                  @Param("from") Instant from,
+                                  @Param("to") Instant to);
+
+    /**
+     * How much each officer looked up in a period, and when they last did.
+     *
+     * <p>The last lookup travels with the count because the two answer opposite halves of the same
+     * question: a low count is a quiet week, a low count with nothing since Tuesday is a device that
+     * stopped working or a person who stopped going out.</p>
+     */
+    @Query("""
+            select c.inspectorUserId, count(c), max(c.occurredAt)
+            from EnforcementCheck c
+            where c.tenantId = :tenantId and c.occurredAt >= :from and c.occurredAt < :to
+            group by c.inspectorUserId
+            order by count(c) desc
+            """)
+    List<Object[]> countByInspector(@Param("tenantId") UUID tenantId,
+                                    @Param("from") Instant from,
+                                    @Param("to") Instant to,
+                                    Pageable pageable);
 }

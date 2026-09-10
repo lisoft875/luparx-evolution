@@ -66,4 +66,21 @@ public interface PlateExemptionRepository extends JpaRepository<PlateExemption, 
 
     /** How many permits point at a category, so retiring one can say what it would leave behind. */
     long countByTenantIdAndExemptionTypeId(UUID tenantId, UUID exemptionTypeId);
+
+    /**
+     * Permits grouped by state (CONTRACT.md v0.36).
+     *
+     * <p>Counted as they stand today and not over a period, because that is the question: how many
+     * cars this municipality is currently not fining, and how many requests are waiting on somebody.
+     * A permit granted in March still exempts a car in September, so a window would answer something
+     * nobody asked.</p>
+     */
+    @org.springframework.data.jpa.repository.Query("""
+            select e.status, count(e)
+            from PlateExemption e
+            where e.tenantId = :tenantId
+            group by e.status
+            """)
+    java.util.List<Object[]> countByStatusGrouped(
+            @org.springframework.data.repository.query.Param("tenantId") java.util.UUID tenantId);
 }

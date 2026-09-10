@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@luparx/auth';
 import { formatDateTime, useTranslation, type TranslationKey } from '@luparx/i18n';
@@ -29,10 +30,17 @@ export function EnforcementChecksPage(): React.JSX.Element {
   const { t, locale } = useTranslation();
   const { apiClient } = useAuth();
 
-  const [plate, setPlate] = useState('');
-  const [zoneId, setZoneId] = useState('');
-  const [inspectorUserId, setInspectorUserId] = useState('');
-  const [verdict, setVerdict] = useState<PlateVerdict | ''>('');
+  // Seeded from the query string so a figure on the dashboard opens the rows it counted, and not a
+  // list the reader then has to filter by hand — which is the difference between a number somebody
+  // can check and a decoration (CONTRACT.md v0.36). Read once, on purpose: after that the filters on
+  // this screen belong to whoever is using them, and re-imposing the URL would fight them.
+  const [params] = useSearchParams();
+  const [plate, setPlate] = useState(params.get('plate') ?? '');
+  const [zoneId, setZoneId] = useState(params.get('zoneId') ?? '');
+  const [inspectorUserId, setInspectorUserId] = useState(params.get('inspectorUserId') ?? '');
+  const [verdict, setVerdict] = useState<PlateVerdict | ''>(
+    (params.get('verdict') as PlateVerdict | null) ?? '',
+  );
   const [page, setPage] = useState(0);
 
   const zonesQuery = useQuery({

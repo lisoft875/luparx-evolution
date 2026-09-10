@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { RequirePermission, useAuth } from '@luparx/auth';
 import { formatDate, formatDateTime, useTranslation, type TranslationKey } from '@luparx/i18n';
@@ -63,7 +64,12 @@ export function ExemptionsPage(): React.JSX.Element {
   const { apiClient } = useAuth();
   const queryClient = useQueryClient();
 
-  const [status, setStatus] = useState<ExemptionStatus | ''>('');
+  // Seeded from the query string (CONTRACT.md v0.36): «Pendientes: 1» on the dashboard has to open
+  // that one pending permit, not the whole register.
+  const [params] = useSearchParams();
+  const [status, setStatus] = useState<ExemptionStatus | ''>(
+    (params.get('status') as ExemptionStatus | null) ?? '',
+  );
   const [exemptionTypeId, setExemptionTypeId] = useState('');
   const [plate, setPlate] = useState('');
   const [page, setPage] = useState(0);

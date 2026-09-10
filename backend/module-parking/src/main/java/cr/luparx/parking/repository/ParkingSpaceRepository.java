@@ -56,4 +56,22 @@ public interface ParkingSpaceRepository extends JpaRepository<ParkingSpace, UUID
             group by s.zoneId
             """)
     List<ParkingSpaceRange> rangesByZone(@Param("tenantId") UUID tenantId);
+
+    /**
+     * Bays in service, by zone (CONTRACT.md v0.36).
+     *
+     * <p>The denominator of occupancy, and only the ones actually in service: a bay taken out for
+     * roadworks is not capacity, and counting it would report a municipality as emptier than it is
+     * on exactly the week it is most congested.</p>
+     */
+    @org.springframework.data.jpa.repository.Query("""
+            select s.zoneId, count(s)
+            from ParkingSpace s
+            where s.tenantId = :tenantId and s.status = :status
+            group by s.zoneId
+            """)
+    java.util.List<Object[]> countInServiceByZone(
+            @org.springframework.data.repository.query.Param("tenantId") java.util.UUID tenantId,
+            @org.springframework.data.repository.query.Param("status")
+            cr.luparx.parking.model.ParkingSpaceStatus status);
 }

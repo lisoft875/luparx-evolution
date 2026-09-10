@@ -3265,3 +3265,94 @@ La tabla de permisos del cliente (`packages/auth/src/permissions.ts`) llevaba de
 efecto es el que advierte su propio comentario: una capacidad que la persona tiene y una pantalla que
 el cliente no le muestra. Corregida, junto con `CITATION_INGEST` y el rol `TENANT_INTEGRATION` de la
 v0.34.
+
+---
+
+# v0.36 — El panel de la municipalidad
+
+Punto 11, y la frase que lo define es la primera: **«No solamente estadísticas bonitas. Debe poder
+consultar.»** Las nueve cosas de la lista ya tenían datos —la v0.29 dejó las fiscalizaciones, la
+v0.30 las exoneraciones, la v0.32 el estado de pago de la estadía, la v0.35 la recaudación y los
+fallos. Lo que faltaba era una pantalla, y sobre todo faltaba que esa pantalla no fuera un adorno.
+
+## La regla que ordena todo lo demás
+
+**Toda cifra es una puerta.** Cada número de esta pantalla es un conteo de filas, y cada número abre
+esas filas, ya filtradas. No hay índices, ni puntajes, ni tendencias trazadas sobre tres puntos —esa
+clase de número que parece hallazgo y que nadie puede verificar. Si una municipalidad lee 47 y no
+puede llegar a los 47, el 47 es decoración.
+
+Eso obligó a algo que no estaba: las pantallas destino **no leían la barra de dirección**. Un enlace
+con `?verdict=NOT_COVERED` aterrizaba en la lista completa, que es justo el defecto que esta versión
+existe para no cometer. Consultas, boletas y exoneraciones ahora siembran sus filtros desde la URL
+—una sola vez al abrir, porque después los filtros son de quien los está usando y volver a imponer la
+URL sería pelearse con él.
+
+## Dos relojes, dichos en voz alta
+
+La ocupación y las estadías vigentes son **de ahora**; todo lo demás es **del período**. La pantalla
+lo dice al lado de cada bloque, con la hora exacta del dato vivo. Mezclarlos es como se termina
+poniendo un conteo en vivo junto a un total mensual donde los dos cuentan cosas distintas y nadie lo
+nota.
+
+## Las nueve, y las decisiones de cada una
+
+1. **Recaudación** — cobrado, neto y **sin confirmar**, del mismo cálculo que la pantalla de
+   conciliación, para que las dos no puedan contradecirse.
+2. **Transacciones** — con signo. Un cargo es negativo, y sumar valores absolutos para llegar a un
+   número más grande sería la primera mentira de un panel financiero.
+3. **Estacionamientos** — agrupados por `paymentStatus` y no por `status`: una estadía que terminó la
+   semana pasada no es el mismo hecho que una que nunca se cobró.
+4. **Ocupación por zona** — estadías vigentes sobre **bahías en servicio**. Una bahía cerrada por
+   obras no es capacidad, y contarla reportaría a la municipalidad más vacía de lo que está justo la
+   semana que más congestionada anda. Una zona **sin bahías numeradas no tiene porcentaje**: se
+   muestra un guión, nunca «0%», porque eso sería una cifra equivocada en vez de una ausente —muchas
+   municipalidades cobran por sector sin pintar números. Las estadías fuera de toda zona se reportan
+   aparte en lugar de perderse.
+5. **Fiscalizaciones** — por lo que concluyeron.
+6. **Infracciones** — por la fecha en que **ocurrieron**, no en que se emitieron: una boleta levantada
+   el lunes y emitida el martes desde la cola sin señal es del lunes, que es el día por el que la
+   municipalidad pregunta cuando pregunta por el lunes.
+7. **Exoneraciones** — como están **hoy**, no del período: un permiso aprobado en marzo sigue
+   exonerando un carro en setiembre, así que una ventana contestaría algo que nadie preguntó.
+8. **Actividad por inspector** — consultas y boletas **lado a lado**, y la pantalla dice por qué:
+   ninguno de los dos números significa nada solo. Muchas consultas y pocas boletas puede ser un
+   sector que cumple; boletas casi sin consultas es alguien que las escribe sin ir a ver. Juntos son
+   una pregunta que vale la pena hacer; por separado son una acusación o una felicitación que nadie se
+   ganó. Los nombres se resuelven al leer (v0.33), y un funcionario que ya se fue igual aparece:
+   su trabajo de esa semana ocurrió.
+9. **Fallos de pago** — por **código del proveedor, tal cual**. El número solo no le dice nada
+   accionable a nadie: cuarenta rechazos por fondos insuficientes son el roce normal de una ciudad;
+   cuarenta por configuración inválida del comercio son una caída que nadie notó, y son los mismos
+   cuarenta.
+
+## Cómo está hecho
+
+`GET /admin/dashboard` — **una sola llamada y no nueve**. Un panel armado con nueve peticiones se
+dibuja en nueve pasos y cada uno puede fallar por su cuenta, dejando una pantalla a medias verdadera,
+que es peor que una honestamente cargando porque nadie sabe cuál mitad.
+
+Todo se **suma en la base**, agrupado y por municipalidad. La tabla de fiscalizaciones es la más
+grande de la plataforma, y un panel que se trajera un mes a memoria para contar se pondría más lento
+cada día que el producto tuviera éxito —que es la única lentitud que una municipalidad se toma
+personal.
+
+`DashboardService` vive en el `app` y no en un módulo, porque lee **cinco contextos acotados** y eso
+es precisamente lo que ningún módulo puede hacer. Un modelo de lectura que cruza contextos pertenece
+a la raíz de composición: ningún módulo gana una dependencia de la que después haya que desenredarlo,
+y el día que uno se extraiga esta clase es donde una llamada remota reemplaza a un repositorio.
+
+Detrás de `AUDIT_READ` —«puede ver lo que hizo esta municipalidad»— y deliberadamente no de
+`TENANT_MANAGE`: leer las cifras no es la misma autoridad que cambiar la configuración, y un panel
+que sólo abre el administrador es un panel que nadie consulta.
+
+Se refresca solo cada treinta segundos: seguido para que la ocupación esté al día, espaciado para que
+una municipalidad con conexión lenta no esté redibujando la página bajo sus propias manos.
+
+## Simulador
+
+Calcula las nueve cifras de los **mismos datos** que alimentan las otras pantallas del simulador. Uno
+con cifras propias se ve idéntico y deja pasar justo el defecto que importa: que el número no
+corresponda a las filas que uno abre al hacer clic. Verificado así, de punta a punta: el panel dice
+`Sin pago vigente: 1`, el clic aterriza en `?verdict=NOT_COVERED` y la lista trae **1 resultado**; el
+panel dice `Aprobados: 2`, el clic aterriza en `?status=APPROVED` y la lista trae **2 resultados**.

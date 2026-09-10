@@ -74,6 +74,8 @@ export function AdminShell({ children }: AdminShellProps): React.JSX.Element {
       sidebar={
         <div className="lx-nav">
           <NavItem to="/">{t('nav.home')}</NavItem>
+          {/* Lo primero después de Inicio: es la pantalla desde la que se llega a las demás. */}
+          {permissions.has('AUDIT_READ') ? <NavItem to="/dashboard">{t('nav.dashboard')}</NavItem> : null}
 
           {/* Operación, antes que las personas: es lo que un municipal abre todos los días. */}
           {permissions.has('TENANT_MANAGE') ? (

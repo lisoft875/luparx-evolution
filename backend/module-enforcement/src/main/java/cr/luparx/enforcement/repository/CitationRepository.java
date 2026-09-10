@@ -179,4 +179,33 @@ public interface CitationRepository extends JpaRepository<Citation, UUID> {
     long countByTenantId(UUID tenantId);
 
     long countByTenantIdAndStatus(UUID tenantId, CitationStatus status);
+
+    /**
+     * Citations of a period grouped by state, with what they are worth (CONTRACT.md v0.36).
+     *
+     * <p>By {@code occurredAt} and not {@code issuedAt}: a citation raised on the street on Monday
+     * and emitted out of the offline queue on Tuesday belongs to Monday, which is the day the
+     * municipality is asking about when it asks what happened on Monday.</p>
+     */
+    @Query("""
+            select c.status, count(c), coalesce(sum(c.fineAmountMinor), 0)
+            from Citation c
+            where c.tenantId = :tenantId and c.occurredAt >= :from and c.occurredAt < :to
+            group by c.status
+            """)
+    List<Object[]> countByStatusIn(@Param("tenantId") UUID tenantId,
+                                   @Param("from") Instant from,
+                                   @Param("to") Instant to);
+
+    /** How many citations each officer raised in a period. Null actor: mirrored from another system. */
+    @Query("""
+            select c.inspectorUserId, count(c)
+            from Citation c
+            where c.tenantId = :tenantId and c.occurredAt >= :from and c.occurredAt < :to
+              and c.inspectorUserId is not null
+            group by c.inspectorUserId
+            """)
+    List<Object[]> countByInspector(@Param("tenantId") UUID tenantId,
+                                    @Param("from") Instant from,
+                                    @Param("to") Instant to);
 }

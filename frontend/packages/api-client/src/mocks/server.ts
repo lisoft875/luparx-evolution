@@ -2287,6 +2287,222 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
   // append-only and idempotent by `deviceCitationId`. Everything a screen can reach is here; the
   // parts a screen never sees (storage of the bytes, the SHA-256, the numbering lock) are not.
   // ---- Conciliación de pagos (CONTRACT.md v0.35) -----------------------------------------
+  // ---- Panel de la municipalidad (CONTRACT.md v0.36) -------------------------------------------
+  // Se calcula de los MISMOS datos que alimentan las demás pantallas del simulador. Un panel con
+  // cifras inventadas se ve idéntico y deja pasar justo el defecto que importa: que el número no
+  // corresponda a las filas que uno abre al hacer clic.
+  if (segments[2] === 'admin' && segments[3] === 'dashboard' && method === 'GET') {
+    const dashAuth = new Headers(init?.headers).get('Authorization');
+    const dashClaims = dashAuth ? decodeMockClaims(dashAuth) : null;
+    if (!dashClaims) return problem(401, 'UNAUTHORIZED', 'Missing or invalid session');
+    const tenantId = dashClaims.tid ?? '';
+    const now = new Date();
+    const from = url.searchParams.get('from') ?? new Date(now.getTime() - 30 * DAY).toISOString();
+    const to = url.searchParams.get('to') ?? now.toISOString();
+    const money = (amountMinor: number) => ({ amountMinor, currencyCode: 'CRC' });
+    const inWindow = (at: string | null) => at !== null && at >= from && at < to;
+
+    // 1. Recaudación — el mismo cálculo que /billing/totals, para que las dos pantallas no puedan
+    // contradecirse.
+    let capturedGross = 0;
+    let capturedNet = 0;
+    let settledGross = 0;
+    let unsettledGross = 0;
+    let capturedCount = 0;
+    for (const payment of mockPayments.filter((p) => p.tenantId === tenantId)) {
+      if (payment.status !== 'CAPTURED') continue;
+      capturedCount += 1;
+      capturedGross += payment.grossMinor;
+      capturedNet += payment.netMinor ?? payment.grossMinor;
+      if (payment.reconciliationStatus === 'MATCHED' || payment.reconciliationStatus === 'AMOUNT_MISMATCH') {
+        settledGross += payment.grossMinor;
+      } else if (payment.reconciliationStatus !== 'NOT_APPLICABLE') {
+        unsettledGross += payment.grossMinor;
+      }
+    }
+
+    // 4. Ocupación — AHORA, y con el denominador honesto: bahías en servicio.
+    const zones = mockAdminZones(tenantId);
+    const zoneRows = zones.map((zone) => {
+      const active = mockParkingSessions.filter(
+        (session) => session.tenantId === tenantId && session.status === 'ACTIVE' && session.zoneId === zone.id,
+      ).length;
+      const bays = mockAdminSpaces.filter(
+        (space) => space.zoneId === zone.id && space.status === 'AVAILABLE',
+      ).length;
+      return {
+        zoneId: zone.id,
+        code: zone.code,
+        name: zone.name,
+        activeSessions: active,
+        baysInService: bays,
+        // Nulo cuando la zona no tiene bahías numeradas. No es 0%.
+        percent: bays === 0 ? null : Math.round((active * 100) / bays),
+      };
+    });
+    zoneRows.sort((a, b) => b.activeSessions - a.activeSessions);
+    const allActive = mockParkingSessions.filter(
+      (session) => session.tenantId === tenantId && session.status === 'ACTIVE',
+    );
+    const unzoned = allActive.filter((session) => !session.zoneId).length;
+
+    const groupCount = <T,>(rows: T[], key: (row: T) => string | null) => {
+      const out = new Map<string, number>();
+      for (const row of rows) {
+        const k = key(row) ?? '-';
+        out.set(k, (out.get(k) ?? 0) + 1);
+      }
+      return out;
+    };
+
+    // 5, 6 y 7.
+    const checks = groupCount(
+      mockEnforcementChecks.filter((c) => c.tenantId === tenantId && inWindow(c.occurredAt)),
+      (c) => c.verdict,
+    );
+    const citationRows = mockCitations.filter((c) => c.tenantId === tenantId && inWindow(c.occurredAt));
+    const citationsByStatus = new Map<string, { count: number; total: number }>();
+    for (const citation of citationRows) {
+      const acc = citationsByStatus.get(citation.status) ?? { count: 0, total: 0 };
+      acc.count += 1;
+      acc.total += citation.fineMinor;
+      citationsByStatus.set(citation.status, acc);
+    }
+    const exemptions = groupCount(
+      mockExemptions.filter((e) => e.tenantId === tenantId),
+      (e) => e.status,
+    );
+
+    // 8. Actividad por inspector: consultas y boletas lado a lado.
+    const byInspector = new Map<string, { checks: number; citations: number; last: string | null }>();
+    for (const check of mockEnforcementChecks.filter((c) => c.tenantId === tenantId && inWindow(c.occurredAt))) {
+      const acc = byInspector.get(check.inspectorUserId) ?? { checks: 0, citations: 0, last: null };
+      acc.checks += 1;
+      if (!acc.last || check.occurredAt > acc.last) acc.last = check.occurredAt;
+      byInspector.set(check.inspectorUserId, acc);
+    }
+    for (const citation of citationRows) {
+      if (!citation.inspectorUserId) continue;
+      const acc = byInspector.get(citation.inspectorUserId) ?? { checks: 0, citations: 0, last: null };
+      acc.citations += 1;
+      byInspector.set(citation.inspectorUserId, acc);
+    }
+
+    // 9. Fallos de pago, por código del proveedor.
+    const failures = new Map<string, { reason: string; count: number; amount: number }>();
+    let failureCount = 0;
+    let failureAmount = 0;
+    for (const payment of mockPayments) {
+      if (payment.tenantId !== tenantId) continue;
+      if (payment.status !== 'FAILED' && payment.status !== 'CANCELLED') continue;
+      failureCount += 1;
+      failureAmount += payment.grossMinor;
+      const code = payment.failureCode ?? '-';
+      const acc = failures.get(code) ?? { reason: payment.failureReason ?? '', count: 0, amount: 0 };
+      acc.count += 1;
+      acc.amount += payment.grossMinor;
+      failures.set(code, acc);
+    }
+
+    return json({
+      from,
+      to,
+      now: now.toISOString(),
+      revenue: {
+        capturedGross: money(capturedGross),
+        capturedNet: money(capturedNet),
+        settledGross: money(settledGross),
+        unsettledGross: money(unsettledGross),
+        capturedCount,
+      },
+      // Los movimientos se derivan de los pagos y de las estadías del período, que es de donde
+      // salen de verdad. El simulador no lleva un libro de billetera aparte, y fabricar uno con
+      // cifras propias sería exactamente la clase de dato bonito que no corresponde a nada.
+      transactions: [
+        {
+          type: 'TOP_UP',
+          labelKey: 'wallet.transaction.top_up',
+          count: mockPayments.filter(
+            (p) => p.tenantId === tenantId && p.status === 'CAPTURED' && inWindow(p.confirmedAt),
+          ).length,
+          total: money(
+            mockPayments
+              .filter((p) => p.tenantId === tenantId && p.status === 'CAPTURED' && inWindow(p.confirmedAt))
+              .reduce((sum, p) => sum + p.grossMinor, 0),
+          ),
+        },
+        {
+          type: 'SESSION_CHARGE',
+          labelKey: 'wallet.transaction.session_charge',
+          count: mockParkingSessions.filter(
+            (session) => session.tenantId === tenantId && inWindow(session.startedAt)
+              && (session.amountMinor ?? 0) > 0,
+          ).length,
+          // Negativo: un cargo sale de la billetera.
+          total: money(
+            -mockParkingSessions
+              .filter((session) => session.tenantId === tenantId && inWindow(session.startedAt))
+              .reduce((sum, session) => sum + (session.amountMinor ?? 0), 0),
+          ),
+        },
+      ].filter((row) => row.count > 0),
+      // El simulador no lleva `paymentStatus` en la estadía, así que se deriva de lo mismo que lo
+      // determina en el servidor: si se cobró algo o no. Es una derivación honesta y no un valor
+      // inventado —y el día que el simulador guarde la columna, esto se reemplaza por leerla.
+      parking: [...groupCount(
+        mockParkingSessions.filter((s) => s.tenantId === tenantId && inWindow(s.startedAt)),
+        (s) => ((s.amountMinor ?? 0) > 0 ? 'PAID' : 'NO_CHARGE'),
+      ).entries()].map(([status, count]) => ({
+        paymentStatus: status,
+        labelKey: `parking.payment.${status.toLowerCase()}`,
+        count,
+        total: money(
+          mockParkingSessions
+            .filter((s) => s.tenantId === tenantId && inWindow(s.startedAt)
+              && ((s.amountMinor ?? 0) > 0 ? 'PAID' : 'NO_CHARGE') === status)
+            .reduce((sum, s) => sum + (s.amountMinor ?? 0), 0),
+        ),
+      })),
+      occupancy: { activeSessions: allActive.length, unzonedActive: unzoned, zones: zoneRows },
+      checks: [...checks.entries()]
+        .map(([verdict, count]) => ({
+          verdict,
+          labelKey: `plate.verdict.${verdict.toLowerCase()}`,
+          count,
+        }))
+        .sort((a, b) => b.count - a.count),
+      citations: [...citationsByStatus.entries()].map(([status, acc]) => ({
+        status,
+        labelKey: `citation.status.${status.toLowerCase()}`,
+        count: acc.count,
+        total: money(acc.total),
+      })),
+      exemptions: [...exemptions.entries()].map(([status, count]) => ({
+        status,
+        labelKey: `admin.exemptions.status.${status}`,
+        count,
+      })),
+      inspectors: [...byInspector.entries()]
+        .map(([id, acc]) => ({
+          inspectorUserId: id,
+          name: mockUsersById.get(id)
+            ? `${mockUsersById.get(id)!.profile.givenName} ${mockUsersById.get(id)!.profile.familyName}`
+            : null,
+          checks: acc.checks,
+          citations: acc.citations,
+          lastCheckAt: acc.last,
+        }))
+        .sort((a, b) => b.checks - a.checks),
+      paymentFailures: {
+        count: failureCount,
+        amount: money(failureAmount),
+        byReason: [...failures.entries()]
+          .map(([code, acc]) => ({ code, reason: acc.reason, count: acc.count, amount: money(acc.amount) }))
+          .sort((a, b) => b.count - a.count),
+      },
+    });
+  }
+
   if (segments[2] === 'admin' && segments[3] === 'billing') {
     // La municipalidad del token, como en toda rama de administración: sin esto la conciliación de
     // un municipio mostraría los pagos de otro, que en dinero no es una fuga de información sino

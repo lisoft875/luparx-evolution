@@ -97,4 +97,26 @@ public interface PaymentRepository extends JpaRepository<Payment, UUID> {
     List<Object[]> summarise(@Param("tenantId") UUID tenantId,
                              @Param("from") Instant from,
                              @Param("to") Instant to);
+
+    /**
+     * Failed attempts of a period grouped by the provider's own code (CONTRACT.md v0.36).
+     *
+     * <p>By code and not merely counted, because the number alone tells a municipality nothing it can
+     * act on. Forty refusals for insufficient funds is the ordinary friction of a city; forty for an
+     * invalid merchant configuration is an outage nobody has noticed, and it is the same forty.</p>
+     */
+    @Query("""
+            select coalesce(p.failureCode, '-'), coalesce(p.failureReason, ''), count(p),
+                   coalesce(sum(p.grossAmountMinor), 0)
+            from Payment p
+            where p.tenantId = :tenantId and p.status in :failed
+              and p.requestedAt >= :from and p.requestedAt < :to
+            group by p.failureCode, p.failureReason
+            order by count(p) desc
+            """)
+    List<Object[]> countFailuresByCode(@Param("tenantId") UUID tenantId,
+                                       @Param("failed") Collection<PaymentState> failed,
+                                       @Param("from") Instant from,
+                                       @Param("to") Instant to,
+                                       Pageable pageable);
 }

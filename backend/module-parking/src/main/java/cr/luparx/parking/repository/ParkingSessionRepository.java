@@ -95,4 +95,40 @@ public interface ParkingSessionRepository extends JpaRepository<ParkingSession, 
      */
     boolean existsByTenantIdAndPlateSnapshotAndCourtesyTrueAndStartedAtBetween(
             java.util.UUID tenantId, String plateSnapshot, java.time.Instant from, java.time.Instant to);
+
+    /**
+     * Running stays grouped by zone, right now (CONTRACT.md v0.36).
+     *
+     * <p>The numerator of occupancy. A stay with no zone is counted apart rather than dropped: it is
+     * still a car parked somewhere, and silently losing it would make the municipality's busiest
+     * hour look quieter than it was.</p>
+     */
+    @org.springframework.data.jpa.repository.Query("""
+            select s.zoneId, count(s)
+            from ParkingSession s
+            where s.tenantId = :tenantId and s.status = :status
+            group by s.zoneId
+            """)
+    java.util.List<Object[]> countActiveByZone(
+            @org.springframework.data.repository.query.Param("tenantId") java.util.UUID tenantId,
+            @org.springframework.data.repository.query.Param("status")
+            cr.luparx.parking.model.ParkingSessionStatus status);
+
+    /**
+     * Stays of a period grouped by how the money went, with what they were worth.
+     *
+     * <p>Grouped by {@code paymentStatus} (v0.32) rather than by {@code status}: the dashboard
+     * question is about the money, and a stay that finished last week is not the same fact as a stay
+     * that was never charged for.</p>
+     */
+    @org.springframework.data.jpa.repository.Query("""
+            select s.paymentStatus, count(s), coalesce(sum(s.amountMinor), 0)
+            from ParkingSession s
+            where s.tenantId = :tenantId and s.startTime >= :from and s.startTime < :to
+            group by s.paymentStatus
+            """)
+    java.util.List<Object[]> countByPaymentStatus(
+            @org.springframework.data.repository.query.Param("tenantId") java.util.UUID tenantId,
+            @org.springframework.data.repository.query.Param("from") java.time.Instant from,
+            @org.springframework.data.repository.query.Param("to") java.time.Instant to);
 }

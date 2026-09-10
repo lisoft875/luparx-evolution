@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useNavigate } from 'react-router-dom';
 import { citationStatusKey, citationStatusTone } from '@luparx/features';
 import { formatCurrencyMinor, formatDateTime, useTranslation } from '@luparx/i18n';
@@ -61,8 +62,16 @@ export function EnforcementCitationsPage(): React.JSX.Element {
   const navigate = useNavigate();
   const zones = useAdminZones();
 
-  const [draft, setDraft] = useState<AdminCitationsQuery>({});
-  const [applied, setApplied] = useState<AdminCitationsQuery>({});
+  // Seeded from the query string, so a count on the dashboard opens exactly the citations it counted
+  // (CONTRACT.md v0.36).
+  const [params] = useSearchParams();
+  const fromUrl: AdminCitationsQuery = {
+    status: (params.get('status') as AdminCitationsQuery['status']) ?? undefined,
+    zoneId: params.get('zoneId') ?? undefined,
+    inspectorUserId: params.get('inspectorUserId') ?? undefined,
+  };
+  const [draft, setDraft] = useState<AdminCitationsQuery>(fromUrl);
+  const [applied, setApplied] = useState<AdminCitationsQuery>(fromUrl);
   const [page, setPage] = useState(0);
 
   const query = useEnforcementCitations({ ...applied, page, size: PAGE_SIZE });
