@@ -1469,17 +1469,82 @@ export interface PlateExemptionSummary {
   plate: string;
   reason: string;
   documentRef: string | null;
+  /**
+   * The category, as this municipality named it (v0.30): "Discapacidad", "Vehículo institucional".
+   * The **beneficiary** deliberately does not travel here: knowing whose permit it is adds nothing to
+   * the decision not to fine, and everything to what a device in the street carries about a person.
+   */
+  typeName: string | null;
   validFrom: string;
   validTo: string | null;
 }
 
-// ---- Plate exemptions, administration side (CONTRACT.md v0.28) --------------------------------
+// ---- Permits and exemptions, administration side (CONTRACT.md v0.30) --------------------------
 
-export type ExemptionStatus = 'ACTIVE' | 'REVOKED';
+/**
+ * Four states since v0.30, when a permit became something that is *requested* before it is granted —
+ * a state that can be rejected implies somebody asked.
+ *
+ * `ACTIVE` is what v0.28 called an approved permit and only appears during the expansion phase; treat
+ * it exactly as `APPROVED` wherever it turns up.
+ *
+ * There is deliberately no `EXPIRED`: running out is a fact about the clock, not a decision anybody
+ * took, so it is read from `expired` — computed against now, never stored.
+ */
+export type ExemptionStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'REVOKED' | 'ACTIVE';
 
-export interface GrantExemptionRequest {
+/** Person or organisation. A disability permit is doña María's; an institutional one is the ministry's. */
+export type BeneficiaryKind = 'PERSON' | 'ORGANISATION';
+
+/** A category of permit, as this municipality defines it. Configuration, never an enumeration. */
+export interface ExemptionType {
+  id: string;
+  /** What a future rule would match on. Set once and never edited. */
+  code: string;
+  name: string;
+  description: string | null;
+  /** A half-hour courtesy may have no beneficiary; a disability permit without a person is not one. */
+  requiresBeneficiary: boolean;
+  active: boolean;
+}
+
+export interface SaveExemptionTypeRequest {
+  code?: string;
+  name: string;
+  description?: string;
+  requiresBeneficiary: boolean;
+  /** Only on update. Retiring is not deleting: granted permits point at the category. */
+  active?: boolean;
+}
+
+/** One plate a permit covers. `plateRaw` is what was typed, and it is what an appeal argues over. */
+export interface ExemptionPlate {
   plate: string;
-  /** Required, and free text rather than a category: what one country exempts is not what another does. */
+  plateRaw: string;
+  status: ExemptionStatus;
+  addedAt: string;
+}
+
+export interface ExemptionDocument {
+  id: string;
+  title: string;
+  contentType: string;
+  byteSize: number;
+  /** The digest of what was stored: "the assessment that was submitted", not "a file put there later". */
+  sha256: string;
+  uploadedByName: string | null;
+  createdAt: string;
+}
+
+export interface RequestExemptionRequest {
+  exemptionTypeId: string;
+  /** One or several: a disability permit belongs to the person and travels with them. */
+  plates: string[];
+  beneficiaryKind?: BeneficiaryKind;
+  beneficiaryName?: string;
+  /** Personal identifier. Never shown on the officer's device. */
+  beneficiaryDocument?: string;
+  /** Required. The category says which rule applies; this says why this vehicle falls under it. */
   reason: string;
   documentRef?: string;
   validFrom?: string;
@@ -1488,6 +1553,11 @@ export interface GrantExemptionRequest {
 }
 
 export interface AmendExemptionRequest {
+  /** Omitted keeps the category the permit already has. */
+  exemptionTypeId?: string;
+  beneficiaryKind?: BeneficiaryKind;
+  beneficiaryName?: string;
+  beneficiaryDocument?: string;
   reason: string;
   documentRef?: string;
   validFrom?: string;
@@ -1496,7 +1566,9 @@ export interface AmendExemptionRequest {
 
 export interface PlateExemption {
   id: string;
+  /** @deprecated since v0.30 — read `plates`. The first of them, kept for an older client. */
   plate: string;
+  /** @deprecated since v0.30 — read `plates`. */
   plateRaw: string;
   reason: string;
   documentRef: string | null;
@@ -1510,6 +1582,22 @@ export interface PlateExemption {
   grantedAt: string;
   revokedAt: string | null;
   revokeReason: string | null;
+  exemptionTypeId: string | null;
+  exemptionTypeCode: string | null;
+  exemptionTypeName: string | null;
+  plates: ExemptionPlate[];
+  beneficiaryKind: BeneficiaryKind | null;
+  beneficiaryName: string | null;
+  beneficiaryDocument: string | null;
+  requestedAt: string | null;
+  requestedByName: string | null;
+  decidedAt: string | null;
+  /** "Who authorised that this car did not pay" — not answered by naming whoever typed the request. */
+  decidedByName: string | null;
+  decisionReason: string | null;
+  /** The same person asked and decided. Permitted, and therefore shown rather than left to be noticed. */
+  selfApproved: boolean;
+  documentCount: number;
 }
 
 /** What the officer's device sends. Everything about location is optional and never invented. */

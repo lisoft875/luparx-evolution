@@ -257,3 +257,11 @@ luparx:
     # this does. How MANY images a defence may carry is the municipality's decision instead, and lives
     # in `enforcement_settings`, editable from the admin portal.
     max-appeal-image-bytes: ${EVIDENCE_MAX_APPEAL_BYTES:1048576}
+    # Los documentos de respaldo de un permiso (CONTRACT.md v0.30). Límites propios y no los de la
+    # evidencia: un dictamen escaneado son varias páginas y se sube desde un escritorio, mientras que
+    # la foto de un parabrisas se toma en la calle con datos móviles.
+    max-document-bytes: ${EXEMPTION_MAX_DOCUMENT_BYTES:20971520}
+    # Verificados por la cabecera del propio archivo. Un PDF y las imágenes del teléfono; nada que
+    # pueda ejecutarse al abrirse (ofimática con macros, ZIP, SVG, HTML).
+    allowed-document-types: ${EXEMPTION_ALLOWED_DOCUMENT_TYPES:application/pdf,image/jpeg,image/png,image/webp,image/heic}
+    max-documents-per-permit: ${EXEMPTION_MAX_DOCUMENTS:10}

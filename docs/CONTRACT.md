@@ -2487,3 +2487,140 @@ viejo» es una consulta que se hace más lenta cada día que la municipalidad op
 
 La pantalla dice en pantalla, no en un manual, que esas filas dicen dónde estuvo un funcionario y que
 se conservan doce meses.
+
+---
+
+# v0.30 — Permisos y exoneraciones (normativo)
+
+v0.28 dio la mitad: una placa, un motivo escrito, una vigencia y quién la otorgó. Un permiso de
+verdad tiene cuatro cosas más, y cada una arregla un caso concreto que el producto pidió por nombre —
+discapacidad, vehículo institucional, cortesía, permiso especial, placa asociada, vigencia,
+beneficiario, documentos de respaldo, estado aprobado/rechazado, quién autorizó.
+
+## La categoría es configuración, no una enumeración
+
+En v0.28 argumenté en contra de un enum de categorías, y ese argumento sigue en pie: **qué exonera un
+país no es lo que exonera otro**, y una lista fija en el esquema sería la ley de Costa Rica incrustada
+en la plataforma. La salida no es renunciar a la categoría: es hacerla **configuración**.
+
+`exemption_types`, un catálogo **por municipalidad**, sembrado con las cuatro que el producto pidió y
+editable sin desplegar nada. `code` es lo que una regla futura reconocería —hoy nada lo usa, y ése es
+el punto— y `name` es lo que se lee en pantalla, en el idioma de la municipalidad que lo escribió.
+
+Una municipalidad creada después de V29_0 no puede quedar con el catálogo vacío, porque entonces no
+podría registrar ni un permiso. Se siembra **la primera vez que alguien lo mira** (el mismo
+`orElseGet` de `CitationNumberService`): `module-tenancy` no debe llamar a `module-enforcement` al
+crear un cantón, y un escuchador de eventos dejaría la existencia del catálogo a merced de un evento
+que nadie ve fallar. Los nombres salen del paquete de mensajes en el idioma configurado de la
+municipalidad, nunca de literales en el código.
+
+Una categoría **no se borra nunca**: los permisos otorgados bajo ella tienen años y explican por qué
+no se multó a un vehículo. Se retira, que es lo que quería quien la quiso quitar de la lista.
+
+## Un permiso ampara varias placas
+
+`exemption_plates`. Porque el permiso de discapacidad **es de la persona y la acompaña**: unas veces
+anda en su carro y otras en el del hijo que la lleva. Con una placa por permiso hay que registrarlo
+dos veces, y el día que se revoca uno queda el otro exonerando — que es el error que nadie descubre,
+porque nadie reclama por una multa que no se puso.
+
+`tenant_id` y `status` están duplicados en esa tabla **a propósito**, y es la única desnormalización
+de esta versión. Son lo que le permite a la **base de datos** sostener «una placa no puede tener dos
+permisos aprobados a la vez en la misma municipalidad», con un índice único parcial. PostgreSQL no
+puede poner un índice parcial sobre una condición que vive en otra tabla, y las alternativas eran un
+disparador —lógica de negocio escondida donde nadie la lee— o dejar la invariante sólo en el
+servicio, que es justo lo que este esquema no hace en ninguna otra parte. Se escriben en la misma
+transacción que el padre y desde un solo lugar.
+
+Un permiso aprobado que ya venció **sigue ocupando la placa**: para dar otro hay que revocar el
+anterior, que es un acto deliberado y con motivo. Es exactamente lo que un registro de exoneraciones
+debería exigir. La última placa de un permiso no se puede quitar: un permiso que no ampara nada es una
+municipalidad habiendo decidido algo sobre ningún vehículo, y revocar es el acto que se quería.
+
+## Se solicita, y después se resuelve
+
+`PENDING → APPROVED | REJECTED`, y `APPROVED → REVOKED`. Un estado que se puede **rechazar** implica
+que antes alguien **pidió**, y separar quién pide de quién resuelve es lo que contesta a un ente
+contralor cuando pregunta *quién autorizó que ese carro no pagara* — una pregunta que no se contesta
+nombrando a quien digitó la solicitud.
+
+**Un permiso no otorga nada hasta que se otorga**: mientras está pendiente no exonera a nadie, y la
+pantalla lo dice con esas palabras.
+
+La plataforma **no prohíbe** que la misma persona solicite y apruebe. Una municipalidad con un solo
+administrador haría entonces este trabajo en papel, donde nadie puede auditarlo; lo que no puede es
+que el hecho sea invisible. La fila lo dice (`selfApproved`), la pantalla lo dice y la entrada de
+auditoría `PLATE_EXEMPTION_APPROVED` lo lleva escrito.
+
+Sigue sin haber `EXPIRED`. Vencer es un hecho del reloj, no una decisión que alguien tomó; escribirlo
+en una columna necesitaría un trabajo para mantenerla cierta, y el atraso de ese trabajo es una
+ventana en la que un permiso vencido se lee como vivo. `inForce` / `pending` / `expired` se calculan
+contra el instante de la consulta, siempre.
+
+## Los documentos de respaldo son archivos
+
+`exemption_documents`, con la misma forma que `citation_evidence` y por la misma razón: quien impugna
+una exoneración años después tiene derecho a ver en qué se sustentó. «Acuerdo 12-2025» en un campo de
+texto es la promesa de que alguien, en algún lado, todavía tiene el acuerdo.
+
+Mismo puerto de almacenamiento que las fotografías de las boletas —es la misma clase de prueba— y el
+mismo SHA-256 sobre los bytes escritos, que es lo que distingue «éste es el dictamen que se presentó»
+de «éste es un archivo que alguien puso después». El tipo lo decide el servidor **leyendo la cabecera
+del archivo**, nunca el nombre ni el `Content-Type` que declaró el navegador.
+
+Límites propios (`DocumentPolicy`) y no los de la evidencia: un dictamen escaneado son varias páginas
+subidas desde un escritorio, y la foto de un parabrisas se toma en la calle con datos móviles.
+Se aceptan PDF e imágenes, y **nada que pueda ejecutarse al abrirse** — ofimática con macros, ZIP,
+SVG, HTML. Estos archivos existen para devolvérselos a una persona dentro de unos años, y un archivo
+que se ejecuta al abrirse no es prueba, es un pasivo.
+
+**No se borran desde la aplicación.** Si uno quedó mal se adjunta el correcto y quedan los dos.
+
+## Lo que ve el fiscalizador, y lo que no
+
+El resumen que viaja al teléfono gana la **categoría** («Discapacidad», «Vehículo institucional»):
+es lo que el funcionario dice en voz alta. El **beneficiario no viaja** — ni el nombre ni la
+identificación. Saber de quién es el permiso no cambia la decisión de no multar, y sí cambia lo que un
+dispositivo anda cargando sobre una persona por la calle. La identificación del beneficiario sólo se
+lee en las pantallas de administración, y tampoco entra en las entradas de auditoría, que no se
+borran nunca.
+
+## La API, expandida y no rota
+
+| Método | Ruta | Permiso |
+| --- | --- | --- |
+| `GET` | `/api/v1/admin/enforcement/exemption-types` | `ENFORCEMENT_MANAGE` |
+| `POST` / `PUT` | `/api/v1/admin/enforcement/exemption-types[/{id}]` | `ENFORCEMENT_MANAGE` |
+| `GET` | `/api/v1/admin/enforcement/exemptions` | `ENFORCEMENT_MANAGE` |
+| `POST` | `/api/v1/admin/enforcement/exemptions` | `ENFORCEMENT_MANAGE` |
+| `PUT` | `/api/v1/admin/enforcement/exemptions/{id}` | `ENFORCEMENT_MANAGE` |
+| `POST` | `…/{id}/approve` · `…/{id}/reject` · `…/{id}/revoke` | `ENFORCEMENT_MANAGE` |
+| `POST` | `…/{id}/plates` | `ENFORCEMENT_MANAGE` |
+| `DELETE` | `…/{id}/plates/{plate}` | `ENFORCEMENT_MANAGE` |
+| `GET` / `POST` | `…/{id}/documents` | `ENFORCEMENT_MANAGE` |
+| `GET` | `…/{id}/documents/{documentId}` | `ENFORCEMENT_MANAGE` |
+
+Todo bajo `ENFORCEMENT_MANAGE`, el permiso que ya gobierna *qué se multa*. Decidir que un vehículo
+nunca se multa es la misma clase de decisión vista desde el otro lado, y ponerlo bajo el más amplio
+`TENANT_MANAGE` dejaría que quien configura tarifas exonerara una placa de callado. La segregación de
+funciones de esta versión es **de registro**, no de permiso: quien resuelve queda nombrado.
+
+`DELETE` aparece una sola vez y borra **a qué vehículos alcanza una decisión**, no la decisión.
+
+### Fase de expansión (ADR 0010)
+
+Nada se borra ni se renombra. Las columnas de v0.28 —`plate`, `plate_raw`, `granted_by`,
+`granted_at`— siguen ahí y se siguen escribiendo con la primera placa, y `ACTIVE` sigue admitido en el
+`CHECK` mientras puedan quedar instancias viejas escribiéndolo. La contracción es otra versión.
+
+Dos consecuencias que se sostienen a propósito:
+
+* La consulta del fiscalizador busca en `exemption_plates` y, **si no encuentra nada, vuelve a
+  buscar** en la columna obsoleta del padre. Una instancia anterior a V29_0 corriendo al lado otorga
+  un permiso escribiendo sólo el padre, y no verlo significa multar un vehículo que esta
+  municipalidad ya había decidido no multar. Se va cuando se vaya la columna.
+* Un cuerpo con `plate` y sin `plates` es la forma de v0.28, y se responde con el **comportamiento**
+  de v0.28: se registra y se otorga en un solo acto, por la misma persona, y queda anotado como tal.
+  Convertir de callado el «exonere esta placa» de un cliente viejo en «pídale a alguien que la
+  exonere» dejaría multando un vehículo que su operador cree exonerado, que es peor que una rama
+  heredada y honesta que desaparece en la contracción.

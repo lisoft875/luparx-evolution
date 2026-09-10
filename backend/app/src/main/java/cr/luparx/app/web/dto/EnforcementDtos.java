@@ -1,6 +1,7 @@
 package cr.luparx.app.web.dto;
 
 import cr.luparx.core.domain.Portal;
+import cr.luparx.enforcement.model.BeneficiaryKind;
 import cr.luparx.enforcement.model.CitationAction;
 import cr.luparx.enforcement.model.CitationStatus;
 import cr.luparx.enforcement.model.AppealStatus;
@@ -127,6 +128,15 @@ public final class EnforcementDtos {
      * car.</p>
      */
     public record PlateExemptionSummary(UUID id, String plate, String reason, String documentRef,
+                                        /**
+                                         * The category, as this municipality named it (v0.30):
+                                         * "Discapacidad", "Vehículo institucional". The officer says
+                                         * this out loud; the <b>beneficiary</b> deliberately does not
+                                         * travel here, because knowing whose permit it is adds nothing
+                                         * to the decision not to fine and everything to what a device
+                                         * in the street is carrying about a person.
+                                         */
+                                        String typeName,
                                         Instant validFrom, Instant validTo) {
     }
 
@@ -200,16 +210,44 @@ public final class EnforcementDtos {
      * own fleet. The screen says so in those words rather than leaving a blank cell, because an
      * exemption nobody reviews is how a sold vehicle keeps parking free.</p>
      */
-    public record GrantExemptionRequest(
-            @NotBlank @Size(max = 32) String plate,
+    public record RequestExemptionRequest(
+            /**
+             * The category, from this municipality's own catalogue. Optional only for the deprecated
+             * shape below; a request that names no category falls into the generic one.
+             */
+            UUID exemptionTypeId,
+            /**
+             * One or several. A disability permit belongs to the person and travels with them.
+             *
+             * <p>No bean-validation annotation on the elements: each one goes through the same
+             * normaliser the officer's lookup uses, which is a stricter check than a length and the
+             * only one that matters — a permit the lookup cannot find is a permit that does not
+             * exist.</p>
+             */
+            List<String> plates,
+            // DEPRECATED since v0.30 — send `plates`. A body carrying this and no `plates` is the
+            // v0.28 shape, and it is answered with the v0.28 BEHAVIOUR: the permit is registered and
+            // granted in one act by the same person, recorded as such. Quietly changing what an old
+            // client's call does would leave a vehicle being fined that its operator believes is
+            // exempt, which is worse than a legacy branch that disappears in the contraction.
+            @Size(max = 32) String plate,
+            BeneficiaryKind beneficiaryKind,
+            @Size(max = 200) String beneficiaryName,
+            /** Personal identifier. Never leaves the administration screens — see the officer's DTO. */
+            @Size(max = 64) String beneficiaryDocument,
             @NotBlank @Size(max = 300) String reason,
             @Size(max = 120) String documentRef,
             Instant validFrom,
             Instant validTo) {
     }
 
-    /** {@code PUT /admin/enforcement/exemptions/{id}}. The plate is never edited: that is a new row. */
+    /** {@code PUT /admin/enforcement/exemptions/{id}}. Plates are added and removed on their own. */
     public record AmendExemptionRequest(
+            /** Optional: omitted keeps the category the permit already has. */
+            UUID exemptionTypeId,
+            BeneficiaryKind beneficiaryKind,
+            @Size(max = 200) String beneficiaryName,
+            @Size(max = 64) String beneficiaryDocument,
             @NotBlank @Size(max = 300) String reason,
             @Size(max = 120) String documentRef,
             Instant validFrom,
@@ -221,6 +259,46 @@ public final class EnforcementDtos {
     }
 
     /**
+     * {@code POST …/{id}/reject}. A refusal owes the person who asked an explanation, so the reason is
+     * required here exactly as it is on a revocation.
+     */
+    public record RejectExemptionRequest(@NotBlank @Size(max = 300) String reason) {
+    }
+
+    /** {@code POST …/{id}/plates}. */
+    public record AddExemptionPlateRequest(@NotBlank @Size(max = 32) String plate) {
+    }
+
+    /** {@code POST/PUT /admin/enforcement/exemption-types}. The code is set once and never edited. */
+    public record SaveExemptionTypeRequest(
+            @Size(max = 32) String code,
+            @NotBlank @Size(max = 120) String name,
+            @Size(max = 400) String description,
+            boolean requiresBeneficiary,
+            /** Only on update; omitted keeps it as it is. Retiring is not deleting. */
+            Boolean active) {
+    }
+
+    /** One category of this municipality's catalogue. */
+    public record ExemptionTypeResponse(UUID id, String code, String name, String description,
+                                        boolean requiresBeneficiary, boolean active) {
+    }
+
+    /** One plate a permit covers. {@code plateRaw} is what was typed; it is what an appeal argues over. */
+    public record ExemptionPlateResponse(String plate, String plateRaw, ExemptionStatus status, Instant addedAt) {
+    }
+
+    /**
+     * A document backing a permit. The bytes are fetched separately; this is its trace.
+     *
+     * @param sha256 the digest of what was stored — what distinguishes "this is the assessment that
+     *               was submitted" from "this is a file somebody put there afterwards"
+     */
+    public record ExemptionDocumentResponse(UUID id, String title, String contentType, long byteSize,
+                                            String sha256, String uploadedByName, Instant createdAt) {
+    }
+
+    /**
      * One exemption as the municipality's register shows it.
      *
      * @param inForce  whether it exempts <em>right now</em> — computed against the clock, never stored
@@ -229,6 +307,9 @@ public final class EnforcementDtos {
      *                 running out is a fact about the clock, not a decision anybody took
      */
     public record PlateExemptionResponse(UUID id,
+                                         // DEPRECATED since v0.30 — read `plates`. This is the first
+                                         // of them, kept so a client older than this version still
+                                         // shows something true.
                                          String plate,
                                          String plateRaw,
                                          String reason,
@@ -241,7 +322,32 @@ public final class EnforcementDtos {
                                          boolean expired,
                                          Instant grantedAt,
                                          Instant revokedAt,
-                                         String revokeReason) {
+                                         String revokeReason,
+                                         // --- v0.30 -------------------------------------------------
+                                         UUID exemptionTypeId,
+                                         String exemptionTypeCode,
+                                         String exemptionTypeName,
+                                         List<ExemptionPlateResponse> plates,
+                                         BeneficiaryKind beneficiaryKind,
+                                         String beneficiaryName,
+                                         String beneficiaryDocument,
+                                         Instant requestedAt,
+                                         String requestedByName,
+                                         Instant decidedAt,
+                                         /**
+                                          * Who granted or refused it. The question an auditor asks is
+                                          * "who authorised that this car did not pay", and it is not
+                                          * answered by naming whoever typed the request.
+                                          */
+                                         String decidedByName,
+                                         String decisionReason,
+                                         /**
+                                          * True when the same person asked and decided. Permitted — a
+                                          * small municipality may have nobody else — and therefore
+                                          * shown, so nobody has to compare two names to notice.
+                                          */
+                                         boolean selfApproved,
+                                         int documentCount) {
     }
 
     // --- citations ---------------------------------------------------------------------------------

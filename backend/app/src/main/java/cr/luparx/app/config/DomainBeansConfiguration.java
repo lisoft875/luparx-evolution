@@ -1,6 +1,7 @@
 package cr.luparx.app.config;
 
 import cr.luparx.core.domain.Portal;
+import cr.luparx.enforcement.model.DocumentPolicy;
 import cr.luparx.enforcement.model.EvidencePolicy;
 import cr.luparx.identity.port.JwtKeySource;
 import cr.luparx.identity.repository.UserRepository;
@@ -158,6 +159,18 @@ public class DomainBeansConfiguration {
                 properties.maxPhotosPerCitation(),
                 properties.maxNoteLength(),
                 properties.maxAppealImageBytes());
+    }
+
+    /**
+     * The limits a permit's backing documents are held to (CONTRACT.md v0.30). Its own bean and not
+     * part of {@link EvidencePolicy}, because a scanned assessment and a windscreen photograph are
+     * different files arriving from different places — see {@link DocumentPolicy}.
+     */
+    @Bean
+    public DocumentPolicy documentPolicy(EnforcementProperties properties) {
+        return new DocumentPolicy(properties.maxDocumentBytes(),
+                Set.copyOf(properties.allowedDocumentTypes()),
+                properties.maxDocumentsPerPermit());
     }
 
     @Bean

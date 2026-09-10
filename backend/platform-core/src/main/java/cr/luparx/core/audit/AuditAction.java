@@ -111,6 +111,27 @@ public final class AuditAction {
     public static final String PLATE_EXEMPTION_AMENDED = "PLATE_EXEMPTION_AMENDED";
     public static final String PLATE_EXEMPTION_REVOKED = "PLATE_EXEMPTION_REVOKED";
 
+    // --- permits: requested, then decided (CONTRACT.md v0.30) -------------------------------------
+    /** Somebody asked. It exempts nobody yet: a permit grants nothing until it is granted. */
+    public static final String PLATE_EXEMPTION_REQUESTED = "PLATE_EXEMPTION_REQUESTED";
+    /**
+     * Somebody granted it — the entry that answers "who authorised that this car did not pay".
+     *
+     * <p>Carries {@code selfApproved} when the person who decided is the person who asked. That is
+     * permitted, because a small municipality may have nobody else and refusing would push the work
+     * off the platform and out of the record entirely; what it must not be is invisible.</p>
+     */
+    public static final String PLATE_EXEMPTION_APPROVED = "PLATE_EXEMPTION_APPROVED";
+    /** Refused, with a reason. Audited like a grant: a refusal is a decision somebody may contest. */
+    public static final String PLATE_EXEMPTION_REJECTED = "PLATE_EXEMPTION_REJECTED";
+    public static final String PLATE_EXEMPTION_PLATE_ADDED = "PLATE_EXEMPTION_PLATE_ADDED";
+    public static final String PLATE_EXEMPTION_PLATE_REMOVED = "PLATE_EXEMPTION_PLATE_REMOVED";
+    /** A backing document was attached. Never removed, so there is no entry for the opposite. */
+    public static final String PLATE_EXEMPTION_DOCUMENT_ATTACHED = "PLATE_EXEMPTION_DOCUMENT_ATTACHED";
+    public static final String EXEMPTION_TYPE_CREATED = "EXEMPTION_TYPE_CREATED";
+    /** Includes retiring one: a category is never deleted, because granted permits point at it. */
+    public static final String EXEMPTION_TYPE_UPDATED = "EXEMPTION_TYPE_UPDATED";
+
     /**
      * The retention purge ran (CONTRACT.md v0.29, ADR 0013).
      *

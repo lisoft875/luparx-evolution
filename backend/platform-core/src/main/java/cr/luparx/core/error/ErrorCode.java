@@ -112,6 +112,31 @@ public final class ErrorCode {
     public static final String EXEMPTION_ALREADY_EXISTS = "EXEMPTION_ALREADY_EXISTS";
     /** Amending something already called back. Revoked is the end of the row, not a state to edit. */
     public static final String EXEMPTION_NOT_ACTIVE = "EXEMPTION_NOT_ACTIVE";
+
+    // --- permits: categories, decisions, documents (CONTRACT.md v0.30) ----------------------------
+    /** The category asked for does not belong to this municipality, or does not exist at all. */
+    public static final String EXEMPTION_TYPE_NOT_FOUND = "EXEMPTION_TYPE_NOT_FOUND";
+    /**
+     * The category was retired. Told apart from "not found" so the screen can refresh its catalogue
+     * instead of showing the operator a dead end on a category they can still see in old permits.
+     */
+    public static final String EXEMPTION_TYPE_INACTIVE = "EXEMPTION_TYPE_INACTIVE";
+    /** Two categories of one municipality cannot share a code; it is what a future rule would match. */
+    public static final String EXEMPTION_TYPE_CODE_TAKEN = "EXEMPTION_TYPE_CODE_TAKEN";
+    /**
+     * Deciding something that is not waiting for a decision — approving twice, rejecting what was
+     * already revoked. Said with its own code because the honest answer is "somebody got there first".
+     */
+    public static final String EXEMPTION_NOT_PENDING = "EXEMPTION_NOT_PENDING";
+    /** Adding or removing a plate on a permit that is closed. A refusal or a revocation is not edited. */
+    public static final String EXEMPTION_NOT_EDITABLE = "EXEMPTION_NOT_EDITABLE";
+    /** A permit has to cover at least one plate; the last one is not removable. */
+    public static final String EXEMPTION_LAST_PLATE = "EXEMPTION_LAST_PLATE";
+    /** As many plates as one permit may cover. A permit for a whole fleet is a policy, not a permit. */
+    public static final String EXEMPTION_PLATE_LIMIT = "EXEMPTION_PLATE_LIMIT";
+    public static final String EXEMPTION_DOCUMENT_NOT_FOUND = "EXEMPTION_DOCUMENT_NOT_FOUND";
+    /** As many backing documents as one permit may carry. */
+    public static final String EXEMPTION_DOCUMENT_LIMIT = "EXEMPTION_DOCUMENT_LIMIT";
     public static final String TENANT_SETTING_INVALID = "TENANT_SETTING_INVALID";
     /**
      * The municipality does not admit citizens on request, so switching to it could not create the

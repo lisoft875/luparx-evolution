@@ -39,7 +39,8 @@ import java.util.UUID;
  *
  * <h2>Layout and path safety</h2>
  *
- * <p>{@code <root>/<tenant>/<yyyy>/<mm>/<citation>/<uuid>.<ext>}. Every segment is generated here —
+ * <p>{@code <root>/<tenant>/<yyyy>/<mm>/<owner>/<uuid>.<ext>}, the owner being the citation or, since
+ * v0.30, the permit the file backs. Every segment is generated here —
  * identifiers and a UUID, never a filename the device sent — so a caller cannot steer the path. On the
  * way back the resolved path is checked to be inside the root before anything is read: keys come from
  * our own rows today, and the check is what keeps that true the day somebody adds an endpoint that
@@ -54,7 +55,9 @@ public class FilesystemEvidenceStorage implements EvidenceStorage {
             "image/jpeg", "jpg",
             "image/png", "png",
             "image/webp", "webp",
-            "image/heic", "heic");
+            "image/heic", "heic",
+            // Since v0.30: a permit's backing document is usually a scanned assessment or an agreement.
+            "application/pdf", "pdf");
 
     private final Path root;
 
@@ -65,7 +68,7 @@ public class FilesystemEvidenceStorage implements EvidenceStorage {
     }
 
     @Override
-    public Stored store(TenantId tenantId, UUID citationId, Upload upload) {
+    public Stored store(TenantId tenantId, UUID ownerId, Upload upload) {
         String contentType = upload.contentType().toLowerCase(Locale.ROOT);
         String extension = EXTENSIONS.getOrDefault(contentType, "bin");
         ZonedDateTime moment = ZonedDateTime.ofInstant(
@@ -74,7 +77,7 @@ public class FilesystemEvidenceStorage implements EvidenceStorage {
                 tenantId.value().toString(),
                 String.format(Locale.ROOT, "%04d", moment.getYear()),
                 String.format(Locale.ROOT, "%02d", moment.getMonthValue()),
-                citationId.toString(),
+                ownerId.toString(),
                 Uuid7.generate() + "." + extension);
 
         Path target = resolve(key);
@@ -86,7 +89,7 @@ public class FilesystemEvidenceStorage implements EvidenceStorage {
             Files.write(temporary, upload.content());
             Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
         } catch (IOException failure) {
-            throw new UncheckedIOException("Could not store evidence for citation " + citationId, failure);
+            throw new UncheckedIOException("Could not store evidence for " + ownerId, failure);
         }
         return new Stored(key, contentType, upload.content().length, sha256Hex(upload.content()));
     }

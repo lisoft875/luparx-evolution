@@ -585,25 +585,129 @@ export const mockParkingSessions: MockParkingSessionRecord[] = [
 ];
 
 /**
- * Placas que la municipalidad no multa (CONTRACT.md v0.28).
+ * Permisos y exoneraciones (CONTRACT.md v0.30).
  *
  * La ambulancia es el caso que justifica el modelo entero: no tiene cuenta en la aplicación, nunca
  * la va a tener, y hasta v0.28 era indistinguible de un carro que no pagó.
+ *
+ * Desde v0.30 un permiso se SOLICITA y luego se resuelve, ampara VARIAS placas y tiene CATEGORÍA y
+ * BENEFICIARIO. El simulador sostiene las mismas reglas que el servidor —una aprobada por placa, la
+ * última placa no se quita, un rechazo necesita motivo—: cada vez que este simulador ha sido más
+ * amable que producción, ha dejado pasar un error hasta la calle.
  */
+export type MockExemptionStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'REVOKED';
+
+export interface MockExemptionType {
+  id: string;
+  tenantId: string;
+  code: string;
+  name: string;
+  description: string | null;
+  requiresBeneficiary: boolean;
+  active: boolean;
+}
+
+/** Las cuatro que siembra V29_0, para cada municipalidad del simulador. */
+export const mockExemptionTypes: MockExemptionType[] = ['tenant-sanjose', 'tenant-escazu'].flatMap(
+  (tenantId) => [
+    {
+      id: `${tenantId}-type-disability`,
+      tenantId,
+      code: 'DISABILITY',
+      name: 'Discapacidad',
+      description:
+        'Persona con discapacidad. El permiso acompaña a la persona, así que suele amparar más de una placa.',
+      requiresBeneficiary: true,
+      active: true,
+    },
+    {
+      id: `${tenantId}-type-institutional`,
+      tenantId,
+      code: 'INSTITUTIONAL',
+      name: 'Vehículo institucional',
+      description: 'Flotilla municipal, emergencias, cuerpos oficiales.',
+      requiresBeneficiary: true,
+      active: true,
+    },
+    {
+      id: `${tenantId}-type-courtesy`,
+      tenantId,
+      code: 'COURTESY',
+      name: 'Cortesía o autorización',
+      description: 'Autorización puntual otorgada por la municipalidad.',
+      requiresBeneficiary: false,
+      active: true,
+    },
+    {
+      id: `${tenantId}-type-special`,
+      tenantId,
+      code: 'SPECIAL',
+      name: 'Permiso especial',
+      description: 'Cualquier otro permiso previsto por la normativa de la municipalidad.',
+      requiresBeneficiary: true,
+      active: true,
+    },
+  ],
+);
+
+export interface MockExemptionPlate {
+  plate: string;
+  plateRaw: string;
+  status: MockExemptionStatus;
+  addedAt: string;
+}
+
+export interface MockExemptionDocument {
+  id: string;
+  exemptionId: string;
+  title: string;
+  contentType: string;
+  byteSize: number;
+  sha256: string;
+  uploadedByName: string | null;
+  createdAt: string;
+}
+
 export interface MockExemption {
   id: string;
   tenantId: string;
+  /** Obsoleta desde v0.30: copia de la primera de `plates`, para un cliente más viejo. */
   plate: string;
   plateRaw: string;
+  plates: MockExemptionPlate[];
+  exemptionTypeId: string | null;
+  beneficiaryKind: 'PERSON' | 'ORGANISATION' | null;
+  beneficiaryName: string | null;
+  beneficiaryDocument: string | null;
   reason: string;
   documentRef: string | null;
-  status: 'ACTIVE' | 'REVOKED';
+  status: MockExemptionStatus;
   validFrom: string;
   validTo: string | null;
+  requestedAt: string | null;
+  requestedByName: string | null;
+  requestedBy: string | null;
+  decidedAt: string | null;
+  decidedByName: string | null;
+  decidedBy: string | null;
+  decisionReason: string | null;
   grantedAt: string;
   revokedAt: string | null;
   revokeReason: string | null;
 }
+
+export const mockExemptionDocuments: MockExemptionDocument[] = [
+  {
+    id: 'exemption-doc-1',
+    exemptionId: 'exemption-2',
+    title: 'Dictamen de discapacidad',
+    contentType: 'application/pdf',
+    byteSize: 184_320,
+    sha256: 'b9d3a1f0c7e54428a1f0c7e54428b9d3a1f0c7e54428b9d3a1f0c7e54428b9d3',
+    uploadedByName: 'Ana Solís',
+    createdAt: new Date(now - 20 * 86400_000).toISOString(),
+  },
+];
 
 export const mockExemptions: MockExemption[] = [
   {
@@ -611,13 +715,109 @@ export const mockExemptions: MockExemption[] = [
     tenantId: 'tenant-sanjose',
     plate: 'CL1234',
     plateRaw: 'CL-1234',
+    plates: [
+      {
+        plate: 'CL1234',
+        plateRaw: 'CL-1234',
+        status: 'APPROVED',
+        addedAt: new Date(now - 90 * 86400_000).toISOString(),
+      },
+    ],
+    exemptionTypeId: 'tenant-sanjose-type-institutional',
+    beneficiaryKind: 'ORGANISATION',
+    beneficiaryName: 'Cruz Roja Costarricense',
+    beneficiaryDocument: '3-011-045678',
     reason: 'Ambulancia de la Cruz Roja, unidad de emergencias',
     documentRef: 'Acuerdo municipal 2026-014',
-    status: 'ACTIVE',
+    status: 'APPROVED',
     // Sin vencimiento, que es legítimo y se muestra con esas palabras en vez de con una celda vacía.
     validFrom: new Date(now - 90 * 86400_000).toISOString(),
     validTo: null,
+    requestedAt: new Date(now - 92 * 86400_000).toISOString(),
+    requestedByName: 'Ana Solís',
+    requestedBy: 'user-admin-sanjose',
+    decidedAt: new Date(now - 90 * 86400_000).toISOString(),
+    decidedByName: 'Ana Solís',
+    // Misma persona en ambos campos: se permite y por eso se muestra, en vez de dejar que alguien
+    // lo note comparando dos nombres.
+    decidedBy: 'user-admin-sanjose',
+    decisionReason: null,
     grantedAt: new Date(now - 90 * 86400_000).toISOString(),
+    revokedAt: null,
+    revokeReason: null,
+  },
+  {
+    // Dos placas: el permiso es de la persona y la acompaña — unas veces en su carro y otras en el
+    // del hijo que la lleva.
+    id: 'exemption-2',
+    tenantId: 'tenant-sanjose',
+    plate: 'SJP456',
+    plateRaw: 'SJP-456',
+    plates: [
+      {
+        plate: 'SJP456',
+        plateRaw: 'SJP-456',
+        status: 'APPROVED',
+        addedAt: new Date(now - 20 * 86400_000).toISOString(),
+      },
+      {
+        plate: 'BMH789',
+        plateRaw: 'BMH-789',
+        status: 'APPROVED',
+        addedAt: new Date(now - 20 * 86400_000).toISOString(),
+      },
+    ],
+    exemptionTypeId: 'tenant-sanjose-type-disability',
+    beneficiaryKind: 'PERSON',
+    beneficiaryName: 'María Rodríguez Vargas',
+    beneficiaryDocument: '1-0876-0543',
+    reason: 'Persona con discapacidad permanente; dictamen del CONAPDIS',
+    documentRef: null,
+    status: 'APPROVED',
+    validFrom: new Date(now - 20 * 86400_000).toISOString(),
+    validTo: new Date(now + 345 * 86400_000).toISOString(),
+    requestedAt: new Date(now - 22 * 86400_000).toISOString(),
+    requestedByName: 'Ana Solís',
+    requestedBy: 'user-admin-sanjose',
+    decidedAt: new Date(now - 20 * 86400_000).toISOString(),
+    decidedByName: 'Carlos Méndez',
+    decidedBy: 'user-admin-sanjose-2',
+    decisionReason: null,
+    grantedAt: new Date(now - 20 * 86400_000).toISOString(),
+    revokedAt: null,
+    revokeReason: null,
+  },
+  {
+    // Esperando resolución. No exonera a nadie: un permiso no otorga nada hasta que se otorga.
+    id: 'exemption-3',
+    tenantId: 'tenant-sanjose',
+    plate: 'CRT321',
+    plateRaw: 'crt-321',
+    plates: [
+      {
+        plate: 'CRT321',
+        plateRaw: 'crt-321',
+        status: 'PENDING',
+        addedAt: new Date(now - 2 * 86400_000).toISOString(),
+      },
+    ],
+    exemptionTypeId: 'tenant-sanjose-type-courtesy',
+    beneficiaryKind: null,
+    beneficiaryName: null,
+    beneficiaryDocument: null,
+    reason: 'Cortesía por trabajos de la municipalidad frente al inmueble',
+    documentRef: null,
+    status: 'PENDING',
+    validFrom: new Date(now - 2 * 86400_000).toISOString(),
+    validTo: new Date(now + 28 * 86400_000).toISOString(),
+    requestedAt: new Date(now - 2 * 86400_000).toISOString(),
+    requestedByName: 'Ana Solís',
+    requestedBy: 'user-admin-sanjose',
+    decidedAt: null,
+    decidedByName: null,
+    decidedBy: null,
+    decisionReason: null,
+    grantedAt: new Date(now - 2 * 86400_000).toISOString(),
     revokedAt: null,
     revokeReason: null,
   },

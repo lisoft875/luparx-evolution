@@ -64,8 +64,11 @@ import type {
   EnforcementChecksQuery,
   InspectorZone,
   ExemptionStatus,
-  GrantExemptionRequest,
+  RequestExemptionRequest,
   AmendExemptionRequest,
+  ExemptionDocument,
+  ExemptionType,
+  SaveExemptionTypeRequest,
   PlateExemption,
   CreateStaffInvitationRequest,
   StaffInvitation,
@@ -422,16 +425,69 @@ export class ApiClient {
 
   readonly adminExemptions = {
     list: (
-      query: { status?: ExemptionStatus; plate?: string } & PageParams = {},
+      query: { status?: ExemptionStatus; exemptionTypeId?: string; plate?: string } & PageParams = {},
     ): Promise<PagedResponse<PlateExemption>> =>
       this.http.request('GET', '/api/v1/admin/enforcement/exemptions', { query }),
-    grant: (payload: GrantExemptionRequest): Promise<PlateExemption> =>
+    get: (id: string): Promise<PlateExemption> =>
+      this.http.request('GET', `/api/v1/admin/enforcement/exemptions/${id}`),
+    /** Registers a request. It is PENDING and exempts nobody until somebody grants it. */
+    request: (payload: RequestExemptionRequest): Promise<PlateExemption> =>
       this.http.request('POST', '/api/v1/admin/enforcement/exemptions', { body: payload, idempotent: true }),
     amend: (id: string, payload: AmendExemptionRequest): Promise<PlateExemption> =>
       this.http.request('PUT', `/api/v1/admin/enforcement/exemptions/${id}`, { body: payload }),
+    approve: (id: string): Promise<PlateExemption> =>
+      this.http.request('POST', `/api/v1/admin/enforcement/exemptions/${id}/approve`, { body: {} }),
+    reject: (id: string, payload: { reason: string }): Promise<PlateExemption> =>
+      this.http.request('POST', `/api/v1/admin/enforcement/exemptions/${id}/reject`, { body: payload }),
     /** A POST and not a DELETE: nothing is deleted, because the row explains a decision. */
     revoke: (id: string, payload: { reason: string }): Promise<PlateExemption> =>
       this.http.request('POST', `/api/v1/admin/enforcement/exemptions/${id}/revoke`, { body: payload }),
+    addPlate: (id: string, payload: { plate: string }): Promise<PlateExemption> =>
+      this.http.request('POST', `/api/v1/admin/enforcement/exemptions/${id}/plates`, { body: payload }),
+    /**
+     * The only DELETE here, and it removes which vehicles a decision covers — not the decision. The
+     * last plate cannot go: revoking is the act that was meant.
+     */
+    removePlate: (id: string, plate: string): Promise<PlateExemption> =>
+      this.http.request(
+        'DELETE',
+        `/api/v1/admin/enforcement/exemptions/${id}/plates/${encodeURIComponent(plate)}`,
+      ),
+    documents: (id: string): Promise<ExemptionDocument[]> =>
+      this.http.request('GET', `/api/v1/admin/enforcement/exemptions/${id}/documents`),
+    /**
+     * Attaches a backing document. The type is decided by the server from the file's own header, so
+     * nothing here declares what the file is.
+     */
+    attachDocument: (id: string, title: string, file: File): Promise<ExemptionDocument> => {
+      const form = new FormData();
+      form.append('title', title);
+      form.append('file', file);
+      return this.http.upload<ExemptionDocument>(
+        `/api/v1/admin/enforcement/exemptions/${id}/documents`,
+        form,
+      );
+    },
+    /**
+     * The bytes, as a `Blob`. Never an `<img src>` or an `<a href>`: the document requires a bearer
+     * token and is served `no-store`, so a plain link would fetch it without the header and show a
+     * broken file — the same reason citation evidence is fetched this way.
+     */
+    document: (id: string, documentId: string): Promise<Blob> =>
+      this.http.blob(`/api/v1/admin/enforcement/exemptions/${id}/documents/${documentId}`),
+  };
+
+  /** The municipality's own catalogue of permit categories. Configuration, never an enumeration. */
+  readonly adminExemptionTypes = {
+    list: (query: { activeOnly?: boolean } = {}): Promise<ExemptionType[]> =>
+      this.http.request('GET', '/api/v1/admin/enforcement/exemption-types', { query }),
+    create: (payload: SaveExemptionTypeRequest): Promise<ExemptionType> =>
+      this.http.request('POST', '/api/v1/admin/enforcement/exemption-types', {
+        body: payload,
+        idempotent: true,
+      }),
+    update: (id: string, payload: SaveExemptionTypeRequest): Promise<ExemptionType> =>
+      this.http.request('PUT', `/api/v1/admin/enforcement/exemption-types/${id}`, { body: payload }),
   };
 
   readonly adminAudit = {

@@ -6,8 +6,9 @@ import type {
   CreateAdminUserRequest,
   PlateCheckRequest,
   LocationState,
-  GrantExemptionRequest,
+  RequestExemptionRequest,
   AmendExemptionRequest,
+  SaveExemptionTypeRequest,
   MembershipStatus,
   CreateStaffInvitationRequest,
   AcceptInvitationRequest,
@@ -50,6 +51,8 @@ import {
   mockTenantSettings,
   mockTimeCredits,
   mockExemptions,
+  mockExemptionTypes,
+  mockExemptionDocuments,
   mockUsersById,
   mockVehicles,
   mockWallets,
@@ -62,6 +65,8 @@ import {
   walletKey,
   type MockParkingSessionRecord,
   type MockExemption,
+  type MockExemptionType,
+  type MockExemptionDocument,
   type MockUserRecord,
 } from './data';
 import { mintMockTokenPair } from './token';
@@ -2205,8 +2210,11 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
       // PRIMERO la exoneración, antes que nada sobre el pago: una ambulancia no se multa haya
       // pagado o no, y preguntar por el pago primero contestaría «no pagó» sobre un vehículo que
       // esta municipalidad ya decidió no multar nunca.
+      // Se resuelve por las placas del permiso (v0.30) y no por la copia del padre: un permiso de
+      // discapacidad ampara varias, y buscar sólo la primera dejaría multando el carro del hijo.
       const exemption = mockExemptions.find(
-        (e) => e.tenantId === tenantId && e.plate === plate && e.status === 'ACTIVE'
+        (e) => e.tenantId === tenantId && e.status === 'APPROVED'
+          && e.plates.some((p) => p.plate === plate && p.status === 'APPROVED')
           && new Date(e.validFrom) <= new Date()
           && (!e.validTo || new Date(e.validTo) > new Date()),
       );
@@ -2246,6 +2254,11 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
               plate: exemption.plate,
               reason: exemption.reason,
               documentRef: exemption.documentRef,
+              // La categoría sí viaja al fiscalizador; el BENEFICIARIO no: saber de quién es el
+              // permiso no cambia la decisión de no multar, y sí cambia lo que un dispositivo anda
+              // cargando sobre una persona por la calle.
+              typeName:
+                mockExemptionTypes.find((t) => t.id === exemption.exemptionTypeId)?.name ?? null,
               validFrom: exemption.validFrom,
               validTo: exemption.validTo,
             }
@@ -2287,56 +2300,164 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
         Number(url.searchParams.get('size') ?? '20')));
     }
 
-    // --- Exoneraciones (CONTRACT.md v0.28) ------------------------------------------------------
+    // --- Categorías de permiso (CONTRACT.md v0.30) ----------------------------------------------
+    // Configuración y no enumeración: qué exonera un país no es lo que exonera otro.
+    if (segments[2] === 'admin' && segments[3] === 'enforcement' && segments[4] === 'exemption-types') {
+      const mineTypes = mockExemptionTypes.filter((t) => t.tenantId === tenantId);
+      const toType = (type: MockExemptionType) => ({
+        id: type.id,
+        code: type.code,
+        name: type.name,
+        description: type.description,
+        requiresBeneficiary: type.requiresBeneficiary,
+        active: type.active,
+      });
+      if (method === 'GET' && segments.length === 5) {
+        const activeOnly = url.searchParams.get('activeOnly') === 'true';
+        return json(mineTypes.filter((t) => !activeOnly || t.active).map(toType));
+      }
+      if (method === 'POST' && segments.length === 5) {
+        const payload = await readBody<SaveExemptionTypeRequest>(init);
+        const code = (payload.code ?? '').trim().toUpperCase();
+        if (!code || !/^[A-Z0-9_]+$/.test(code)) {
+          return problem(422, 'VALIDATION_FAILED', 'That code is not valid');
+        }
+        if (!payload.name?.trim()) return problem(422, 'VALIDATION_FAILED', 'A name is required');
+        if (mineTypes.some((t) => t.code === code)) {
+          return problem(409, 'EXEMPTION_TYPE_CODE_TAKEN', 'That code is already used');
+        }
+        const type: MockExemptionType = {
+          id: `type-${crypto.randomUUID()}`,
+          tenantId: tenantId ?? '',
+          code,
+          name: payload.name.trim(),
+          description: payload.description?.trim() || null,
+          requiresBeneficiary: payload.requiresBeneficiary,
+          active: true,
+        };
+        mockExemptionTypes.push(type);
+        return json(toType(type), 201);
+      }
+      if (method === 'PUT' && segments.length === 6) {
+        const type = mineTypes.find((t) => t.id === segments[5]);
+        if (!type) return problem(404, 'EXEMPTION_TYPE_NOT_FOUND', 'That category does not exist');
+        const payload = await readBody<SaveExemptionTypeRequest>(init);
+        if (!payload.name?.trim()) return problem(422, 'VALIDATION_FAILED', 'A name is required');
+        // El código nunca se edita: es lo que una regla futura reconocería.
+        type.name = payload.name.trim();
+        type.description = payload.description?.trim() || null;
+        type.requiresBeneficiary = payload.requiresBeneficiary;
+        type.active = payload.active ?? true;
+        return json(toType(type));
+      }
+    }
+
+    // --- Permisos y exoneraciones (CONTRACT.md v0.30) -------------------------------------------
     if (segments[2] === 'admin' && segments[3] === 'enforcement' && segments[4] === 'exemptions') {
       const mine = mockExemptions.filter((e) => e.tenantId === tenantId);
+      const granted = (status: MockExemption['status']) => status === 'APPROVED';
       const toResponse = (exemption: MockExemption) => {
         const nowDate = new Date();
         const from = new Date(exemption.validFrom);
         const to = exemption.validTo ? new Date(exemption.validTo) : null;
+        const type = mockExemptionTypes.find((t) => t.id === exemption.exemptionTypeId) ?? null;
         return {
           ...exemption,
+          exemptionTypeCode: type?.code ?? null,
+          exemptionTypeName: type?.name ?? null,
           // Los tres calculados contra el reloj, nunca guardados: vencer es un hecho del reloj y una
           // columna necesitaría un trabajo para mantenerse cierta.
-          inForce: exemption.status === 'ACTIVE' && from <= nowDate && (!to || to > nowDate),
-          pending: exemption.status === 'ACTIVE' && from > nowDate,
-          expired: exemption.status === 'ACTIVE' && !!to && to <= nowDate,
+          inForce: granted(exemption.status) && from <= nowDate && (!to || to > nowDate),
+          pending: granted(exemption.status) && from > nowDate,
+          expired: granted(exemption.status) && !!to && to <= nowDate,
+          selfApproved:
+            exemption.requestedBy !== null && exemption.requestedBy === exemption.decidedBy,
+          documentCount: mockExemptionDocuments.filter((d) => d.exemptionId === exemption.id).length,
         };
       };
+      /** Una aprobada por placa y municipalidad, igual que el índice parcial del servidor. */
+      const takenBy = (plate: string, selfId: string | null) =>
+        mine.some(
+          (e) =>
+            e.id !== selfId &&
+            e.status === 'APPROVED' &&
+            e.plates.some((p) => p.plate === plate && p.status === 'APPROVED'),
+        );
 
       if (method === 'GET' && segments.length === 5) {
         const statusFilter = url.searchParams.get('status');
+        const typeFilter = url.searchParams.get('exemptionTypeId');
         const plateFilter = normalizeMockPlate(url.searchParams.get('plate') ?? '');
         const rows = mine
           .filter((e) => !statusFilter || e.status === statusFilter)
-          .filter((e) => !plateFilter || e.plate.includes(plateFilter))
+          .filter((e) => !typeFilter || e.exemptionTypeId === typeFilter)
+          // Contra las placas del hijo y no contra la copia del padre: buscar sólo la primera
+          // escondería justamente la fila que alguien anda buscando.
+          .filter((e) => !plateFilter || e.plates.some((p) => p.plate.includes(plateFilter)))
           .map(toResponse);
         return json(paginate(rows, Number(url.searchParams.get('page') ?? '0'),
           Number(url.searchParams.get('size') ?? '20')));
       }
       if (method === 'POST' && segments.length === 5) {
-        const payload = await readBody<GrantExemptionRequest>(init);
-        const plate = normalizeMockPlate(payload.plate);
-        if (!plate) return problem(422, 'VALIDATION_FAILED', 'That plate cannot be read');
-        if (!payload.reason?.trim()) {
-          return problem(422, 'VALIDATION_FAILED', 'A reason is required');
+        const payload = await readBody<RequestExemptionRequest & { plate?: string }>(init);
+        const raw = payload.plates?.length ? payload.plates : payload.plate ? [payload.plate] : [];
+        const legacy = !payload.plates?.length && !!payload.plate;
+        if (!raw.length) return problem(422, 'VALIDATION_FAILED', 'At least one plate is required');
+        if (!payload.reason?.trim()) return problem(422, 'VALIDATION_FAILED', 'A reason is required');
+        const type =
+          mockExemptionTypes.find(
+            (t) => t.tenantId === tenantId && t.id === payload.exemptionTypeId,
+          ) ??
+          mockExemptionTypes.find((t) => t.tenantId === tenantId && t.code === 'SPECIAL') ??
+          null;
+        if (!type) return problem(404, 'EXEMPTION_TYPE_NOT_FOUND', 'That category does not exist');
+        if (!type.active) {
+          return problem(422, 'EXEMPTION_TYPE_INACTIVE', 'That category was retired');
         }
-        // Una viva por placa: dos filas vivas significan que revocar la que se ve deja la otra
-        // exonerando, y nadie reclama por una multa que no se puso.
-        if (mine.some((e) => e.plate === plate && e.status === 'ACTIVE')) {
-          return problem(409, 'EXEMPTION_ALREADY_EXISTS', 'That plate already has a live exemption');
+        if (type.requiresBeneficiary && (!payload.beneficiaryName?.trim() || !payload.beneficiaryKind)) {
+          return problem(422, 'VALIDATION_FAILED', 'This category requires a beneficiary');
         }
+        const plates: MockExemption['plates'] = [];
+        for (const value of raw) {
+          const plate = normalizeMockPlate(value);
+          if (!plate) return problem(422, 'VALIDATION_FAILED', 'That plate cannot be read');
+          if (takenBy(plate, null)) {
+            return problem(409, 'EXEMPTION_ALREADY_EXISTS', 'That plate already has an approved permit');
+          }
+          if (!plates.some((p) => p.plate === plate)) {
+            plates.push({
+              plate,
+              plateRaw: value.trim(),
+              status: 'PENDING',
+              addedAt: new Date().toISOString(),
+            });
+          }
+        }
+        const stamp = new Date().toISOString();
         const exemption: MockExemption = {
           id: `exemption-${crypto.randomUUID()}`,
           tenantId: tenantId ?? '',
-          plate,
-          plateRaw: payload.plate.trim(),
+          plate: plates[0]!.plate,
+          plateRaw: plates[0]!.plateRaw,
+          plates,
+          exemptionTypeId: type.id,
+          beneficiaryKind: payload.beneficiaryKind ?? null,
+          beneficiaryName: payload.beneficiaryName?.trim() || null,
+          beneficiaryDocument: payload.beneficiaryDocument?.trim() || null,
           reason: payload.reason.trim(),
           documentRef: payload.documentRef?.trim() || null,
-          status: 'ACTIVE',
-          validFrom: payload.validFrom ?? new Date().toISOString(),
+          // Un permiso no otorga nada hasta que se otorga.
+          status: 'PENDING',
+          validFrom: payload.validFrom ?? stamp,
           validTo: payload.validTo ?? null,
-          grantedAt: new Date().toISOString(),
+          requestedAt: stamp,
+          requestedByName: 'Ana Solís',
+          requestedBy: userId ?? null,
+          decidedAt: null,
+          decidedByName: null,
+          decidedBy: null,
+          decisionReason: null,
+          grantedAt: stamp,
           revokedAt: null,
           revokeReason: null,
         };
@@ -2345,31 +2466,201 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
           tenantId: tenantId ?? null,
           actorUserId: userId,
           actorPortal: 'admin',
-          action: 'PLATE_EXEMPTION_GRANTED',
+          action: 'PLATE_EXEMPTION_REQUESTED',
           resourceType: 'plate-exemption',
           resourceId: exemption.id,
-          metadata: { plate: exemption.plate },
+          metadata: { plates: exemption.plates.map((p) => p.plate).join(',') },
         });
+        if (legacy) {
+          // La forma de v0.28 se responde con el COMPORTAMIENTO de v0.28: se registra y se otorga en
+          // un solo acto, por la misma persona, y queda anotado — cambiarle el significado a la
+          // llamada de un cliente viejo dejaría multando un vehículo que su operador cree exonerado.
+          exemption.status = 'APPROVED';
+          exemption.plates.forEach((plate) => (plate.status = 'APPROVED'));
+          exemption.decidedAt = stamp;
+          exemption.decidedByName = 'Ana Solís';
+          exemption.decidedBy = userId ?? null;
+        }
         return json(toResponse(exemption), 201);
       }
       if (segments.length >= 6) {
         const exemption = mine.find((e) => e.id === segments[5]);
         if (!exemption) return problem(404, 'EXEMPTION_NOT_FOUND', 'Exemption not found');
+        const editable = exemption.status === 'PENDING' || exemption.status === 'APPROVED';
+
+        if (!segments[6] && method === 'GET') {
+          return json(toResponse(exemption));
+        }
+        if (segments[6] === 'approve' && method === 'POST') {
+          if (exemption.status !== 'PENDING') {
+            return problem(409, 'EXEMPTION_NOT_PENDING', 'Somebody has already decided that permit');
+          }
+          for (const plate of exemption.plates) {
+            if (takenBy(plate.plate, exemption.id)) {
+              return problem(409, 'EXEMPTION_ALREADY_EXISTS', 'That plate already has an approved permit');
+            }
+          }
+          exemption.status = 'APPROVED';
+          exemption.plates.forEach((plate) => (plate.status = 'APPROVED'));
+          exemption.decidedAt = new Date().toISOString();
+          exemption.decidedByName = 'Ana Solís';
+          exemption.decidedBy = userId ?? null;
+          exemption.decisionReason = null;
+          exemption.grantedAt = exemption.decidedAt;
+          recordAuditEvent({
+            tenantId: tenantId ?? null,
+            actorUserId: userId,
+            actorPortal: 'admin',
+            action: 'PLATE_EXEMPTION_APPROVED',
+            resourceType: 'plate-exemption',
+            resourceId: exemption.id,
+            metadata: {
+              plates: exemption.plates.map((p) => p.plate).join(','),
+              selfApproved: String(exemption.requestedBy === exemption.decidedBy),
+            },
+          });
+          return json(toResponse(exemption));
+        }
+        if (segments[6] === 'reject' && method === 'POST') {
+          const payload = await readBody<{ reason: string }>(init);
+          if (exemption.status !== 'PENDING') {
+            return problem(409, 'EXEMPTION_NOT_PENDING', 'Somebody has already decided that permit');
+          }
+          if (!payload.reason?.trim()) {
+            return problem(422, 'VALIDATION_FAILED', 'A reason is required');
+          }
+          exemption.status = 'REJECTED';
+          exemption.plates.forEach((plate) => (plate.status = 'REJECTED'));
+          exemption.decidedAt = new Date().toISOString();
+          exemption.decidedByName = 'Ana Solís';
+          exemption.decidedBy = userId ?? null;
+          exemption.decisionReason = payload.reason.trim();
+          return json(toResponse(exemption));
+        }
         if (segments[6] === 'revoke' && method === 'POST') {
           const payload = await readBody<{ reason: string }>(init);
+          if (exemption.status !== 'APPROVED') {
+            return problem(409, 'EXEMPTION_NOT_ACTIVE', 'That permit is not in force');
+          }
           if (!payload.reason?.trim()) {
             return problem(422, 'VALIDATION_FAILED', 'A reason is required');
           }
           exemption.status = 'REVOKED';
+          exemption.plates.forEach((plate) => (plate.status = 'REVOKED'));
           exemption.revokedAt = new Date().toISOString();
           exemption.revokeReason = payload.reason.trim();
           return json(toResponse(exemption));
         }
+        if (segments[6] === 'plates' && method === 'POST') {
+          const payload = await readBody<{ plate: string }>(init);
+          if (!editable) return problem(409, 'EXEMPTION_NOT_EDITABLE', 'That permit is no longer edited');
+          const plate = normalizeMockPlate(payload.plate ?? '');
+          if (!plate) return problem(422, 'VALIDATION_FAILED', 'That plate cannot be read');
+          if (exemption.plates.some((p) => p.plate === plate)) {
+            return problem(409, 'EXEMPTION_ALREADY_EXISTS', 'That plate is already covered');
+          }
+          if (exemption.plates.length >= 10) {
+            return problem(409, 'EXEMPTION_PLATE_LIMIT', 'A permit cannot cover more plates');
+          }
+          if (takenBy(plate, exemption.id)) {
+            return problem(409, 'EXEMPTION_ALREADY_EXISTS', 'That plate already has an approved permit');
+          }
+          exemption.plates.push({
+            plate,
+            plateRaw: payload.plate.trim(),
+            status: exemption.status,
+            addedAt: new Date().toISOString(),
+          });
+          exemption.plate = exemption.plates[0]!.plate;
+          exemption.plateRaw = exemption.plates[0]!.plateRaw;
+          return json(toResponse(exemption));
+        }
+        if (segments[6] === 'plates' && segments[7] && method === 'DELETE') {
+          if (!editable) return problem(409, 'EXEMPTION_NOT_EDITABLE', 'That permit is no longer edited');
+          const plate = normalizeMockPlate(decodeURIComponent(segments[7]));
+          const index = exemption.plates.findIndex((p) => p.plate === plate);
+          if (index < 0) return problem(404, 'EXEMPTION_NOT_FOUND', 'That plate is not covered');
+          // La última no se quita: un permiso que no ampara nada es una municipalidad habiendo
+          // decidido algo sobre ningún vehículo. Revocar es el acto que se quería.
+          if (exemption.plates.length <= 1) {
+            return problem(409, 'EXEMPTION_LAST_PLATE', 'A permit has to cover at least one plate');
+          }
+          exemption.plates.splice(index, 1);
+          exemption.plate = exemption.plates[0]!.plate;
+          exemption.plateRaw = exemption.plates[0]!.plateRaw;
+          return json(toResponse(exemption));
+        }
+        if (segments[6] === 'documents' && method === 'GET') {
+          return json(
+            mockExemptionDocuments
+              .filter((d) => d.exemptionId === exemption.id)
+              .map((d) => ({
+                id: d.id,
+                title: d.title,
+                contentType: d.contentType,
+                byteSize: d.byteSize,
+                sha256: d.sha256,
+                uploadedByName: d.uploadedByName,
+                createdAt: d.createdAt,
+              })),
+          );
+        }
+        if (segments[6] === 'documents' && method === 'POST') {
+          const form = init?.body instanceof FormData ? init.body : null;
+          const file = form?.get('file');
+          const title = String(form?.get('title') ?? '').trim();
+          if (!title) return problem(422, 'VALIDATION_FAILED', 'The document needs a name');
+          if (!(file instanceof File) || file.size === 0) {
+            return problem(422, 'VALIDATION_FAILED', 'The file is empty');
+          }
+          if (mockExemptionDocuments.filter((d) => d.exemptionId === exemption.id).length >= 10) {
+            return problem(409, 'EXEMPTION_DOCUMENT_LIMIT', 'This permit already carries the maximum');
+          }
+          const document: MockExemptionDocument = {
+            id: `exemption-doc-${crypto.randomUUID()}`,
+            exemptionId: exemption.id,
+            title,
+            // El servidor lo decide leyendo la cabecera del archivo; el simulador no puede, así que
+            // acepta lo declarado y lo dice aquí en vez de fingir que hizo la comprobación.
+            contentType: file.type || 'application/octet-stream',
+            byteSize: file.size,
+            sha256: crypto.randomUUID().replace(/-/g, '').repeat(2).slice(0, 64),
+            uploadedByName: 'Ana Solís',
+            createdAt: new Date().toISOString(),
+          };
+          mockExemptionDocuments.push(document);
+          return json(
+            {
+              id: document.id,
+              title: document.title,
+              contentType: document.contentType,
+              byteSize: document.byteSize,
+              sha256: document.sha256,
+              uploadedByName: document.uploadedByName,
+              createdAt: document.createdAt,
+            },
+            201,
+          );
+        }
         if (!segments[6] && method === 'PUT') {
           const payload = await readBody<AmendExemptionRequest>(init);
-          if (exemption.status !== 'ACTIVE') {
-            return problem(409, 'EXEMPTION_NOT_ACTIVE', 'That exemption is no longer active');
+          if (!editable) {
+            return problem(409, 'EXEMPTION_NOT_EDITABLE', 'That permit is no longer edited');
           }
+          if (!payload.reason?.trim()) {
+            return problem(422, 'VALIDATION_FAILED', 'A reason is required');
+          }
+          if (payload.exemptionTypeId) {
+            const type = mockExemptionTypes.find(
+              (t) => t.tenantId === tenantId && t.id === payload.exemptionTypeId,
+            );
+            if (!type) return problem(404, 'EXEMPTION_TYPE_NOT_FOUND', 'That category does not exist');
+            if (!type.active) return problem(422, 'EXEMPTION_TYPE_INACTIVE', 'That category was retired');
+            exemption.exemptionTypeId = type.id;
+          }
+          exemption.beneficiaryKind = payload.beneficiaryKind ?? null;
+          exemption.beneficiaryName = payload.beneficiaryName?.trim() || null;
+          exemption.beneficiaryDocument = payload.beneficiaryDocument?.trim() || null;
           exemption.reason = payload.reason.trim();
           exemption.documentRef = payload.documentRef?.trim() || null;
           if (payload.validFrom) exemption.validFrom = payload.validFrom;

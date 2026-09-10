@@ -12,8 +12,14 @@ import cr.luparx.enforcement.entity.InfractionType;
 import cr.luparx.enforcement.model.EvidenceKind;
 import cr.luparx.core.id.TenantId;
 import cr.luparx.enforcement.entity.EnforcementCheck;
+import cr.luparx.enforcement.entity.ExemptionDocument;
+import cr.luparx.enforcement.entity.ExemptionPlate;
+import cr.luparx.enforcement.entity.ExemptionType;
 import cr.luparx.enforcement.entity.PlateExemption;
 import cr.luparx.enforcement.repository.CitationRepository;
+import cr.luparx.enforcement.repository.ExemptionDocumentRepository;
+import cr.luparx.enforcement.repository.ExemptionPlateRepository;
+import cr.luparx.enforcement.repository.ExemptionTypeRepository;
 import cr.luparx.identity.entity.User;
 import cr.luparx.identity.service.UserDirectoryService;
 import cr.luparx.enforcement.model.PlateStatus;
@@ -50,15 +56,24 @@ public class EnforcementMapper {
     private final ParkingZoneRepository zoneRepository;
     private final CitationRepository citationRepository;
     private final UserDirectoryService userDirectoryService;
+    private final ExemptionTypeRepository exemptionTypeRepository;
+    private final ExemptionPlateRepository exemptionPlateRepository;
+    private final ExemptionDocumentRepository exemptionDocumentRepository;
     private final Clock clock;
 
     public EnforcementMapper(ParkingZoneRepository zoneRepository,
                              CitationRepository citationRepository,
                              UserDirectoryService userDirectoryService,
+                             ExemptionTypeRepository exemptionTypeRepository,
+                             ExemptionPlateRepository exemptionPlateRepository,
+                             ExemptionDocumentRepository exemptionDocumentRepository,
                              Clock clock) {
         this.zoneRepository = zoneRepository;
         this.citationRepository = citationRepository;
         this.userDirectoryService = userDirectoryService;
+        this.exemptionTypeRepository = exemptionTypeRepository;
+        this.exemptionPlateRepository = exemptionPlateRepository;
+        this.exemptionDocumentRepository = exemptionDocumentRepository;
         this.clock = clock;
     }
 
@@ -121,11 +136,130 @@ public class EnforcementMapper {
                 status.checkedAt());
     }
 
-    /** Only what an officer needs in order to justify not fining. Never who granted it. */
+    /** Only what an officer needs in order to justify not fining. Never who granted it, never whose. */
     private EnforcementDtos.PlateExemptionSummary toExemptionSummary(PlateExemption exemption) {
+        String typeName = exemption.getExemptionTypeId() == null
+                ? null
+                : exemptionTypeRepository.findByTenantIdAndId(exemption.getTenantId(),
+                        exemption.getExemptionTypeId()).map(ExemptionType::getName).orElse(null);
         return new EnforcementDtos.PlateExemptionSummary(exemption.getId(), exemption.getPlate(),
-                exemption.getReason(), exemption.getDocumentRef(), exemption.getValidFrom(),
+                exemption.getReason(), exemption.getDocumentRef(), typeName, exemption.getValidFrom(),
                 exemption.getValidTo());
+    }
+
+    // --- permits (CONTRACT.md v0.30) ---------------------------------------------------------------
+
+    /**
+     * A page of the permit register, with categories, plates, document counts and the two names
+     * resolved <b>once for the whole page</b>.
+     *
+     * <p>Four queries for twenty-five permits rather than a hundred: the same rule the citation
+     * listing follows, and for the same reason — a screen that asks per row gets slower every month a
+     * municipality operates.</p>
+     */
+    public List<EnforcementDtos.PlateExemptionResponse> toExemptions(TenantId tenantId,
+                                                                    List<PlateExemption> exemptions) {
+        if (exemptions == null || exemptions.isEmpty()) {
+            return List.of();
+        }
+        List<UUID> ids = exemptions.stream().map(PlateExemption::getId).toList();
+
+        Map<UUID, ExemptionType> types = new HashMap<>();
+        for (ExemptionType type : exemptionTypeRepository.findByTenantIdOrderByNameAsc(tenantId.value())) {
+            types.put(type.getId(), type);
+        }
+        Map<UUID, List<ExemptionPlate>> plates = new HashMap<>();
+        for (ExemptionPlate plate : exemptionPlateRepository.findById_ExemptionIdInOrderByAddedAtAsc(ids)) {
+            plates.computeIfAbsent(plate.getExemptionId(), key -> new ArrayList<>()).add(plate);
+        }
+        Map<UUID, Integer> documents = new HashMap<>();
+        for (Object[] row : exemptionDocumentRepository.countByExemption(tenantId.value(), ids)) {
+            documents.put((UUID) row[0], ((Number) row[1]).intValue());
+        }
+        Map<UUID, String> names = names(exemptions.stream()
+                .flatMap(exemption -> java.util.stream.Stream.of(exemption.getRequestedBy(), exemption.getDecidedBy()))
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .toList());
+
+        Instant now = clock.instant();
+        List<EnforcementDtos.PlateExemptionResponse> result = new ArrayList<>(exemptions.size());
+        for (PlateExemption exemption : exemptions) {
+            ExemptionType type = exemption.getExemptionTypeId() == null
+                    ? null
+                    : types.get(exemption.getExemptionTypeId());
+            result.add(new EnforcementDtos.PlateExemptionResponse(
+                    exemption.getId(),
+                    exemption.getPlate(),
+                    exemption.getPlateRaw(),
+                    exemption.getReason(),
+                    exemption.getDocumentRef(),
+                    exemption.getStatus(),
+                    exemption.getValidFrom(),
+                    exemption.getValidTo(),
+                    // All three computed against now, never stored: running out is a fact about the
+                    // clock and a column would need a job to stay true (see ExemptionStatus).
+                    exemption.isInForceAt(now),
+                    exemption.isPendingAt(now),
+                    exemption.isExpiredAt(now),
+                    exemption.getGrantedAt(),
+                    exemption.getRevokedAt(),
+                    exemption.getRevokeReason(),
+                    exemption.getExemptionTypeId(),
+                    type == null ? null : type.getCode(),
+                    type == null ? null : type.getName(),
+                    plates.getOrDefault(exemption.getId(), List.of()).stream().map(this::toExemptionPlate).toList(),
+                    exemption.getBeneficiaryKind(),
+                    exemption.getBeneficiaryName(),
+                    exemption.getBeneficiaryDocument(),
+                    exemption.getRequestedAt(),
+                    names.get(exemption.getRequestedBy()),
+                    exemption.getDecidedAt(),
+                    names.get(exemption.getDecidedBy()),
+                    exemption.getDecisionReason(),
+                    exemption.getRequestedBy() != null && exemption.getRequestedBy().equals(exemption.getDecidedBy()),
+                    documents.getOrDefault(exemption.getId(), 0)));
+        }
+        return result;
+    }
+
+    public EnforcementDtos.PlateExemptionResponse toExemption(TenantId tenantId, PlateExemption exemption) {
+        return toExemptions(tenantId, List.of(exemption)).get(0);
+    }
+
+    private EnforcementDtos.ExemptionPlateResponse toExemptionPlate(ExemptionPlate plate) {
+        return new EnforcementDtos.ExemptionPlateResponse(plate.getPlate(), plate.getPlateRaw(),
+                plate.getStatus(), plate.getAddedAt());
+    }
+
+    public EnforcementDtos.ExemptionTypeResponse toExemptionType(ExemptionType type) {
+        return new EnforcementDtos.ExemptionTypeResponse(type.getId(), type.getCode(), type.getName(),
+                type.getDescription(), type.isRequiresBeneficiary(), type.isActive());
+    }
+
+    public List<EnforcementDtos.ExemptionDocumentResponse> toExemptionDocuments(List<ExemptionDocument> documents) {
+        if (documents == null || documents.isEmpty()) {
+            return List.of();
+        }
+        Map<UUID, String> names = names(documents.stream()
+                .map(ExemptionDocument::getUploadedBy).distinct().toList());
+        return documents.stream()
+                .map(document -> new EnforcementDtos.ExemptionDocumentResponse(document.getId(),
+                        document.getTitle(), document.getContentType(), document.getByteSize(),
+                        document.getSha256(), names.get(document.getUploadedBy()), document.getCreatedAt()))
+                .toList();
+    }
+
+    /** Display names for a set of user identifiers, in one query. */
+    private Map<UUID, String> names(List<UUID> userIds) {
+        Map<UUID, String> names = new HashMap<>();
+        if (userIds.isEmpty()) {
+            return names;
+        }
+        for (User person : userDirectoryService.findAllById(userIds)) {
+            names.put(person.getId(), person.displayName());
+        }
+        return names;
     }
 
     /**

@@ -153,6 +153,14 @@ export function PlateLookupPage(): React.JSX.Element {
                 ) : null}
                 {result.exemption ? (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    {/* The category first, in the municipality's own words: "Discapacidad" is what the
+                        officer says out loud, and the written reason is what backs it up. Whose permit
+                        it is deliberately never reaches this screen. */}
+                    {result.exemption.typeName ? (
+                      <span className="lx-text-body">
+                        <strong>{result.exemption.typeName}</strong>
+                      </span>
+                    ) : null}
                     <span className="lx-text-body">
                       {t('inspector.lookup.exemption.reason', { reason: result.exemption.reason })}
                     </span>

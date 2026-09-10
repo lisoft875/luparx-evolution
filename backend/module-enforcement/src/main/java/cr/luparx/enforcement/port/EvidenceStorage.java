@@ -28,10 +28,14 @@ public interface EvidenceStorage {
 
     /**
      * Writes one file and returns what has to be recorded about it. Implementations do not validate
-     * the content type or the size — {@code EvidenceService} does that before calling, so that every
-     * storage backend enforces exactly the same rules.
+     * the content type or the size — the calling service does that first, so that every storage
+     * backend enforces exactly the same rules.
+     *
+     * @param ownerId the act the file belongs to: a citation since v0.6, a permit since v0.30. It is
+     *                used to group the stored objects and nothing else; an implementation must not
+     *                read anything into which of the two it is
      */
-    Stored store(TenantId tenantId, UUID citationId, Upload upload);
+    Stored store(TenantId tenantId, UUID ownerId, Upload upload);
 
     /** Reads a file back for the officer, the administrator or the citizen who is entitled to see it. */
     Optional<Content> read(TenantId tenantId, String storageKey);
