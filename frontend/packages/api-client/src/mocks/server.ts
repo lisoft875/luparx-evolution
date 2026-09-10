@@ -4,6 +4,8 @@ import type {
   AdminUserDetail,
   AdminUserListItem,
   CreateAdminUserRequest,
+  CreateMembershipRequest,
+  LookupPersonRequest,
   CreateVehicleRequest,
   ExtendParkingSessionRequest,
   LoginRequest,
@@ -831,6 +833,56 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
         });
         return json(toDetail(record), 201);
       }
+      // POST /api/v1/admin/users/lookup — one person, matched exactly (CONTRACT.md v0.26).
+      //
+      // The mock reproduces the three things that make this endpoint safe, because a friendlier
+      // mock is how a contract bug reaches production: exactly one criterion, an exact match with no
+      // partial terms, and an answer that carries a masked address and only the posts this person
+      // holds in THIS municipality.
+      if (method === 'POST' && segments[4] === 'lookup') {
+        const payload = await readBody<LookupPersonRequest>(init);
+        const byEmail = typeof payload.email === 'string' && payload.email.trim() !== '';
+        const byDocument = payload.identityDocument != null;
+        if (byEmail === byDocument) {
+          return problem(422, 'VALIDATION_FAILED', 'Send exactly one of email or identityDocument');
+        }
+        let match: MockUserRecord | undefined;
+        if (byEmail) {
+          match = findUserByEmail(payload.email ?? '');
+        } else {
+          const wanted = payload.identityDocument;
+          // UPPER_ALPHANUMERIC, the catalogue's default normaliser: "1-0987-0123" is the same
+          // cédula as "109870123", and the server compares them in that canonical form.
+          const canonical = (value: string): string => value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+          match = [...mockUsersById.values()].find(
+            (record) =>
+              record.profile.identityDocument.countryCode === wanted?.countryCode &&
+              record.profile.identityDocument.type === wanted?.type &&
+              canonical(record.profile.identityDocument.number) === canonical(wanted?.number ?? ''),
+          );
+        }
+        if (!match) return json({ found: false, person: null });
+        const local = match.profile.email.split('@')[0] ?? '';
+        const domain = match.profile.email.slice(local.length);
+        return json({
+          found: true,
+          person: {
+            userId: match.profile.id,
+            fullName: [match.profile.givenName, match.profile.familyName, match.profile.secondFamilyName]
+              .filter(Boolean)
+              .join(' '),
+            maskedEmail: `${local.slice(0, local.length <= 2 ? 1 : 2)}***${domain}`,
+            accountStatus: match.profile.status,
+            accessHere: match.memberships
+              .filter((membership) => membership.tenantId === tenantId)
+              .map((membership) => ({
+                portal: membership.portal,
+                role: membership.role,
+                status: membership.status,
+              })),
+          },
+        });
+      }
       if (method === 'GET' && segments.length === 5) {
         const user = mockUsersById.get(segments[4] ?? '');
         if (!user) return problem(404, 'USER_NOT_FOUND', 'User not found');
@@ -862,9 +914,45 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
       }
     }
 
-    // POST /api/v1/admin/memberships — create membership (invite / manual grant).
+    // POST /api/v1/admin/memberships — give a post to somebody who already has an account
+    // (CONTRACT.md v0.26). It used to answer 204 and change nothing, which made the screen look like
+    // it worked and the staff list look like it had not: the two refusals below and the row it adds
+    // are the whole point of exercising this against the mock.
     if (resource === 'memberships' && method === 'POST' && segments.length === 4) {
-      return noContent();
+      const payload = await readBody<CreateMembershipRequest>(init);
+      const person = mockUsersById.get(payload.userId);
+      if (!person) return problem(404, 'USER_NOT_FOUND', 'User not found');
+      if (!TENANT_GRANTABLE_ROLES.includes(payload.role)) {
+        return problem(403, 'ROLE_NOT_ALLOWED_FOR_PORTAL', 'A municipal administrator cannot grant that role');
+      }
+      // One post per app: the unique index is (municipality, person, portal), so a second grant on
+      // the same portal is a conflict and not a silent replacement of the role they hold.
+      if (person.memberships.some((m) => m.tenantId === tenantId && m.portal === payload.portal)) {
+        return problem(409, 'MEMBERSHIP_ALREADY_EXISTS', 'That person already has access to this app');
+      }
+      const tenant = MOCK_TENANTS.find((x) => x.id === tenantId);
+      const membership = {
+        id: `membership-${crypto.randomUUID()}`,
+        tenantId: tenantId ?? '',
+        tenantName: tenant?.name ?? (tenantId ?? ''),
+        tenantShortName: tenant?.shortName ?? null,
+        tenantLogoUrl: null,
+        tenantBrandColor: tenant?.brandColor ?? null,
+        portal: payload.portal,
+        role: payload.role,
+        status: 'ACTIVE' as const,
+      };
+      person.memberships.push(membership);
+      recordAuditEvent({
+        tenantId: tenantId ?? null,
+        actorUserId: 'mock-admin',
+        actorPortal: 'admin',
+        action: 'MEMBERSHIP_CREATED',
+        resourceType: 'membership',
+        resourceId: membership.id,
+        metadata: { userId: payload.userId, role: payload.role },
+      });
+      return json(membership, 201);
     }
     // GET /api/v1/admin/memberships/staff — the administration panel (CONTRACT.md v0.15). One row
     // per post, suspended and revoked included, with the sectors it covers and the last sign-in.

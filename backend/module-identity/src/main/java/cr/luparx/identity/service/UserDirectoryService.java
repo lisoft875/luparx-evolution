@@ -2,6 +2,7 @@ package cr.luparx.identity.service;
 
 import cr.luparx.core.error.ErrorCode;
 import cr.luparx.core.error.NotFoundException;
+import cr.luparx.core.email.EmailAddress;
 import cr.luparx.core.i18n.CountryCodes;
 import cr.luparx.core.i18n.Locales;
 import cr.luparx.core.i18n.TimeZones;
@@ -10,8 +11,11 @@ import cr.luparx.core.page.PageRequest;
 import cr.luparx.core.page.PageResponse;
 import cr.luparx.core.page.SortDirection;
 import cr.luparx.geo.model.AddressInput;
+import cr.luparx.geo.model.IdentityDocumentTypeCode;
+import cr.luparx.geo.model.NormalizedDocument;
 import cr.luparx.geo.model.NormalizedPhone;
 import cr.luparx.geo.service.AddressValidator;
+import cr.luparx.geo.service.IdentityDocumentValidator;
 import cr.luparx.geo.service.PhoneNumberService;
 import cr.luparx.identity.entity.User;
 import cr.luparx.identity.model.UserStatus;
@@ -27,6 +31,7 @@ import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -46,17 +51,20 @@ public class UserDirectoryService {
     private final UserRepository userRepository;
     private final PhoneNumberService phoneNumberService;
     private final AddressValidator addressValidator;
+    private final IdentityDocumentValidator documentValidator;
     private final RefreshTokenService refreshTokenService;
     private final Clock clock;
 
     public UserDirectoryService(UserRepository userRepository,
                                 PhoneNumberService phoneNumberService,
                                 AddressValidator addressValidator,
+                                IdentityDocumentValidator documentValidator,
                                 RefreshTokenService refreshTokenService,
                                 Clock clock) {
         this.userRepository = userRepository;
         this.phoneNumberService = phoneNumberService;
         this.addressValidator = addressValidator;
+        this.documentValidator = documentValidator;
         this.refreshTokenService = refreshTokenService;
         this.clock = clock;
     }
@@ -88,6 +96,44 @@ public class UserDirectoryService {
         }
         Page<User> page = userRepository.searchByIds(ids, likeTerm(query), status, toPageable(request));
         return PageResponse.of(page.getContent(), request.page(), request.size(), page.getTotalElements());
+    }
+
+    /**
+     * The one person whose email is exactly this one, or nobody (CONTRACT.md v0.26).
+     *
+     * <p>Not a search: no wildcards, no partial match, no listing. That is the whole difference
+     * between this and {@link #searchGlobal}, and it is what makes it safe to expose to a municipal
+     * administrator — you can only find a person you can already name exactly, so the answer confirms
+     * what the caller already had rather than handing them the register. The caller is still
+     * responsible for rate-limiting and auditing the attempt.</p>
+     *
+     * <p>The address is normalised the same way registration normalises it, so a stray space or a
+     * capital letter finds the account instead of quietly reporting that nobody is there.</p>
+     */
+    @Transactional(readOnly = true)
+    public Optional<User> findByExactEmail(String email) {
+        String normalized = EmailAddress.normalize(email);
+        if (normalized == null || normalized.isBlank()) {
+            return Optional.empty();
+        }
+        return userRepository.findByEmail(normalized);
+    }
+
+    /**
+     * The one person holding exactly this identity document, or nobody. Exact match, like
+     * {@link #findByExactEmail}.
+     *
+     * <p>The number goes through the country+type catalogue first, so it is compared in the same
+     * normalised form it was stored in — "1-1234-5678" and "112345678" are the same cédula — and a
+     * number that could never have been registered is refused as invalid rather than answered with a
+     * misleading "nobody has it".</p>
+     */
+    @Transactional(readOnly = true)
+    public Optional<User> findByExactDocument(String countryCode, IdentityDocumentTypeCode type, String number) {
+        NormalizedDocument document = documentValidator.validateAndNormalize(countryCode, type, number,
+                "identityDocument.number");
+        return userRepository.findByDocumentCountryCodeAndDocumentTypeAndDocumentNumberNormalized(
+                document.countryCode(), document.type(), document.normalized());
     }
 
     /** Platform-wide padrón; callable only from {@code /api/v1/platform/**}. */

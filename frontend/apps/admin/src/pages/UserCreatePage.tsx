@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -47,14 +47,24 @@ export function UserCreatePage(): React.JSX.Element {
   const { t } = useTranslation();
   const { apiClient } = useAuth();
   const navigate = useNavigate();
+  const [params] = useSearchParams();
   const queryClient = useQueryClient();
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const documentTypesRef = React.useRef<ReturnType<typeof useDocumentTypes>['data']>(undefined);
 
+  // Carried over from the lookup that came up empty (CONTRACT.md v0.26): the administrator already
+  // typed the document or the address once, and asking for it again is how the two end up
+  // disagreeing — which, for a value that is unique platform-wide, is a conflict waiting months.
+  const seeded: StaffValues = {
+    ...DEFAULT_VALUES,
+    email: params.get('email') ?? DEFAULT_VALUES.email,
+    identityDocumentNumber: params.get('document') ?? DEFAULT_VALUES.identityDocumentNumber,
+  };
+
   const { control, register, handleSubmit, watch, formState, setValue } = useForm<StaffValues>({
-    defaultValues: DEFAULT_VALUES,
+    defaultValues: seeded,
     mode: 'onBlur',
     resolver: (values, context, options) => {
       const selectedType = documentTypesRef.current?.find((d) => d.type === values.identityDocumentType);

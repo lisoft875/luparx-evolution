@@ -31,6 +31,18 @@ public interface AuditEventRepository extends JpaRepository<AuditEventEntity, UU
                                           @Param("to") Instant to,
                                           Pageable pageable);
 
+    /**
+     * How many times one actor performed one action recently.
+     *
+     * <p>This is what rate-limits the directory lookup, and the choice is deliberate: the counter is
+     * the audit trail itself, so the limit cannot drift from the record, it holds across every
+     * backend instance (an in-memory counter would be bypassed by spreading requests over replicas,
+     * ARCHITECTURE.md §7), and there is no second table to keep. It rides
+     * {@code ix_audit_events_actor_occurred}, which narrows to one person's recent events before the
+     * action is compared.</p>
+     */
+    long countByActorUserIdAndActionAndOccurredAtAfter(UUID actorUserId, String action, Instant occurredAt);
+
     @Query("""
             select a from AuditEventEntity a
             where (:tenantId is null or a.tenantId = :tenantId)

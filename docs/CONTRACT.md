@@ -2031,3 +2031,109 @@ suele ser un dígito de distancia, y volver a teclearlo invita a la errata— y 
 después, dice que es la misma bahía y que las estadías ya pagadas y las boletas ya emitidas siguen
 mostrando el código que tenían. Después de escribir, el operador ya decidió; la advertencia llega
 tarde. Guardar está deshabilitado mientras el código no cambia.
+
+---
+
+# v0.26 — Una persona, una cuenta, varios puestos (normativo)
+
+## El caso que no tenía salida
+
+La gente llega a una municipalidad **ya registrada**. El caso corriente es el obvio: la persona que
+van a contratar de fiscalizadora parqueó en el centro el año pasado y se registró como ciudadana.
+
+Hasta ahora la única puerta era `POST /admin/users`, que **crea** a una persona, y que rechazaba
+—correctamente— con `EMAIL_ALREADY_REGISTERED` o `DOCUMENT_ALREADY_REGISTERED`. De ahí no se salía:
+el administrador ni siquiera podía **ver** a esa persona, porque toda consulta del portal municipal
+está limitada a quienes ya tienen una membresía en esa municipalidad, que es justamente lo que a esa
+persona le falta. El mensaje de error decía «búsquela en la lista de usuarios», y en la lista no
+estaba. Ese mensaje era el defecto.
+
+## Lo que ya funcionaba y no había que cambiar
+
+El modelo **ya** admite varios puestos por persona: la unicidad es
+`(municipalidad, persona, portal)`, no `(municipalidad, persona)`. Una misma cuenta puede ser
+fiscalizadora en la app de calle, llevar finanzas en el portal municipal, y seguir siendo ciudadana
+que parquea el domingo. Son tres membresías, **una sola cuenta y un solo expediente de datos
+personales**. La resolución de acceso ya filtra por portal en todas partes, así que sostenerlo no
+requirió tocar nada.
+
+**Un puesto por aplicación**, y eso se mantiene: no existen dos roles simultáneos dentro del mismo
+portal. Quien hace finanzas y soporte recibe el rol que cubra ambas cosas. El permiso efectivo de una
+sesión sigue siendo trivial de leer y de auditar, que es lo que se pierde al unir permisos de varios
+roles.
+
+## `POST /api/v1/admin/users/lookup`
+
+Encuentra a **una** persona ya registrada, por su correo exacto o por su documento de identidad
+exacto. Permiso: `ROLE_ASSIGN` — sólo pregunta quien puede efectivamente dar un puesto.
+
+**Es un POST y no un GET con parámetros**, y no es cuestión de estilo: un correo y un número de
+cédula son datos personales, y las cadenas de consulta terminan en el historial del navegador, en los
+registros del proxy y en los del servidor (SECURITY.md §11). El cuerpo no.
+
+**Es coincidencia exacta, no un buscador.** Sin comodines, sin coincidencia parcial, sin listado,
+nunca más de un resultado. Ésa es toda la diferencia con el padrón de plataforma
+(`GET /platform/users`), y es lo que hace que se le pueda dar a un administrador municipal: se puede
+**confirmar** a alguien que ya se sabe nombrar entero; no se puede navegar el padrón. Exactamente uno
+de los dos criterios por petición; mandar los dos es un cliente que está adivinando y se rechaza.
+
+El documento pasa por el catálogo de país+tipo antes de comparar, así que `1-0987-0123` y `109870123`
+son la misma cédula, y un número que nunca pudo registrarse se rechaza como inválido en vez de
+contestarse con un «no existe» que sería engañoso.
+
+### Lo que devuelve, y lo que nunca devuelve
+
+Nombre completo —para cotejarlo contra la cédula que el administrador tiene en la mano—, correo
+**enmascarado** (`ja***@gmail.com`), estado de la cuenta, y los puestos que esa persona ya tiene
+**en la municipalidad que pregunta**.
+
+**Nunca sus membresías en otras municipalidades.** Para qué otro cantón trabaja esa persona es asunto
+de ella y de ese cantón, y contestarlo aquí sería una fuga entre inquilinos a través de una pantalla
+que parece un campo de búsqueda.
+
+### Los tres límites
+
+1. `ROLE_ASSIGN`.
+2. **Se audita cada intento**, encontrado o no, como `USER_DIRECTORY_LOOKUP`. La entrada guarda si fue
+   por correo o por documento y el id de quien se encontró; **nunca el valor buscado**, que es un
+   identificador personal completo.
+3. **Límite por persona y por ventana**, contado *desde esas mismas filas de bitácora*. Es
+   deliberado: el contador es la bitácora, así que no puede desviarse del registro, no hay una segunda
+   tabla que mantener, y el límite vale con varias instancias detrás del balanceador —un contador en
+   memoria se esquiva repartiendo las peticiones—. Configurable
+   (`luparx.security.directory-lookup-window`, `…-max-per-actor`; por omisión 40 cada 10 minutos):
+   contratar a diez personas en una tarde cabe de sobra, barrer el padrón no.
+
+La coincidencia exacta no es lo que impide encontrar a un desconocido —eso ya lo impide—. El límite
+es lo que impide usar el endpoint como oráculo: alimentado con una lista de correos, uno por uno, un
+lookup sin techo contesta «¿existe esta persona?» para todos.
+
+## Dar el puesto
+
+`POST /api/v1/admin/memberships` ya existía; lo nuevo es que **la persona se entera**. Un correo de
+aviso: quién se lo dio, a qué app puede entrar, y que use la misma cuenta y la misma contraseña
+porque no hay nada que registrar de nuevo.
+
+Deliberadamente **sin enlace con token**: la cuenta ya existe y su dueño ya tiene contraseña, así que
+no hay nada que activar. Un mensaje que pidiera «haga clic para aceptar» enseñaría exactamente el
+hábito del que vive el fraude por correo. Nadie debería adquirir autoridad en una municipalidad sin
+que le llegue un mensaje diciéndolo: es lo que permite notar un acceso que uno no pidió.
+
+## La pantalla
+
+Funcionarios tiene **una sola puerta**, «Agregar funcionario», y abre con la pregunta correcta —¿esta
+persona ya existe?— en vez de con el formulario de creación. Si aparece, se confirma el nombre, se
+escoge el rol y listo. Si no aparece, ahí mismo se ofrece abrirle el expediente, **con lo ya escrito
+puesto en el formulario**: el administrador tecleó la cédula una vez, y teclearla de nuevo es como
+terminan sin coincidir dos copias de un dato que es único en toda la plataforma.
+
+El rol cuya app la persona ya ocupa se muestra **deshabilitado y con el motivo** en vez de ocultarse:
+esconderlo dejaría al administrador preguntándose adónde se fue, y ofrecerlo lo llevaría a un
+conflicto que el servidor tiene que rechazar.
+
+## De paso: el enlace de restablecer acceso
+
+Estaba fijo al portal de administración, así que a un fiscalizador —la persona para la que más se
+usa ese botón— se le mandaba a una puerta que no usa. Ahora sale del puesto que la persona tiene en
+esa municipalidad. La contraseña es una sola, cualquiera de los portales la restablece; esto sólo
+decide dónde aterriza.

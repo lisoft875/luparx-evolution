@@ -74,6 +74,19 @@ public final class AuditAction {
      */
     public static final String PARKING_SPACE_RENAMED = "PARKING_SPACE_RENAMED";
 
+    /**
+     * A municipal administrator looked a person up in the platform-wide directory by their exact
+     * email or identity document, in order to give them a post (CONTRACT.md v0.26).
+     *
+     * <p>Recorded on every attempt, found or not, for two reasons. It is the only reach a tenant
+     * portal has outside its own municipality, so it has to be accountable; and the rate limit that
+     * stops the endpoint from becoming a way to enumerate the national register is <em>counted from
+     * these very rows</em>. The entry never carries the term that was searched — that is a full
+     * personal identifier (SECURITY.md §11) — only whether it was an email or a document, and the id
+     * of whoever was found.</p>
+     */
+    public static final String USER_DIRECTORY_LOOKUP = "USER_DIRECTORY_LOOKUP";
+
     // --- account, locales and municipal operation (CONTRACT.md "v0.3") --------------------------
     public static final String USER_EMAIL_CHANGE_REQUESTED = "USER_EMAIL_CHANGE_REQUESTED";
     public static final String USER_EMAIL_CHANGED = "USER_EMAIL_CHANGED";

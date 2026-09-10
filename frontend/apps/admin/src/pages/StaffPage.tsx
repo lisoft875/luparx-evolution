@@ -6,6 +6,7 @@ import { RequirePermission, useAuth } from '@luparx/auth';
 import { useTranslation, formatDateTime, type TranslationKey } from '@luparx/i18n';
 import type { MembershipStatus, StaffMember } from '@luparx/api-client';
 import { Alert, Badge, Button, Input, Modal, Pagination, Select, Table } from '@luparx/ui';
+import { AddStaffDialog } from '../components/AddStaffDialog';
 import { AdminShell } from '../components/AdminShell';
 
 const PAGE_SIZE = 20;
@@ -39,6 +40,7 @@ export function StaffPage(): React.JSX.Element {
 
   const [status, setStatus] = useState<MembershipStatus | ''>('');
   const [page, setPage] = useState(0);
+  const [adding, setAdding] = useState(false);
   const [suspending, setSuspending] = useState<StaffMember | null>(null);
   const [suspendReason, setSuspendReason] = useState('');
   const [zoning, setZoning] = useState<StaffMember | null>(null);
@@ -112,8 +114,12 @@ export function StaffPage(): React.JSX.Element {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         <h1>{t('admin.staff.title')}</h1>
         <RequirePermission permission="ROLE_ASSIGN">
-          <Button type="button" onClick={() => navigate('/users/new')}>
-            {t('admin.users.create.cta')}
+          {/* One door, and it opens on the right first question. Hiring somebody starts with "does
+              this person already exist here" — most of the time they do, because they parked
+              downtown once — and opening the creation form first is what used to walk an
+              administrator into a conflict with nowhere to go (CONTRACT.md v0.26). */}
+          <Button type="button" onClick={() => setAdding(true)}>
+            {t('admin.staff.add.title')}
           </Button>
         </RequirePermission>
       </div>
@@ -287,6 +293,33 @@ export function StaffPage(): React.JSX.Element {
           </div>
         </div>
       </Modal>
+
+      <AddStaffDialog
+        open={adding}
+        onClose={() => setAdding(false)}
+        onGranted={(person, granted) => {
+          setAdding(false);
+          setError(null);
+          setFeedback(
+            t('admin.staff.add.granted', {
+              name: person.fullName ?? '',
+              role: t(`role.${granted}` as TranslationKey),
+            }),
+          );
+          void queryClient.invalidateQueries({ queryKey: ['admin', 'staff'] });
+          void queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
+        }}
+        onCreateNew={(seed) => {
+          setAdding(false);
+          // What was typed travels to the creation form: the administrator already entered the
+          // document or the address once, and typing it a second time is how the two end up
+          // disagreeing.
+          const params = new URLSearchParams();
+          if (seed.email) params.set('email', seed.email);
+          if (seed.documentNumber) params.set('document', seed.documentNumber);
+          navigate(`/users/new${params.toString() ? `?${params.toString()}` : ''}`);
+        }}
+      />
 
       <Modal
         open={zoning !== null}

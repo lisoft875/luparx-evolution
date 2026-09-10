@@ -1,6 +1,7 @@
 package cr.luparx.app.web;
 
 import cr.luparx.app.audit.AuditRecorder;
+import cr.luparx.app.notification.SmtpNotificationSender;
 import cr.luparx.app.outbox.OutboxRecorder;
 import cr.luparx.app.web.dto.AdminDtos;
 import cr.luparx.core.audit.AuditAction;
@@ -8,6 +9,7 @@ import cr.luparx.core.domain.Role;
 import cr.luparx.core.error.ErrorCode;
 import cr.luparx.core.error.ForbiddenException;
 import cr.luparx.core.error.ValidationException;
+import cr.luparx.core.i18n.Locales;
 import cr.luparx.core.id.TenantId;
 import cr.luparx.core.id.UserId;
 import cr.luparx.core.outbox.OutboxEventType;
@@ -18,11 +20,13 @@ import cr.luparx.core.tenant.TenantContextHolder;
 import cr.luparx.tenancy.entity.TenantMembership;
 import cr.luparx.tenancy.model.MembershipStatus;
 import cr.luparx.identity.entity.User;
+import cr.luparx.identity.port.NotificationSender;
 import cr.luparx.identity.service.UserDirectoryService;
 import cr.luparx.parking.entity.ParkingZone;
 import cr.luparx.parking.service.ParkingCatalogService;
 import cr.luparx.tenancy.service.MembershipService;
 import cr.luparx.tenancy.service.MembershipZoneService;
+import cr.luparx.tenancy.service.TenantService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -40,6 +44,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -60,6 +65,9 @@ public class AdminMembershipController {
     private final MembershipZoneService zoneService;
     private final ParkingCatalogService catalogService;
     private final UserDirectoryService userDirectoryService;
+    private final TenantService tenantService;
+    private final NotificationSender notificationSender;
+    private final SmtpNotificationSender portalUrls;
     private final AuditRecorder auditRecorder;
     private final OutboxRecorder outboxRecorder;
     private final ResponseMapper mapper;
@@ -68,6 +76,9 @@ public class AdminMembershipController {
                                      MembershipZoneService zoneService,
                                      ParkingCatalogService catalogService,
                                      UserDirectoryService userDirectoryService,
+                                     TenantService tenantService,
+                                     NotificationSender notificationSender,
+                                     SmtpNotificationSender portalUrls,
                                      AuditRecorder auditRecorder,
                                      OutboxRecorder outboxRecorder,
                                      ResponseMapper mapper) {
@@ -75,6 +86,9 @@ public class AdminMembershipController {
         this.zoneService = zoneService;
         this.catalogService = catalogService;
         this.userDirectoryService = userDirectoryService;
+        this.tenantService = tenantService;
+        this.notificationSender = notificationSender;
+        this.portalUrls = portalUrls;
         this.auditRecorder = auditRecorder;
         this.outboxRecorder = outboxRecorder;
         this.mapper = mapper;
@@ -93,9 +107,26 @@ public class AdminMembershipController {
         return membershipService.listByTenant(tenantId, status, request).map(mapper::toMembership);
     }
 
+    /**
+     * Gives a post in this municipality to somebody who already has an account.
+     *
+     * <p>This is the other half of {@code POST /admin/users}: that one opens an account for a person
+     * the platform has never seen, this one gives access to a person it already knows — most often a
+     * citizen of this same municipality who is now being hired. Nothing about their account is
+     * touched: same password, same profile, same history. They simply hold one post more.</p>
+     *
+     * <p>The portal is the role's portal, and the uniqueness of (municipality, person, portal) is
+     * what shapes the model: one post per app. The same person can be an inspector on the street
+     * app, hold finance in this portal, and still be a citizen who parks downtown on Sunday — three
+     * memberships, one account, one set of personal data (CONTRACT.md v0.26).</p>
+     *
+     * <p>The person is told by email. Nobody should acquire authority in a municipality without a
+     * message landing in their inbox saying so: it is what lets a person notice an access they never
+     * asked for, and it costs a mail.</p>
+     */
     @PostMapping
     @PreAuthorize("hasAuthority('PERM_ROLE_ASSIGN')")
-    @Operation(summary = "Grant a membership in the active municipality")
+    @Operation(summary = "Grant a membership in the active municipality to an existing account")
     public AdminDtos.MembershipResponse create(@Valid @RequestBody AdminDtos.CreateMembershipRequest request) {
         TenantId tenantId = TenantContextHolder.requireTenantId();
         if (request.tenantId() != null && !request.tenantId().equals(tenantId.value())) {
@@ -107,7 +138,31 @@ public class AdminMembershipController {
                 request.portal(), request.role(), MembershipStatus.ACTIVE);
         auditRecorder.record(AuditAction.MEMBERSHIP_CREATED, "membership", membership.getId().toString(),
                 Map.of("userId", request.userId().toString(), "role", request.role().name()));
+        notifyGranted(tenantId, UserId.of(request.userId()), request.role());
         return mapper.toMembership(membership);
+    }
+
+    /**
+     * Tells the person that a municipality just gave them access.
+     *
+     * <p>Deliberately not a link with a token in it: this account already exists and its owner
+     * already has a password, so there is nothing to activate. A message that asked them to "click
+     * to accept" would be teaching the exact habit that phishing lives on. It names the municipality,
+     * points at the app's front door, and says what to do if the access was unexpected.</p>
+     *
+     * <p>Sent after the grant, never instead of it: the SMTP adapter swallows delivery failures on
+     * purpose, because a mail server that is down must not undo an appointment that is already
+     * recorded.</p>
+     */
+    private void notifyGranted(TenantId tenantId, UserId userId, Role role) {
+        User person = userDirectoryService.require(userId);
+        String tenantName = tenantService.require(tenantId).getDisplayName();
+        notificationSender.send(person.getEmail(),
+                Locales.parse(person.getLocale()).orElse(Locale.ROOT),
+                "email.accessGranted",
+                Map.of("name", person.getGivenName(),
+                        "link", portalUrls.portalBaseUrl(role.portal().slug()),
+                        "tenant", tenantName == null ? "" : tenantName));
     }
 
     /**

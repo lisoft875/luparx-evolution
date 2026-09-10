@@ -325,6 +325,26 @@ export const esCR = {
   'admin.staff.zones.help':
     'Un fiscalizador sólo puede consultar placas y levantar boletas en los sectores que tenga asignados.',
   'admin.staff.zones.noneMeansAll': 'Sin sectores marcados puede actuar en toda la municipalidad.',
+  'admin.staff.add.title': 'Agregar funcionario',
+  'admin.staff.add.help':
+    'Primero busque a la persona: mucha gente ya tiene cuenta porque se registró como ciudadana. Si ya existe, se le da el puesto sin volver a pedirle sus datos.',
+  'admin.staff.add.searchBy': 'Buscar por',
+  'admin.staff.add.by.document': 'Por identificación',
+  'admin.staff.add.by.email': 'Por correo electrónico',
+  'admin.staff.add.exactHint': 'Tiene que ser el dato completo y exacto; no es un buscador por partes.',
+  'admin.staff.add.search': 'Buscar',
+  'admin.staff.add.searchAgain': 'Buscar a otra persona',
+  'admin.staff.add.notFound': 'Nadie en la plataforma tiene ese dato. Si es su primera vez, ábrale el expediente.',
+  'admin.staff.add.createNew': 'Crear expediente nuevo',
+  'admin.staff.add.noAccessHere': 'Todavía no tiene ningún acceso en esta municipalidad.',
+  'admin.staff.add.blocked': 'Esta cuenta está bloqueada en la plataforma. Desbloquéela antes de darle un puesto.',
+  'admin.staff.add.rolePerApp': 'Un puesto por aplicación: puede ser fiscalizador en la app de calle y llevar finanzas en este portal, con la misma cuenta.',
+  'admin.staff.add.appTaken': 'Ya tiene un puesto en esa aplicación',
+  'admin.staff.add.grant': 'Dar acceso',
+  'admin.staff.add.granted': 'Listo: {{name}} ahora es {{role}} en esta municipalidad. Se le avisó por correo.',
+  'admin.staff.add.error.rateLimited': 'Demasiadas búsquedas seguidas. Espere unos minutos.',
+  'admin.staff.add.error.documentInvalid': 'Ese número no tiene el formato del documento seleccionado.',
+  'admin.staff.add.error.alreadyHasAccess': 'Esa persona ya tiene un puesto en esa aplicación en esta municipalidad.',
   'admin.staff.action.suspend': 'Desactivar',
   'admin.staff.action.reactivate': 'Reactivar',
   'admin.staff.action.revoke': 'Revocar',
@@ -382,9 +402,9 @@ export const esCR = {
     'Los mismos datos que se le piden a cualquiera al registrarse. Escríbalos como aparecen en el expediente.',
   'admin.users.create.submit': 'Crear y enviar el correo',
   'admin.users.create.error.EMAIL_ALREADY_REGISTERED':
-    'Ya existe una cuenta con ese correo. Búsquela en la lista de usuarios y otórguele el acceso desde su ficha.',
+    'Ya existe una cuenta con ese correo. Use «Agregar funcionario» en Funcionarios: ahí se busca a la persona y se le da el puesto sin volver a crearla.',
   'admin.users.create.error.DOCUMENT_ALREADY_REGISTERED':
-    'Ya existe una cuenta con esa identificación. Búsquela en la lista de usuarios y otórguele el acceso desde su ficha.',
+    'Ya existe una cuenta con esa identificación. Use «Agregar funcionario» en Funcionarios: ahí se busca a la persona y se le da el puesto sin volver a crearla.',
   'admin.users.create.error.ROLE_NOT_ALLOWED_FOR_PORTAL':
     'Un administrador municipal no puede otorgar ese rol. Solicítelo a la plataforma.',
 

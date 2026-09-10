@@ -183,6 +183,12 @@ luparx:
     login-max-per-email: ${LOGIN_MAX_FAILURES_PER_EMAIL:5}
     login-max-per-ip: ${LOGIN_MAX_FAILURES_PER_IP:50}
     login-lockout: ${LOGIN_LOCKOUT:15m}
+    # Búsqueda de personas en el padrón desde una municipalidad (CONTRACT.md v0.26). Es coincidencia
+    # exacta —hay que saber el correo o la cédula completos— y aun así se limita: es la única
+    # consulta de un portal de municipalidad que responde por gente de otra. Contratar a diez
+    # funcionarios en una tarde cabe de sobra; barrer el padrón, no.
+    directory-lookup-window: ${DIRECTORY_LOOKUP_WINDOW:10m}
+    directory-lookup-max-per-actor: ${DIRECTORY_LOOKUP_MAX_PER_ACTOR:40}
     cors-allowed-origins:
       # One origin list per portal — never a shared wildcard (docs/SECURITY.md §7).
       citizen: ${CORS_ALLOWED_ORIGIN_CITIZEN:http://localhost:5183}

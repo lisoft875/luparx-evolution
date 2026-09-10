@@ -59,6 +59,8 @@ import type {
   UpdateParkingSpaceRequest,
   UpdateParkingZoneRequest,
   CreateAdminUserRequest,
+  LookupPersonRequest,
+  LookupPersonResponse,
   MembershipStatus,
   StaffMember,
   SuspendMembershipRequest,
@@ -302,6 +304,14 @@ export class ApiClient {
     list: (query: AdminUsersQuery & PageParams): Promise<PagedResponse<AdminUserListItem>> =>
       this.http.request('GET', '/api/v1/admin/users', { query }),
     get: (id: string): Promise<AdminUserDetail> => this.http.request('GET', `/api/v1/admin/users/${id}`),
+    /**
+     * One person, matched exactly by email or identity document (CONTRACT.md v0.26).
+     *
+     * A POST that reads: the criteria are personal data and do not belong in a URL. Not idempotent
+     * on purpose — every attempt has to reach the server, because the server counts them.
+     */
+    lookup: (payload: LookupPersonRequest): Promise<LookupPersonResponse> =>
+      this.http.request('POST', '/api/v1/admin/users/lookup', { body: payload }),
     // Idempotent: a double submit of a staff form must not open two accounts, and the second call
     // would otherwise land on EMAIL_ALREADY_REGISTERED and read to the administrator as their own
     // mistake.

@@ -4,6 +4,7 @@ import cr.luparx.app.audit.AuditRecorder;
 import cr.luparx.app.notification.SmtpNotificationSender;
 import cr.luparx.app.outbox.OutboxRecorder;
 import cr.luparx.app.repository.TenantScopedUserRepository;
+import cr.luparx.app.security.DirectoryLookupRateLimiter;
 import cr.luparx.app.web.dto.AdminDtos;
 import cr.luparx.core.audit.AuditAction;
 import cr.luparx.core.domain.Portal;
@@ -77,6 +78,7 @@ public class AdminUserController {
     private final UserRegistrationService registrationService;
     private final MembershipService membershipService;
     private final PasswordResetService passwordResetService;
+    private final DirectoryLookupRateLimiter rateLimiter;
     private final NotificationSender notificationSender;
     private final SmtpNotificationSender portalUrls;
     private final AuditRecorder auditRecorder;
@@ -89,6 +91,7 @@ public class AdminUserController {
                                UserRegistrationService registrationService,
                                MembershipService membershipService,
                                PasswordResetService passwordResetService,
+                               DirectoryLookupRateLimiter rateLimiter,
                                NotificationSender notificationSender,
                                SmtpNotificationSender portalUrls,
                                AuditRecorder auditRecorder,
@@ -100,6 +103,7 @@ public class AdminUserController {
         this.registrationService = registrationService;
         this.membershipService = membershipService;
         this.passwordResetService = passwordResetService;
+        this.rateLimiter = rateLimiter;
         this.notificationSender = notificationSender;
         this.portalUrls = portalUrls;
         this.auditRecorder = auditRecorder;
@@ -137,6 +141,106 @@ public class AdminUserController {
         User user = requireMemberOfTenant(tenantId, id);
         List<TenantMembership> memberships = membershipRepository.findByTenantIdAndUserId(tenantId.value(), id);
         return mapper.toUserDetail(user, memberships);
+    }
+
+    /**
+     * Finds one person who is already registered on the platform, so that a post can be given to
+     * them instead of a second account being opened for them (CONTRACT.md v0.26).
+     *
+     * <h2>The problem this solves</h2>
+     *
+     * <p>People arrive at a municipality already registered. The most common case is the obvious one:
+     * an inspector parked downtown last year, so they registered as a citizen. Until now the only way
+     * in was {@code POST /admin/users}, which creates a person — and it refuses, correctly, with
+     * {@code EMAIL_ALREADY_REGISTERED} or {@code DOCUMENT_ALREADY_REGISTERED}, from which there was
+     * no way forward. The administrator could not even see the person: every other query in this
+     * portal is scoped to those who already hold a membership here, which this person does not.</p>
+     *
+     * <h2>Why this is a lookup and not a search</h2>
+     *
+     * <p>This is the only query in a municipal portal that answers about people outside the
+     * municipality, and the register behind it is national. So it is an <b>exact match</b>: the whole
+     * email, or the whole identity document. No partial terms, no wildcards, no listing, and never
+     * more than one result. You can confirm a person you can already name; you cannot browse.</p>
+     *
+     * <p>Three things bound it beyond that. It costs {@code ROLE_ASSIGN}, so only someone who may
+     * actually hand out a post can ask. Every attempt is audited, found or not — the entry records
+     * whether it was an email or a document and never the value itself. And the attempts are
+     * rate-limited from those very audit rows, so the endpoint cannot be fed a list of addresses to
+     * find out who exists.</p>
+     *
+     * <p>What comes back is deliberately thin: the name, so the administrator can check it against
+     * the identity card in their hand, a masked address, the account status, and the posts this
+     * person already holds <em>here</em>. Never their posts anywhere else — see
+     * {@link AdminDtos.PersonMatch}.</p>
+     */
+    @PostMapping("/lookup")
+    @PreAuthorize("hasAuthority('PERM_ROLE_ASSIGN')")
+    @Operation(summary = "Find one already-registered person by their exact email or identity document")
+    public AdminDtos.LookupPersonResponse lookup(@Valid @RequestBody AdminDtos.LookupPersonRequest request) {
+        TenantId tenantId = TenantContextHolder.requireTenantId();
+        UserId actor = TenantContextHolder.current().map(context -> context.userId()).orElse(null);
+
+        if (request.hasEmail() == request.hasDocument()) {
+            // Both, or neither. A client that sends both is guessing which one the server prefers,
+            // and guessing is not a thing to resolve silently on a query about a person.
+            throw new ValidationException("email", ErrorCode.VALIDATION_FAILED,
+                    "error.directory.lookup.criteria");
+        }
+        rateLimiter.checkAllowed(actor);
+
+        // Recorded BEFORE the answer is known, and recorded either way: an attempt that found nobody
+        // is exactly the attempt worth counting, and a limiter that only counted the hits would be
+        // no limiter at all against somebody probing for who exists.
+        java.util.Optional<User> match = request.hasEmail()
+                ? userDirectoryService.findByExactEmail(request.email())
+                : userDirectoryService.findByExactDocument(request.identityDocument().countryCode(),
+                        request.identityDocument().type(), request.identityDocument().number());
+        Map<String, Object> metadata = new HashMap<>();
+        metadata.put("by", request.hasEmail() ? "EMAIL" : "DOCUMENT");
+        metadata.put("found", Boolean.valueOf(match.isPresent()));
+        match.ifPresent(user -> metadata.put("userId", user.getId().toString()));
+        auditRecorder.record(AuditAction.USER_DIRECTORY_LOOKUP, "user",
+                match.map(user -> user.getId().toString()).orElse(null), metadata);
+
+        if (match.isEmpty()) {
+            return AdminDtos.LookupPersonResponse.notFound();
+        }
+        User person = match.get();
+        List<AdminDtos.PersonAccess> here =
+                membershipRepository.findByTenantIdAndUserId(tenantId.value(), person.getId()).stream()
+                        .map(membership -> new AdminDtos.PersonAccess(membership.getPortal(),
+                                membership.getRole(), membership.getStatus()))
+                        .toList();
+        return new AdminDtos.LookupPersonResponse(true, new AdminDtos.PersonMatch(
+                person.getId(),
+                mapper.fullName(person),
+                maskEmail(person.getEmail()),
+                person.getStatus(),
+                here));
+    }
+
+    /**
+     * {@code javier.li@gmail.com} → {@code ja***@gmail.com}.
+     *
+     * <p>Enough for an administrator to recognise the address they typed, not enough to learn one
+     * they did not. The domain is kept whole on purpose: it is the part that tells a municipality
+     * whether the person is writing from a work account, and it identifies nobody by itself.</p>
+     */
+    static String maskEmail(String email) {
+        if (email == null || email.isBlank()) {
+            return "";
+        }
+        int at = email.indexOf('@');
+        if (at <= 0) {
+            return "***";
+        }
+        String local = email.substring(0, at);
+        String domain = email.substring(at);
+        // One visible character for a very short local part; two otherwise. Never all of a
+        // two-letter name.
+        int visible = local.length() <= 2 ? 1 : 2;
+        return local.substring(0, visible) + "***" + domain;
     }
 
     /**
@@ -296,7 +400,7 @@ public class AdminUserController {
                 Locales.parse(issued.user().getLocale()).orElse(Locale.ROOT),
                 "email.passwordReset",
                 Map.of("name", issued.user().getGivenName(),
-                        "link", portalUrls.portalBaseUrl(Portal.ADMIN.slug())
+                        "link", portalUrls.portalBaseUrl(resetPortalFor(tenantId, id).slug())
                                 + "/password/reset?token=" + issued.token()));
         auditRecorder.record(AuditAction.USER_PASSWORD_RESET_REQUESTED, "user", id.toString(),
                 Map.of("forced", "true"));
@@ -304,6 +408,29 @@ public class AdminUserController {
     }
 
     // --- helpers ---------------------------------------------------------------------------------
+
+    /**
+     * Which app's reset page the emailed link should point at.
+     *
+     * <p>The link used to be hardcoded to the admin portal, which sent an inspector — the commonest
+     * person this button is pressed for — to a front door they do not use. The password itself is
+     * one and the same whichever portal resets it, so this only decides where the person lands.</p>
+     *
+     * <p>Since v0.26 one person may hold posts in more than one app of the same municipality, so
+     * there can be two right answers; the admin portal wins when they hold one, because it is the
+     * desk-bound app and this button is normally pressed while somebody is on the phone with the
+     * person. Citizen memberships are ignored: this is a staff action.</p>
+     */
+    private Portal resetPortalFor(TenantId tenantId, UUID userId) {
+        List<TenantMembership> memberships = membershipRepository.findByTenantIdAndUserId(tenantId.value(), userId);
+        boolean admin = memberships.stream().anyMatch(m -> m.getPortal() == Portal.ADMIN);
+        if (admin) {
+            return Portal.ADMIN;
+        }
+        return memberships.stream().anyMatch(m -> m.getPortal() == Portal.INSPECTOR)
+                ? Portal.INSPECTOR
+                : Portal.ADMIN;
+    }
 
     /** The IDOR guard: the user must actually belong to the active tenant. */
     private User requireMemberOfTenant(TenantId tenantId, UUID userId) {

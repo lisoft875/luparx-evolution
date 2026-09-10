@@ -313,6 +313,26 @@ export const enUS: Record<TranslationKey, string> = {
   'admin.staff.zones.help':
     'An inspector can only check plates and issue citations in the sectors assigned to them.',
   'admin.staff.zones.noneMeansAll': 'With no sector ticked they may act anywhere in the municipality.',
+  'admin.staff.add.title': 'Add staff member',
+  'admin.staff.add.help':
+    'Look the person up first: many people already have an account because they registered as citizens. If they exist, they get the post without being asked for their details again.',
+  'admin.staff.add.searchBy': 'Search by',
+  'admin.staff.add.by.document': 'By identity document',
+  'admin.staff.add.by.email': 'By email',
+  'admin.staff.add.exactHint': 'It has to be the whole, exact value; this is not a partial search.',
+  'admin.staff.add.search': 'Search',
+  'admin.staff.add.searchAgain': 'Look up somebody else',
+  'admin.staff.add.notFound': 'Nobody on the platform has that. If this is their first time, open their file.',
+  'admin.staff.add.createNew': 'Create a new file',
+  'admin.staff.add.noAccessHere': 'They hold no access in this municipality yet.',
+  'admin.staff.add.blocked': 'This account is blocked platform-wide. Unblock it before giving them a post.',
+  'admin.staff.add.rolePerApp': 'One post per app: the same account can be an inspector on the street app and hold finance in this portal.',
+  'admin.staff.add.appTaken': 'Already holds a post in that app',
+  'admin.staff.add.grant': 'Grant access',
+  'admin.staff.add.granted': 'Done: {{name}} is now {{role}} in this municipality. They were told by email.',
+  'admin.staff.add.error.rateLimited': 'Too many lookups in a row. Wait a few minutes.',
+  'admin.staff.add.error.documentInvalid': "That number doesn't match the format of the chosen document.",
+  'admin.staff.add.error.alreadyHasAccess': 'That person already holds a post in that app in this municipality.',
   'admin.staff.action.suspend': 'Deactivate',
   'admin.staff.action.reactivate': 'Reactivate',
   'admin.staff.action.revoke': 'Revoke',
@@ -370,9 +390,9 @@ export const enUS: Record<TranslationKey, string> = {
     'The same details anyone gives when registering. Enter them as they appear in the file.',
   'admin.users.create.submit': 'Create and send the email',
   'admin.users.create.error.EMAIL_ALREADY_REGISTERED':
-    'An account with that email already exists. Find them in the user list and grant the access from their record.',
+    'An account with that email already exists. Use \'Add staff member\' on the Staff screen: it looks the person up and gives them the post without creating them again.',
   'admin.users.create.error.DOCUMENT_ALREADY_REGISTERED':
-    'An account with that identity document already exists. Find them in the user list and grant the access from their record.',
+    'An account with that identity document already exists. Use \'Add staff member\' on the Staff screen: it looks the person up and gives them the post without creating them again.',
   'admin.users.create.error.ROLE_NOT_ALLOWED_FOR_PORTAL':
     'A municipal administrator cannot grant that role. Ask the platform for it.',
 

@@ -99,6 +99,71 @@ public final class AdminDtos {
     public record BlockUserRequest(@NotBlank @Size(max = 500) String reason) {
     }
 
+    /**
+     * {@code POST /admin/users/lookup}: find one person who already exists on the platform, by their
+     * exact email or their exact identity document (CONTRACT.md v0.26).
+     *
+     * <p>A POST rather than a GET with query parameters, and that is not a style choice: an email
+     * address and a national identity number are personal data, and query strings end up in browser
+     * history, proxy logs and access logs (SECURITY.md §11). The body does not.</p>
+     *
+     * <p>Exactly one of the two must be filled in. Sending both is a client that is guessing, and it
+     * is refused rather than silently resolved in favour of one.</p>
+     */
+    public record LookupPersonRequest(
+            @Email @Size(max = 320) String email,
+            @Valid IdentityDocumentDto identityDocument) {
+
+        public LookupPersonRequest {
+            email = EmailAddress.normalize(email);
+        }
+
+        public boolean hasEmail() {
+            return email != null && !email.isBlank();
+        }
+
+        public boolean hasDocument() {
+            return identityDocument != null;
+        }
+    }
+
+    /**
+     * The answer to a lookup. {@code found == false} carries no person at all — not a masked one,
+     * not an empty shell.
+     */
+    public record LookupPersonResponse(boolean found, PersonMatch person) {
+
+        public static LookupPersonResponse notFound() {
+            return new LookupPersonResponse(false, null);
+        }
+    }
+
+    /**
+     * Just enough to be sure it is the right person, and nothing else.
+     *
+     * <p>The name confirms the match against the identity card the administrator is holding; the
+     * email is masked because the administrator already typed the one they know and does not need to
+     * be told anybody else's. There is no phone, no address, no document number, and above all
+     * <b>no membership of any other municipality</b>: which other councils this person works for is
+     * theirs and those councils', and answering it here would leak across tenants through a screen
+     * that looks like a search box.</p>
+     *
+     * @param accessHere what this person already holds <em>in the requesting municipality</em>, which
+     *                   is that municipality's own data. It is what lets the screen say "already an
+     *                   inspector here" instead of letting the administrator walk into a 409.
+     */
+    public record PersonMatch(
+            UUID userId,
+            String fullName,
+            String maskedEmail,
+            UserStatus accountStatus,
+            List<PersonAccess> accessHere) {
+    }
+
+    /** One post this person holds in the requesting municipality. */
+    public record PersonAccess(Portal portal, Role role, MembershipStatus status) {
+    }
+
     public record CreateMembershipRequest(
             @NotNull UUID userId,
             UUID tenantId,

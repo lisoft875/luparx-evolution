@@ -379,6 +379,44 @@ export interface CreateAdminUserRequest {
   role: Role;
 }
 
+/**
+ * `POST /admin/users/lookup` — find one person who is already registered, to give them a post
+ * instead of opening a second account for them (CONTRACT.md v0.26).
+ *
+ * Exactly one of the two criteria: it is an exact match, not a search. A POST rather than a query
+ * string because an email address and an identity number are personal data and query strings end up
+ * in logs.
+ */
+export interface LookupPersonRequest {
+  email?: string;
+  identityDocument?: IdentityDocumentInput;
+}
+
+export interface LookupPersonResponse {
+  found: boolean;
+  person: PersonMatch | null;
+}
+
+/**
+ * Just enough to be sure it is the right person.
+ *
+ * The email arrives masked (`ja***@gmail.com`), and `accessHere` lists only what this person holds
+ * **in this municipality** — what they do for any other council is not part of the answer.
+ */
+export interface PersonMatch {
+  userId: string;
+  fullName: string | null;
+  maskedEmail: string;
+  accountStatus: UserStatus | null;
+  accessHere: PersonAccess[];
+}
+
+export interface PersonAccess {
+  portal: Portal;
+  role: Role;
+  status: MembershipStatus;
+}
+
 /** The roles a municipal administrator may grant inside their own municipality (CONTRACT.md v0.14). */
 export const TENANT_GRANTABLE_ROLES: readonly Role[] = [
   'INSPECTOR',
@@ -432,7 +470,12 @@ export interface BlockUserRequest {
 
 export interface CreateMembershipRequest {
   userId: string;
-  tenantId: string;
+  /**
+   * Optional, and best omitted. The municipality is the session's active one, taken from the token;
+   * sending a different id is refused with `CROSS_TENANT_ACCESS_DENIED`, so the field can only ever
+   * agree with the server or be rejected by it.
+   */
+  tenantId?: string;
   portal: Portal;
   role: Role;
 }
