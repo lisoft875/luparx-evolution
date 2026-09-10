@@ -327,7 +327,7 @@ public class AdminUserController {
                 "email.accountCreated",
                 Map.of("name", issued.user().getGivenName(),
                         "link", portalUrls.portalBaseUrl(role.portal().slug())
-                                + "/password/reset?token=" + issued.token()));
+                                + "/reset-password?token=" + issued.token()));
 
         auditRecorder.record(AuditAction.USER_CREATED, "user", result.userId().toString(),
                 Map.of("role", role.name(), "portal", role.portal().slug(), "createdBy", "tenant-admin"));
@@ -401,7 +401,7 @@ public class AdminUserController {
                 "email.passwordReset",
                 Map.of("name", issued.user().getGivenName(),
                         "link", portalUrls.portalBaseUrl(resetPortalFor(tenantId, id).slug())
-                                + "/password/reset?token=" + issued.token()));
+                                + "/reset-password?token=" + issued.token()));
         auditRecorder.record(AuditAction.USER_PASSWORD_RESET_REQUESTED, "user", id.toString(),
                 Map.of("forced", "true"));
         return ResponseEntity.noContent().build();

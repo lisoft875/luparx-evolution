@@ -48,6 +48,11 @@ export function App(): React.JSX.Element {
               <Route path="/register" element={<RegisterPage />} />
               <Route path="/forgot-password" element={<ForgotPasswordPage />} />
               <Route path="/reset-password" element={<ResetPasswordPage />} />
+              {/* El correo dice «/password/reset» desde v0.1 y la ruta siempre fue «/reset-password»:
+                  cada enlace de restablecimiento caía en el comodín de abajo, que redirige a «/» y se
+                  come el token. Los correos ya salen con la ruta buena; este alias es para los que
+                  siguen en las bandejas de entrada de la gente (CONTRACT.md v0.27). */}
+              <Route path="/password/reset" element={<ResetPasswordPage />} />
               <Route path="/select-tenant" element={<TenantSelectPage />} />
               <Route
                 path="/"

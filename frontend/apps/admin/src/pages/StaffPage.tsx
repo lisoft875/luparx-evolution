@@ -4,7 +4,13 @@ import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { RequirePermission, useAuth } from '@luparx/auth';
 import { useTranslation, formatDateTime, type TranslationKey } from '@luparx/i18n';
-import type { MembershipStatus, StaffMember } from '@luparx/api-client';
+import {
+  TENANT_GRANTABLE_ROLES,
+  type MembershipStatus,
+  type Role,
+  type StaffInvitation,
+  type StaffMember,
+} from '@luparx/api-client';
 import { Alert, Badge, Button, Input, Modal, Pagination, Select, Table } from '@luparx/ui';
 import { AddStaffDialog } from '../components/AddStaffDialog';
 import { AdminShell } from '../components/AdminShell';
@@ -41,6 +47,8 @@ export function StaffPage(): React.JSX.Element {
   const [status, setStatus] = useState<MembershipStatus | ''>('');
   const [page, setPage] = useState(0);
   const [adding, setAdding] = useState(false);
+  const [changingRole, setChangingRole] = useState<StaffMember | null>(null);
+  const [nextRole, setNextRole] = useState<Role | ''>('');
   const [suspending, setSuspending] = useState<StaffMember | null>(null);
   const [suspendReason, setSuspendReason] = useState('');
   const [zoning, setZoning] = useState<StaffMember | null>(null);
@@ -51,6 +59,14 @@ export function StaffPage(): React.JSX.Element {
   const query = useQuery({
     queryKey: ['admin', 'staff', { status, page }],
     queryFn: () => apiClient.adminStaff.list({ status: status || undefined, page, size: PAGE_SIZE }),
+  });
+
+  // Invitations that are still waiting (CONTRACT.md v0.27). Only the pending ones: an accepted one
+  // has become a post and is already a row in the table above, and showing it twice would make the
+  // panel answer "how many people work here" wrongly.
+  const invitationsQuery = useQuery({
+    queryKey: ['admin', 'staff-invitations'],
+    queryFn: () => apiClient.adminStaffInvitations.list({ status: 'PENDING', size: 50 }),
   });
 
   // The municipality's own sectors, for the assignment dialog. The same list the inspector app is
@@ -95,6 +111,33 @@ export function StaffPage(): React.JSX.Element {
   const resetMutation = useMutation({
     mutationFn: (member: StaffMember) => apiClient.adminUsers.forcePasswordReset(member.userId),
     onSuccess: afterChange('admin.staff.resetSent'),
+    onError: onFailure,
+  });
+  const changeRoleMutation = useMutation({
+    mutationFn: ({ member, role }: { member: StaffMember; role: Role }) =>
+      apiClient.adminMemberships.update(member.membershipId, { role }),
+    onSuccess: () => {
+      setChangingRole(null);
+      afterChange('admin.staff.changeRole.done')();
+    },
+    onError: onFailure,
+  });
+  const resendMutation = useMutation({
+    mutationFn: (invitation: StaffInvitation) => apiClient.adminStaffInvitations.resend(invitation.id),
+    onSuccess: () => {
+      setError(null);
+      setFeedback(t('admin.staff.invitations.resent'));
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'staff-invitations'] });
+    },
+    onError: onFailure,
+  });
+  const revokeInvitationMutation = useMutation({
+    mutationFn: (invitation: StaffInvitation) => apiClient.adminStaffInvitations.revoke(invitation.id),
+    onSuccess: () => {
+      setError(null);
+      setFeedback(t('admin.staff.invitations.revoked'));
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'staff-invitations'] });
+    },
     onError: onFailure,
   });
   const zonesMutation = useMutation({
@@ -193,10 +236,29 @@ export function StaffPage(): React.JSX.Element {
                     : member.zones.map((zone) => zone.name).join(', '),
               },
               {
-                key: 'lastLogin',
-                header: t('admin.staff.column.lastLogin'),
-                render: (member) =>
-                  member.lastLoginAt ? formatDateTime(member.lastLoginAt, locale) : t('admin.staff.lastLogin.never'),
+                key: 'lastUsed',
+                header: t('admin.staff.column.lastUsed'),
+                // The POST's own use, not the person's last sign-in. Since v0.26 a person may hold
+                // two posts, and the person-level stamp cannot tell them apart: it would show the
+                // same date on both rows and mark an unused inspector post as busy. When there is no
+                // recorded use for this post, the person's own sign-in is offered underneath as
+                // context, clearly labelled — never dressed up as this post's.
+                render: (member) => (
+                  <>
+                    <div>
+                      {member.lastUsedAt
+                        ? formatDateTime(member.lastUsedAt, locale)
+                        : t('admin.staff.lastUsed.none')}
+                    </div>
+                    {!member.lastUsedAt && member.lastLoginAt ? (
+                      <div className="lx-text-meta">
+                        {t('admin.staff.lastUsed.personHint', {
+                          date: formatDateTime(member.lastLoginAt, locale),
+                        })}
+                      </div>
+                    ) : null}
+                  </>
+                ),
               },
               {
                 key: 'actions',
@@ -216,6 +278,18 @@ export function StaffPage(): React.JSX.Element {
                       </Button>
                     </RequirePermission>
                     <RequirePermission permission="ROLE_ASSIGN">
+                      {member.status !== 'REVOKED' ? (
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          onClick={() => {
+                            setChangingRole(member);
+                            setNextRole(member.role);
+                          }}
+                        >
+                          {t('admin.staff.action.changeRole')}
+                        </Button>
+                      ) : null}
                       {member.status === 'SUSPENDED' ? (
                         <Button type="button" variant="secondary" onClick={() => reactivateMutation.mutate(member)}>
                           {t('admin.staff.action.reactivate')}
@@ -294,6 +368,123 @@ export function StaffPage(): React.JSX.Element {
         </div>
       </Modal>
 
+      {/* Las invitaciones van DEBAJO de la plantilla y aparte: son promesas, no personal. Mezclarlas
+          en la misma tabla haría que «cuánta gente trabaja aquí» se conteste mal. */}
+      {(invitationsQuery.data?.items.length ?? 0) > 0 ? (
+        <div style={{ marginTop: 'var(--lx-space-6)' }}>
+          <h2>{t('admin.staff.invitations.title')}</h2>
+          <p className="lx-text-meta">{t('admin.staff.invitations.description')}</p>
+          <Table
+            loading={invitationsQuery.isLoading}
+            loadingLabel={t('common.loading')}
+            emptyLabel={t('admin.staff.invitations.empty')}
+            rows={invitationsQuery.data?.items ?? []}
+            rowKey={(row) => row.id}
+            columns={[
+              {
+                key: 'email',
+                header: t('admin.staff.invitations.column.email'),
+                render: (invitation) => invitation.email,
+              },
+              {
+                key: 'role',
+                header: t('admin.staff.invitations.column.role'),
+                render: (invitation) => t(`role.${invitation.role}` as TranslationKey),
+              },
+              {
+                key: 'sent',
+                header: t('admin.staff.invitations.column.sent'),
+                render: (invitation) => formatDateTime(invitation.createdAt, locale),
+              },
+              {
+                key: 'expires',
+                header: t('admin.staff.invitations.column.expires'),
+                // Vencida se muestra como lo que es —una fecha que pasó— y no como un estado
+                // distinto: el servidor lo calcula, nadie lo guarda, y sigue siendo reenviable.
+                render: (invitation) =>
+                  invitation.expired ? (
+                    <Badge tone="warning">{t('admin.staff.invitations.expired')}</Badge>
+                  ) : (
+                    formatDateTime(invitation.expiresAt, locale)
+                  ),
+              },
+              {
+                key: 'actions',
+                header: t('admin.staff.column.actions'),
+                render: (invitation) => (
+                  <RequirePermission permission="ROLE_ASSIGN">
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      <Button type="button" variant="secondary" onClick={() => resendMutation.mutate(invitation)}>
+                        {t('admin.staff.invitations.action.resend')}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="danger"
+                        onClick={() => revokeInvitationMutation.mutate(invitation)}
+                      >
+                        {t('admin.staff.invitations.action.revoke')}
+                      </Button>
+                    </div>
+                  </RequirePermission>
+                ),
+              },
+            ]}
+          />
+        </div>
+      ) : null}
+
+      <Modal
+        open={changingRole !== null}
+        onClose={() => setChangingRole(null)}
+        title={t('admin.staff.changeRole.title')}
+        closeLabel={t('common.close')}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--lx-space-3)' }}>
+          <p className="lx-text-body" style={{ margin: 0 }}>
+            {t('admin.staff.changeRole.body', {
+              name: changingRole?.fullName ?? '',
+              app: changingRole ? t(`portal.${changingRole.portal}` as TranslationKey) : '',
+            })}
+          </p>
+          {/* Un rol pertenece a un portal y sólo a uno, así que la lista se limita a la app de este
+              puesto. Decirlo aquí evita que alguien busque «fiscalizador» en un puesto de admin y
+              crea que se perdió la opción. */}
+          <Alert tone="info">{t('admin.staff.changeRole.sameApp')}</Alert>
+          <Select
+            aria-label={t('admin.users.create.roleLabel')}
+            value={nextRole}
+            onChange={(value) => setNextRole(value as Role)}
+            placeholder={t('common.select.placeholder')}
+            options={TENANT_GRANTABLE_ROLES.filter(
+              (role) =>
+                changingRole !== null
+                && (role === 'INSPECTOR' || role === 'INSPECTOR_LEAD' ? 'inspector' : 'admin')
+                  === changingRole.portal,
+            ).map((role) => ({
+              value: role,
+              label: t(`role.${role}` as TranslationKey),
+              detail: t(`role.${role}.detail` as TranslationKey),
+            }))}
+          />
+          <div className="lx-dialog-actions">
+            <Button type="button" variant="secondary" fullWidth onClick={() => setChangingRole(null)}>
+              {t('common.cancel')}
+            </Button>
+            <Button
+              type="button"
+              fullWidth
+              loading={changeRoleMutation.isPending}
+              disabled={nextRole === '' || nextRole === changingRole?.role}
+              onClick={() =>
+                changingRole && nextRole !== '' && changeRoleMutation.mutate({ member: changingRole, role: nextRole })
+              }
+            >
+              {t('common.save')}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
       <AddStaffDialog
         open={adding}
         onClose={() => setAdding(false)}
@@ -308,6 +499,14 @@ export function StaffPage(): React.JSX.Element {
           );
           void queryClient.invalidateQueries({ queryKey: ['admin', 'staff'] });
           void queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
+        }}
+        onInvited={(email, granted) => {
+          setAdding(false);
+          setError(null);
+          setFeedback(
+            t('admin.staff.add.invited', { email, role: t(`role.${granted}` as TranslationKey) }),
+          );
+          void queryClient.invalidateQueries({ queryKey: ['admin', 'staff-invitations'] });
         }}
         onCreateNew={(seed) => {
           setAdding(false);

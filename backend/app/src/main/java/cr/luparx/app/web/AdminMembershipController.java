@@ -266,6 +266,10 @@ public class AdminMembershipController {
                     membership.getSuspendedAt(),
                     membership.getRevokedAt(),
                     zones,
+                    // The post's own use first, the person's sign-in second. Since v0.26 they answer
+                    // different questions and the panel needs both: "is this post still worked?" and
+                    // "is this account alive at all?".
+                    membership.getLastUsedAt(),
                     person == null ? null : person.getLastLoginAt(),
                     person == null ? null : person.getLastLoginPortal(),
                     person == null ? null : person.getStatus()));

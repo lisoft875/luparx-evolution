@@ -1,5 +1,7 @@
 export { RegistrationForm } from './registration/RegistrationForm';
 export type { RegistrationFormProps } from './registration/RegistrationForm';
+export { AcceptInvitationForm } from './invitation/AcceptInvitationForm';
+export type { AcceptInvitationFormProps } from './invitation/AcceptInvitationForm';
 export { LoginForm } from './login/LoginForm';
 export type { LoginFormProps } from './login/LoginForm';
 export { ForgotPasswordForm } from './login/ForgotPasswordForm';

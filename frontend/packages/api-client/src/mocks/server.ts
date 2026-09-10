@@ -4,6 +4,9 @@ import type {
   AdminUserDetail,
   AdminUserListItem,
   CreateAdminUserRequest,
+  MembershipStatus,
+  CreateStaffInvitationRequest,
+  AcceptInvitationRequest,
   CreateMembershipRequest,
   LookupPersonRequest,
   CreateVehicleRequest,
@@ -63,6 +66,44 @@ import { mintMockTokenPair } from './token';
  * does not have.
  */
 const mockMembershipZones = new Map<string, string[]>();
+
+/**
+ * Cuándo se usó cada PUESTO por última vez (CONTRACT.md v0.27), por id de membresía.
+ *
+ * Aparte del último ingreso de la persona a propósito: son dos preguntas distintas, y confundirlas
+ * es el defecto que v0.27 arregla. El mock siembra un puesto usado y otro sin uso registrado, para
+ * que la pantalla tenga que decir las dos cosas.
+ */
+const mockMembershipLastUsed = new Map<string, string>([
+  ['membership-4', new Date(Date.now() - 3 * 86400000).toISOString()],
+]);
+
+/** Invitaciones vivas y respondidas de la sesión de vista previa (CONTRACT.md v0.27). */
+interface MockInvitation {
+  id: string;
+  tenantId: string;
+  email: string;
+  portal: Portal;
+  role: Role;
+  status: 'PENDING' | 'ACCEPTED' | 'REVOKED';
+  token: string;
+  createdAt: string;
+  expiresAt: string;
+  acceptedAt: string | null;
+  revokedAt: string | null;
+}
+const mockInvitations: MockInvitation[] = [];
+
+/**
+ * Token predecible, sólo en el mock.
+ *
+ * El servidor real usa un aleatorio criptográfico y guarda su hash; aquí el punto es que la vista
+ * previa sea recorrible entera —invitar en el panel y abrir el enlace— sin que nadie tenga que
+ * espiar el estado interno del transporte. Esto no existe en producción.
+ */
+function mockInvitationToken(email: string): string {
+  return `tok-${email}`;
+}
 
 /** Zones an administrator created in this session, on top of the fixture's own (CONTRACT.md v0.16). */
 interface MockAdminZone {
@@ -353,6 +394,94 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
   }
 
   // ---- Auth: /api/v1/auth/{portal}/... -------------------------------------------------------
+  // ---- Aceptar una invitación (CONTRACT.md v0.27). SIN autenticación, a propósito: quien sigue el
+  // enlace todavía no tiene cuenta.
+  if (segments[2] === 'invitations' && segments[3]) {
+    const token = decodeURIComponent(segments[3]);
+    const invitation = mockInvitations.find((i) => i.token === token);
+    const usable = invitation
+      && invitation.status === 'PENDING'
+      && new Date(invitation.expiresAt) > new Date();
+    if (invitation?.status === 'ACCEPTED') {
+      return problem(409, 'INVITATION_ALREADY_ACCEPTED', 'That invitation has already been used');
+    }
+    if (invitation && invitation.status === 'PENDING' && !usable) {
+      return problem(409, 'INVITATION_EXPIRED', 'That invitation has expired');
+    }
+    // Una revocada se contesta como inexistente: la municipalidad la retiró y quien tiene el enlace
+    // no tiene por qué enterarse de más.
+    if (!invitation || !usable) {
+      return problem(404, 'INVITATION_NOT_FOUND', 'No usable invitation behind that link');
+    }
+    const tenant = MOCK_TENANTS.find((x) => x.id === invitation.tenantId);
+    if (method === 'GET' && !segments[4]) {
+      return json({
+        tenantName: tenant?.name ?? invitation.tenantId,
+        email: invitation.email,
+        portal: invitation.portal,
+        role: invitation.role,
+        expiresAt: invitation.expiresAt,
+      });
+    }
+    if (method === 'POST' && segments[4] === 'accept') {
+      const payload = await readBody<AcceptInvitationRequest>(init);
+      const newId = nextMockUserId();
+      mockUsersById.set(newId, {
+        profile: {
+          id: newId,
+          // Del la invitación, NUNCA del cuerpo: si el cuerpo pudiera traer una dirección, una
+          // invitación sería una forma de abrirle cuenta al buzón de otra persona.
+          email: invitation.email,
+          // Seguir un enlace mandado a esa dirección ya prueba el buzón.
+          emailVerified: true,
+          givenName: payload.givenName,
+          familyName: payload.familyName,
+          secondFamilyName: payload.secondFamilyName,
+          birthDate: payload.birthDate,
+          nationalityCode: payload.nationalityCode,
+          phone: payload.phone,
+          identityDocument: payload.identityDocument,
+          address: payload.address,
+          locale: payload.locale ?? 'es-CR',
+          timeZone: payload.timeZone ?? 'America/Costa_Rica',
+          status: 'ACTIVE' as const,
+        },
+        // Suya, elegida por ella: es la diferencia con una cuenta abierta por un operador.
+        password: payload.password,
+        memberships: [
+          {
+            id: `membership-${crypto.randomUUID()}`,
+            tenantId: invitation.tenantId,
+            tenantName: tenant?.name ?? invitation.tenantId,
+            tenantShortName: tenant?.shortName ?? null,
+            tenantLogoUrl: null,
+            tenantBrandColor: tenant?.brandColor ?? null,
+            portal: invitation.portal,
+            role: invitation.role,
+            status: 'ACTIVE',
+          },
+        ],
+      });
+      invitation.status = 'ACCEPTED';
+      invitation.acceptedAt = new Date().toISOString();
+      recordAuditEvent({
+        tenantId: invitation.tenantId,
+        actorUserId: newId,
+        actorPortal: invitation.portal,
+        action: 'STAFF_INVITATION_ACCEPTED',
+        resourceType: 'staff-invitation',
+        resourceId: invitation.id,
+        metadata: { role: invitation.role },
+      });
+      return json({
+        userId: newId,
+        portal: invitation.portal,
+        role: invitation.role,
+        tenantName: tenant?.name ?? invitation.tenantId,
+      }, 201);
+    }
+  }
+
   if (segments[2] === 'auth') {
     const portal = segments[3] as Portal;
     const action = segments.slice(4).join('/');
@@ -914,6 +1043,103 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
       }
     }
 
+    // ---- Invitaciones de funcionarios (CONTRACT.md v0.27) -------------------------------------
+    if (resource === 'staff-invitations') {
+      const mine = mockInvitations.filter((i) => i.tenantId === tenantId);
+      const toResponse = (invitation: MockInvitation) => ({
+        id: invitation.id,
+        email: invitation.email,
+        portal: invitation.portal,
+        role: invitation.role,
+        status: invitation.status,
+        createdAt: invitation.createdAt,
+        expiresAt: invitation.expiresAt,
+        // Calculado, nunca guardado: vencer es un hecho del reloj y no una decisión de nadie.
+        expired: invitation.status === 'PENDING' && new Date(invitation.expiresAt) <= new Date(),
+        acceptedAt: invitation.acceptedAt,
+        revokedAt: invitation.revokedAt,
+      });
+
+      if (method === 'GET' && segments.length === 4) {
+        const statusFilter = url.searchParams.get('status');
+        const rows = mine.filter((i) => !statusFilter || i.status === statusFilter).map(toResponse);
+        return json(paginate(rows, Number(url.searchParams.get('page') ?? '0'),
+          Number(url.searchParams.get('size') ?? '20')));
+      }
+      if (method === 'POST' && segments.length === 4) {
+        const payload = await readBody<CreateStaffInvitationRequest>(init);
+        const email = payload.email.trim().toLowerCase();
+        if (!TENANT_GRANTABLE_ROLES.includes(payload.role)) {
+          return problem(403, 'ROLE_NOT_ALLOWED_FOR_PORTAL', 'A municipal administrator cannot grant that role');
+        }
+        // Quien ya tiene cuenta no se invita: se le da el puesto sobre la que tiene (v0.26). El
+        // rechazo es la respuesta correcta, no un estorbo.
+        if (findUserByEmail(email)) {
+          return problem(409, 'EMAIL_ALREADY_REGISTERED', 'That address already has an account');
+        }
+        const portal = payload.role === 'INSPECTOR' || payload.role === 'INSPECTOR_LEAD' ? 'inspector' : 'admin';
+        const now = new Date();
+        const expiresAt = new Date(now.getTime() + 14 * 86400000).toISOString();
+        // Reinvitar reemplaza el enlace de la invitación viva; no agrega una segunda.
+        const existing = mine.find((i) => i.email === email && i.status === 'PENDING');
+        if (existing) {
+          existing.token = mockInvitationToken(email);
+          existing.createdAt = now.toISOString();
+          existing.expiresAt = expiresAt;
+          existing.role = payload.role;
+          existing.portal = portal as Portal;
+          return json(toResponse(existing), 201);
+        }
+        const invitation: MockInvitation = {
+          id: `invitation-${crypto.randomUUID()}`,
+          tenantId: tenantId ?? '',
+          email,
+          portal: portal as Portal,
+          role: payload.role,
+          status: 'PENDING',
+          token: mockInvitationToken(email),
+          createdAt: now.toISOString(),
+          expiresAt,
+          acceptedAt: null,
+          revokedAt: null,
+        };
+        mockInvitations.push(invitation);
+        recordAuditEvent({
+          tenantId: tenantId ?? null,
+          actorUserId: 'mock-admin',
+          actorPortal: 'admin',
+          action: 'STAFF_INVITATION_SENT',
+          resourceType: 'staff-invitation',
+          resourceId: invitation.id,
+          metadata: { role: invitation.role, portal: invitation.portal },
+        });
+        return json(toResponse(invitation), 201);
+      }
+      if (segments.length >= 5) {
+        const invitation = mine.find((i) => i.id === segments[4]);
+        if (!invitation) return problem(404, 'INVITATION_NOT_FOUND', 'Invitation not found');
+        if (segments[5] === 'resend' && method === 'POST') {
+          if (invitation.status !== 'PENDING') {
+            return problem(409, 'INVITATION_NOT_PENDING', 'That invitation is no longer active');
+          }
+          // Reenviar cambia el token de verdad: el enlace anterior tiene que dejar de servir, y una
+          // vista previa que reutilizara el mismo no probaría nada.
+          invitation.token = `${mockInvitationToken(invitation.email)}-${mockInvitations.length}`;
+          invitation.createdAt = new Date().toISOString();
+          invitation.expiresAt = new Date(Date.now() + 14 * 86400000).toISOString();
+          return json(toResponse(invitation));
+        }
+        if (!segments[5] && method === 'DELETE') {
+          if (invitation.status === 'ACCEPTED') {
+            return problem(409, 'INVITATION_ALREADY_ACCEPTED', 'That invitation was already used');
+          }
+          invitation.status = 'REVOKED';
+          invitation.revokedAt = new Date().toISOString();
+          return json(toResponse(invitation));
+        }
+      }
+    }
+
     // POST /api/v1/admin/memberships — give a post to somebody who already has an account
     // (CONTRACT.md v0.26). It used to answer 204 and change nothing, which made the screen look like
     // it worked and the staff list look like it had not: the two refusals below and the row it adds
@@ -980,6 +1206,9 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
                 .find((z) => z.id === zoneId);
               return { zoneId, code: zone?.code ?? zoneId, name: zone?.name ?? zoneId };
             }),
+            // El uso DEL PUESTO, no el de la persona (CONTRACT.md v0.27). El mock los distingue
+            // porque distinguirlos es justamente lo que había que arreglar.
+            lastUsedAt: mockMembershipLastUsed.get(membership.id ?? '') ?? null,
             lastLoginAt: person.profile.lastLoginAt ?? null,
             lastLoginPortal: person.profile.lastLoginPortal ?? null,
             accountStatus: person.profile.status,
@@ -1035,6 +1264,33 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
         membership.statusReason = null;
         membership.suspendedAt = null;
         return noContent();
+      }
+      // PUT /api/v1/admin/memberships/{id} — cambiar el rol de un puesto que ya existe.
+      if (!subAction && method === 'PUT') {
+        const payload = await readBody<{ role?: Role; status?: MembershipStatus }>(init);
+        if (payload.role) {
+          if (!TENANT_GRANTABLE_ROLES.includes(payload.role)) {
+            return problem(403, 'ROLE_NOT_ALLOWED_FOR_PORTAL', 'A municipal administrator cannot grant that role');
+          }
+          // Un rol pertenece a un portal y sólo a uno: cambiar de rol no puede cambiar de app. Pasar
+          // de administración a fiscalización es un PUESTO NUEVO, no una edición de éste.
+          const target = payload.role === 'INSPECTOR' || payload.role === 'INSPECTOR_LEAD' ? 'inspector' : 'admin';
+          if (target !== membership.portal) {
+            return problem(422, 'ROLE_NOT_ALLOWED_FOR_PORTAL', 'That role belongs to another app');
+          }
+          membership.role = payload.role;
+        }
+        if (payload.status) membership.status = payload.status;
+        recordAuditEvent({
+          tenantId: membership.tenantId,
+          actorUserId: 'mock-admin',
+          actorPortal: 'admin',
+          action: 'MEMBERSHIP_ROLE_CHANGED',
+          resourceType: 'membership',
+          resourceId: membershipId ?? '',
+          metadata: { role: String(payload.role) },
+        });
+        return json(membership);
       }
       if (subAction === 'zones' && method === 'PUT') {
         const payload = await readBody<{ zoneIds: string[] }>(init);

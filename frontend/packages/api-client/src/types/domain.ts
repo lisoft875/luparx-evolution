@@ -444,9 +444,84 @@ export interface StaffMember {
   revokedAt?: string | null;
   /** Empty means every zone of this municipality, never none (CONTRACT.md v0.15). */
   zones: ZoneAssignment[];
+  /**
+   * When THIS post was last used (CONTRACT.md v0.27). Null means no recorded use since the platform
+   * began measuring it per post — which is not "never", and the panel must not say "never".
+   */
+  lastUsedAt?: string | null;
+  /**
+   * When the PERSON last signed in anywhere, and through which app. A different question: since
+   * v0.26 somebody may be signing in daily through a post that is not this one.
+   */
   lastLoginAt?: string | null;
   lastLoginPortal?: string | null;
   accountStatus: UserStatus | null;
+}
+
+// ---- Staff invitations (CONTRACT.md v0.27) ----------------------------------------------------
+
+export type InvitationStatus = 'PENDING' | 'ACCEPTED' | 'REVOKED';
+
+/**
+ * A post offered to an address that has no account yet.
+ *
+ * Two fields are all the municipality supplies. Everything else about the person is theirs to enter:
+ * they are the only one who knows how to spell it, and an identity document is unique platform-wide,
+ * so a typo is not a formatting slip but the wrong identity.
+ */
+export interface CreateStaffInvitationRequest {
+  email: string;
+  role: Role;
+}
+
+export interface StaffInvitation {
+  id: string;
+  email: string;
+  portal: Portal;
+  role: Role;
+  status: InvitationStatus;
+  createdAt: string;
+  expiresAt: string;
+  /** Computed by the server: PENDING and past its deadline. Never a stored status. */
+  expired: boolean;
+  acceptedAt?: string | null;
+  revokedAt?: string | null;
+}
+
+/** What the invited person is shown before typing anything. No authentication behind this. */
+export interface InvitationPreview {
+  tenantName: string;
+  email: string;
+  portal: Portal;
+  role: Role;
+  expiresAt: string;
+}
+
+/**
+ * The invited person's own registration: CONTRACT.md §2 in full, plus a password they choose.
+ *
+ * There is deliberately **no email field** — the address is the invited one. A body that could carry
+ * an address would turn an invitation into a way to open an account on somebody else's mailbox.
+ */
+export interface AcceptInvitationRequest {
+  givenName: string;
+  familyName: string;
+  secondFamilyName?: string;
+  identityDocument: IdentityDocumentInput;
+  address: AddressInput;
+  phone: PhoneInput;
+  nationalityCode: string;
+  birthDate: string;
+  password: string;
+  locale?: string;
+  timeZone?: string;
+}
+
+export interface AcceptInvitationResponse {
+  userId: string;
+  portal: Portal;
+  role: Role;
+  tenantName: string;
 }
 
 export interface ZoneAssignment {
@@ -480,9 +555,16 @@ export interface CreateMembershipRequest {
   role: Role;
 }
 
+/**
+ * `PUT /admin/memberships/{id}` — change the role of a post that already exists, or its status.
+ *
+ * Both optional and only what is sent is applied. A role can only change **within the same app**:
+ * a role belongs to one portal, so moving somebody from the municipal portal to the enforcement app
+ * is a second post, not an edit of this one.
+ */
 export interface UpdateMembershipRequest {
-  role: Role;
-  status: MembershipStatus;
+  role?: Role;
+  status?: MembershipStatus;
 }
 
 export interface RejectMembershipRequest {

@@ -83,6 +83,24 @@ public final class ErrorCode {
     public static final String MEMBERSHIP_ALREADY_EXISTS = "MEMBERSHIP_ALREADY_EXISTS";
     public static final String MEMBERSHIP_INVALID_TRANSITION = "MEMBERSHIP_INVALID_TRANSITION";
     public static final String ROLE_NOT_ALLOWED_FOR_PORTAL = "ROLE_NOT_ALLOWED_FOR_PORTAL";
+
+    // --- staff invitations (CONTRACT.md v0.27) ----------------------------------------------------
+    /**
+     * No usable invitation behind that link. Deliberately also the answer for a <em>revoked</em>
+     * one: a municipality that called an invitation back owes the holder of the link no account of
+     * why, and distinguishing the two would confirm that the address had been invited at all.
+     */
+    public static final String INVITATION_NOT_FOUND = "INVITATION_NOT_FOUND";
+    /**
+     * The link ran out of time. Told apart from {@link #INVITATION_NOT_FOUND} because the person can
+     * do something about it — ask for it to be sent again — and a bare "not found" would send them
+     * looking for a mistake they did not make.
+     */
+    public static final String INVITATION_EXPIRED = "INVITATION_EXPIRED";
+    /** Already used. Usually the same person clicking the old mail after signing up; say so plainly. */
+    public static final String INVITATION_ALREADY_ACCEPTED = "INVITATION_ALREADY_ACCEPTED";
+    /** Re-sending or revoking something that is no longer live. */
+    public static final String INVITATION_NOT_PENDING = "INVITATION_NOT_PENDING";
     public static final String TENANT_SETTING_INVALID = "TENANT_SETTING_INVALID";
     /**
      * The municipality does not admit citizens on request, so switching to it could not create the

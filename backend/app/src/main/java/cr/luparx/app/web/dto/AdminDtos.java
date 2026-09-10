@@ -7,6 +7,7 @@ import cr.luparx.core.domain.Portal;
 import cr.luparx.core.domain.Role;
 import cr.luparx.core.email.EmailAddress;
 import cr.luparx.identity.model.UserStatus;
+import cr.luparx.tenancy.model.InvitationStatus;
 import cr.luparx.tenancy.model.MembershipStatus;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
@@ -208,9 +209,96 @@ public final class AdminDtos {
             Instant revokedAt,
             /** Empty means every zone of this municipality, never none (CONTRACT.md v0.15). */
             List<ZoneAssignmentResponse> zones,
+            /**
+             * When THIS post was last used (v0.27). Null means no recorded use since the platform
+             * started measuring it per post — which is not "never", and the panel says so.
+             */
+            Instant lastUsedAt,
+            /**
+             * When the PERSON last signed in anywhere, and on which app. A different question from
+             * {@code lastUsedAt}: this one answers "is the account alive at all", and since v0.26 a
+             * person may well be signing in daily through a post that is not this one.
+             */
             Instant lastLoginAt,
             String lastLoginPortal,
             UserStatus accountStatus) {
+    }
+
+    // --- staff invitations (CONTRACT.md v0.27) ----------------------------------------------------
+
+    /**
+     * {@code POST /admin/staff-invitations}: offer a post to an address that has no account yet.
+     *
+     * <p>Two fields, and that is the whole point. Everything else about the person — their name,
+     * their identity document, their address — is theirs to enter, because they are the only one who
+     * knows how to spell it, and because those values are unique platform-wide: a typo in a national
+     * identity number is not a formatting slip, it is the wrong identity, permanently.</p>
+     */
+    public record CreateStaffInvitationRequest(
+            @NotBlank @Email @Size(max = 320) String email,
+            @NotNull Role role) {
+
+        public CreateStaffInvitationRequest {
+            email = EmailAddress.normalize(email);
+        }
+    }
+
+    /**
+     * An invitation as the municipality's panel sees it. No token, not even hashed: the panel shows
+     * who was invited and when, never a way in.
+     */
+    public record StaffInvitationResponse(
+            UUID id,
+            String email,
+            Portal portal,
+            Role role,
+            InvitationStatus status,
+            Instant createdAt,
+            Instant expiresAt,
+            /** True when it is PENDING and the clock has already run out — computed, never stored. */
+            boolean expired,
+            Instant acceptedAt,
+            Instant revokedAt) {
+    }
+
+    /**
+     * What the invited person is shown before they fill anything in, from the public endpoint.
+     *
+     * <p>The municipality and the role, so they know what they are accepting, and the address it was
+     * sent to, so they can tell it is theirs. Nothing about who invited them and nothing about the
+     * municipality's staff: whoever holds this link has not authenticated as anybody.</p>
+     */
+    public record InvitationPreviewResponse(
+            String tenantName,
+            String email,
+            Portal portal,
+            Role role,
+            Instant expiresAt) {
+    }
+
+    /**
+     * {@code POST /invitations/{token}/accept} — the invited person's own registration.
+     *
+     * <p>It is CONTRACT.md §2 in full, plus a password they choose, and <b>no email field</b>: the
+     * address is the one the invitation was sent to. Letting the body carry an address would turn an
+     * invitation into a way to open an account for somebody else's mailbox.</p>
+     */
+    public record AcceptInvitationRequest(
+            @NotBlank @Size(max = 100) String givenName,
+            @NotBlank @Size(max = 100) String familyName,
+            @Size(max = 100) String secondFamilyName,
+            @NotNull @Valid IdentityDocumentDto identityDocument,
+            @NotNull @Valid AddressDto address,
+            @NotNull @Valid PhoneDto phone,
+            @NotBlank @Size(min = 2, max = 2) String nationalityCode,
+            @NotNull LocalDate birthDate,
+            @NotBlank @Size(max = 200) String password,
+            @Size(max = 35) String locale,
+            @Size(max = 64) String timeZone) {
+    }
+
+    /** The outcome of accepting: the account exists and can be signed into right away. */
+    public record AcceptInvitationResponse(UUID userId, Portal portal, Role role, String tenantName) {
     }
 
     /** A sector, named, so the panel does not have to resolve ids against another call. */

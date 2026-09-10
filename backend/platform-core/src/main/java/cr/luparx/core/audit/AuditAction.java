@@ -87,6 +87,18 @@ public final class AuditAction {
      */
     public static final String USER_DIRECTORY_LOOKUP = "USER_DIRECTORY_LOOKUP";
 
+    // --- staff invitations (CONTRACT.md v0.27) ----------------------------------------------------
+    /** A post offered to an address with no account yet. Also recorded when the link is re-sent. */
+    public static final String STAFF_INVITATION_SENT = "STAFF_INVITATION_SENT";
+    /** Called back before it was used. */
+    public static final String STAFF_INVITATION_REVOKED = "STAFF_INVITATION_REVOKED";
+    /**
+     * Somebody opened an account with an invitation. The actor is the invited person, not the
+     * administrator who invited them — this is the moment they act for the first time, and the
+     * invitation row says who offered it.
+     */
+    public static final String STAFF_INVITATION_ACCEPTED = "STAFF_INVITATION_ACCEPTED";
+
     // --- account, locales and municipal operation (CONTRACT.md "v0.3") --------------------------
     public static final String USER_EMAIL_CHANGE_REQUESTED = "USER_EMAIL_CHANGE_REQUESTED";
     public static final String USER_EMAIL_CHANGED = "USER_EMAIL_CHANGED";

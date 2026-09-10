@@ -9,6 +9,7 @@ import { API_BASE_URL, PORTAL, USE_MOCKS } from './env';
 import { LoginPage } from './pages/LoginPage';
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
+import { AcceptInvitationPage } from './pages/AcceptInvitationPage';
 import { TenantSelectPage } from './pages/TenantSelectPage';
 import { HomePage } from './pages/HomePage';
 import { ProfilePage } from './pages/ProfilePage';
@@ -60,6 +61,13 @@ export function App(): React.JSX.Element {
               <Route path="/login" element={<LoginPage />} />
               <Route path="/forgot-password" element={<ForgotPasswordPage />} />
               <Route path="/reset-password" element={<ResetPasswordPage />} />
+              {/* Aceptar una invitación: pública, y el token va en la ruta y no en la query (v0.27). */}
+              <Route path="/invitation/:token" element={<AcceptInvitationPage />} />
+              {/* El correo dice «/password/reset» desde v0.1 y la ruta siempre fue «/reset-password»:
+                  cada enlace de restablecimiento caía en el comodín de abajo, que redirige a «/» y se
+                  come el token. Los correos ya salen con la ruta buena; este alias es para los que
+                  siguen en las bandejas de entrada de la gente (CONTRACT.md v0.27). */}
+              <Route path="/password/reset" element={<ResetPasswordPage />} />
               <Route path="/select-tenant" element={<TenantSelectPage />} />
               <Route
                 path="/"

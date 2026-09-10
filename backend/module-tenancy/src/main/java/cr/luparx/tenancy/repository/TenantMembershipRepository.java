@@ -7,6 +7,7 @@ import cr.luparx.tenancy.model.MembershipStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -66,6 +67,28 @@ public interface TenantMembershipRepository extends JpaRepository<TenantMembersh
                                    Pageable pageable);
 
     long countByTenantIdAndStatus(UUID tenantId, MembershipStatus status);
+
+    /**
+     * Stamps that a session was opened on this post (V26_1).
+     *
+     * <p>A direct update and not a dirty-checked write: the row carries an optimistic-lock version,
+     * and two replicas signing the same person in at the same instant would otherwise make one of
+     * them fail. They are not in conflict — they are writing the same fact — so the version is left
+     * alone and the last writer wins, which for a "last used" stamp is exactly right.</p>
+     *
+     * <p>Narrowed by (user, tenant, portal) rather than by id because that is what the session knows,
+     * and only ACTIVE, so a suspended post does not quietly look busy.</p>
+     */
+    @Modifying
+    @Query("""
+            update TenantMembership m set m.lastUsedAt = :now
+            where m.userId = :userId and m.tenantId = :tenantId and m.portal = :portal
+              and m.status = cr.luparx.tenancy.model.MembershipStatus.ACTIVE
+            """)
+    int markUsed(@Param("userId") UUID userId,
+                 @Param("tenantId") UUID tenantId,
+                 @Param("portal") Portal portal,
+                 @Param("now") Instant now);
 
     /** Registered-users report per tenant, grouped by portal (CONTRACT.md §4). */
     @Query("""

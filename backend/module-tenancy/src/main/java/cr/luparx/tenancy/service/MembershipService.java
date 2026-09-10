@@ -324,6 +324,25 @@ public class MembershipService {
     }
 
     /**
+     * Records that a session was opened on one post (CONTRACT.md v0.27).
+     *
+     * <p>Called when a session is <em>established</em> for a municipality and portal — signing in, or
+     * switching to one — and deliberately not on every token refresh: "is this post still being
+     * used?" is a question about days, and a write on the refresh path would buy nothing for it.</p>
+     *
+     * <p>Nothing here fails a session. If the post is not there or is not active, the update touches
+     * no rows and the caller carries on: authority was already decided by the resolver, and a
+     * bookkeeping stamp must never be what stops somebody signing in.</p>
+     */
+    @Transactional
+    public void recordUse(UserId userId, TenantId tenantId, Portal portal) {
+        if (userId == null || tenantId == null || portal == null) {
+            return;
+        }
+        membershipRepository.markUsed(userId.value(), tenantId.value(), portal, clock.instant());
+    }
+
+    /**
      * The municipality's staff (CONTRACT.md v0.15): everybody holding a post that is not a citizen's.
      *
      * <p>Suspended and revoked posts are included by default and on purpose. The panel is where a

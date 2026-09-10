@@ -45,6 +45,12 @@ public class SecurityConfig {
 
     private static final String[] PUBLIC_PATHS = {
             "/api/v1/catalog/**",
+            // Accepting a staff invitation (CONTRACT.md v0.27). Public by necessity, exactly like the
+            // password-reset routes: the person following the link has no account yet, so there is no
+            // token they could present. What stands in for authentication is the token in the link
+            // itself — single-use, hashed at rest, short-lived — and everything the request can
+            // affect comes from the stored invitation rather than from the body.
+            "/api/v1/invitations/**",
             "/.well-known/**",
             // The servlet container's ERROR dispatch must not be denied, or a genuine error would be
             // rewritten into a 403 by the fallback chain.

@@ -74,6 +74,13 @@ public class TenantMembership {
     @Column(name = "status_reason", length = 500)
     private String statusReason;
 
+    /**
+     * When THIS post was last used (V26_1). Null means no recorded use since v0.27 started
+     * measuring it, which is not the same as "never" and the panel says so in those words.
+     */
+    @Column(name = "last_used_at")
+    private Instant lastUsedAt;
+
     @Version
     @Column(name = "version", nullable = false)
     private long version;
@@ -151,6 +158,19 @@ public class TenantMembership {
 
     public String getStatusReason() {
         return statusReason;
+    }
+
+    /**
+     * When this post was last used, or null when there is no recorded use since v0.27.
+     *
+     * <p>Read-only from here on purpose. The stamp is written by a direct update statement
+     * ({@code TenantMembershipRepository.markUsed}) rather than by dirty-checking this entity,
+     * because this row carries an optimistic-lock version: two replicas signing the same person in
+     * at the same moment are not a conflict to resolve — they are the same fact written twice — and
+     * making one of them fail would turn a bookkeeping detail into a failed login.</p>
+     */
+    public Instant getLastUsedAt() {
+        return lastUsedAt;
     }
 
     public long getVersion() {

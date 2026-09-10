@@ -158,7 +158,7 @@ public class PlatformUserController {
                 "email.passwordReset",
                 Map.of("name", issued.user().getGivenName(),
                         "link", portalUrls.portalBaseUrl(Portal.PLATFORM.slug())
-                                + "/password/reset?token=" + issued.token()));
+                                + "/reset-password?token=" + issued.token()));
         auditPlatformAccess(AuditAction.USER_PASSWORD_RESET_REQUESTED, Map.of("userId", id.toString()));
         return ResponseEntity.noContent().build();
     }

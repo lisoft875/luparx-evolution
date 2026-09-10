@@ -223,7 +223,7 @@ public class AuthController {
                 localeOf(value.user().getLocale()),
                 "email.passwordReset",
                 Map.of("name", value.user().getGivenName(),
-                        "link", portalUrls.portalBaseUrl(target.slug()) + "/password/reset?token=" + value.token())));
+                        "link", portalUrls.portalBaseUrl(target.slug()) + "/reset-password?token=" + value.token())));
         return ResponseEntity.accepted().build();
     }
 

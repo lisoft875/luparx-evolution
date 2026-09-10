@@ -15,6 +15,7 @@ import cr.luparx.identity.service.TokenIssueRequest;
 import cr.luparx.identity.service.TokenService;
 import cr.luparx.tenancy.service.AccessGrant;
 import cr.luparx.tenancy.service.AccessResolver;
+import cr.luparx.tenancy.service.MembershipService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,17 +35,20 @@ public class SessionService {
     private final TokenService tokenService;
     private final RefreshTokenService refreshTokenService;
     private final AccessResolver accessResolver;
+    private final MembershipService membershipService;
     private final AuditRecorder auditRecorder;
     private final SecurityProperties securityProperties;
 
     public SessionService(TokenService tokenService,
                           RefreshTokenService refreshTokenService,
                           AccessResolver accessResolver,
+                          MembershipService membershipService,
                           AuditRecorder auditRecorder,
                           SecurityProperties securityProperties) {
         this.tokenService = tokenService;
         this.refreshTokenService = refreshTokenService;
         this.accessResolver = accessResolver;
+        this.membershipService = membershipService;
         this.auditRecorder = auditRecorder;
         this.securityProperties = securityProperties;
     }
@@ -61,6 +65,10 @@ public class SessionService {
                 ? tenantId
                 : accessResolver.defaultTenant(user.userId(), portal).orElse(null);
         AccessGrant grant = accessResolver.resolve(user.userId(), portal, effectiveTenantId);
+        // Which POST was used, not only which person signed in (CONTRACT.md v0.27). The person-level
+        // stamp on `users` cannot tell an inspector's post from the same person's finance post, and
+        // since v0.26 holding both is ordinary.
+        membershipService.recordUse(user.userId(), grant.tenantId(), portal);
 
         String accessToken = tokenService.issueAccessToken(new TokenIssueRequest(
                 user.userId(),
@@ -108,6 +116,7 @@ public class SessionService {
     public IssuedTokens switchTenant(User user, Portal portal, TenantId tenantId,
                                      HttpServletRequest request) {
         AccessGrant grant = accessResolver.resolve(user.userId(), portal, tenantId);
+        membershipService.recordUse(user.userId(), grant.tenantId(), portal);
         refreshTokenService.revokeAllForUserAndPortal(user.userId(), portal);
 
         String accessToken = tokenService.issueAccessToken(new TokenIssueRequest(

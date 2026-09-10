@@ -2137,3 +2137,118 @@ Estaba fijo al portal de administración, así que a un fiscalizador —la perso
 usa ese botón— se le mandaba a una puerta que no usa. Ahora sale del puesto que la persona tiene en
 esa municipalidad. La contraseña es una sola, cualquiera de los portales la restablece; esto sólo
 decide dónde aterriza.
+
+---
+
+# v0.27 — Invitar, cambiar rol, y saber si un puesto se usa (normativo)
+
+Tres huecos del panel de funcionarios, más un defecto viejo que apareció al tirar del hilo.
+
+## 1. Invitación de funcionarios
+
+### El problema
+
+Dar de alta a alguien nuevo era: el administrador transcribe el expediente de personal entero —nombre,
+cédula, dirección, teléfono, fecha de nacimiento— y la persona sólo recibe un enlace para poner su
+contraseña.
+
+Funciona, y pone a una tercera persona a teclear valores que son **únicos en toda la plataforma**. Una
+errata en la cédula no es un error de forma que después se corrige: es **la identidad equivocada**,
+ocupando un número que le pertenece a alguien más, y se descubre meses después cuando esa otra persona
+intenta registrarse. La municipalidad puede dar fe de dos cosas: la dirección a la que le escribe y el
+puesto que ofrece. Todo lo demás lo sabe deletrear una sola persona.
+
+### `POST /api/v1/admin/staff-invitations` (`ROLE_ASSIGN`)
+
+Dos campos: `email` y `role`. Nada más.
+
+Un correo que **ya tiene cuenta** se rechaza con `EMAIL_ALREADY_REGISTERED`, y eso es la respuesta
+correcta y no un estorbo: a esa persona no hay que invitarla ni volver a pedirle sus datos: se le da el
+puesto sobre su cuenta con la búsqueda de v0.26. La pantalla lo dice con esas palabras.
+
+Reinvitar una dirección con invitación viva **reemplaza su token**, no agrega una fila. Dos
+invitaciones vivas son dos formas de entrar al mismo puesto, y retirar la que el administrador ve
+dejaría la otra funcionando. Enviar de nuevo mata el enlace anterior, que es lo que «enviar de nuevo»
+honestamente significa.
+
+`GET` lista, `POST /{id}/resend` reenvía, `DELETE /{id}` retira.
+
+### `staff_invitations` (V26_0)
+
+**No es una membresía y no otorga nada.** Es una promesa: alguien con autoridad ofreció este puesto a
+esta dirección. La membresía nace al aceptar, y de ahí en adelante manda `tenant_memberships` como
+siempre. El token se guarda **hasheado**, como todo token de un solo uso: leer esa tabla no permite
+aceptar la invitación de nadie. Un índice único parcial garantiza una sola invitación viva por
+(municipalidad, correo).
+
+No hay estado `EXPIRED`: vencer es un hecho del reloj y no una decisión de nadie. Escribirlo en una
+columna obliga a correr un trabajo para mantenerla cierta, y el atraso de ese trabajo es una ventana en
+la que una invitación vencida se lee como viva. La fila lleva `expires_at` y quien lee compara.
+
+### `GET/POST /api/v1/invitations/{token}[/accept]` — **sin autenticación**
+
+Como las rutas de restablecer contraseña, y por la misma razón: quien sigue el enlace todavía no tiene
+cuenta. Lo que sustituye a la autenticación es el token del enlace, y **todo lo que decide el resultado
+sale de la invitación guardada, nunca del cuerpo**:
+
+* **el correo** es el invitado, y el cuerpo no tiene campo de correo. Si lo tuviera, una invitación
+  sería una forma de abrirle cuenta al buzón de otra persona;
+* **la municipalidad y el rol** son los ofrecidos, así que nadie puede pedir un puesto mejor que el que
+  le dieron;
+* **la contraseña** es suya y nadie más la ve, por la misma razón por la que un administrador no puede
+  ponerla al crear una cuenta a mano.
+
+La cuenta nace **verificada**: seguir un enlace mandado a esa dirección ya prueba el buzón, y mandar
+después un «confirme su correo» sería pedir dos veces lo mismo. La cuenta y el puesto se crean en **una
+transacción**: una cuenta sin su puesto dejaría a alguien pudiendo ingresar sin autoridad y sin
+explicación.
+
+## 2. Cambiar el rol de un puesto
+
+`PUT /admin/memberships/{id}` existía desde v0.1 y **ninguna pantalla lo llamaba**. Ahora Funcionarios
+tiene «Cambiar rol» por fila.
+
+Sólo dentro de la misma aplicación, y el diálogo lo dice: un rol pertenece a un portal y sólo a uno, así
+que pasar a alguien del portal municipal a la app de fiscalización **es un puesto nuevo, no una edición
+de éste**. La lista se limita a los roles de esa app en vez de ofrecer los cuatro y rechazar dos.
+
+## 3. Último acceso: del puesto, no de la persona
+
+V22_0 puso el último ingreso en la **persona** (`users.last_login_at`). Para «¿esta cuenta se usa?»
+alcanzaba, y era casi siempre cierto porque casi nadie tenía dos puestos.
+
+**v0.26 hizo de eso el caso normal**, y contra ese mundo la columna miente en un panel que muestra una
+fila por puesto: dos puestos de la misma persona muestran la misma fecha, y una fiscalizadora de San
+José y de Escazú que sólo entra por Escazú **aparece activa en San José** — que es exactamente la cuenta
+que una revisión de accesos tenía que encontrar.
+
+`V26_1` agrega `tenant_memberships.last_used_at`, sellado cuando se **establece** una sesión para esa
+municipalidad y ese portal (ingresar, o cambiar de municipalidad), no en cada refresco de token: «¿este
+puesto se sigue usando?» es una pregunta de días. Se escribe con una sentencia directa y no por
+dirty-checking, porque la fila lleva versión optimista y dos réplicas sellando a la vez no están en
+conflicto —escriben el mismo hecho— y hacer fallar a una convertiría un detalle contable en un ingreso
+rechazado.
+
+Fase de expansión (ADR 0010): columna anulable **sin relleno**. `NULL` significa «sin uso registrado
+desde que esto se mide», que es la verdad; no hay dato histórico por puesto que inventar, y la pantalla
+lo dice con esas palabras en vez de fingir un «nunca». Debajo ofrece el último ingreso de la persona,
+**etiquetado como lo que es**.
+
+## 4. El defecto que apareció de paso: todos los enlaces de restablecer contraseña estaban rotos
+
+Al escribir el enlace de la invitación se vio que el correo de restablecimiento dice
+`/password/reset?token=…` desde v0.1 y que **la ruta de las cuatro apps siempre fue `/reset-password`**.
+Cada enlace caía en el comodín del router, que redirige a `/` y se come el token. Cuatro lugares
+armaban ese enlace: restablecimiento propio, forzado por la municipalidad, forzado por la plataforma, y
+el correo de cuenta creada — es decir, **la única forma de activar una cuenta abierta por un operador**.
+
+Los correos ya salen con la ruta que existe, y las cuatro apps ganan `/password/reset` como alias, para
+los enlaces que ya están en las bandejas de entrada de la gente.
+
+## Lo que ya estaba y no había que construir
+
+De la lista del panel: activar/desactivar/suspender (v0.15), asignar zonas (v0.15), restablecer acceso
+(v0.14, con el portal corregido en v0.26), y **nunca borrar el historial de actuaciones al desactivar a
+un funcionario** — que no es una omisión sino una invariante escrita: desactivar toca la membresía y ni
+una sola boleta, `V22_0` lo dice en su encabezado y `MembershipService.suspend` lo repite donde se toma
+la decisión.

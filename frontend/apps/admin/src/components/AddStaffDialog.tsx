@@ -24,7 +24,9 @@ export interface AddStaffDialogProps {
   onClose: () => void;
   /** Called after a post is granted, so the caller can refresh its list and say so. */
   onGranted: (person: PersonMatch, role: Role) => void;
-  /** Called when the person is not on the platform yet and a file has to be opened for them. */
+  /** Called after an invitation is sent, so the caller can refresh its list and say so. */
+  onInvited: (email: string, role: Role) => void;
+  /** Called when the file is to be typed by hand instead — see the dialog's secondary action. */
   onCreateNew: (seed: { email?: string; documentNumber?: string }) => void;
 }
 
@@ -46,7 +48,13 @@ export interface AddStaffDialogProps {
  * <p>The person keeps one account and one set of personal data. Their citizen life is untouched:
  * they still park, still pay, still see their own fines. They simply hold one post more.</p>
  */
-export function AddStaffDialog({ open, onClose, onGranted, onCreateNew }: AddStaffDialogProps): React.JSX.Element {
+export function AddStaffDialog({
+  open,
+  onClose,
+  onGranted,
+  onInvited,
+  onCreateNew,
+}: AddStaffDialogProps): React.JSX.Element {
   const { t } = useTranslation();
   const { apiClient, activeTenant } = useAuth();
 
@@ -61,6 +69,7 @@ export function AddStaffDialog({ open, onClose, onGranted, onCreateNew }: AddSta
   const [match, setMatch] = useState<PersonMatch | null>(null);
   const [searched, setSearched] = useState(false);
   const [role, setRole] = useState<Role | ''>('');
+  const [inviteEmail, setInviteEmail] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   const countries = useCountries(apiClient);
@@ -75,6 +84,7 @@ export function AddStaffDialog({ open, onClose, onGranted, onCreateNew }: AddSta
     setRole('');
     setError(null);
     setEmail('');
+    setInviteEmail('');
     setDocumentNumber('');
     setCountry(activeTenant?.countryCode ?? '');
   }, [open, activeTenant?.countryCode]);
@@ -97,6 +107,7 @@ export function AddStaffDialog({ open, onClose, onGranted, onCreateNew }: AddSta
       RATE_LIMITED: 'admin.staff.add.error.rateLimited',
       INVALID_IDENTITY_DOCUMENT: 'admin.staff.add.error.documentInvalid',
       MEMBERSHIP_ALREADY_EXISTS: 'admin.staff.add.error.alreadyHasAccess',
+      EMAIL_ALREADY_REGISTERED: 'admin.staff.add.error.emailRegistered',
       ROLE_NOT_ALLOWED_FOR_PORTAL: 'admin.users.create.error.ROLE_NOT_ALLOWED_FOR_PORTAL',
       VALIDATION_FAILED: 'admin.staff.add.error.documentInvalid',
     };
@@ -122,6 +133,9 @@ export function AddStaffDialog({ open, onClose, onGranted, onCreateNew }: AddSta
       setSearched(true);
       setMatch(response.person);
       setRole('');
+      // Nobody found: the address that was searched for is the one to invite, so it is carried
+      // over rather than asked for twice.
+      setInviteEmail(response.person ? '' : by === 'EMAIL' ? email.trim() : '');
     },
     onError: (err) => {
       setSearched(false);
@@ -140,6 +154,16 @@ export function AddStaffDialog({ open, onClose, onGranted, onCreateNew }: AddSta
     onSuccess: (_result, variables) => {
       setError(null);
       onGranted(variables.person, variables.granted);
+    },
+    onError: (err) => setError(describe(err)),
+  });
+
+  const inviteMutation = useMutation({
+    mutationFn: ({ email: address, granted }: { email: string; granted: Role }) =>
+      apiClient.adminStaffInvitations.create({ email: address, role: granted }),
+    onSuccess: (_result, variables) => {
+      setError(null);
+      onInvited(variables.email, variables.granted);
     },
     onError: (err) => setError(describe(err)),
   });
@@ -262,14 +286,48 @@ export function AddStaffDialog({ open, onClose, onGranted, onCreateNew }: AddSta
         ) : null}
 
         {/* Nobody with that document or address. Not an error — it is the other normal answer, and
-            it is the moment to open a file for them, with what was already typed carried over. */}
+            it is the moment to invite them: the municipality states the address and the post, and
+            the person fills in their own particulars (CONTRACT.md v0.27). */}
         {searched && !match ? (
-          <Alert tone="info">
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--lx-space-2)' }}>
-              <span>{t('admin.staff.add.notFound')}</span>
+          <div className="lx-card" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--lx-space-3)' }}>
+            <Alert tone="info">{t('admin.staff.add.notFound')}</Alert>
+            <p className="lx-text-meta" style={{ margin: 0 }}>
+              {t('admin.staff.add.inviteHelp')}
+            </p>
+            <FormField label={t('user.field.email')} hint={t('admin.staff.add.inviteEmailHint')}>
+              {({ inputId, describedBy }) => (
+                <Input
+                  id={inputId}
+                  aria-describedby={describedBy}
+                  type="email"
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                />
+              )}
+            </FormField>
+            <FormField label={t('admin.users.create.roleLabel')}>
+              {({ inputId }) => (
+                <Select
+                  id={inputId}
+                  value={role}
+                  onChange={(value) => setRole(value as Role)}
+                  placeholder={t('common.select.placeholder')}
+                  options={TENANT_GRANTABLE_ROLES.map((option) => ({
+                    value: option,
+                    label: t(`role.${option}` as TranslationKey),
+                    detail: t(`role.${option}.detail` as TranslationKey),
+                  }))}
+                />
+              )}
+            </FormField>
+            <div className="lx-dialog-actions">
+              {/* Still here, and secondary. Typing the file by hand is the right answer when the
+                  person has no usable address of their own — a plaza with a shared inbox, somebody
+                  who does not use email — and the wrong default everywhere else. */}
               <Button
                 type="button"
                 variant="secondary"
+                fullWidth
                 onClick={() =>
                   onCreateNew(
                     by === 'EMAIL'
@@ -280,8 +338,17 @@ export function AddStaffDialog({ open, onClose, onGranted, onCreateNew }: AddSta
               >
                 {t('admin.staff.add.createNew')}
               </Button>
+              <Button
+                type="button"
+                fullWidth
+                disabled={inviteEmail.trim() === '' || role === ''}
+                loading={inviteMutation.isPending}
+                onClick={() => role !== '' && inviteMutation.mutate({ email: inviteEmail.trim(), granted: role })}
+              >
+                {t('admin.staff.add.invite')}
+              </Button>
             </div>
-          </Alert>
+          </div>
         ) : null}
 
         {match ? (

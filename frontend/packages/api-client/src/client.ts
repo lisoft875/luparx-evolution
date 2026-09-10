@@ -59,6 +59,12 @@ import type {
   UpdateParkingSpaceRequest,
   UpdateParkingZoneRequest,
   CreateAdminUserRequest,
+  CreateStaffInvitationRequest,
+  StaffInvitation,
+  InvitationStatus,
+  InvitationPreview,
+  AcceptInvitationRequest,
+  AcceptInvitationResponse,
   LookupPersonRequest,
   LookupPersonResponse,
   MembershipStatus,
@@ -338,6 +344,40 @@ export class ApiClient {
       this.http.request('POST', `/api/v1/admin/memberships/${membershipId}/reactivate`, { idempotent: true }),
     assignZones: (membershipId: string, payload: AssignZonesRequest): Promise<ZoneAssignment[]> =>
       this.http.request('PUT', `/api/v1/admin/memberships/${membershipId}/zones`, { body: payload }),
+  };
+
+  /**
+   * Invitations of the active municipality (CONTRACT.md v0.27).
+   *
+   * `create` is idempotent-keyed: a double submit must not send the same person two different links,
+   * and the second call would otherwise land on a re-issue that silently kills the first mail.
+   */
+  readonly adminStaffInvitations = {
+    list: (query: { status?: InvitationStatus } & PageParams = {}): Promise<PagedResponse<StaffInvitation>> =>
+      this.http.request('GET', '/api/v1/admin/staff-invitations', { query }),
+    create: (payload: CreateStaffInvitationRequest): Promise<StaffInvitation> =>
+      this.http.request('POST', '/api/v1/admin/staff-invitations', { body: payload, idempotent: true }),
+    /** Sends it again with a new link. The previous one stops working. */
+    resend: (id: string): Promise<StaffInvitation> =>
+      this.http.request('POST', `/api/v1/admin/staff-invitations/${id}/resend`),
+    revoke: (id: string): Promise<StaffInvitation> =>
+      this.http.request('DELETE', `/api/v1/admin/staff-invitations/${id}`),
+  };
+
+  /**
+   * Accepting an invitation. **Unauthenticated** — the person following the link has no account yet,
+   * which is the whole point — so both calls go out with `auth: false`; sending the portal's bearer
+   * token here would fail for the very people this is for.
+   */
+  readonly invitations = {
+    preview: (token: string): Promise<InvitationPreview> =>
+      this.http.request('GET', `/api/v1/invitations/${encodeURIComponent(token)}`, { auth: false }),
+    accept: (token: string, payload: AcceptInvitationRequest): Promise<AcceptInvitationResponse> =>
+      this.http.request('POST', `/api/v1/invitations/${encodeURIComponent(token)}/accept`, {
+        body: payload,
+        auth: false,
+        idempotent: true,
+      }),
   };
 
   readonly adminMemberships = {
