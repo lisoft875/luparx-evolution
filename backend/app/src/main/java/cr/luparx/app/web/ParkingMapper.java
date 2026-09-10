@@ -30,6 +30,7 @@ import org.springframework.stereotype.Component;
 import java.time.Clock;
 import java.time.DayOfWeek;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.EnumMap;
@@ -101,6 +102,7 @@ public class ParkingMapper {
                 policy.getCreditMinRemainingMinutes(),
                 policy.getCreditExpiryDays(),
                 policy.getGraceMinutes(),
+                policy.getFreeMinutes(),
                 policy.getUpdatedAt());
     }
 
@@ -114,7 +116,8 @@ public class ParkingMapper {
      *                  picker never multiplies anything (CONTRACT.md v0.24)
      */
     public ParkingDtos.CitizenParkingZoneResponse toCitizenZone(ParkingZone zone, ZonePriceBook prices,
-                                                                List<Integer> offered, ParkingSpaceRange range) {
+                                                                List<Integer> offered, ParkingSpaceRange range,
+                                                                cr.luparx.parking.model.ZoneRules rules) {
         return new ParkingDtos.CitizenParkingZoneResponse(
                 zone.getId(),
                 zone.getCode(),
@@ -122,7 +125,11 @@ public class ParkingMapper {
                 zone.getDescription(),
                 prices == null ? null : toRateSummary(prices, offered),
                 range == null ? null : new ParkingDtos.SpaceCodeRange(range.firstCode(), range.lastCode(),
-                        range.count()));
+                        range.count()),
+                rules.sessionIncrements().values(),
+                rules.sessionMinMinutes(),
+                rules.sessionMaxMinutes(),
+                rules.freeMinutes());
     }
 
     private ParkingDtos.ParkingRateSummary toRateSummary(ZonePriceBook prices, List<Integer> offered) {
@@ -353,12 +360,27 @@ public class ParkingMapper {
             for (ChargingBand band : exceptionBands.getOrDefault(exception.getId(), List.of())) {
                 bands.add(toBand(band));
             }
+            // The next date the rule lands on, computed here rather than left to the screen: a person
+            // reading "Jueves Santo, se repite" should not have to work out when that is this year.
+            LocalDate today = LocalDate.ofInstant(now, resolved.zone());
+            LocalDate nextDate = exception.recurrence().datesIn(today, today.plusDays(370L)).stream()
+                    .findFirst()
+                    .orElse(exception.getExceptionDate());
             mappedExceptions.add(new ParkingDtos.ChargingExceptionDto(
                     exception.getExceptionDate(),
                     Boolean.valueOf(exception.isCharges()),
                     Boolean.valueOf(exception.isChargesAllDay()),
                     exception.getLabel(),
-                    bands));
+                    bands,
+                    exception.getRecurrence().name(),
+                    exception.getMonth() == null ? null : Integer.valueOf(exception.getMonth().intValue()),
+                    exception.getDay() == null ? null : Integer.valueOf(exception.getDay().intValue()),
+                    exception.getEasterOffsetDays() == null
+                            ? null
+                            : Integer.valueOf(exception.getEasterOffsetDays().intValue()),
+                    exception.getObservance().name(),
+                    exception.getHolidayCode(),
+                    nextDate));
         }
 
         boolean chargingNow = resolved.chargesAt(now);

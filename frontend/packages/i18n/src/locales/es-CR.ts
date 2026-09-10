@@ -213,6 +213,24 @@ export const esCR = {
   'admin.zones.action.spaces': 'Espacios',
   'admin.zones.action.activate': 'Activar',
   'admin.zones.action.deactivate': 'Desactivar',
+  'admin.zones.action.rules': 'Reglas de la zona',
+  'admin.zones.rules.title': 'Reglas de {{zone}}',
+  'admin.zones.rules.notice':
+    'Lo que deje en blanco lo hereda de la municipalidad, y sigue heredándolo si la municipalidad lo cambia. El texto gris de cada campo es lo que aplica hoy.',
+  'admin.zones.rules.saved': 'Reglas de la zona guardadas.',
+  'admin.zones.rules.inheritHint': 'Hoy aplica: {{value}}',
+  'admin.zones.rules.incrementsLabel': 'Duraciones que se venden aquí (minutos, separadas por coma)',
+  'admin.zones.rules.minLabel': 'Estadía mínima',
+  'admin.zones.rules.maxLabel': 'Estadía máxima',
+  'admin.zones.rules.maxHint': 'Es la palanca que maneja la rotación: dos horas en el centro, más en la periferia.',
+  'admin.zones.rules.freeLabel': 'Minutos de cortesía',
+  'admin.zones.rules.freeHint': 'Se conceden una vez por placa y día. Cero es no dar cortesía.',
+  'admin.zones.rules.ownScheduleLabel': 'Esta zona tiene su propio horario de cobro',
+  'admin.zones.rules.dayFree': 'No se cobra',
+  'admin.zones.rules.freeZoneWarning':
+    'Con horario propio y sin ninguna franja, esta zona no cobra nunca. Es válido —una zona gratuita— pero conviene que sea a propósito.',
+  'admin.zones.rules.error.band': 'Revise las horas del {{day}}: la de cierre tiene que ser posterior a la de apertura.',
+  'admin.zones.rules.error.invalid': 'Revise los números: la cortesía no puede pasar de la estadía máxima.',
   'admin.zones.field.code': 'Código',
   'admin.zones.field.codeHint': 'Es como se le llama a la zona en los reportes y en la radio. No se puede cambiar después.',
   'admin.zones.field.codeFixed': 'El código no se cambia: es por lo que se agrupan los reportes de todo lo cobrado en esta zona.',
@@ -641,6 +659,7 @@ export const esCR = {
   'citizen.parking.step3.title': 'Tiempo',
   'citizen.parking.step3.creditApplied': 'incluye {{minutes}} a favor',
   'citizen.parking.step3.savedMinutes': 'Tus minutos guardados',
+  'citizen.parking.step3.courtesy': 'Cortesía, una vez al día',
   'citizen.parking.step4.title': 'Resumen y pago',
   'citizen.parking.step4.zoneLabel': 'Zona',
   'citizen.parking.step4.vehicleLabel': 'Vehículo',
@@ -972,6 +991,27 @@ export const esCR = {
   'admin.settings.schedule.exceptions.empty': 'Todavía no hay excepciones cargadas.',
   'admin.settings.schedule.exceptions.add': 'Agregar excepción',
   'admin.settings.schedule.exceptions.remove': 'Quitar',
+  'admin.settings.schedule.exceptions.repeatLabel': 'Se repite',
+  'admin.settings.schedule.exceptions.repeat.once': 'Sólo esta fecha',
+  'admin.settings.schedule.exceptions.repeat.annual': 'Cada año, el mismo día',
+  'admin.settings.schedule.exceptions.repeat.easter': 'Con la Semana Santa',
+  'admin.settings.schedule.exceptions.monthLabel': 'Mes',
+  'admin.settings.schedule.exceptions.dayLabel': 'Día',
+  'admin.settings.schedule.exceptions.mondayLabel': 'Se traslada al lunes',
+  'admin.settings.schedule.exceptions.easterLabel': 'Qué día',
+  'admin.settings.schedule.exceptions.easter.maundyThursday': 'Jueves Santo',
+  'admin.settings.schedule.exceptions.easter.goodFriday': 'Viernes Santo',
+  'admin.settings.schedule.exceptions.easter.sunday': 'Domingo de Resurrección',
+  'admin.settings.schedule.exceptions.easter.monday': 'Lunes de Pascua',
+  'admin.settings.schedule.exceptions.nextDate': 'La próxima vez cae el {{date}}.',
+  'admin.settings.schedule.holidays.title': 'Feriados del país',
+  'admin.settings.schedule.holidays.description':
+    'Para no volver a digitarlos cada diciembre. Al agregarlos quedan como excepciones suyas, que puede editar o quitar cuando quiera.',
+  'admin.settings.schedule.holidays.notice':
+    'Es un punto de partida, no asesoría legal: la ley de feriados cambia y el calendario de cobro de esta municipalidad es su responsabilidad. Revise cada uno antes de guardar.',
+  'admin.settings.schedule.holidays.empty': 'La plataforma todavía no tiene el calendario de este país.',
+  'admin.settings.schedule.holidays.add': 'Agregar',
+  'admin.settings.schedule.holidays.added': 'Ya está',
   'admin.settings.schedule.exceptions.dateLabel': 'Fecha',
   'admin.settings.schedule.exceptions.labelLabel': 'Nombre del feriado',
   'admin.settings.schedule.exceptions.chargesLabel': 'Ese día se cobra',
@@ -985,6 +1025,7 @@ export const esCR = {
   'citizen.parking.step1.noZones': 'Esta municipalidad todavía no publicó sus zonas de parqueo.',
   'citizen.parking.step4.chargeableMinutesLabel': 'Minutos que se cobran',
   'citizen.parking.step4.chargeableMinutesHint': 'El resto cae fuera del horario de cobro.',
+  'citizen.parking.step4.courtesyHint': 'Es una estadía de cortesía: no se cobra.',
 
   // ---- Ciudadano: guía del código de espacio (rango real de la zona + formato del municipio) ----
   'citizen.parking.step1.spaceCodeRange': 'Espacios {{first}}–{{last}} en esta zona ({{count}} en total).',
@@ -996,6 +1037,9 @@ export const esCR = {
 
   // ---- Ciudadano: duración "Otro" dentro de los límites de la municipalidad --------------------
   'citizen.parking.step3.maxNotice': 'Esta municipalidad permite hasta {{max}} por estacionamiento.',
+  'citizen.parking.step3.maxNoticeZone': 'En esta zona se permite hasta {{max}} por estacionamiento.',
+  'citizen.parking.step3.courtesyNotice':
+    'Los primeros {{minutes}} son de cortesía en esta zona, una vez al día por placa.',
 
   // ---- Catálogos (claves que devuelve el servidor: países, documentos, divisiones) --------------
   // El catálogo viaja con claves estables, no con nombres ya escritos: el mismo país se lee en

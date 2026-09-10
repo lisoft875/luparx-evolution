@@ -58,6 +58,9 @@ import type {
   UpdateParkingPolicyRequest,
   UpdateParkingSpaceRequest,
   UpdateParkingZoneRequest,
+  UpdateZoneRulesRequest,
+  ZoneRules,
+  HolidayCatalogEntry,
   CreateAdminUserRequest,
   PlateCheckRequest,
   EnforcementCheck,
@@ -642,6 +645,20 @@ export class ApiClient {
       this.http.request('POST', '/api/v1/admin/parking/zones', { body: payload, idempotent: true }),
     updateZone: (id: string, payload: UpdateParkingZoneRequest): Promise<AdminParkingZone> =>
       this.http.request('PUT', `/api/v1/admin/parking/zones/${id}`, { body: payload }),
+    /** What this zone departs from the municipality in, and what it therefore applies (v0.31). */
+    zoneRules: (id: string): Promise<ZoneRules> =>
+      this.http.request('GET', `/api/v1/admin/parking/zones/${id}/rules`),
+    /**
+     * Replaces it all as one form. Absent means "follow the municipality", never "leave unchanged".
+     */
+    updateZoneRules: (id: string, payload: UpdateZoneRulesRequest): Promise<ZoneRules> =>
+      this.http.request('PUT', `/api/v1/admin/parking/zones/${id}/rules`, { body: payload }),
+    /**
+     * The public holidays of this municipality's country, as a starting point it copies and then
+     * owns. Never a live authority over what gets charged — see `HolidayCatalogEntry`.
+     */
+    holidays: (): Promise<HolidayCatalogEntry[]> =>
+      this.http.request('GET', '/api/v1/admin/parking/holidays'),
     spaces: (query: { zoneId?: string } & PageParams = {}): Promise<PagedResponse<ParkingSpace>> =>
       this.http.request('GET', '/api/v1/admin/parking/spaces', { query }),
     createSpace: (payload: CreateParkingSpaceRequest): Promise<ParkingSpace> =>

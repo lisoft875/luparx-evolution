@@ -17,6 +17,9 @@ import type {
   UpdateParkingScheduleRequest,
   UpdateParkingSpaceFormatRequest,
   UpdateTenantLocalesRequest,
+  HolidayCatalogEntry,
+  ZoneRules,
+  UpdateZoneRulesRequest,
 } from '@luparx/api-client';
 
 /**
@@ -30,6 +33,9 @@ const KEYS = {
   spaceFormat: ['admin', 'parking', 'space-format'] as const,
   schedule: ['admin', 'parking', 'schedule'] as const,
   policy: ['admin', 'parking', 'policy'] as const,
+  holidays: ['admin', 'parking', 'holidays'] as const,
+  zoneRules: ['admin', 'parking', 'zone-rules'] as const,
+  zones: ['admin', 'parking', 'zones'] as const,
 };
 
 /**
@@ -87,6 +93,40 @@ export function useUpdateSpaceFormat() {
   return useMutation<ParkingSpaceFormat, unknown, UpdateParkingSpaceFormatRequest>({
     mutationFn: (payload) => apiClient.adminParking.updateSpaceFormat(payload),
     onSuccess: (data) => queryClient.setQueryData(KEYS.spaceFormat, data),
+  });
+}
+
+/**
+ * The public holidays of this municipality's country, offered so nobody types them (v0.31).
+ *
+ * A starting point and not legal advice: the rules are *copied* into the municipality's own
+ * exceptions, and from then on they are its rows to edit or delete.
+ */
+export function useCountryHolidays(): UseQueryResult<HolidayCatalogEntry[]> {
+  const { apiClient } = useAuth();
+  return useQuery({ queryKey: KEYS.holidays, queryFn: () => apiClient.adminParking.holidays() });
+}
+
+/** What one zone departs from the municipality in, and what it therefore applies (v0.31). */
+export function useZoneRules(zoneId: string | null): UseQueryResult<ZoneRules> {
+  const { apiClient } = useAuth();
+  return useQuery({
+    queryKey: [...KEYS.zoneRules, zoneId],
+    queryFn: () => apiClient.adminParking.zoneRules(zoneId!),
+    enabled: zoneId !== null,
+  });
+}
+
+export function useUpdateZoneRules(zoneId: string | null) {
+  const { apiClient } = useAuth();
+  const queryClient = useQueryClient();
+  return useMutation<ZoneRules, unknown, UpdateZoneRulesRequest>({
+    mutationFn: (payload) => apiClient.adminParking.updateZoneRules(zoneId!, payload),
+    onSuccess: (data) => {
+      queryClient.setQueryData([...KEYS.zoneRules, zoneId], data);
+      // The citizen's zone list carries these numbers now, so it is stale the moment they change.
+      void queryClient.invalidateQueries({ queryKey: KEYS.zones });
+    },
   });
 }
 

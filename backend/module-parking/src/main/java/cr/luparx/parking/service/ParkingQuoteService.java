@@ -9,6 +9,7 @@ import cr.luparx.parking.entity.ParkingRate;
 import cr.luparx.parking.entity.ParkingZone;
 import cr.luparx.parking.model.ParkingQuote;
 import cr.luparx.parking.model.ZonePriceBook;
+import cr.luparx.parking.model.ZoneRules;
 import cr.luparx.parking.repository.ParkingRateRepository;
 import cr.luparx.parking.repository.ParkingZoneRepository;
 import org.springframework.stereotype.Service;
@@ -56,6 +57,7 @@ public class ParkingQuoteService {
     private final TimeCreditService timeCreditService;
     private final ParkingScheduleService scheduleService;
     private final ParkingPolicyService policyService;
+    private final CourtesyService courtesyService;
     private final Clock clock;
 
     public ParkingQuoteService(ParkingZoneRepository zoneRepository,
@@ -63,12 +65,14 @@ public class ParkingQuoteService {
                                TimeCreditService timeCreditService,
                                ParkingScheduleService scheduleService,
                                ParkingPolicyService policyService,
+                               CourtesyService courtesyService,
                                Clock clock) {
         this.zoneRepository = zoneRepository;
         this.rateRepository = rateRepository;
         this.timeCreditService = timeCreditService;
         this.scheduleService = scheduleService;
         this.policyService = policyService;
+        this.courtesyService = courtesyService;
         this.clock = clock;
     }
 
@@ -123,12 +127,34 @@ public class ParkingQuoteService {
      */
     @Transactional
     public ParkingQuote quote(TenantId tenantId, UserId userId, UUID zoneId, int minutes) {
+        return quote(tenantId, userId, zoneId, minutes, null);
+    }
+
+    /**
+     * The same, told which plate it is for.
+     *
+     * <p>The plate is optional and it only ever makes the answer <b>cheaper</b>: courtesy is limited
+     * per plate (CONTRACT.md v0.31), so without one the quote cannot know whether this stay would be
+     * free and answers with the price. A client that names the plate sees the price it will actually
+     * be charged, which is the point — a screen that says ₡500 and then charges nothing is a smaller
+     * problem than one that says ₡0 and then charges, but both are the screen lying.</p>
+     */
+    @Transactional
+    public ParkingQuote quote(TenantId tenantId, UserId userId, UUID zoneId, int minutes,
+                              String plateNormalized) {
         requireActiveZone(tenantId, zoneId);
         Instant now = clock.instant();
         ZonePriceBook prices = requirePriceBook(tenantId, zoneId, now);
         int available = timeCreditService.availableMinutes(tenantId, userId);
-        policyService.requireSessionIncrement(policyService.require(tenantId), minutes, available);
-        int chargeable = chargeableMinutes(tenantId, now, minutes);
+        ZoneRules rules = policyService.rulesFor(tenantId, zoneId);
+        policyService.requireSessionIncrement(rules, minutes, available);
+        if (plateNormalized != null
+                && courtesyService.isAvailable(tenantId, rules, plateNormalized, minutes, now)) {
+            // Nothing is charged and nothing is spent: a courtesy stay does not consume saved minutes
+            // either, because minutes the citizen paid for once should not be burnt on free time.
+            return price(prices, minutes, 0, 0);
+        }
+        int chargeable = chargeableMinutes(tenantId, zoneId, now, minutes);
         return price(prices, minutes, chargeable, available);
     }
 
@@ -143,10 +169,16 @@ public class ParkingQuoteService {
      */
     @Transactional
     public int chargeableMinutes(TenantId tenantId, Instant from, int minutes) {
+        return chargeableMinutes(tenantId, null, from, minutes);
+    }
+
+    /** The same, under the hours of one zone — its own when it keeps them (CONTRACT.md v0.31). */
+    @Transactional
+    public int chargeableMinutes(TenantId tenantId, UUID zoneId, Instant from, int minutes) {
         if (minutes <= 0) {
             return 0;
         }
-        return scheduleService.chargeableMinutes(tenantId, from, from.plusSeconds((long) minutes * 60L));
+        return scheduleService.chargeableMinutes(tenantId, zoneId, from, from.plusSeconds((long) minutes * 60L));
     }
 
     /**

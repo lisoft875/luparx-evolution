@@ -125,20 +125,35 @@ export function ParkingPage(): React.JSX.Element {
   const { data: timeCredits } = useTimeCredits();
 
   /**
-   * The stay lengths this municipality actually sells.
+   * The stay lengths sold **in the chosen zone**.
    *
    * `sessionIncrementsMinutes` is not a suggestion the minimum and maximum then widen: the server
    * refuses anything not on that list with `INVALID_INCREMENT` and explicitly never rounds to the
    * nearest one. So the client offers exactly the published options, bounded by the same minimum
    * and maximum the server applies — a free-text minute box would only manufacture requests that
    * are certain to be refused.
+   *
+   * Since v0.31 a zone may sell different durations and a shorter maximum than its municipality —
+   * two hours in the historic centre, more on the edges — so the list comes from the zone when the
+   * zone carries one. Falling back to the municipality's is what keeps this working against a
+   * server older than v0.31, where zones did not carry rules at all.
    */
+  const zoneMaxMinutes = zone?.sessionMaxMinutes ?? policy?.sessionMaxMinutes;
   const incrementMinutes = useMemo(
-    () =>
-      (policy?.sessionIncrementsMinutes ?? []).filter(
-        (option) => option >= (policy?.sessionMinMinutes ?? 0) && option <= (policy?.sessionMaxMinutes ?? Infinity),
-      ),
-    [policy?.sessionIncrementsMinutes, policy?.sessionMinMinutes, policy?.sessionMaxMinutes],
+    () => {
+      const offered = zone?.sessionIncrementsMinutes ?? policy?.sessionIncrementsMinutes ?? [];
+      const min = zone?.sessionMinMinutes ?? policy?.sessionMinMinutes ?? 0;
+      const max = zone?.sessionMaxMinutes ?? policy?.sessionMaxMinutes ?? Infinity;
+      return offered.filter((option) => option >= min && option <= max);
+    },
+    [
+      zone?.sessionIncrementsMinutes,
+      zone?.sessionMinMinutes,
+      zone?.sessionMaxMinutes,
+      policy?.sessionIncrementsMinutes,
+      policy?.sessionMinMinutes,
+      policy?.sessionMaxMinutes,
+    ],
   );
 
   /**
@@ -154,7 +169,7 @@ export function ParkingPage(): React.JSX.Element {
   const savedMinutes = timeCredits?.minutes ?? 0;
   const savedMinutesOption =
     savedMinutes > 0 &&
-    savedMinutes <= (policy?.sessionMaxMinutes ?? Infinity) &&
+    savedMinutes <= (zoneMaxMinutes ?? Infinity) &&
     !incrementMinutes.includes(savedMinutes)
       ? savedMinutes
       : null;
@@ -193,8 +208,12 @@ export function ParkingPage(): React.JSX.Element {
   const quoteZoneId = zone ? zoneId : null;
   // A quote per offered duration, so the price rides on the option itself rather than only
   // appearing in the summary after the choice has been made (v0.6, reference screen 5).
-  const durationQuotes = useParkingQuotes(quoteZoneId, offeredMinutes);
-  const { data: quote } = useParkingQuote(quoteZoneId, minutes);
+  // Told which car, so the courtesy of v0.31 is priced into what the picker shows: a screen that
+  // said ₡500 and then charged nothing would be the screen lying, and so would the reverse.
+  const quoteVehicleId = isGuest ? null : (vehicleId ?? null);
+  const quotePlate = isGuest ? (guestPlateNormalized || null) : null;
+  const durationQuotes = useParkingQuotes(quoteZoneId, offeredMinutes, quoteVehicleId, quotePlate);
+  const { data: quote } = useParkingQuote(quoteZoneId, minutes, quoteVehicleId, quotePlate);
   const { data: schedule } = useParkingSchedule();
   const startSession = useStartParkingSession();
   const [error, setError] = useState<string | null>(null);
@@ -230,6 +249,20 @@ export function ParkingPage(): React.JSX.Element {
   }
 
   const durationLabel = minutes !== null ? formatDurationLabel(minutes, tPlural) : '';
+
+  /**
+   * Whether the quote on screen is a courtesy one.
+   *
+   * Read from the numbers rather than from a flag on the wire: a stay that costs nothing, spends no
+   * saved minutes, and is short enough for this zone's courtesy is one — and inferring it here keeps
+   * the client working against a server that has not been told to say so.
+   */
+  const isCourtesyQuote =
+    quote !== undefined &&
+    quote.payableMinor === 0 &&
+    quote.creditMinutesApplied === 0 &&
+    (zone?.freeMinutes ?? 0) > 0 &&
+    quote.minutes <= (zone?.freeMinutes ?? 0);
 
   /**
    * Everything chosen below belongs to the municipality that was active when it was chosen: a zone
@@ -439,6 +472,17 @@ export function ParkingPage(): React.JSX.Element {
                       detail:
                         [
                           option === savedMinutesOption ? t('citizen.parking.step3.savedMinutes') : undefined,
+                          // Courtesy says so in words, for the same reason the saved-minute option
+                          // does: a bare "₡0" reads as parking having become free, and this one is
+                          // free once a day and only for a short stay.
+                          option !== savedMinutesOption &&
+                          optionQuote &&
+                          optionQuote.payableMinor === 0 &&
+                          optionQuote.creditMinutesApplied === 0 &&
+                          (zone?.freeMinutes ?? 0) > 0 &&
+                          option <= (zone?.freeMinutes ?? 0)
+                            ? t('citizen.parking.step3.courtesy')
+                            : undefined,
                           price,
                           option === savedMinutesOption ? undefined : credited,
                         ]
@@ -448,13 +492,26 @@ export function ParkingPage(): React.JSX.Element {
                     };
                   })}
                 />
-                {/* One line, and it always states the municipality's ceiling — that is the number
-                    a person needs before choosing. */}
+                {/* One line, and it always states the ceiling — that is the number a person needs
+                    before choosing. Since v0.31 it is THIS ZONE's ceiling, which is often lower than
+                    the municipality's: saying "up to eight hours" where the zone allows two would be
+                    an invitation to be refused at the last step. */}
                 <p className="lx-text-meta" style={{ margin: 0 }}>
-                  {t('citizen.parking.step3.maxNotice', {
-                    max: formatDurationLabel(p.sessionMaxMinutes, tPlural),
-                  })}
+                  {t(
+                    zone?.sessionMaxMinutes !== undefined && zone.sessionMaxMinutes !== p.sessionMaxMinutes
+                      ? 'citizen.parking.step3.maxNoticeZone'
+                      : 'citizen.parking.step3.maxNotice',
+                    { max: formatDurationLabel(zoneMaxMinutes ?? p.sessionMaxMinutes, tPlural) },
+                  )}
                 </p>
+                {/* The courtesy, said before the choice rather than discovered in the summary. */}
+                {(zone?.freeMinutes ?? 0) > 0 ? (
+                  <p className="lx-text-meta" style={{ margin: 0 }}>
+                    {t('citizen.parking.step3.courtesyNotice', {
+                      minutes: tPlural('citizen.parking.durationMinutes', zone?.freeMinutes ?? 0),
+                    })}
+                  </p>
+                ) : null}
               </div>
             )}
           </QueryBoundary>
@@ -487,11 +544,18 @@ export function ParkingPage(): React.JSX.Element {
               <>
                 {/* Only the minutes inside a charging band are billed (CONTRACT.md v0.3): when the
                     stay spills past closing time, the difference is shown rather than left to be
-                    discovered on the receipt. */}
+                    discovered on the receipt.
+
+                    A courtesy stay also has nothing chargeable, and it is NOT the same fact: saying
+                    "the rest falls outside charging hours" about a free quarter of an hour at ten in
+                    the morning is simply untrue, and it is the kind of untrue that teaches a person
+                    to stop reading the summary. */}
                 {quote.chargeableMinutes !== quote.minutes ? (
                   <ListRow
                     title={t('citizen.parking.step4.chargeableMinutesLabel')}
-                    meta={t('citizen.parking.step4.chargeableMinutesHint')}
+                    meta={t(
+                      isCourtesyQuote ? 'citizen.parking.step4.courtesyHint' : 'citizen.parking.step4.chargeableMinutesHint',
+                    )}
                     value={tPlural('citizen.parking.durationMinutes', quote.chargeableMinutes)}
                   />
                 ) : null}

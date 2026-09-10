@@ -148,6 +148,14 @@ public final class AuditAction {
     public static final String TENANT_BRANDING_UPDATED = "TENANT_BRANDING_UPDATED";
     public static final String PARKING_SPACE_FORMAT_UPDATED = "PARKING_SPACE_FORMAT_UPDATED";
     public static final String PARKING_SCHEDULE_UPDATED = "PARKING_SCHEDULE_UPDATED";
+    /**
+     * A zone was given rules of its own, or put back to following the municipality (v0.31).
+     *
+     * <p>Audited apart from the municipality's policy because it answers a different question: "why
+     * did this zone charge until ten when the rest of the canton stopped at six" is asked about one
+     * zone, and the entry names it.</p>
+     */
+    public static final String PARKING_ZONE_RULES_UPDATED = "PARKING_ZONE_RULES_UPDATED";
 
     // --- enforcement (CONTRACT.md "v0.7"): every act on a citation is traceable, and the citation
     // also keeps its own history in citation_events, which is part of the act and not a log -------

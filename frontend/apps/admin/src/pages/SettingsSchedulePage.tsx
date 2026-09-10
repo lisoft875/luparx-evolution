@@ -1,10 +1,28 @@
 import * as React from 'react';
 import { useEffect, useState } from 'react';
-import type { ChargingBand, ChargingDay, ChargingException, Weekday } from '@luparx/api-client';
-import { formatWeekdayTime, useTranslation, type TranslationKey } from '@luparx/i18n';
-import { Alert, Badge, Button, Card, Checkbox, DateField, FormField, Input, SectionHeader } from '@luparx/ui';
+import type {
+  ChargingBand,
+  ChargingDay,
+  ChargingException,
+  ExceptionRecurrence,
+  HolidayCatalogEntry,
+  Weekday,
+} from '@luparx/api-client';
+import { formatDate, formatWeekdayTime, useTranslation, type TranslationKey } from '@luparx/i18n';
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  Checkbox,
+  DateField,
+  FormField,
+  Input,
+  SectionHeader,
+  Select,
+} from '@luparx/ui';
 import { AdminShell } from '../components/AdminShell';
-import { useParkingScheduleSettings, useUpdateParkingSchedule } from '../lib/queries';
+import { useCountryHolidays, useParkingScheduleSettings, useUpdateParkingSchedule } from '../lib/queries';
 
 /** Monday first: the working week is what this screen is mostly about, and the free day should read as the exception it is. */
 const WEEKDAYS: Weekday[] = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
@@ -29,6 +47,19 @@ function toMinute(value: string): number | null {
   return hours * 60 + minutes;
 }
 
+/**
+ * The moveable feasts, as distances from Easter Sunday.
+ *
+ * A short list rather than a free number: these are the days a municipality actually suspends
+ * charging for, and asking somebody to type "-2" would be asking them to know the arithmetic.
+ */
+const EASTER_OFFSETS: { days: number; key: TranslationKey }[] = [
+  { days: -3, key: 'admin.settings.schedule.exceptions.easter.maundyThursday' },
+  { days: -2, key: 'admin.settings.schedule.exceptions.easter.goodFriday' },
+  { days: 0, key: 'admin.settings.schedule.exceptions.easter.sunday' },
+  { days: 1, key: 'admin.settings.schedule.exceptions.easter.monday' },
+];
+
 function band(startsAt: string, endsAt: string): ChargingBand {
   return { startsAt, endsAt, startMinute: toMinute(startsAt) ?? 0, endMinute: toMinute(endsAt) ?? 0 };
 }
@@ -48,6 +79,7 @@ function band(startsAt: string, endsAt: string): ChargingBand {
 export function SettingsSchedulePage(): React.JSX.Element {
   const { t, locale } = useTranslation();
   const scheduleQuery = useParkingScheduleSettings();
+  const holidaysQuery = useCountryHolidays();
   const updateMutation = useUpdateParkingSchedule();
 
   const [chargesAllDay, setChargesAllDay] = useState(false);
@@ -74,6 +106,50 @@ export function SettingsSchedulePage(): React.JSX.Element {
   function updateException(index: number, patch: Partial<ChargingException>): void {
     setSaved(false);
     setExceptions((current) => current.map((entry, i) => (i === index ? { ...entry, ...patch } : entry)));
+  }
+
+  /**
+   * Switching the rule clears the fields of the shape being left behind.
+   *
+   * Carrying a stale date on an annual rule would send the server a body it refuses, and — worse —
+   * would leave a number on screen that no longer means anything.
+   */
+  function setRecurrence(index: number, recurrence: ExceptionRecurrence): void {
+    const today = new Date();
+    updateException(index, {
+      recurrence,
+      date: recurrence === 'ONCE' ? (exceptions[index]?.date ?? today.toISOString().slice(0, 10)) : null,
+      month: recurrence === 'ANNUAL' ? (exceptions[index]?.month ?? today.getMonth() + 1) : null,
+      day: recurrence === 'ANNUAL' ? (exceptions[index]?.day ?? today.getDate()) : null,
+      easterOffsetDays: recurrence === 'EASTER' ? (exceptions[index]?.easterOffsetDays ?? -2) : null,
+    });
+  }
+
+  /**
+   * Copies a holiday out of the country catalogue into this municipality's own exceptions.
+   *
+   * A copy and never a link: from here on the row is the municipality's, and editing or deleting it
+   * owes the platform no explanation. `charges: false` because a public holiday suspends charging —
+   * a municipality that does charge on one can say so by ticking the box afterwards.
+   */
+  function addHoliday(holiday: HolidayCatalogEntry): void {
+    setSaved(false);
+    setExceptions((current) => [
+      ...current,
+      {
+        date: null,
+        charges: false,
+        chargesAllDay: false,
+        label: holiday.name,
+        bands: [],
+        recurrence: holiday.kind === 'EASTER' ? 'EASTER' : 'ANNUAL',
+        month: holiday.month,
+        day: holiday.day,
+        easterOffsetDays: holiday.easterOffsetDays,
+        observance: holiday.observance,
+        holidayCode: holiday.code,
+      },
+    ]);
   }
 
   async function handleSave(): Promise<void> {
@@ -226,15 +302,85 @@ export function SettingsSchedulePage(): React.JSX.Element {
             style={{ borderTop: '1px solid var(--lx-border)', padding: 'var(--lx-space-3) 0' }}
           >
             <div style={{ display: 'flex', gap: 'var(--lx-space-3)', flexWrap: 'wrap', alignItems: 'flex-end' }}>
-              <FormField label={t('admin.settings.schedule.exceptions.dateLabel')}>
+              <FormField label={t('admin.settings.schedule.exceptions.repeatLabel')}>
                 {({ inputId }) => (
-                  <DateField
+                  <Select
                     id={inputId}
-                    value={entry.date}
-                    onChange={(event) => updateException(index, { date: event.target.value })}
+                    value={entry.recurrence ?? 'ONCE'}
+                    onChange={(value) => setRecurrence(index, value as ExceptionRecurrence)}
+                    options={[
+                      { value: 'ONCE', label: t('admin.settings.schedule.exceptions.repeat.once') },
+                      { value: 'ANNUAL', label: t('admin.settings.schedule.exceptions.repeat.annual') },
+                      { value: 'EASTER', label: t('admin.settings.schedule.exceptions.repeat.easter') },
+                    ]}
                   />
                 )}
               </FormField>
+              {/* Each shape asks for exactly its own data, and nothing else is shown: a month and a
+                  day next to a full date would be two answers to one question. */}
+              {(entry.recurrence ?? 'ONCE') === 'ONCE' ? (
+                <FormField label={t('admin.settings.schedule.exceptions.dateLabel')}>
+                  {({ inputId }) => (
+                    <DateField
+                      id={inputId}
+                      value={entry.date ?? ''}
+                      onChange={(event) => updateException(index, { date: event.target.value })}
+                    />
+                  )}
+                </FormField>
+              ) : null}
+              {entry.recurrence === 'ANNUAL' ? (
+                <>
+                  <FormField label={t('admin.settings.schedule.exceptions.monthLabel')}>
+                    {({ inputId }) => (
+                      <Input
+                        id={inputId}
+                        type="number"
+                        min={1}
+                        max={12}
+                        style={{ width: 90 }}
+                        value={entry.month ?? ''}
+                        onChange={(event) => updateException(index, { month: Number(event.target.value) || null })}
+                      />
+                    )}
+                  </FormField>
+                  <FormField label={t('admin.settings.schedule.exceptions.dayLabel')}>
+                    {({ inputId }) => (
+                      <Input
+                        id={inputId}
+                        type="number"
+                        min={1}
+                        max={31}
+                        style={{ width: 90 }}
+                        value={entry.day ?? ''}
+                        onChange={(event) => updateException(index, { day: Number(event.target.value) || null })}
+                      />
+                    )}
+                  </FormField>
+                  <Checkbox
+                    label={t('admin.settings.schedule.exceptions.mondayLabel')}
+                    checked={entry.observance === 'MONDAY'}
+                    onChange={(event) =>
+                      updateException(index, { observance: event.target.checked ? 'MONDAY' : 'EXACT' })
+                    }
+                  />
+                </>
+              ) : null}
+              {entry.recurrence === 'EASTER' ? (
+                <FormField label={t('admin.settings.schedule.exceptions.easterLabel')}>
+                  {({ inputId }) => (
+                    <Select
+                      id={inputId}
+                      value={String(entry.easterOffsetDays ?? -2)}
+                      onChange={(value) => updateException(index, { easterOffsetDays: Number(value) })}
+                      options={EASTER_OFFSETS.map((offset) => ({
+                        value: String(offset.days),
+                        label: t(offset.key),
+                      }))}
+                    />
+                  )}
+                </FormField>
+              ) : null}
               <FormField label={t('admin.settings.schedule.exceptions.labelLabel')} optionalLabel={t('common.optional')}>
                 {({ inputId }) => (
                   <Input
@@ -278,6 +424,15 @@ export function SettingsSchedulePage(): React.JSX.Element {
                 {t('admin.settings.schedule.exceptions.remove')}
               </Button>
             </div>
+            {/* When the rule actually lands next. The server computes it — a person reading
+                "Jueves Santo, se repite" should not have to work out Easter in their head. */}
+            {entry.nextDate ? (
+              <p className="lx-text-meta" style={{ margin: '4px 0 0' }}>
+                {t('admin.settings.schedule.exceptions.nextDate', {
+                  date: formatDate(entry.nextDate, locale),
+                })}
+              </p>
+            ) : null}
             {entry.charges && !entry.chargesAllDay ? (
               <div style={{ display: 'flex', gap: 'var(--lx-space-3)', flexWrap: 'wrap', alignItems: 'flex-end' }}>
                 <FormField label={t('admin.settings.schedule.fromLabel')}>
@@ -315,12 +470,67 @@ export function SettingsSchedulePage(): React.JSX.Element {
             setSaved(false);
             setExceptions((current) => [
               ...current,
-              { date: new Date().toISOString().slice(0, 10), charges: false, chargesAllDay: false, label: '', bands: [] },
+              {
+                date: new Date().toISOString().slice(0, 10),
+                charges: false,
+                chargesAllDay: false,
+                label: '',
+                bands: [],
+                recurrence: 'ONCE',
+                observance: 'EXACT',
+              },
             ]);
           }}
         >
           {t('admin.settings.schedule.exceptions.add')}
         </Button>
+      </Card>
+
+      {/* --- the country's holidays, offered rather than typed (v0.31) ------------------------- */}
+      <Card>
+        <SectionHeader
+          title={t('admin.settings.schedule.holidays.title')}
+          description={t('admin.settings.schedule.holidays.description')}
+        />
+        {/* Said on the screen and not only in a manual: what a canton charges on is the canton's
+            answer to give, and this list is where it starts, not where it ends. */}
+        <Alert tone="info">{t('admin.settings.schedule.holidays.notice')}</Alert>
+        {(holidaysQuery.data ?? []).length === 0 ? (
+          <p className="lx-text-meta">{t('admin.settings.schedule.holidays.empty')}</p>
+        ) : null}
+        {(holidaysQuery.data ?? []).map((holiday) => {
+          const added = holiday.alreadyAdded || exceptions.some((e) => e.holidayCode === holiday.code);
+          return (
+            <div
+              key={holiday.code}
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                gap: 12,
+                borderTop: '1px solid var(--lx-border)',
+                padding: 'var(--lx-space-2) 0',
+              }}
+            >
+              <div>
+                <div>{holiday.name}</div>
+                <div className="lx-text-meta">
+                  {holiday.thisYear ? formatDate(holiday.thisYear, locale) : '—'}
+                  {holiday.observance === 'MONDAY'
+                    ? ` · ${t('admin.settings.schedule.exceptions.mondayLabel')}`
+                    : ''}
+                </div>
+              </div>
+              {added ? (
+                <Badge tone="success">{t('admin.settings.schedule.holidays.added')}</Badge>
+              ) : (
+                <Button type="button" variant="secondary" onClick={() => addHoliday(holiday)}>
+                  {t('admin.settings.schedule.holidays.add')}
+                </Button>
+              )}
+            </div>
+          );
+        })}
       </Card>
 
       <Button type="button" onClick={handleSave} loading={updateMutation.isPending}>

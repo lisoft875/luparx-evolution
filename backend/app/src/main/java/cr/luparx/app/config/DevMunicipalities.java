@@ -189,7 +189,7 @@ final class DevMunicipalities {
                     null,
                     // Extensions off and no credit for finishing early: the two flows the citizen app
                     // has to degrade gracefully without.
-                    new PolicyVariant(List.of(30, 60, 120), 30, 240, false, List.of(), 240, true, false, 0, 0, 5),
+                    new PolicyVariant(List.of(30, 60, 120), 30, 240, false, List.of(), 240, true, false, 0, 0, 5, 0),
                     null, 28,
                     "Extensions disabled and no credit for finishing early; sessions capped at 4 hours."));
 
@@ -269,6 +269,13 @@ final class DevMunicipalities {
     }
 
     /** A public holiday: the date it falls on and the name an operator would recognise. */
+    /**
+     * A public holiday to seed.
+     *
+     * <p>The date names the day of the year; it is written as an ANNUAL rule (v0.31) rather than as a
+     * single date, so a development database seeded today still has Christmas next year. The year in
+     * the literal is ignored and only the month and day are used.</p>
+     */
     record HolidaySeed(LocalDate date, String label) {
     }
 
@@ -284,7 +291,9 @@ final class DevMunicipalities {
             boolean creditOnEarlyFinishEnabled,
             int creditMinRemainingMinutes,
             int creditExpiryDays,
-            int graceMinutes) {
+            int graceMinutes,
+            /** Minutes of courtesy (v0.31); 0 is the honest default for a municipality that offers none. */
+            int freeMinutes) {
     }
 
     /** A bay code format to write for a municipality. */

@@ -201,6 +201,24 @@ export const enUS: Record<TranslationKey, string> = {
   'admin.zones.action.spaces': 'Bays',
   'admin.zones.action.activate': 'Activate',
   'admin.zones.action.deactivate': 'Deactivate',
+  'admin.zones.action.rules': 'Zone rules',
+  'admin.zones.rules.title': 'Rules for {{zone}}',
+  'admin.zones.rules.notice':
+    'Anything you leave blank is inherited from the municipality, and stays inherited if the municipality changes it. The grey text in each field is what applies today.',
+  'admin.zones.rules.saved': 'Zone rules saved.',
+  'admin.zones.rules.inheritHint': 'Applies today: {{value}}',
+  'admin.zones.rules.incrementsLabel': 'Durations sold here (minutes, comma separated)',
+  'admin.zones.rules.minLabel': 'Shortest stay',
+  'admin.zones.rules.maxLabel': 'Longest stay',
+  'admin.zones.rules.maxHint': 'The lever that manages rotation: two hours downtown, more on the edges.',
+  'admin.zones.rules.freeLabel': 'Courtesy minutes',
+  'admin.zones.rules.freeHint': 'Granted once per plate per day. Zero means no courtesy.',
+  'admin.zones.rules.ownScheduleLabel': 'This zone keeps its own charging hours',
+  'admin.zones.rules.dayFree': 'Not charged',
+  'admin.zones.rules.freeZoneWarning':
+    'With its own timetable and no band at all, this zone never charges. That is valid — a free zone — but it should be on purpose.',
+  'admin.zones.rules.error.band': 'Check the hours for {{day}}: the closing time has to be later than the opening one.',
+  'admin.zones.rules.error.invalid': 'Check the numbers: courtesy cannot exceed the longest stay.',
   'admin.zones.field.code': 'Code',
   'admin.zones.field.codeHint': 'What the zone is called in reports and on the radio. It cannot be changed later.',
   'admin.zones.field.codeFixed': 'The code does not change: it is what every report of what was charged here is grouped by.',
@@ -629,6 +647,7 @@ export const enUS: Record<TranslationKey, string> = {
   'citizen.parking.step3.title': 'Time',
   'citizen.parking.step3.creditApplied': 'includes {{minutes}} of credit',
   'citizen.parking.step3.savedMinutes': 'Your saved minutes',
+  'citizen.parking.step3.courtesy': 'Courtesy, once a day',
   'citizen.parking.step4.title': 'Summary and payment',
   'citizen.parking.step4.zoneLabel': 'Zone',
   'citizen.parking.step4.vehicleLabel': 'Vehicle',
@@ -959,6 +978,27 @@ export const enUS: Record<TranslationKey, string> = {
   'admin.settings.schedule.exceptions.empty': 'No exceptions yet.',
   'admin.settings.schedule.exceptions.add': 'Add exception',
   'admin.settings.schedule.exceptions.remove': 'Remove',
+  'admin.settings.schedule.exceptions.repeatLabel': 'Repeats',
+  'admin.settings.schedule.exceptions.repeat.once': 'This date only',
+  'admin.settings.schedule.exceptions.repeat.annual': 'Every year, same day',
+  'admin.settings.schedule.exceptions.repeat.easter': 'With Easter',
+  'admin.settings.schedule.exceptions.monthLabel': 'Month',
+  'admin.settings.schedule.exceptions.dayLabel': 'Day',
+  'admin.settings.schedule.exceptions.mondayLabel': 'Moves to the Monday',
+  'admin.settings.schedule.exceptions.easterLabel': 'Which day',
+  'admin.settings.schedule.exceptions.easter.maundyThursday': 'Maundy Thursday',
+  'admin.settings.schedule.exceptions.easter.goodFriday': 'Good Friday',
+  'admin.settings.schedule.exceptions.easter.sunday': 'Easter Sunday',
+  'admin.settings.schedule.exceptions.easter.monday': 'Easter Monday',
+  'admin.settings.schedule.exceptions.nextDate': 'Next falls on {{date}}.',
+  'admin.settings.schedule.holidays.title': "The country's holidays",
+  'admin.settings.schedule.holidays.description':
+    'So nobody retypes them every December. Adding one makes it an exception of yours, which you can edit or remove whenever you like.',
+  'admin.settings.schedule.holidays.notice':
+    'A starting point, not legal advice: holiday law changes and this municipality is answerable for its own charging calendar. Check each one before saving.',
+  'admin.settings.schedule.holidays.empty': 'The platform does not have this country\'s calendar yet.',
+  'admin.settings.schedule.holidays.add': 'Add',
+  'admin.settings.schedule.holidays.added': 'Already there',
   'admin.settings.schedule.exceptions.dateLabel': 'Date',
   'admin.settings.schedule.exceptions.labelLabel': 'Holiday name',
   'admin.settings.schedule.exceptions.chargesLabel': 'Charged on that day',
@@ -972,6 +1012,7 @@ export const enUS: Record<TranslationKey, string> = {
   'citizen.parking.step1.noZones': 'This municipality has not published its parking zones yet.',
   'citizen.parking.step4.chargeableMinutesLabel': 'Chargeable minutes',
   'citizen.parking.step4.chargeableMinutesHint': 'The rest falls outside the charging hours.',
+  'citizen.parking.step4.courtesyHint': 'A courtesy stay: nothing is charged.',
 
   // ---- Citizen: bay-code guide (the zone's real range + the municipality's format) --------------
   'citizen.parking.step1.spaceCodeRange': 'Bays {{first}}–{{last}} in this zone ({{count}} in total).',
@@ -983,6 +1024,9 @@ export const enUS: Record<TranslationKey, string> = {
 
   // ---- Citizen: "Other" duration, inside the municipality's own limits --------------------------
   'citizen.parking.step3.maxNotice': 'This municipality allows up to {{max}} per stay.',
+  'citizen.parking.step3.maxNoticeZone': 'This zone allows up to {{max}} per stay.',
+  'citizen.parking.step3.courtesyNotice':
+    'The first {{minutes}} are free in this zone, once a day per plate.',
 
   // ---- Catalogs (server-provided keys: countries, documents, divisions) -------------------------
   'country.CR': 'Costa Rica',

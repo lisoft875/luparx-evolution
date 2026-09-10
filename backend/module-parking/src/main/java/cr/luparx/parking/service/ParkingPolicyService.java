@@ -5,15 +5,23 @@ import cr.luparx.core.error.UnprocessableEntityException;
 import cr.luparx.core.error.ValidationException;
 import cr.luparx.core.id.TenantId;
 import cr.luparx.parking.entity.ParkingPolicy;
+import cr.luparx.parking.entity.ParkingZonePolicy;
 import cr.luparx.parking.model.MinuteIncrements;
 import cr.luparx.parking.model.ParkingPolicyDefaults;
+import cr.luparx.parking.model.ZoneRules;
 import cr.luparx.parking.repository.ParkingPolicyRepository;
+import cr.luparx.parking.repository.ParkingZonePolicyRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
 
 /**
  * Reads and writes the parking policy of a municipality, and is the only place that decides what a
@@ -24,16 +32,31 @@ import java.util.List;
  * materialised on the first read so that the municipality can then edit a real row. A default that
  * lived as a constant in this class would be a decision the municipality could not make, which is
  * precisely what CONTRACT.md v0.2 forbids.</p>
+ *
+ * <h2>What applies in one zone</h2>
+ *
+ * <p>Since v0.31 a zone may depart from some of these numbers, and {@link #rulesFor} is the single
+ * place that folds the two rows into one answer ({@link ZoneRules}). Every caller reads a plain
+ * number from it and none of them reaches for the zone row itself: the alternative is the same
+ * fallback written in six places, and the day one of them forgets it a zone silently gets a maximum
+ * stay of zero.</p>
+ *
+ * <p>A zone row is <b>never created on read</b>, unlike the municipality's. Materialising a row of
+ * nulls for every zone somebody looks at would fill the table with rows that say nothing, and
+ * "departs in nothing" is already what the absence of a row means.</p>
  */
 @Service
 public class ParkingPolicyService {
 
     private final ParkingPolicyRepository repository;
+    private final ParkingZonePolicyRepository zoneRepository;
     private final ParkingPolicyDefaults defaults;
     private final Clock clock;
 
-    public ParkingPolicyService(ParkingPolicyRepository repository, ParkingPolicyDefaults defaults, Clock clock) {
+    public ParkingPolicyService(ParkingPolicyRepository repository, ParkingZonePolicyRepository zoneRepository,
+                                ParkingPolicyDefaults defaults, Clock clock) {
         this.repository = repository;
+        this.zoneRepository = zoneRepository;
         this.defaults = defaults;
         this.clock = clock;
     }
@@ -46,6 +69,116 @@ public class ParkingPolicyService {
     public ParkingPolicy require(TenantId tenantId) {
         return repository.findById(tenantId.value())
                 .orElseGet(() -> repository.save(ParkingPolicy.fromDefaults(tenantId, defaults, clock.instant())));
+    }
+
+    /**
+     * The rules that actually apply in one zone: the municipality's, with the zone's departures
+     * folded in.
+     *
+     * @param zoneId the zone, or null for the municipality's own rules with nothing overridden
+     */
+    @Transactional
+    public ZoneRules rulesFor(TenantId tenantId, UUID zoneId) {
+        ParkingPolicy policy = require(tenantId);
+        if (zoneId == null) {
+            return ZoneRules.of(policy);
+        }
+        return ZoneRules.of(policy, zoneId,
+                zoneRepository.findByTenantIdAndZoneId(tenantId.value(), zoneId).orElse(null));
+    }
+
+    /** The rules of a whole page of zones, resolved in two queries rather than two per row. */
+    @Transactional
+    public Map<UUID, ZoneRules> rulesFor(TenantId tenantId, Collection<UUID> zoneIds) {
+        ParkingPolicy policy = require(tenantId);
+        Map<UUID, ZoneRules> resolved = new HashMap<>();
+        if (zoneIds == null || zoneIds.isEmpty()) {
+            return resolved;
+        }
+        Map<UUID, ParkingZonePolicy> overrides = new HashMap<>();
+        for (ParkingZonePolicy override : zoneRepository.findByTenantIdAndZoneIdIn(tenantId.value(), zoneIds)) {
+            overrides.put(override.getZoneId(), override);
+        }
+        for (UUID zoneId : zoneIds) {
+            resolved.put(zoneId, ZoneRules.of(policy, zoneId, overrides.get(zoneId)));
+        }
+        return resolved;
+    }
+
+    /** What a zone departs in, if anything. Absent is the normal case, never a missing row. */
+    @Transactional(readOnly = true)
+    public Optional<ParkingZonePolicy> zoneOverride(TenantId tenantId, UUID zoneId) {
+        return zoneRepository.findByTenantIdAndZoneId(tenantId.value(), zoneId);
+    }
+
+    /**
+     * Replaces everything a zone departs in, as one form.
+     *
+     * <p>A form where every field came back empty means "this zone follows the municipality in
+     * everything", and the row is <b>deleted</b> rather than kept full of nulls: a row that says
+     * nothing is a row somebody will one day read as if it said something.</p>
+     *
+     * <p>The numbers are validated against each other but deliberately <b>not</b> against the
+     * municipality's. A zone that sells shorter stays than the municipality's minimum is exactly the
+     * kind of departure this exists for; requiring it to stay inside the municipality's range would
+     * make the range a ceiling the zone cannot lower, which is the opposite of the point.</p>
+     */
+    @Transactional
+    public Optional<ParkingZonePolicy> replaceZone(TenantId tenantId, UUID zoneId,
+                                                   List<Integer> sessionIncrements,
+                                                   Integer sessionMinMinutes,
+                                                   Integer sessionMaxMinutes,
+                                                   List<Integer> extensionIncrements,
+                                                   Integer extensionMaxTotalMinutes,
+                                                   Integer freeMinutes) {
+        ValidationException.Collector errors = new ValidationException.Collector();
+        MinuteIncrements session = sessionIncrements == null || sessionIncrements.isEmpty()
+                ? null
+                : parse(sessionIncrements, "sessionIncrementsMinutes", errors);
+        MinuteIncrements extension = extensionIncrements == null || extensionIncrements.isEmpty()
+                ? null
+                : parse(extensionIncrements, "extensionIncrementsMinutes", errors);
+
+        if (sessionMinMinutes != null && sessionMinMinutes.intValue() <= 0) {
+            errors.add("sessionMinMinutes", ErrorCode.VALIDATION_FAILED, "error.parking.policy.sessionMin.invalid");
+        }
+        if (sessionMaxMinutes != null && sessionMaxMinutes.intValue() <= 0) {
+            errors.add("sessionMaxMinutes", ErrorCode.VALIDATION_FAILED, "error.parking.policy.sessionMax.invalid");
+        }
+        if (sessionMinMinutes != null && sessionMaxMinutes != null
+                && sessionMaxMinutes.intValue() < sessionMinMinutes.intValue()) {
+            errors.add("sessionMaxMinutes", ErrorCode.VALIDATION_FAILED, "error.parking.policy.sessionMax.invalid");
+        }
+        if (extensionMaxTotalMinutes != null && extensionMaxTotalMinutes.intValue() <= 0) {
+            errors.add("extensionMaxTotalMinutes", ErrorCode.VALIDATION_FAILED,
+                    "error.parking.policy.extensionMaxTotal.invalid");
+        }
+        if (freeMinutes != null && freeMinutes.intValue() < 0) {
+            errors.add("freeMinutes", ErrorCode.VALIDATION_FAILED, "error.parking.policy.negative");
+        }
+        // Courtesy longer than the longest stay this zone sells would make every stay in it free.
+        // Checked against the RESOLVED maximum, so a zone that only departed on the courtesy is still
+        // held to the municipality's maximum rather than to nothing.
+        int effectiveMax = sessionMaxMinutes != null
+                ? sessionMaxMinutes.intValue()
+                : require(tenantId).getSessionMaxMinutes();
+        if (freeMinutes != null && freeMinutes.intValue() > effectiveMax) {
+            errors.add("freeMinutes", ErrorCode.VALIDATION_FAILED, "error.parking.policy.freeMinutes.tooLong");
+        }
+        errors.throwIfAny();
+
+        Instant now = clock.instant();
+        ParkingZonePolicy override = zoneRepository.findByTenantIdAndZoneId(tenantId.value(), zoneId)
+                .orElseGet(() -> new ParkingZonePolicy(zoneId, tenantId.value(), now));
+        override.replace(session, sessionMinMinutes, sessionMaxMinutes, extension, extensionMaxTotalMinutes,
+                freeMinutes, now);
+        if (override.isEmpty()) {
+            if (override.getVersion() > 0L || zoneRepository.existsById(zoneId)) {
+                zoneRepository.delete(override);
+            }
+            return Optional.empty();
+        }
+        return Optional.of(zoneRepository.save(override));
     }
 
     /** The row as it is, without creating one. Used where a read must not write. */
@@ -71,7 +204,8 @@ public class ParkingPolicyService {
                                  boolean creditOnEarlyFinishEnabled,
                                  int creditMinRemainingMinutes,
                                  int creditExpiryDays,
-                                 int graceMinutes) {
+                                 int graceMinutes,
+                                 int freeMinutes) {
         ValidationException.Collector errors = new ValidationException.Collector();
         MinuteIncrements session = parse(sessionIncrements, "sessionIncrementsMinutes", errors);
         MinuteIncrements extension = parse(extensionIncrements, "extensionIncrementsMinutes", errors);
@@ -109,6 +243,14 @@ public class ParkingPolicyService {
         if (graceMinutes < 0) {
             errors.add("graceMinutes", ErrorCode.VALIDATION_FAILED, "error.parking.policy.negative");
         }
+        if (freeMinutes < 0) {
+            errors.add("freeMinutes", ErrorCode.VALIDATION_FAILED, "error.parking.policy.negative");
+        }
+        if (freeMinutes > sessionMaxMinutes) {
+            // Courtesy longer than the longest stay sold would make every stay free — almost always a
+            // typo, and one whose cost nobody notices because nothing fails.
+            errors.add("freeMinutes", ErrorCode.VALIDATION_FAILED, "error.parking.policy.freeMinutes.tooLong");
+        }
         errors.throwIfAny();
 
         Instant now = clock.instant();
@@ -116,11 +258,12 @@ public class ParkingPolicyService {
         if (policy == null) {
             return repository.save(new ParkingPolicy(tenantId.value(), session, sessionMinMinutes,
                     sessionMaxMinutes, extensionEnabled, extension, extensionMaxTotalMinutes, earlyFinishEnabled,
-                    creditOnEarlyFinishEnabled, creditMinRemainingMinutes, creditExpiryDays, graceMinutes, now));
+                    creditOnEarlyFinishEnabled, creditMinRemainingMinutes, creditExpiryDays, graceMinutes,
+                    freeMinutes, now));
         }
         policy.replace(session, sessionMinMinutes, sessionMaxMinutes, extensionEnabled, extension,
                 extensionMaxTotalMinutes, earlyFinishEnabled, creditOnEarlyFinishEnabled,
-                creditMinRemainingMinutes, creditExpiryDays, graceMinutes, now);
+                creditMinRemainingMinutes, creditExpiryDays, graceMinutes, freeMinutes, now);
         return repository.save(policy);
     }
 
@@ -131,8 +274,8 @@ public class ParkingPolicyService {
      *         list. It is never rounded to the nearest offered option: charging for something other
      *         than what the citizen asked for is worse than refusing.
      */
-    public void requireSessionIncrement(ParkingPolicy policy, int minutes) {
-        requireSessionIncrement(policy, minutes, 0);
+    public void requireSessionIncrement(ZoneRules rules, int minutes) {
+        requireSessionIncrement(rules, minutes, 0);
     }
 
     /**
@@ -155,21 +298,21 @@ public class ParkingPolicyService {
      * @param savedMinutes the citizen's time-credit balance in this municipality, read inside the
      *                     same transaction that will spend it; 0 when they have none
      */
-    public void requireSessionIncrement(ParkingPolicy policy, int minutes, int savedMinutes) {
-        if (minutes > 0 && minutes == savedMinutes && minutes <= policy.getSessionMaxMinutes()) {
+    public void requireSessionIncrement(ZoneRules rules, int minutes, int savedMinutes) {
+        if (minutes > 0 && minutes == savedMinutes && minutes <= rules.sessionMaxMinutes()) {
             return;
         }
-        if (!policy.sessionIncrements().allows(minutes)
-                || minutes < policy.getSessionMinMinutes()
-                || minutes > policy.getSessionMaxMinutes()) {
+        if (!rules.sessionIncrements().allows(minutes)
+                || minutes < rules.sessionMinMinutes()
+                || minutes > rules.sessionMaxMinutes()) {
             throw UnprocessableEntityException.of(ErrorCode.INVALID_INCREMENT, "error.parking.increment.invalid",
                     Integer.valueOf(minutes));
         }
     }
 
     /** The same check for an extension. The two lists are configured separately by the municipality. */
-    public void requireExtensionIncrement(ParkingPolicy policy, int minutes) {
-        if (!policy.extensionIncrements().allows(minutes)) {
+    public void requireExtensionIncrement(ZoneRules rules, int minutes) {
+        if (!rules.extensionIncrements().allows(minutes)) {
             throw UnprocessableEntityException.of(ErrorCode.INVALID_INCREMENT, "error.parking.increment.invalid",
                     Integer.valueOf(minutes));
         }

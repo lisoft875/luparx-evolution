@@ -7,16 +7,26 @@ import cr.luparx.core.id.TenantId;
 import cr.luparx.core.page.PageRequest;
 import cr.luparx.core.page.PageResponse;
 import cr.luparx.core.tenant.TenantContextHolder;
+import cr.luparx.core.time.HolidayObservance;
+import cr.luparx.geo.entity.HolidayCatalogEntry;
+import cr.luparx.geo.service.HolidayCatalogService;
 import cr.luparx.parking.entity.ParkingPolicy;
 import cr.luparx.parking.entity.ParkingRate;
 import cr.luparx.parking.entity.ParkingScheduleException;
 import cr.luparx.parking.entity.ParkingSpace;
 import cr.luparx.parking.entity.ParkingSpaceFormat;
 import cr.luparx.parking.entity.ParkingZone;
+import cr.luparx.parking.entity.ParkingZonePolicy;
+import cr.luparx.parking.entity.ParkingZoneSchedule;
+import cr.luparx.parking.entity.ParkingZoneScheduleSlot;
+import cr.luparx.parking.model.ExceptionRecurrence;
+import cr.luparx.parking.model.ZoneRules;
 import cr.luparx.parking.service.ParkingCatalogService;
 import cr.luparx.parking.service.ParkingPolicyService;
 import cr.luparx.parking.service.ParkingScheduleService;
 import cr.luparx.parking.service.ParkingSpaceFormatService;
+import cr.luparx.tenancy.entity.Tenant;
+import cr.luparx.tenancy.service.TenantService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -34,10 +44,16 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Clock;
+import java.time.DayOfWeek;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.EnumMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -57,6 +73,8 @@ public class AdminParkingController {
     private final ParkingCatalogService catalogService;
     private final ParkingSpaceFormatService spaceFormatService;
     private final ParkingScheduleService scheduleService;
+    private final HolidayCatalogService holidayCatalogService;
+    private final TenantService tenantService;
     private final ParkingMapper mapper;
     private final AuditRecorder auditRecorder;
     private final Clock clock;
@@ -65,6 +83,8 @@ public class AdminParkingController {
                                   ParkingCatalogService catalogService,
                                   ParkingSpaceFormatService spaceFormatService,
                                   ParkingScheduleService scheduleService,
+                                  HolidayCatalogService holidayCatalogService,
+                                  TenantService tenantService,
                                   ParkingMapper mapper,
                                   AuditRecorder auditRecorder,
                                   Clock clock) {
@@ -72,6 +92,8 @@ public class AdminParkingController {
         this.catalogService = catalogService;
         this.spaceFormatService = spaceFormatService;
         this.scheduleService = scheduleService;
+        this.holidayCatalogService = holidayCatalogService;
+        this.tenantService = tenantService;
         this.mapper = mapper;
         this.auditRecorder = auditRecorder;
         this.clock = clock;
@@ -104,7 +126,11 @@ public class AdminParkingController {
                 request.creditOnEarlyFinishEnabled().booleanValue(),
                 request.creditMinRemainingMinutes().intValue(),
                 request.creditExpiryDays().intValue(),
-                request.graceMinutes().intValue());
+                request.graceMinutes().intValue(),
+                // Absent keeps what the municipality has, which for one that has never set it is 0.
+                request.freeMinutes() == null
+                        ? policyService.require(tenantId).getFreeMinutes()
+                        : request.freeMinutes().intValue());
         auditRecorder.record(AuditAction.PARKING_POLICY_UPDATED, "parking-policy", tenantId.toString(),
                 Map.of("sessionIncrements", policy.getSessionIncrementsMinutes(),
                         "extensionEnabled", String.valueOf(policy.isExtensionEnabled()),
@@ -367,10 +393,11 @@ public class AdminParkingController {
                     }
                 }
                 exceptions.add(new ParkingScheduleService.ExceptionEntry(
-                        exception.date(),
+                        recurrenceOf(exception),
                         exception.charges() != null && exception.charges().booleanValue(),
                         exception.chargesAllDay() != null && exception.chargesAllDay().booleanValue(),
                         exception.label(),
+                        exception.holidayCode(),
                         exceptionBands));
             }
         }
@@ -380,6 +407,167 @@ public class AdminParkingController {
                         "bands", String.valueOf(bands.size()),
                         "exceptions", String.valueOf(exceptions.size())));
         return readSchedule(tenantId);
+    }
+
+    /**
+     * The rule a submitted exception states.
+     *
+     * <p>An absent {@code recurrence} is read as {@code ONCE}, which is what every exception written
+     * before v0.31 was and what a client older than this version still sends. Reading it as anything
+     * else would turn one client's single holiday into an annual one nobody asked for.</p>
+     */
+    private static ExceptionRecurrence recurrenceOf(ParkingDtos.ChargingExceptionDto dto) {
+        HolidayObservance observance = "MONDAY".equalsIgnoreCase(dto.observance())
+                ? HolidayObservance.MONDAY
+                : HolidayObservance.EXACT;
+        String kind = dto.recurrence() == null ? "ONCE" : dto.recurrence().trim().toUpperCase(Locale.ROOT);
+        return switch (kind) {
+            case "ANNUAL" -> ExceptionRecurrence.annual(
+                    dto.month() == null ? 0 : dto.month().intValue(),
+                    dto.day() == null ? 0 : dto.day().intValue(),
+                    observance);
+            case "EASTER" -> ExceptionRecurrence.easter(
+                    dto.easterOffsetDays() == null ? 0 : dto.easterOffsetDays().intValue(), observance);
+            default -> ExceptionRecurrence.once(dto.date());
+        };
+    }
+
+    // --- a country's holidays, and a zone's own rules (CONTRACT.md v0.31) ---------------------------
+
+    /**
+     * The holidays of this municipality's country, so it does not have to type them.
+     *
+     * <p>Reference data and never a live authority: the municipality <b>copies</b> what it wants into
+     * its own exceptions, and from then on the rows are its to edit or delete. Holiday law changes,
+     * and the calendar a canton charges on is the canton's answer to give — which is also why the
+     * screen says this is a starting point and not legal advice.</p>
+     */
+    @GetMapping("/holidays")
+    @PreAuthorize("hasAuthority('PERM_TENANT_MANAGE')")
+    @Operation(summary = "The public holidays of this municipality's country, as a starting point")
+    public List<ParkingDtos.HolidayCatalogEntryDto> holidays() {
+        TenantId tenantId = TenantContextHolder.requireTenantId();
+        Tenant tenant = tenantService.require(tenantId);
+        int year = LocalDate.ofInstant(clock.instant(), scheduleService.zoneOf(tenantId)).getYear();
+        Set<String> already = new HashSet<>();
+        for (ParkingScheduleException exception : scheduleService.exceptions(tenantId)) {
+            if (exception.getHolidayCode() != null) {
+                already.add(exception.getHolidayCode());
+            }
+        }
+        List<ParkingDtos.HolidayCatalogEntryDto> result = new ArrayList<>();
+        for (HolidayCatalogEntry entry : holidayCatalogService.forCountry(tenant.getCountryCode())) {
+            result.add(new ParkingDtos.HolidayCatalogEntryDto(
+                    entry.getCode(),
+                    entry.getName(),
+                    entry.getKind().name(),
+                    entry.getMonth() == null ? null : Integer.valueOf(entry.getMonth().intValue()),
+                    entry.getDay() == null ? null : Integer.valueOf(entry.getDay().intValue()),
+                    entry.getEasterOffsetDays() == null
+                            ? null
+                            : Integer.valueOf(entry.getEasterOffsetDays().intValue()),
+                    entry.getObservance().name(),
+                    entry.observedIn(year).orElse(null),
+                    entry.observedIn(year + 1).orElse(null),
+                    already.contains(entry.getCode())));
+        }
+        return result;
+    }
+
+    @GetMapping("/zones/{id}/rules")
+    @PreAuthorize("hasAuthority('PERM_TENANT_MANAGE')")
+    @Operation(summary = "What this zone departs from the municipality in, and what it applies")
+    public ParkingDtos.ZoneRulesResponse zoneRules(@PathVariable UUID id) {
+        TenantId tenantId = TenantContextHolder.requireTenantId();
+        catalogService.requireZone(tenantId, id);
+        return readZoneRules(tenantId, id);
+    }
+
+    /**
+     * Replaces everything a zone departs in, as one form.
+     *
+     * <p>Absent means "follow the municipality", never "leave unchanged": those are opposite
+     * instructions, and a partial update could not tell them apart. A form where everything is absent
+     * puts the zone back to following in everything.</p>
+     */
+    @PutMapping("/zones/{id}/rules")
+    @PreAuthorize("hasAuthority('PERM_TENANT_MANAGE')")
+    @Operation(summary = "Give a zone rules of its own, or put it back to following the municipality")
+    public ParkingDtos.ZoneRulesResponse updateZoneRules(@PathVariable UUID id,
+                                                         @Valid @RequestBody
+                                                         ParkingDtos.UpdateZoneRulesRequest request) {
+        TenantId tenantId = TenantContextHolder.requireTenantId();
+        ParkingZone zone = catalogService.requireZone(tenantId, id);
+        policyService.replaceZone(tenantId, id,
+                request.sessionIncrementsMinutes(),
+                request.sessionMinMinutes(),
+                request.sessionMaxMinutes(),
+                request.extensionIncrementsMinutes(),
+                request.extensionMaxTotalMinutes(),
+                request.freeMinutes());
+
+        boolean ownSchedule = request.ownSchedule() != null && request.ownSchedule().booleanValue();
+        List<ParkingScheduleService.BandEntry> bands = new ArrayList<>();
+        if (ownSchedule && request.week() != null) {
+            for (ParkingDtos.ChargingDayDto day : request.week()) {
+                if (day == null || day.bands() == null) {
+                    continue;
+                }
+                for (ParkingDtos.ChargingBandDto band : day.bands()) {
+                    bands.add(new ParkingScheduleService.BandEntry(day.weekday(), band.startMinute(),
+                            band.endMinute()));
+                }
+            }
+        }
+        scheduleService.replaceZone(tenantId, id, ownSchedule,
+                request.chargesAllDay() != null && request.chargesAllDay().booleanValue(), bands);
+
+        auditRecorder.record(AuditAction.PARKING_ZONE_RULES_UPDATED, "parking-zone", id.toString(),
+                Map.of("zone", zone.getCode(),
+                        "ownSchedule", String.valueOf(ownSchedule),
+                        "sessionMax", String.valueOf(request.sessionMaxMinutes()),
+                        "freeMinutes", String.valueOf(request.freeMinutes())));
+        return readZoneRules(tenantId, id);
+    }
+
+    /** One read shared by the GET and by the answer to the PUT, so both always agree. */
+    private ParkingDtos.ZoneRulesResponse readZoneRules(TenantId tenantId, UUID zoneId) {
+        ZoneRules rules = policyService.rulesFor(tenantId, zoneId);
+        ParkingZonePolicy override = policyService.zoneOverride(tenantId, zoneId).orElse(null);
+        ParkingZoneSchedule zoneHeader = scheduleService.zoneSchedule(tenantId, zoneId).orElse(null);
+
+        Map<DayOfWeek, List<ParkingDtos.ChargingBandDto>> byDay = new EnumMap<>(DayOfWeek.class);
+        if (zoneHeader != null) {
+            for (ParkingZoneScheduleSlot slot : scheduleService.zoneSlots(zoneId)) {
+                byDay.computeIfAbsent(slot.weekday(), key -> new ArrayList<>())
+                        .add(mapper.toBand(slot.band()));
+            }
+        }
+        List<ParkingDtos.ChargingDayDto> week = new ArrayList<>(DayOfWeek.values().length);
+        for (DayOfWeek weekday : DayOfWeek.values()) {
+            week.add(new ParkingDtos.ChargingDayDto(weekday, byDay.getOrDefault(weekday, List.of())));
+        }
+
+        return new ParkingDtos.ZoneRulesResponse(
+                zoneId,
+                override != null,
+                override == null || override.sessionIncrements() == null
+                        ? null : override.sessionIncrements().values(),
+                override == null ? null : override.getSessionMinMinutes(),
+                override == null ? null : override.getSessionMaxMinutes(),
+                override == null || override.extensionIncrements() == null
+                        ? null : override.extensionIncrements().values(),
+                override == null ? null : override.getExtensionMaxTotalMinutes(),
+                override == null ? null : override.getFreeMinutes(),
+                rules.sessionIncrements().values(),
+                rules.sessionMinMinutes(),
+                rules.sessionMaxMinutes(),
+                rules.extensionIncrements().values(),
+                rules.extensionMaxTotalMinutes(),
+                rules.freeMinutes(),
+                zoneHeader != null,
+                zoneHeader != null && zoneHeader.isChargesAllDay(),
+                week);
     }
 
     /** One read shared by the GET and by the answer to the PUT, so both always agree. */

@@ -7,6 +7,7 @@ import { useTranslation, type TranslationKey } from '@luparx/i18n';
 import { ApiError, type AdminParkingZone } from '@luparx/api-client';
 import { Alert, Badge, Button, FormField, Input, Modal, Table } from '@luparx/ui';
 import { AdminShell } from '../components/AdminShell';
+import { ZoneRulesDialog } from '../components/ZoneRulesDialog';
 
 interface ZoneDraft {
   code: string;
@@ -35,6 +36,7 @@ export function ZonesPage(): React.JSX.Element {
 
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<AdminParkingZone | null>(null);
+  const [rulesFor, setRulesFor] = useState<AdminParkingZone | null>(null);
   const [draft, setDraft] = useState<ZoneDraft>(EMPTY_DRAFT);
   const [error, setError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -172,6 +174,11 @@ export function ZonesPage(): React.JSX.Element {
                   >
                     {t('admin.zones.edit')}
                   </Button>
+                  {/* The hours and the maximum stay of THIS zone (v0.31) — the two levers that
+                      actually manage rotation, and until now the same number for the whole canton. */}
+                  <Button type="button" variant="secondary" onClick={() => setRulesFor(zone)}>
+                    {t('admin.zones.action.rules')}
+                  </Button>
                   <Button type="button" variant="ghost" onClick={() => toggleMutation.mutate(zone)}>
                     {t(zone.active ? 'admin.zones.action.deactivate' : 'admin.zones.action.activate')}
                   </Button>
@@ -292,6 +299,11 @@ export function ZonesPage(): React.JSX.Element {
           </div>
         </div>
       </Modal>
+      <ZoneRulesDialog
+        zoneId={rulesFor?.id ?? null}
+        zoneName={rulesFor ? `${rulesFor.code} — ${rulesFor.name}` : ''}
+        onClose={() => setRulesFor(null)}
+      />
     </AdminShell>
   );
 }

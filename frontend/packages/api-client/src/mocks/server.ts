@@ -47,6 +47,11 @@ import {
   mockAuditEvents,
   mockIdempotencyResponses,
   mockParkingPolicyForTenant,
+  mockZoneRules,
+  mockScheduleExceptions,
+  MOCK_HOLIDAYS_CR,
+  type MockZoneRules,
+  type MockException,
   mockParkingSessions,
   mockTenantSettings,
   mockTimeCredits,
@@ -807,8 +812,73 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
       if (method === 'GET') return json(mockChargingSchedule());
       if (method === 'PUT') {
         const payload = await readBody<Record<string, unknown>>(init);
-        return json({ ...(mockChargingSchedule() as Record<string, unknown>), ...payload, updatedAt: new Date().toISOString() });
+        // Las excepciones se GUARDAN, no se devuelven de vuelta sin más: la pantalla de horario
+        // agrega feriados del catálogo y tiene que poder volver a abrirse y verlos ahí. Un simulador
+        // que sólo hiciera eco dejaría pasar el error de no persistirlos.
+        const incoming = (payload.exceptions as Record<string, unknown>[] | undefined) ?? [];
+        const recurring = incoming.filter((e) => (e.recurrence ?? 'ONCE') !== 'ONCE');
+        if (recurring.length > 60) {
+          return problem(400, 'VALIDATION_FAILED', 'Too many recurring exceptions');
+        }
+        for (const entry of incoming) {
+          const kind = (entry.recurrence as string) ?? 'ONCE';
+          // Cada forma exige exactamente sus propios datos, igual que el CHECK de la base.
+          const coherent =
+            (kind === 'ONCE' && !!entry.date) ||
+            (kind === 'ANNUAL' && entry.month != null && entry.day != null) ||
+            (kind === 'EASTER' && entry.easterOffsetDays != null);
+          if (!coherent) {
+            return problem(400, 'VALIDATION_FAILED', 'That exception says nothing about when it falls');
+          }
+        }
+        const kept = mockScheduleExceptions.filter((e) => e.tenantId !== (tenantId ?? ''));
+        mockScheduleExceptions.length = 0;
+        mockScheduleExceptions.push(...kept);
+        for (const entry of incoming) {
+          mockScheduleExceptions.push({
+            tenantId: tenantId ?? '',
+            date: (entry.date as string) ?? null,
+            charges: entry.charges === true,
+            chargesAllDay: entry.chargesAllDay === true,
+            label: (entry.label as string) ?? null,
+            bands: (entry.bands as MockException['bands']) ?? [],
+            recurrence: ((entry.recurrence as MockException['recurrence']) ?? 'ONCE'),
+            month: (entry.month as number) ?? null,
+            day: (entry.day as number) ?? null,
+            easterOffsetDays: (entry.easterOffsetDays as number) ?? null,
+            observance: ((entry.observance as MockException['observance']) ?? 'EXACT'),
+            holidayCode: (entry.holidayCode as string) ?? null,
+          });
+        }
+        const base = mockChargingSchedule() as Record<string, unknown>;
+        return json({
+          ...base,
+          chargesAllDay: payload.chargesAllDay,
+          week: payload.week ?? base.week,
+          exceptions: mockScheduleExceptions
+            .filter((e) => e.tenantId === (tenantId ?? ''))
+            .map(mockExceptionDto),
+          updatedAt: new Date().toISOString(),
+        });
       }
+    }
+
+    // --- los feriados del país (CONTRACT.md v0.31) ----------------------------------------------
+    if (resource === 'parking' && segments[4] === 'holidays' && method === 'GET') {
+      const year = new Date().getUTCFullYear();
+      const already = new Set(
+        mockScheduleExceptions
+          .filter((e) => e.tenantId === (tenantId ?? '') && e.holidayCode)
+          .map((e) => e.holidayCode as string),
+      );
+      return json(
+        MOCK_HOLIDAYS_CR.map((holiday) => ({
+          ...holiday,
+          thisYear: mockRuleDate({ ...holiday, date: null }, year),
+          nextYear: mockRuleDate({ ...holiday, date: null }, year + 1),
+          alreadyAdded: already.has(holiday.code),
+        })),
+      );
     }
 
     // --- the parking policy, read and replaced whole (CONTRACT.md v0.18) -----------------------
@@ -879,6 +949,55 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
         };
         mockExtraZones.push(zone);
         return json({ ...zone, spaceCount: 0 }, 201);
+      }
+      // .../zones/{id}/rules — en qué se aparta una zona (CONTRACT.md v0.31).
+      if (segments.length === 7 && segments[6] === 'rules') {
+        const zoneId = segments[5]!;
+        if (!mockAdminZones(tenantId).some((z) => z.id === zoneId)) {
+          return problem(404, 'PARKING_ZONE_NOT_FOUND', 'Zone not found');
+        }
+        if (method === 'GET') return json(mockZoneRulesDto(zoneId, tenantId));
+        if (method === 'PUT') {
+          const payload = await readBody<Record<string, unknown>>(init);
+          const policy = mockParkingPolicyForTenant(tenantId);
+          const min = payload.sessionMinMinutes as number | undefined;
+          const max = payload.sessionMaxMinutes as number | undefined;
+          const free = payload.freeMinutes as number | undefined;
+          if (min != null && max != null && max < min) {
+            return problem(400, 'VALIDATION_FAILED', 'Invalid', undefined, [
+              { field: 'sessionMaxMinutes', code: 'VALIDATION_FAILED', message: 'Invalid' },
+            ]);
+          }
+          // La cortesía se compara contra el máximo RESUELTO, no contra ninguno: una zona que sólo
+          // se apartó en la cortesía sigue sujeta al máximo de la municipalidad.
+          if (free != null && free > (max ?? policy.sessionMaxMinutes)) {
+            return problem(400, 'VALIDATION_FAILED', 'Invalid', undefined, [
+              { field: 'freeMinutes', code: 'VALIDATION_FAILED', message: 'Invalid' },
+            ]);
+          }
+          const next: MockZoneRules = {
+            zoneId,
+            tenantId: tenantId ?? '',
+            sessionIncrementsMinutes: (payload.sessionIncrementsMinutes as number[]) ?? null,
+            sessionMinMinutes: min ?? null,
+            sessionMaxMinutes: max ?? null,
+            extensionIncrementsMinutes: (payload.extensionIncrementsMinutes as number[]) ?? null,
+            extensionMaxTotalMinutes: (payload.extensionMaxTotalMinutes as number) ?? null,
+            freeMinutes: free ?? null,
+            ownSchedule: payload.ownSchedule === true,
+            chargesAllDay: payload.chargesAllDay === true,
+            week: (payload.week as MockZoneRules['week']) ?? [],
+          };
+          const departsInNothing =
+            next.sessionIncrementsMinutes === null && next.sessionMinMinutes === null &&
+            next.sessionMaxMinutes === null && next.extensionIncrementsMinutes === null &&
+            next.extensionMaxTotalMinutes === null && next.freeMinutes === null;
+          const index = mockZoneRules.findIndex((r) => r.zoneId === zoneId && r.tenantId === tenantId);
+          if (index >= 0) mockZoneRules.splice(index, 1);
+          // Una fila que no dice nada es una fila que alguien va a leer algún día como si dijera algo.
+          if (!departsInNothing || next.ownSchedule) mockZoneRules.push(next);
+          return json(mockZoneRulesDto(zoneId, tenantId));
+        }
       }
       if (method === 'PUT' && segments.length === 6) {
         const payload = await readBody<{ name: string; description?: string; active: boolean }>(init);
@@ -1839,7 +1958,14 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
 
       if (sub === 'quote' && method === 'POST') {
         const payload = await readBody<ParkingQuoteRequest>(init);
-        return json(toWireQuote(computeMockQuote(payload.zoneId, payload.minutes, userId, tenantId)));
+        // La placa se resuelve como la resuelve el inicio de una sesión: la de un vehículo
+        // registrado sale del registro y nunca de la petición, para que nadie reclame la cortesía
+        // de otro.
+        const quotePlate = payload.vehicleId
+          ? (mockVehicles.find((v) => v.id === payload.vehicleId && v.userId === userId)?.plate ?? null)
+          : (payload.plate ?? null);
+        return json(toWireQuote(computeMockQuote(payload.zoneId, payload.minutes, userId, tenantId,
+          quotePlate)));
       }
 
       // The charging schedule this mock municipality runs on: Monday to Saturday 07:00–18:00, no
@@ -2918,8 +3044,26 @@ function zoneNameForId(zoneId: string): string {
 }
 
 /** Server-side quote math (CONTRACT.md v0.2 §Invariantes — always computed here, never trusted from the client). */
-function computeMockQuote(zoneId: string, minutes: number, userId: string, tenantId: string | null): ParkingQuoteResponse {
+function computeMockQuote(zoneId: string, minutes: number, userId: string, tenantId: string | null,
+                         plate?: string | null): ParkingQuoteResponse {
   const rate = mockZoneRate(zoneId, tenantId);
+  // Cortesía (CONTRACT.md v0.31): sólo se puede contestar si se sabe la placa, porque el límite es
+  // por placa. Sin placa la cotización devuelve el precio, que es la respuesta honesta.
+  const rules = mockZoneRulesDto(zoneId, tenantId) as Record<string, unknown>;
+  const freeMinutes = (rules.effectiveFreeMinutes as number) ?? 0;
+  if (plate && freeMinutes > 0 && minutes <= freeMinutes && !mockCourtesyUsedToday(tenantId, plate)) {
+    // Ni dinero ni minutos guardados: los minutos que el ciudadano ya pagó una vez no se queman en
+    // tiempo gratis.
+    return {
+      minutes,
+      chargeableMinutes: 0,
+      amountMinor: 0,
+      currencyCode: rate.currencyCode,
+      creditMinutesApplied: 0,
+      payableMinutes: 0,
+      payableMinor: 0,
+    };
+  }
   const amountMinor = Math.round(rate.rateMinorPerMinute * minutes);
   const availableCreditMinutes = availableMockCreditMinutes(walletKey(userId, tenantId ?? ''));
   const creditMinutesApplied = Math.min(availableCreditMinutes, minutes);
@@ -2937,6 +3081,25 @@ function computeMockQuote(zoneId: string, minutes: number, userId: string, tenan
   };
 }
 
+/**
+ * Si esta placa ya usó su cortesía hoy, en el día natural de la municipalidad.
+ *
+ * Por PLACA y no por cuenta —la bahía la ocupa un carro—, por MUNICIPALIDAD y no por zona —moverse
+ * una cuadra para reiniciar el cuarto de hora es justo el abuso que el límite existe para impedir—
+ * y por DÍA NATURAL y no por ventana móvil, porque «una vez al día» es una frase que una persona
+ * puede predecir y «veinticuatro horas rodantes» es un problema de aritmética sobre ayer.
+ */
+function mockCourtesyUsedToday(tenantId: string | null, plate: string): boolean {
+  const today = new Date().toISOString().slice(0, 10);
+  return mockParkingSessions.some(
+    (session) =>
+      session.tenantId === tenantId &&
+      normalizeMockPlate(session.plateSnapshot ?? '') === normalizeMockPlate(plate) &&
+      session.courtesy === true &&
+      (session.startedAt ?? '').slice(0, 10) === today,
+  );
+}
+
 /** Domain quote → the server's wire shape (money in `MoneyDto` pairs). */
 function toWireQuote(quote: ParkingQuoteResponse): unknown {
   return {
@@ -2950,6 +3113,104 @@ function toWireQuote(quote: ParkingQuoteResponse): unknown {
 }
 
 const MOCK_WEEKDAYS = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'] as const;
+
+/**
+ * Domingo de Resurrección, por el computus gregoriano anónimo.
+ *
+ * La misma aritmética que el servidor, escrita aquí porque el simulador tiene que llegar a la misma
+ * fecha: si difirieran por un día, una pantalla mostraría Viernes Santo el jueves y nadie lo notaría
+ * hasta que se cobrara un feriado en la calle.
+ */
+function mockEasterSunday(year: number): Date {
+  const a = year % 19;
+  const b = Math.floor(year / 100);
+  const c = year % 100;
+  const d = Math.floor(b / 4);
+  const e = b % 4;
+  const f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4);
+  const k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31);
+  const day = ((h + l - 7 * m + 114) % 31) + 1;
+  return new Date(Date.UTC(year, month - 1, day));
+}
+
+function mockObserved(nominal: Date, observance: 'EXACT' | 'MONDAY'): Date {
+  if (observance !== 'MONDAY') return nominal;
+  const shifted = new Date(nominal);
+  // El lunes en o después de la fecha: uno que ya cae lunes se queda donde está.
+  const forward = (8 - shifted.getUTCDay()) % 7;
+  shifted.setUTCDate(shifted.getUTCDate() + (shifted.getUTCDay() === 1 ? 0 : forward));
+  return shifted;
+}
+
+const mockIsoDate = (date: Date): string => date.toISOString().slice(0, 10);
+
+/** La fecha en que cae una regla, para el año dado. Null cuando no cae en ninguna real. */
+function mockRuleDate(
+  rule: { kind?: string; recurrence?: string; month: number | null; day: number | null;
+          easterOffsetDays: number | null; observance: 'EXACT' | 'MONDAY'; date?: string | null },
+  year: number,
+): string | null {
+  const kind = rule.kind ?? rule.recurrence ?? 'ONCE';
+  if (kind === 'ONCE') return rule.date ?? null;
+  let nominal: Date;
+  if (kind === 'EASTER') {
+    nominal = mockEasterSunday(year);
+    nominal.setUTCDate(nominal.getUTCDate() + (rule.easterOffsetDays ?? 0));
+  } else {
+    if (rule.month === null || rule.day === null) return null;
+    nominal = new Date(Date.UTC(year, rule.month - 1, rule.day));
+    if (nominal.getUTCMonth() !== rule.month - 1) return null;
+  }
+  return mockIsoDate(mockObserved(nominal, rule.observance));
+}
+
+/** Lo que el servidor devuelve por cada excepción, con `nextDate` ya calculado. */
+function mockExceptionDto(exception: MockException): unknown {
+  const year = new Date().getUTCFullYear();
+  const nextDate = mockRuleDate(exception, year) ?? mockRuleDate(exception, year + 1);
+  return { ...exception, tenantId: undefined, nextDate };
+}
+
+const mockEmptyWeek = () => MOCK_WEEKDAYS.map((weekday) => ({ weekday, bands: [] as unknown[] }));
+
+/** Lo que aplica en una zona: lo de la municipalidad con lo que la zona se aparte encima. */
+function mockZoneRulesDto(zoneId: string, tenantId: string | null): unknown {
+  const policy = mockParkingPolicyForTenant(tenantId);
+  const override = mockZoneRules.find((r) => r.zoneId === zoneId && r.tenantId === tenantId) ?? null;
+  const effectiveMax = override?.sessionMaxMinutes ?? policy.sessionMaxMinutes;
+  return {
+    zoneId,
+    hasOwnRules: override !== null,
+    overrideSessionIncrementsMinutes: override?.sessionIncrementsMinutes ?? null,
+    overrideSessionMinMinutes: override?.sessionMinMinutes ?? null,
+    overrideSessionMaxMinutes: override?.sessionMaxMinutes ?? null,
+    overrideExtensionIncrementsMinutes: override?.extensionIncrementsMinutes ?? null,
+    overrideExtensionMaxTotalMinutes: override?.extensionMaxTotalMinutes ?? null,
+    overrideFreeMinutes: override?.freeMinutes ?? null,
+    effectiveSessionIncrementsMinutes:
+      override?.sessionIncrementsMinutes ?? policy.sessionIncrementsMinutes,
+    effectiveSessionMinMinutes: override?.sessionMinMinutes ?? policy.sessionMinMinutes,
+    effectiveSessionMaxMinutes: effectiveMax,
+    effectiveExtensionIncrementsMinutes:
+      override?.extensionIncrementsMinutes ?? policy.extensionIncrementsMinutes,
+    // El techo de la extensión nunca sube por encima del máximo de la zona: extender un carro más
+    // allá del máximo que la zona puso es justo lo que ese máximo existe para impedir.
+    effectiveExtensionMaxTotalMinutes: Math.max(
+      effectiveMax,
+      override?.extensionMaxTotalMinutes ?? policy.extensionMaxTotalMinutes,
+    ),
+    effectiveFreeMinutes: override?.freeMinutes ?? policy.freeMinutes ?? 0,
+    hasOwnSchedule: override?.ownSchedule ?? false,
+    chargesAllDay: override?.chargesAllDay ?? false,
+    week: override?.ownSchedule ? override.week : mockEmptyWeek(),
+  };
+}
 
 /** Monday–Saturday 07:00–18:00, Sunday free — CONTRACT.md v0.3's default charging schedule. */
 function mockChargingSchedule(): unknown {
@@ -2976,7 +3237,9 @@ function mockChargingSchedule(): unknown {
       weekday,
       bands: weekday === 'SUNDAY' ? [] : [band],
     })),
-    exceptions: [],
+    exceptions: mockScheduleExceptions
+      .filter((e) => e.tenantId === 'tenant-sanjose')
+      .map(mockExceptionDto),
     chargingNow,
     nextChargingStartsAt: chargingNow ? null : next.toISOString(),
     updatedAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
@@ -2986,22 +3249,36 @@ function mockChargingSchedule(): unknown {
 function mockCitizenZones(tenantId: string | null): unknown {
   // `spaceCodes` summarises the bays the zone actually holds, so the citizen's field can state the
   // range instead of letting a code be guessed and refused at submit.
+  //
+  // Cada zona lleva además LAS REGLAS QUE APLICAN EN ELLA (CONTRACT.md v0.31): una zona puede vender
+  // otras duraciones y otro máximo que su municipalidad, y un cliente que ofreciera la lista de
+  // `GET /policy` le mostraría al ciudadano una duración que el inicio va a rechazar.
+  const withRules = (zone: Record<string, unknown>) => {
+    const rules = mockZoneRulesDto(zone.id as string, tenantId) as Record<string, unknown>;
+    return {
+      ...zone,
+      sessionIncrementsMinutes: rules.effectiveSessionIncrementsMinutes,
+      sessionMinMinutes: rules.effectiveSessionMinMinutes,
+      sessionMaxMinutes: rules.effectiveSessionMaxMinutes,
+      freeMinutes: rules.effectiveFreeMinutes,
+    };
+  };
   return tenantId === 'tenant-escazu'
     ? [
-        {
+        withRules({
           id: 'zone-escazu-centro',
           code: 'ESC-CENTRO',
           name: 'Centro',
           spaceCodes: { first: 'LUP-0001', last: 'LUP-0040', count: 40 },
-        },
+        }),
       ]
     : [
-        {
+        withRules({
           id: 'zone-centro',
           code: 'SJ-CENTRO',
           name: 'Centro',
           spaceCodes: { first: 'LUP-0001', last: 'LUP-0050', count: 50 },
-        },
+        }),
       ];
 }
 

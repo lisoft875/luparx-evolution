@@ -2624,3 +2624,152 @@ Dos consecuencias que se sostienen a propósito:
   Convertir de callado el «exonere esta placa» de un cliente viejo en «pídale a alguien que la
   exonere» dejaría multando un vehículo que su operador cree exonerado, que es peor que una rama
   heredada y honesta que desaparece en la contracción.
+
+---
+
+# v0.31 — Zonas y tarifas configurables (normativo)
+
+Casi todo lo que pide este punto ya existía —zonas, tarifa por zona con escalera de duraciones,
+fracciones, horario, días de cobro, feriados, tiempo máximo— y por eso el trabajo de esta versión no
+fue agregar campos sino arreglar **dónde vivían**.
+
+## Estaba al revés
+
+La TARIFA era lo único configurable por zona. El horario, los días de cobro, las fracciones y el
+tiempo máximo eran de toda la municipalidad.
+
+Pero la tarifa es la palanca que la gente nombra, y el **horario** y el **tiempo máximo** son las que
+de verdad manejan la rotación: el centro histórico necesita dos horas de máximo y cobrar de seis de
+la mañana a ocho de la noche, y la zona del hospital necesita veinticuatro horas. Hasta v0.31 tenían
+que compartir el mismo número.
+
+`parking_zone_policies` y `parking_zone_schedules` lo arreglan, con dos formas de herencia distintas
+y a propósito:
+
+* **Por columna** para los números. Una columna nula significa «lo que diga la municipalidad», así
+  que subir el máximo de la municipalidad sigue moviendo a toda zona que no se haya apartado.
+  Copiar los valores al crear la zona habría dejado a cada una congelada en lo que era cierto el día
+  que se creó, y de eso nadie se entera hasta que audita.
+* **Por tabla** para el horario. Un horario no se hereda a medias: o la zona tiene sus franjas o usa
+  las de la municipalidad, y que exista la fila de encabezado es lo que dice cuál de las dos. Un
+  encabezado sin ninguna franja es una **zona gratuita**, que es configuración legítima y que hasta
+  hoy no se podía expresar.
+
+Lo que **no** puede cambiar una zona es tan deliberado como lo que sí: si se puede extender, si se
+puede terminar antes, si los minutos sobrantes vuelven como crédito y cuál es la tolerancia del
+fiscalizador siguen siendo de la municipalidad. Eso es lo que el producto le promete al ciudadano, no
+una palanca de rotación; una municipalidad donde una zona devuelve minutos y la de al lado no, sin
+que el ciudadano pueda saberlo antes de parquear, es una promesa rota y no una configuración.
+
+**El techo de la extensión nunca sube por encima del máximo de la zona.** Una zona que bajó su
+máximo a dos horas y heredó un techo de doce dejaría que una extensión llevara el carro más allá de
+lo que esa zona puso — que es exactamente lo que ese máximo existe para impedir.
+
+`ZoneRules` resuelve la herencia **en un solo lugar** y todo lo demás lee un número. La alternativa
+—que cada llamador busque la fila de la zona y caiga hacia atrás a la de la municipalidad— es el
+mismo condicional de tres líneas escrito en seis lados, y el día que a uno se le olvide el respaldo,
+una zona queda en silencio con un máximo de cero.
+
+Nada de esto sirve si el ciudadano no lo ve: `GET /citizen/parking/zones` ahora lleva las duraciones,
+el mínimo, el máximo y la cortesía **de cada zona**, y la app ofrece esas y no las de `GET /policy`.
+Un cliente que siguiera leyendo la política de la municipalidad le mostraría al ciudadano una
+duración que el inicio va a rechazar.
+
+## Los feriados se escriben una vez
+
+Se digitaban fecha por fecha, sin repetición: alguien tenía que volver a escribir los once feriados
+del país cada diciembre, para cada municipalidad. El diciembre que se le olvidara, la plataforma
+cobraba el 15 de setiembre.
+
+Una excepción ahora guarda una **regla** y no una fecha:
+
+| `recurrence` | Qué dice | Para qué |
+| --- | --- | --- |
+| `ONCE` | una fecha concreta | lo que significaba toda excepción antes de v0.31 |
+| `ANNUAL` | un día del año | «el 15 de setiembre, todos los años» |
+| `EASTER` | días respecto al Domingo de Resurrección | Jueves y Viernes Santo, que se mueven |
+
+Se guarda la regla y no las fechas expandidas: veinte años de «15 de setiembre» son veinte copias de
+una decisión, y el día que cambie la ley habría que reescribir filas que describen lo que ya se
+cobró. `observance` va aparte (`EXACT` / `MONDAY`) porque trasladar al lunes es una decisión sobre
+**cuándo se observa** una fecha que ya sabemos calcular, no sobre cómo se calcula — y así un país que
+no traslada nada usa las mismas filas.
+
+Cuando dos reglas caen el mismo día, **gana la fecha concreta**. Una fecha que alguien digitó a
+propósito es más específica que una regla que además la produce, que es un hecho sobre las dos filas
+y no una preferencia que alguien configuró — el mismo argumento con el que la escalera de precios
+desempata en v0.24.
+
+`holiday_catalog` trae los feriados de cada país como reglas, en `module-geo`, porque los feriados
+son un hecho del país y no del parqueo. La municipalidad los **copia** a sus propias excepciones y
+desde ese momento son filas suyas: la pantalla dice, con esas palabras, que es un punto de partida y
+no asesoría legal, porque la ley de feriados cambia y el calendario de cobro de un cantón es del
+cantón. Por eso también el catálogo se copia en vez de leerse en vivo al cotizar: editar o borrar uno
+no puede depender de que la plataforma esté de acuerdo. `module-parking` no depende de `module-geo`.
+
+`Easter` vive en `platform-core` porque `module-geo` y `module-parking` necesitan la misma respuesta:
+dos implementaciones que difirieran por un día cobrarían el Viernes Santo en una pantalla y no en la
+otra.
+
+## Minutos de cortesía
+
+Los primeros minutos de una estadía no se cobran, para que el que se baja a dejar algo no pague. En
+un modelo de prepago eso significa una cosa concreta: el ciudadano puede iniciar una **estadía
+gratuita** que no pase de la cortesía de la zona, y no sale nada de su billetera ni de sus minutos
+guardados — los minutos que ya pagó una vez no se queman en tiempo gratis.
+
+Minutos gratis sin límite no son cortesía, son parqueo gratis: salirse y volver a entrar cada cuarto
+de hora sostiene una bahía todo el día, y la bahía es lo escaso que la municipalidad administra. El
+límite es **una estadía de cortesía por placa y día natural**, en la zona horaria de la
+municipalidad. Tres decisiones dentro de esa frase, y cada una pudo haber sido al revés:
+
+* **Por placa**, no por cuenta: la bahía la ocupa un carro. Contar por cuenta dejaría que las tres
+  del mismo hogar tomaran tres bahías gratis, y castigaría a quien anda una vez en un carro prestado.
+* **Por municipalidad**, no por zona: moverse una cuadra para reiniciar el cuarto de hora es el abuso
+  obvio, y es para el que existe el límite.
+* **Por día natural**, no por ventana móvil: «una vez al día» es una frase que alguien en una
+  ventanilla puede decir y un ciudadano puede predecir. Veinticuatro horas rodantes es más justo en
+  abstracto e inexplicable en la práctica — la respuesta a «¿por qué no puedo?» se vuelve un problema
+  de aritmética sobre ayer por la tarde.
+
+La cortesía se decide **al iniciar** y no al cotizar, porque la cotización no sabe la placa y esta
+regla es sobre la placa. Por eso `POST /citizen/parking/quote` acepta ahora `vehicleId` o `plate`,
+opcionales, y sólo pueden abaratar la respuesta: sin ellos la cotización no puede saber si la estadía
+sale gratis y contesta con el precio. Un cliente que dice de qué carro se trata ve el precio que se
+le va a cobrar, que es el punto — una pantalla que dice ₡500 y no cobra nada es un problema menor que
+una que dice ₡0 y cobra, pero las dos son la pantalla mintiendo.
+
+La marca queda en la estadía (`parking_sessions.courtesy`) y no en un libro aparte: «¿esta placa ya
+usó su cortesía hoy?» es una pregunta sobre estadías que ya existen, no un hecho nuevo que registrar
+en otro lado.
+
+## La API
+
+| Método | Ruta | Permiso |
+| --- | --- | --- |
+| `GET` | `/api/v1/admin/parking/zones/{id}/rules` | `TENANT_MANAGE` |
+| `PUT` | `/api/v1/admin/parking/zones/{id}/rules` | `TENANT_MANAGE` |
+| `GET` | `/api/v1/admin/parking/holidays` | `TENANT_MANAGE` |
+
+En el `PUT`, **ausente significa «seguir a la municipalidad»** y nunca «dejar como estaba»: son
+instrucciones opuestas y una actualización parcial no podría distinguirlas. Un cuerpo donde todo está
+ausente devuelve la zona a seguir en todo, y su fila se borra en vez de quedarse llena de nulos —
+una fila que no dice nada es una fila que alguien va a leer algún día como si dijera algo.
+
+Se auditan aparte de la política de la municipalidad (`PARKING_ZONE_RULES_UPDATED`) porque contestan
+otra pregunta: «¿por qué esta zona cobró hasta las diez cuando el resto del cantón paró a las seis?»
+se pregunta sobre una zona, y la entrada la nombra.
+
+`free-minutes` es cero por omisión en la configuración de despliegue, que es lo que toda
+municipalidad tenía antes: regalar tiempo tiene un costo de ingresos y es una decisión de cada
+municipalidad, no algo que la plataforma conceda de oficio en nombre de otro.
+
+## Fase de expansión (ADR 0010)
+
+Nada se borra ni se renombra. `exception_date` deja de ser obligatoria pero sigue ahí y sigue siendo
+lo único que llevan las excepciones `ONCE`; una excepción sin `recurrence` se lee como `ONCE`, que es
+lo que significaba antes de v0.31 y lo que sigue mandando un cliente más viejo. Leerla como otra cosa
+convertiría el feriado único de alguien en uno anual que nadie pidió.
+
+Los índices únicos de fecha pasan a ser parciales, uno por forma: sólo pueden hablar de las filas que
+tienen fecha.

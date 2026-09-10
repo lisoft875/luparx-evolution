@@ -119,6 +119,11 @@ public final class ParkingDtos {
             int creditMinRemainingMinutes,
             int creditExpiryDays,
             int graceMinutes,
+            /**
+             * Minutes of courtesy at the start of a stay (v0.31); 0 means none. Granted once per
+             * plate per calendar day, so a client must not present it as "always the first N free".
+             */
+            int freeMinutes,
             Instant updatedAt) {
     }
 
@@ -134,13 +139,24 @@ public final class ParkingDtos {
             @NotNull Boolean creditOnEarlyFinishEnabled,
             @NotNull @Min(0) Integer creditMinRemainingMinutes,
             @NotNull @Min(0) Integer creditExpiryDays,
-            @NotNull @Min(0) Integer graceMinutes) {
+            @NotNull @Min(0) Integer graceMinutes,
+            /** Optional: absent keeps whatever the municipality has, which for most of them is 0. */
+            @Min(0) Integer freeMinutes) {
     }
 
     // --- quote -----------------------------------------------------------------------------------
 
-    /** {@code POST /citizen/parking/quote}. */
-    public record QuoteRequest(@NotNull UUID zoneId, @NotNull @Min(1) Integer minutes) {
+    /**
+     * {@code POST /citizen/parking/quote}.
+     *
+     * <p>Since v0.31 the caller may say which car it is for, and it only ever makes the answer
+     * cheaper: courtesy is limited per plate, so without one the quote cannot tell whether this stay
+     * would be free and answers with the price. Exactly one of the two may be given — a registered
+     * vehicle of the caller's, or a plate typed for somebody else's car — and giving neither is the
+     * pre-v0.31 behaviour, unchanged.</p>
+     */
+    public record QuoteRequest(@NotNull UUID zoneId, @NotNull @Min(1) Integer minutes,
+                               UUID vehicleId, @Size(max = 32) String plate) {
     }
 
     /**
@@ -179,7 +195,24 @@ public final class ParkingDtos {
             String name,
             String description,
             ParkingRateSummary rate,
-            SpaceCodeRange spaceCodes) {
+            SpaceCodeRange spaceCodes,
+            // --- the rules of THIS zone (CONTRACT.md v0.31) --------------------------------------
+            /**
+             * The durations sold here, which may not be the municipality's: since v0.31 a zone can
+             * depart. A client must offer these and not the ones from {@code GET /policy}, or it will
+             * show a citizen a duration the start refuses.
+             */
+            List<Integer> sessionIncrementsMinutes,
+            int sessionMinMinutes,
+            /** The longest a car may hold a bay here — two hours downtown, more on the edges. */
+            int sessionMaxMinutes,
+            /**
+             * Minutes of courtesy in this zone; 0 means none. Granted <b>once per plate per day</b>,
+             * so a client must say "the first N minutes are free once a day" and never promise them on
+             * every stay. Whether this particular car still has its courtesy is answered by the quote,
+             * which is the only place that knows the plate.
+             */
+            int freeMinutes) {
     }
 
     /**
@@ -534,20 +567,109 @@ public final class ParkingDtos {
     }
 
     /**
-     * A dated exception.
+     * One exception to the weekly timetable.
      *
-     * @param date          local date in the municipality's zone
+     * <p>Since v0.31 it carries a <b>rule</b> rather than only a date, so a municipality writes its
+     * holidays once instead of every December. {@code date} is filled only for {@code ONCE};
+     * {@code month}/{@code day} for {@code ANNUAL}; {@code easterOffsetDays} for {@code EASTER}. The
+     * server also returns {@code nextDate}, the next day this rule actually lands on, because a person
+     * reading a screen should not have to evaluate a recurrence in their head.</p>
+     *
+     * @param date          local date in the municipality's zone; only for {@code ONCE}
      * @param charges       false — the usual case — is a holiday: nothing is charged that day
      * @param chargesAllDay that day is charged around the clock
      * @param label         tenant content naming it; never a translated label
      * @param bands         its own bands; empty means "as usual", i.e. the weekday bands
      */
     public record ChargingExceptionDto(
-            @NotNull LocalDate date,
+            LocalDate date,
             @NotNull Boolean charges,
             Boolean chargesAllDay,
             @Size(max = 120) String label,
-            List<ChargingBandDto> bands) {
+            List<ChargingBandDto> bands,
+            // --- v0.31 --------------------------------------------------------------------------
+            /** {@code ONCE}, {@code ANNUAL} or {@code EASTER}; absent is read as {@code ONCE}. */
+            String recurrence,
+            @Min(1) @Max(12) Integer month,
+            @Min(1) @Max(31) Integer day,
+            @Min(-180) @Max(180) Integer easterOffsetDays,
+            /** {@code EXACT} or {@code MONDAY}; absent is read as {@code EXACT}. */
+            String observance,
+            /** Which catalogue entry it was copied from. Provenance only; never a live link. */
+            @Size(max = 48) String holidayCode,
+            /** Read-only: the next date this rule lands on, so nobody has to work it out on screen. */
+            LocalDate nextDate) {
+    }
+
+    // --- a country's holidays, and a zone's own rules (CONTRACT.md v0.31) ---------------------------
+
+    /**
+     * One holiday of the municipality's country, with the date it falls on this year and the next.
+     *
+     * <p>{@code alreadyAdded} is what stops a screen from offering the same holiday twice. It is
+     * computed against the exceptions the municipality already has, by {@code code}: once copied, the
+     * rule is the municipality's to edit and this catalogue has no further say over it.</p>
+     */
+    public record HolidayCatalogEntryDto(
+            String code,
+            String name,
+            String kind,
+            Integer month,
+            Integer day,
+            Integer easterOffsetDays,
+            String observance,
+            LocalDate thisYear,
+            LocalDate nextYear,
+            boolean alreadyAdded) {
+    }
+
+    /**
+     * What a zone departs from its municipality in, and what it therefore ends up applying.
+     *
+     * <p>The {@code override*} fields are null when the zone follows the municipality on that point;
+     * the {@code effective*} fields are always filled, because that is what the screen has to show a
+     * person deciding whether to depart at all.</p>
+     */
+    public record ZoneRulesResponse(
+            UUID zoneId,
+            boolean hasOwnRules,
+            List<Integer> overrideSessionIncrementsMinutes,
+            Integer overrideSessionMinMinutes,
+            Integer overrideSessionMaxMinutes,
+            List<Integer> overrideExtensionIncrementsMinutes,
+            Integer overrideExtensionMaxTotalMinutes,
+            Integer overrideFreeMinutes,
+            List<Integer> effectiveSessionIncrementsMinutes,
+            int effectiveSessionMinMinutes,
+            int effectiveSessionMaxMinutes,
+            List<Integer> effectiveExtensionIncrementsMinutes,
+            int effectiveExtensionMaxTotalMinutes,
+            int effectiveFreeMinutes,
+            /** Whether the zone keeps its own timetable; false means it follows the municipality's. */
+            boolean hasOwnSchedule,
+            boolean chargesAllDay,
+            List<ChargingDayDto> week) {
+    }
+
+    /**
+     * {@code PUT /admin/parking/zones/{id}/rules} — everything a zone departs in, as one form.
+     *
+     * <p>Every field is optional and <b>absent means "follow the municipality"</b>, not "leave
+     * unchanged": those are opposite instructions and a partial update could not tell them apart. A
+     * form where everything is absent puts the zone back to following in everything, and its row is
+     * deleted rather than kept full of nulls.</p>
+     */
+    public record UpdateZoneRulesRequest(
+            List<Integer> sessionIncrementsMinutes,
+            @Min(1) Integer sessionMinMinutes,
+            @Min(1) Integer sessionMaxMinutes,
+            List<Integer> extensionIncrementsMinutes,
+            @Min(1) Integer extensionMaxTotalMinutes,
+            @Min(0) Integer freeMinutes,
+            /** True gives the zone its own timetable; false takes it away and it follows again. */
+            Boolean ownSchedule,
+            Boolean chargesAllDay,
+            List<ChargingDayDto> week) {
     }
 
     /** {@code GET /admin/parking/schedule} and {@code GET /citizen/parking/schedule}. */

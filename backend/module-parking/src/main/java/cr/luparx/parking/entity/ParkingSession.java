@@ -102,6 +102,15 @@ public class ParkingSession {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    /**
+     * This stay was given as a courtesy and was not charged (V30_0 — CONTRACT.md v0.31).
+     *
+     * <p>On the stay and not in a ledger of its own, because "has this plate had its courtesy today"
+     * is a question about stays that already exist rather than a new fact to record somewhere else.</p>
+     */
+    @Column(name = "courtesy", nullable = false)
+    private boolean courtesy;
+
     @Version
     @Column(name = "version", nullable = false)
     private long version;
@@ -228,6 +237,15 @@ public class ParkingSession {
 
     public Instant getUpdatedAt() {
         return updatedAt;
+    }
+
+    public boolean isCourtesy() {
+        return courtesy;
+    }
+
+    /** Set once, as the stay is created. A stay never becomes a courtesy one afterwards. */
+    public void markCourtesy() {
+        this.courtesy = true;
     }
 
     public long getVersion() {

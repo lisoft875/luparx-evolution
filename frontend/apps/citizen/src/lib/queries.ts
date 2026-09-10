@@ -109,11 +109,28 @@ export function useActiveParkingSessions(): UseQueryResult<ParkingSession[]> {
 }
 
 /** Live quote for the zone/duration currently selected in the parking flow — server-computed, never estimated client-side (CONTRACT.md v0.2 §Invariantes). */
-export function useParkingQuote(zoneId: string | null, minutes: number | null): UseQueryResult<ParkingQuoteResponse> {
+export function useParkingQuote(
+  zoneId: string | null,
+  minutes: number | null,
+  /**
+   * Which car it is for, when the flow already knows (v0.31). Courtesy is limited per plate, so a
+   * quote that does not name one cannot say whether the stay is free — and the price on the screen
+   * would then not be the price charged. It is part of the cache key for the same reason.
+   */
+  vehicleId?: string | null,
+  plate?: string | null,
+): UseQueryResult<ParkingQuoteResponse> {
   const { apiClient } = useAuth();
+  const forCar = vehicleId ?? plate ?? '';
   return useQuery({
-    queryKey: KEYS.quote(zoneId ?? '', minutes ?? 0),
-    queryFn: () => apiClient.citizenParking.quote({ zoneId: zoneId!, minutes: minutes! }),
+    queryKey: [...KEYS.quote(zoneId ?? '', minutes ?? 0), forCar],
+    queryFn: () =>
+      apiClient.citizenParking.quote({
+        zoneId: zoneId!,
+        minutes: minutes!,
+        ...(vehicleId ? { vehicleId } : {}),
+        ...(!vehicleId && plate ? { plate } : {}),
+      }),
     enabled: Boolean(zoneId) && Boolean(minutes) && minutes! > 0,
   });
 }
@@ -131,12 +148,21 @@ export function useParkingQuote(zoneId: string | null, minutes: number | null): 
 export function useParkingQuotes(
   zoneId: string | null,
   minutesList: number[],
+  vehicleId?: string | null,
+  plate?: string | null,
 ): Map<number, ParkingQuoteResponse> {
   const { apiClient } = useAuth();
+  const forCar = vehicleId ?? plate ?? '';
   const results = useQueries({
     queries: minutesList.map((minutes) => ({
-      queryKey: KEYS.quote(zoneId ?? '', minutes),
-      queryFn: () => apiClient.citizenParking.quote({ zoneId: zoneId as string, minutes }),
+      queryKey: [...KEYS.quote(zoneId ?? '', minutes), forCar],
+      queryFn: () =>
+        apiClient.citizenParking.quote({
+          zoneId: zoneId as string,
+          minutes,
+          ...(vehicleId ? { vehicleId } : {}),
+          ...(!vehicleId && plate ? { plate } : {}),
+        }),
       enabled: Boolean(zoneId) && minutes > 0,
       staleTime: 60_000,
     })),

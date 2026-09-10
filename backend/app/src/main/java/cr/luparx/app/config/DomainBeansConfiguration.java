@@ -109,7 +109,8 @@ public class DomainBeansConfiguration {
                 properties.creditOnEarlyFinishEnabledOrDefault(),
                 properties.creditMinRemainingOrDefault(),
                 properties.creditExpiryDaysOrDefault(),
-                properties.graceMinutesOrDefault());
+                properties.graceMinutesOrDefault(),
+                properties.freeMinutesOrDefault());
     }
 
     /**

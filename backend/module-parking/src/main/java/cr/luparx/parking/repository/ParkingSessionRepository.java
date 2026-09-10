@@ -85,4 +85,14 @@ public interface ParkingSessionRepository extends JpaRepository<ParkingSession, 
                                              @Param("since") Instant since);
 
     long countByTenantIdAndStatus(UUID tenantId, ParkingSessionStatus status);
+
+    /**
+     * Whether this plate already took its courtesy stay inside this window (CONTRACT.md v0.31).
+     *
+     * <p>The window is the municipality's own calendar day, computed by the caller in its time zone:
+     * a midnight is a local fact, and a day that turned over at seven in the evening would be
+     * unexplainable to the person standing at the bay.</p>
+     */
+    boolean existsByTenantIdAndPlateSnapshotAndCourtesyTrueAndStartedAtBetween(
+            java.util.UUID tenantId, String plateSnapshot, java.time.Instant from, java.time.Instant to);
 }

@@ -20,6 +20,8 @@ package cr.luparx.parking.model;
  * @param creditMinRemainingMinutes  minimum remaining minutes for a credit to be granted
  * @param creditExpiryDays           days a credited minute stays usable; 0 means never expires
  * @param graceMinutes               tolerance before a session counts as expired
+ * @param freeMinutes                minutes of courtesy at the start of a stay; 0 means none, which
+ *                                   is what every municipality had before v0.31
  */
 public record ParkingPolicyDefaults(
         MinuteIncrements sessionIncrementsMinutes,
@@ -32,7 +34,8 @@ public record ParkingPolicyDefaults(
         boolean creditOnEarlyFinishEnabled,
         int creditMinRemainingMinutes,
         int creditExpiryDays,
-        int graceMinutes) {
+        int graceMinutes,
+        int freeMinutes) {
 
     public ParkingPolicyDefaults {
         if (sessionIncrementsMinutes == null || sessionIncrementsMinutes.isEmpty()) {
@@ -47,8 +50,12 @@ public record ParkingPolicyDefaults(
         if (extensionMaxTotalMinutes < sessionMaxMinutes) {
             throw new IllegalArgumentException("extension cap must not be below the session maximum");
         }
-        if (creditMinRemainingMinutes < 0 || creditExpiryDays < 0 || graceMinutes < 0) {
-            throw new IllegalArgumentException("credit and grace settings must not be negative");
+        if (creditMinRemainingMinutes < 0 || creditExpiryDays < 0 || graceMinutes < 0 || freeMinutes < 0) {
+            throw new IllegalArgumentException("credit, grace and courtesy settings must not be negative");
+        }
+        if (freeMinutes > sessionMaxMinutes) {
+            // Courtesy longer than the longest stay the municipality sells would make every stay free.
+            throw new IllegalArgumentException("courtesy minutes must not exceed the session maximum");
         }
     }
 }

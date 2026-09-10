@@ -439,6 +439,8 @@ export const MOCK_PARKING_POLICIES: Record<string, ParkingPolicy> = {
     creditMinRemainingMinutes: 10,
     creditExpiryDays: 30,
     graceMinutes: 5,
+    // Diez minutos de cortesía (v0.31): el que se baja a dejar algo no paga. Una vez por placa y día.
+    freeMinutes: 10,
   },
   'tenant-escazu': {
     sessionIncrementsMinutes: [30, 60, 90],
@@ -452,6 +454,8 @@ export const MOCK_PARKING_POLICIES: Record<string, ParkingPolicy> = {
     creditMinRemainingMinutes: 0,
     creditExpiryDays: 0,
     graceMinutes: 10,
+    // Escazú no da cortesía: cero es una respuesta legítima y es la que tienen casi todas.
+    freeMinutes: 0,
   },
 };
 
@@ -489,6 +493,131 @@ export function mockZoneRate(zoneId: string, tenantId: string | null): MockZoneR
     }
   );
 }
+
+/**
+ * En qué se aparta una zona de su municipalidad (CONTRACT.md v0.31).
+ *
+ * Nulo es HEREDAR, no cero. Se siembra una sola zona apartada —el centro de San José— porque es el
+ * caso que justifica la versión entera: dos horas de máximo donde la rotación importa, mientras el
+ * resto del cantón sigue con ocho.
+ */
+export interface MockZoneRules {
+  zoneId: string;
+  tenantId: string;
+  sessionIncrementsMinutes: number[] | null;
+  sessionMinMinutes: number | null;
+  sessionMaxMinutes: number | null;
+  extensionIncrementsMinutes: number[] | null;
+  extensionMaxTotalMinutes: number | null;
+  freeMinutes: number | null;
+  ownSchedule: boolean;
+  chargesAllDay: boolean;
+  week: { weekday: string; bands: { startMinute: number; endMinute: number; startsAt: string; endsAt: string }[] }[];
+}
+
+export const mockZoneRules: MockZoneRules[] = [
+  {
+    zoneId: 'zone-centro',
+    tenantId: 'tenant-sanjose',
+    sessionIncrementsMinutes: [15, 30, 60],
+    sessionMinMinutes: 15,
+    // Dos horas: es la palanca que maneja la rotación en el centro histórico.
+    sessionMaxMinutes: 120,
+    extensionIncrementsMinutes: null,
+    extensionMaxTotalMinutes: null,
+    freeMinutes: 15,
+    ownSchedule: true,
+    chargesAllDay: false,
+    week: [
+      'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY',
+    ].map((weekday) => ({
+      weekday,
+      bands: [{ startMinute: 360, endMinute: 1200, startsAt: '06:00', endsAt: '20:00' }],
+    })).concat([
+      { weekday: 'SATURDAY', bands: [{ startMinute: 420, endMinute: 840, startsAt: '07:00', endsAt: '14:00' }] },
+    ]),
+  },
+];
+
+/**
+ * Los feriados de Costa Rica, como regla (CONTRACT.md v0.31).
+ *
+ * No es asesoría legal y la pantalla lo dice: es un punto de partida que la municipalidad copia y
+ * desde ese momento son filas suyas, que edita o borra sin que la plataforma tenga nada que opinar.
+ */
+export interface MockHoliday {
+  code: string;
+  name: string;
+  kind: 'FIXED' | 'EASTER';
+  month: number | null;
+  day: number | null;
+  easterOffsetDays: number | null;
+  observance: 'EXACT' | 'MONDAY';
+}
+
+export const MOCK_HOLIDAYS_CR: MockHoliday[] = [
+  { code: 'CR_ANO_NUEVO', name: 'Año Nuevo', kind: 'FIXED', month: 1, day: 1, easterOffsetDays: null, observance: 'EXACT' },
+  { code: 'CR_JUEVES_SANTO', name: 'Jueves Santo', kind: 'EASTER', month: null, day: null, easterOffsetDays: -3, observance: 'EXACT' },
+  { code: 'CR_VIERNES_SANTO', name: 'Viernes Santo', kind: 'EASTER', month: null, day: null, easterOffsetDays: -2, observance: 'EXACT' },
+  { code: 'CR_JUAN_SANTAMARIA', name: 'Día de Juan Santamaría', kind: 'FIXED', month: 4, day: 11, easterOffsetDays: null, observance: 'MONDAY' },
+  { code: 'CR_DIA_TRABAJO', name: 'Día Internacional del Trabajo', kind: 'FIXED', month: 5, day: 1, easterOffsetDays: null, observance: 'EXACT' },
+  { code: 'CR_ANEXION_NICOYA', name: 'Anexión del Partido de Nicoya', kind: 'FIXED', month: 7, day: 25, easterOffsetDays: null, observance: 'MONDAY' },
+  { code: 'CR_VIRGEN_ANGELES', name: 'Virgen de los Ángeles', kind: 'FIXED', month: 8, day: 2, easterOffsetDays: null, observance: 'EXACT' },
+  { code: 'CR_DIA_MADRE', name: 'Día de la Madre', kind: 'FIXED', month: 8, day: 15, easterOffsetDays: null, observance: 'MONDAY' },
+  { code: 'CR_CULTURA_AFRO', name: 'Día de la Persona Negra y la Cultura Afrocostarricense', kind: 'FIXED', month: 8, day: 31, easterOffsetDays: null, observance: 'MONDAY' },
+  { code: 'CR_INDEPENDENCIA', name: 'Día de la Independencia', kind: 'FIXED', month: 9, day: 15, easterOffsetDays: null, observance: 'EXACT' },
+  { code: 'CR_ABOLICION', name: 'Día de la Abolición del Ejército', kind: 'FIXED', month: 12, day: 1, easterOffsetDays: null, observance: 'MONDAY' },
+  { code: 'CR_NAVIDAD', name: 'Navidad', kind: 'FIXED', month: 12, day: 25, easterOffsetDays: null, observance: 'EXACT' },
+];
+
+/** Las excepciones que la municipalidad ya escribió. Se siembran dos, una de cada forma. */
+export interface MockException {
+  tenantId: string;
+  date: string | null;
+  charges: boolean;
+  chargesAllDay: boolean;
+  label: string | null;
+  bands: { startMinute: number; endMinute: number; startsAt: string; endsAt: string }[];
+  recurrence: 'ONCE' | 'ANNUAL' | 'EASTER';
+  month: number | null;
+  day: number | null;
+  easterOffsetDays: number | null;
+  observance: 'EXACT' | 'MONDAY';
+  holidayCode: string | null;
+}
+
+export const mockScheduleExceptions: MockException[] = [
+  {
+    tenantId: 'tenant-sanjose',
+    date: null,
+    charges: false,
+    chargesAllDay: false,
+    label: 'Día de la Independencia',
+    bands: [],
+    // Anual: se escribe una vez y sigue siendo cierta el año que viene.
+    recurrence: 'ANNUAL',
+    month: 9,
+    day: 15,
+    easterOffsetDays: null,
+    observance: 'EXACT',
+    holidayCode: 'CR_INDEPENDENCIA',
+  },
+  {
+    tenantId: 'tenant-sanjose',
+    date: null,
+    charges: false,
+    chargesAllDay: false,
+    label: 'Viernes Santo',
+    bands: [],
+    // Se mueve con la Pascua: no hay día del año que lo describa.
+    recurrence: 'EASTER',
+    month: null,
+    day: null,
+    easterOffsetDays: -2,
+    observance: 'EXACT',
+    holidayCode: 'CR_VIERNES_SANTO',
+  },
+];
 
 // ---- Wallet & time credits, scoped `(userId, tenantId)` (CONTRACT.md v0.2 rules 5/6 — per-tenant, never global) ----
 
@@ -533,6 +662,8 @@ export function availableMockCreditMinutes(key: string): number {
 export interface MockParkingSessionRecord extends ParkingSession {
   userId: string;
   tenantId: string;
+  /** Se otorgó como cortesía y no se cobró (v0.31). Una por placa y día natural. */
+  courtesy?: boolean;
 }
 
 const now = Date.now();

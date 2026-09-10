@@ -838,11 +838,29 @@ export interface ParkingPolicy {
   creditMinRemainingMinutes: number;
   creditExpiryDays: number;
   graceMinutes: number;
+  /**
+   * Minutes of courtesy at the start of a stay (v0.31); 0 means none.
+   *
+   * Granted **once per plate per calendar day**, so a screen must say "the first N minutes are free,
+   * once a day" and never promise them on every stay. Whether a particular car still has its
+   * courtesy is answered by the quote, which is the only call that knows the plate. A zone may
+   * depart from this number — read `ParkingZone.freeMinutes` for the one that applies where the
+   * citizen is parking.
+   */
+  freeMinutes?: number;
 }
 
 export interface ParkingQuoteRequest {
   zoneId: string;
   minutes: number;
+  /**
+   * Which car it is for. Optional, and it only ever makes the answer cheaper: courtesy is limited
+   * per plate, so without it the server cannot tell whether this stay would be free and answers with
+   * the price. Give one or the other — a registered vehicle of the caller's, or a plate typed for
+   * somebody else's car.
+   */
+  vehicleId?: string;
+  plate?: string;
 }
 
 /**
@@ -978,6 +996,17 @@ export interface ParkingZone {
    * is most of them, and is the reason the ladder exists. Absent from servers older than v0.24.
    */
   durations?: ParkingDurationPrice[];
+  /**
+   * The durations sold **in this zone** (v0.31). Since a zone may depart from its municipality, a
+   * client must offer these and not the list from `GET /policy`, or it will show a citizen a
+   * duration the start refuses. Absent from servers older than v0.31.
+   */
+  sessionIncrementsMinutes?: number[];
+  sessionMinMinutes?: number;
+  /** The longest a car may hold a bay here: two hours downtown, more on the edges. */
+  sessionMaxMinutes?: number;
+  /** Courtesy minutes in this zone; 0 means none. Once per plate per day — see `ParkingPolicy`. */
+  freeMinutes?: number;
 }
 
 /** One entry of the citizen's duration picker: how long, and what it costs here. */
@@ -1017,6 +1046,8 @@ export interface UpdateParkingPolicyRequest {
   creditMinRemainingMinutes: number;
   creditExpiryDays: number;
   graceMinutes: number;
+  /** Absent keeps whatever the municipality has, which for most of them is 0. */
+  freeMinutes?: number;
 }
 
 export interface CreateParkingZoneRequest {
@@ -1143,19 +1174,115 @@ export interface ChargingBand {
   endsAt: string;
 }
 
-/** A dated override — a public holiday that suspends charging, or one with its own hours. */
+/**
+ * How an exception decides which day it falls on (v0.31).
+ *
+ * `ONCE` is one concrete date, and it is what every exception written before v0.31 means. `ANNUAL`
+ * is a day of the year, every year — so a municipality writes its holidays once instead of every
+ * December. `EASTER` is a number of days from Easter Sunday, which is the only way to describe
+ * Maundy Thursday and Good Friday: they move.
+ */
+export type ExceptionRecurrence = 'ONCE' | 'ANNUAL' | 'EASTER';
+
+/**
+ * When a holiday is taken, given the day it falls on. `MONDAY` moves it to the following Monday,
+ * which is what Costa Rican law does with several of them; a holiday already on a Monday stays put.
+ */
+export type HolidayObservance = 'EXACT' | 'MONDAY';
+
+/** An override of the weekly timetable — a holiday that suspends charging, or a day with its own hours. */
 export interface ChargingException {
-  date: string;
+  /** Only for `ONCE`. The other two compute their date for whatever year is being asked about. */
+  date?: string | null;
   charges: boolean;
   chargesAllDay: boolean;
   label?: string;
   bands: ChargingBand[];
+  /** Absent is read as `ONCE`, which is what a client older than v0.31 means. */
+  recurrence?: ExceptionRecurrence;
+  month?: number | null;
+  day?: number | null;
+  easterOffsetDays?: number | null;
+  observance?: HolidayObservance;
+  /** Which catalogue entry it was copied from. Provenance only; the row is the municipality's. */
+  holidayCode?: string | null;
+  /** Read-only: the next date this rule lands on, so nobody works out a recurrence on screen. */
+  nextDate?: string | null;
 }
 
 export interface UpdateParkingScheduleRequest {
   chargesAllDay: boolean;
   week: ChargingDay[];
   exceptions: ChargingException[];
+}
+
+/**
+ * One holiday of the municipality's country, offered so nobody has to type it (v0.31).
+ *
+ * A starting point and **not legal advice**: holiday law changes, and the calendar a canton charges
+ * on is the canton's to answer for. That is why these are *copied* into the municipality's own
+ * exceptions — once copied, editing or deleting one is entirely the municipality's business.
+ */
+export interface HolidayCatalogEntry {
+  code: string;
+  name: string;
+  kind: 'FIXED' | 'EASTER';
+  month: number | null;
+  day: number | null;
+  easterOffsetDays: number | null;
+  observance: HolidayObservance;
+  /** When it falls this year and next, so a screen shows dates rather than a rule to evaluate. */
+  thisYear: string | null;
+  nextYear: string | null;
+  /** True when the municipality already copied it. What stops a screen offering it twice. */
+  alreadyAdded: boolean;
+}
+
+/**
+ * What a zone departs from its municipality in, and what it therefore applies (v0.31).
+ *
+ * The `override*` fields are null where the zone follows the municipality; the `effective*` fields
+ * are always filled, because that is what somebody deciding whether to depart needs to see.
+ */
+export interface ZoneRules {
+  zoneId: string;
+  hasOwnRules: boolean;
+  overrideSessionIncrementsMinutes: number[] | null;
+  overrideSessionMinMinutes: number | null;
+  overrideSessionMaxMinutes: number | null;
+  overrideExtensionIncrementsMinutes: number[] | null;
+  overrideExtensionMaxTotalMinutes: number | null;
+  overrideFreeMinutes: number | null;
+  effectiveSessionIncrementsMinutes: number[];
+  effectiveSessionMinMinutes: number;
+  effectiveSessionMaxMinutes: number;
+  effectiveExtensionIncrementsMinutes: number[];
+  effectiveExtensionMaxTotalMinutes: number;
+  effectiveFreeMinutes: number;
+  /** Whether the zone keeps its own timetable. False means it follows the municipality's. */
+  hasOwnSchedule: boolean;
+  chargesAllDay: boolean;
+  week: ChargingDay[];
+}
+
+/**
+ * `PUT /admin/parking/zones/{id}/rules`.
+ *
+ * Every field is optional and **absent means "follow the municipality"**, not "leave unchanged":
+ * those are opposite instructions and a partial update could not tell them apart. A body where
+ * everything is absent puts the zone back to following in everything.
+ */
+export interface UpdateZoneRulesRequest {
+  sessionIncrementsMinutes?: number[];
+  sessionMinMinutes?: number;
+  sessionMaxMinutes?: number;
+  extensionIncrementsMinutes?: number[];
+  extensionMaxTotalMinutes?: number;
+  freeMinutes?: number;
+  /** True gives the zone its own timetable; false takes it away and it follows again. */
+  ownSchedule?: boolean;
+  chargesAllDay?: boolean;
+  week?: ChargingDay[];
 }
 
 /**

@@ -194,7 +194,8 @@ public class DevParkingSeeder {
                     variant.creditOnEarlyFinishEnabled(),
                     variant.creditMinRemainingMinutes(),
                     variant.creditExpiryDays(),
-                    variant.graceMinutes());
+                    variant.graceMinutes(),
+                    variant.freeMinutes());
         }
         LOGGER.info("Development seed: {} parking policy — start {} min, extension {} ({}), early finish {},"
                         + " credit {}.",
@@ -247,8 +248,13 @@ public class DevParkingSeeder {
             List<ParkingScheduleService.ExceptionEntry> exceptions = new ArrayList<>();
             for (HolidaySeed holiday : scheduleVariant.holidays()) {
                 // charges = false: a public holiday suspends charging whatever the weekday bands say.
-                exceptions.add(new ParkingScheduleService.ExceptionEntry(holiday.date(), false, false,
-                        holiday.label(), List.of()));
+                // Seeded as an ANNUAL rule and not as one date: a fixture that expired on 31 December
+                // would leave a development database quietly charging on Christmas next year.
+                exceptions.add(new ParkingScheduleService.ExceptionEntry(
+                        cr.luparx.parking.model.ExceptionRecurrence.annual(
+                                holiday.date().getMonthValue(), holiday.date().getDayOfMonth(),
+                                cr.luparx.core.time.HolidayObservance.EXACT),
+                        false, false, holiday.label(), null, List.of()));
             }
             scheduleService.replace(tenantId, scheduleVariant.chargesAllDay(), entries, exceptions);
             bands = scheduleService.slots(tenantId);

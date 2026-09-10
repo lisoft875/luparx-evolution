@@ -20,6 +20,7 @@ import cr.luparx.core.money.Money;
 import cr.luparx.parking.model.ExtensionOption;
 import cr.luparx.parking.model.ParkingQuote;
 import cr.luparx.parking.model.ZonePriceBook;
+import cr.luparx.parking.model.ZoneRules;
 import cr.luparx.parking.model.ParkingSessionStatus;
 import cr.luparx.parking.model.PlateNormalizer;
 import cr.luparx.parking.model.SessionVehicleRef;
@@ -82,6 +83,7 @@ public class ParkingSessionService {
     private final ParkingSessionExtensionRepository extensionRepository;
     private final ParkingSpaceRepository spaceRepository;
     private final ParkingPolicyService policyService;
+    private final CourtesyService courtesyService;
     private final ParkingQuoteService quoteService;
     private final ParkingScheduleService scheduleService;
     private final ParkingSpaceFormatService spaceFormatService;
@@ -94,6 +96,7 @@ public class ParkingSessionService {
                                  ParkingSessionExtensionRepository extensionRepository,
                                  ParkingSpaceRepository spaceRepository,
                                  ParkingPolicyService policyService,
+                                 CourtesyService courtesyService,
                                  ParkingQuoteService quoteService,
                                  ParkingScheduleService scheduleService,
                                  ParkingSpaceFormatService spaceFormatService,
@@ -105,6 +108,7 @@ public class ParkingSessionService {
         this.extensionRepository = extensionRepository;
         this.spaceRepository = spaceRepository;
         this.policyService = policyService;
+        this.courtesyService = courtesyService;
         this.quoteService = quoteService;
         this.scheduleService = scheduleService;
         this.spaceFormatService = spaceFormatService;
@@ -203,12 +207,15 @@ public class ParkingSessionService {
     public ParkingSession start(TenantId tenantId, UserId userId, UUID zoneId, String spaceCode,
                                 SessionVehicleRef vehicleRef, int minutes, String idempotencyKey) {
         ParkingPolicy policy = policyService.require(tenantId);
+        // The rules OF THIS ZONE (CONTRACT.md v0.31): the municipality's, with whatever the zone
+        // departs in folded in. Resolved once here and read as plain numbers from then on.
+        ZoneRules rules = policyService.rulesFor(tenantId, zoneId);
         // Read — and locked — before the duration is judged, because one of the durations a citizen
         // may ask for is exactly their saved minutes (CONTRACT.md v0.12), and the same number then
         // prices the stay below. Reading it twice would let the balance move in between and make the
         // check and the price disagree about what "all of it" means.
         int savedMinutes = timeCreditService.availableMinutesForUpdate(tenantId, userId);
-        policyService.requireSessionIncrement(policy, minutes, savedMinutes);
+        policyService.requireSessionIncrement(rules, minutes, savedMinutes);
 
         // Resolved to the two facts a stay actually records — the plate as it will be verified, and
         // what kind of vehicle it is. For a registered car they come from the record (so a citizen
@@ -249,12 +256,21 @@ public class ParkingSessionService {
 
         Instant now = clock.instant();
         ZonePriceBook prices = quoteService.requirePriceBook(tenantId, zoneId, now);
-        int chargeable = requireChargeableWindow(tenantId, now, minutes);
-        ParkingQuote quote = quoteService.price(prices, minutes, chargeable, savedMinutes);
+
+        // Courtesy is decided HERE and not in the quote, because the quote does not know the plate
+        // and this rule is about the plate: one free stay per plate per day. It is checked before the
+        // charging-hours refusal on purpose — a courtesy stay outside charging hours is free either
+        // way, and refusing it would tell somebody they cannot have something that costs nothing.
+        boolean courtesy = courtesyService.isAvailable(tenantId, rules, plate, minutes, now);
+        int chargeable = courtesy ? 0 : requireChargeableWindow(tenantId, zoneId, now, minutes);
+        ParkingQuote quote = quoteService.price(prices, minutes, chargeable, courtesy ? 0 : savedMinutes);
 
         ParkingSession session = new ParkingSession(Uuid7.generate(), tenantId.value(), userId.value(),
                 vehicleId, plate, vehicleType, zoneId, space.getId(), space.getCode(), now,
                 now.plusSeconds((long) minutes * 60L), quote.payable(), quote.creditMinutesApplied());
+        if (courtesy) {
+            session.markCourtesy();
+        }
         // Flushed here so the partial unique indexes decide the race between two replicas now, while
         // the transaction can still be rolled back cleanly, rather than at commit.
         sessionRepository.saveAndFlush(session);
@@ -339,12 +355,15 @@ public class ParkingSessionService {
         if (expireIfDue(session, policy) || !session.getStatus().isActive()) {
             throw ConflictException.of(ErrorCode.PARKING_SESSION_NOT_ACTIVE, "error.parking.session.notActive");
         }
-        policyService.requireExtensionIncrement(policy, minutes);
+        ZoneRules rules = policyService.rulesFor(tenantId, session.getZoneId());
+        policyService.requireExtensionIncrement(rules, minutes);
 
         int totalAfter = session.bookedMinutes() + minutes;
-        if (totalAfter > policy.getExtensionMaxTotalMinutes()) {
+        if (totalAfter > rules.extensionMaxTotalMinutes()) {
+            // The zone's ceiling, which never rises above the zone's own maximum stay: extending a
+            // car past the maximum the zone set is exactly what that maximum exists to prevent.
             throw UnprocessableEntityException.of(ErrorCode.EXTENSION_EXCEEDS_MAX,
-                    "error.parking.extension.exceedsMax", Integer.valueOf(policy.getExtensionMaxTotalMinutes()));
+                    "error.parking.extension.exceedsMax", Integer.valueOf(rules.extensionMaxTotalMinutes()));
         }
 
         Instant now = clock.instant();
@@ -352,7 +371,7 @@ public class ParkingSessionService {
         // An extension adds time to the END of the session, so what it costs is decided by the
         // charging hours of the stretch it adds — not by the hours at the moment the button is
         // pressed. Extending a 17:30 session at 17:55 buys 18:00-19:00, which is free.
-        int chargeable = requireChargeableWindow(tenantId, session.getExpiresAt(), minutes);
+        int chargeable = requireChargeableWindow(tenantId, session.getZoneId(), session.getExpiresAt(), minutes);
         int available = timeCreditService.availableMinutesForUpdate(tenantId, userId);
         ParkingQuote quote = quoteService.price(prices, minutes, chargeable, available);
 
@@ -411,14 +430,15 @@ public class ParkingSessionService {
         Money balance = walletService.balance(tenantId, userId);
         Instant from = session.getExpiresAt();
 
-        List<Integer> offered = policy.extensionIncrements().values();
+        ZoneRules rules = policyService.rulesFor(tenantId, session.getZoneId());
+        List<Integer> offered = rules.extensionIncrements().values();
         List<ExtensionOption> options = new ArrayList<>(offered.size());
         for (Integer minutes : offered) {
             int added = minutes.intValue();
-            int chargeable = quoteService.chargeableMinutes(tenantId, from, added);
+            int chargeable = quoteService.chargeableMinutes(tenantId, session.getZoneId(), from, added);
             ParkingQuote quote = quoteService.price(prices, added, chargeable, credit);
             Instant newExpiresAt = from.plusSeconds((long) added * 60L);
-            if (session.bookedMinutes() + added > policy.getExtensionMaxTotalMinutes()) {
+            if (session.bookedMinutes() + added > rules.extensionMaxTotalMinutes()) {
                 options.add(ExtensionOption.unavailable(added, quote, newExpiresAt,
                         ErrorCode.EXTENSION_EXCEEDS_MAX));
             } else if (quote.payable().isPositive() && balance.compareTo(quote.payable()) < 0) {
@@ -488,12 +508,12 @@ public class ParkingSessionService {
      * @throws ConflictException {@code OUTSIDE_CHARGING_HOURS}, carrying when charging next resumes so
      *         the app can say it in words ("charging resumes on Monday at 7:00")
      */
-    private int requireChargeableWindow(TenantId tenantId, Instant from, int minutes) {
-        int chargeable = quoteService.chargeableMinutes(tenantId, from, minutes);
+    private int requireChargeableWindow(TenantId tenantId, UUID zoneId, Instant from, int minutes) {
+        int chargeable = quoteService.chargeableMinutes(tenantId, zoneId, from, minutes);
         if (chargeable > 0) {
             return chargeable;
         }
-        Instant next = scheduleService.nextChargingStart(tenantId, from).orElse(null);
+        Instant next = scheduleService.nextChargingStart(tenantId, zoneId, from).orElse(null);
         throw ConflictException.of(ErrorCode.OUTSIDE_CHARGING_HOURS, "error.parking.schedule.outsideHours",
                 next == null ? "-" : next.toString());
     }

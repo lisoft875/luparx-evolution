@@ -24,6 +24,7 @@ import java.util.List;
  * @param creditMinRemainingMinutes  minimum remaining minutes for a credit to be granted
  * @param creditExpiryDays           days a credited minute stays usable; 0 means it never expires
  * @param graceMinutes               tolerance before a session counts as expired
+ * @param freeMinutes                minutes of courtesy at the start of a stay; 0 means none
  */
 @ConfigurationProperties(prefix = "platform.defaults.parking")
 public record ParkingDefaultsProperties(
@@ -37,7 +38,8 @@ public record ParkingDefaultsProperties(
         Boolean creditOnEarlyFinishEnabled,
         Integer creditMinRemainingMinutes,
         Integer creditExpiryDays,
-        Integer graceMinutes) {
+        Integer graceMinutes,
+        Integer freeMinutes) {
 
     /*
      * Wrapper types on purpose, exactly as DevSeedProperties does: an absent property binds to null
@@ -97,5 +99,14 @@ public record ParkingDefaultsProperties(
 
     public int graceMinutesOrDefault() {
         return graceMinutes == null || graceMinutes.intValue() < 0 ? 5 : graceMinutes.intValue();
+    }
+
+    /**
+     * Zero unless a deployment says otherwise, which is what every municipality had before v0.31.
+     * Courtesy is a policy decision with a revenue cost, so the platform does not hand it out by
+     * default on somebody else's behalf.
+     */
+    public int freeMinutesOrDefault() {
+        return freeMinutes == null || freeMinutes.intValue() < 0 ? 0 : freeMinutes.intValue();
     }
 }

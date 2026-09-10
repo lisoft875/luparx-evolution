@@ -22,13 +22,16 @@ import cr.luparx.parking.model.ExtensionOption;
 import cr.luparx.parking.model.ParkingQuote;
 import cr.luparx.parking.model.ParkingSessionStatus;
 import cr.luparx.parking.model.ParkingSpaceRange;
+import cr.luparx.parking.model.PlateNormalizer;
 import cr.luparx.parking.model.SessionVehicleRef;
+import cr.luparx.parking.model.ZoneRules;
 import cr.luparx.parking.service.ParkingCatalogService;
 import cr.luparx.parking.service.ParkingPolicyService;
 import cr.luparx.parking.service.ParkingQuoteService;
 import cr.luparx.parking.service.ParkingScheduleService;
 import cr.luparx.parking.service.ParkingSessionService;
 import cr.luparx.parking.service.ParkingSpaceFormatService;
+import cr.luparx.parking.service.VehicleService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -91,6 +94,7 @@ public class CitizenParkingController {
     private final ParkingScheduleService scheduleService;
     private final ParkingCatalogService catalogService;
     private final ParkingSpaceFormatService spaceFormatService;
+    private final VehicleService vehicleService;
     private final ParkingMapper mapper;
     private final AuditRecorder auditRecorder;
     private final OutboxRecorder outboxRecorder;
@@ -102,6 +106,7 @@ public class CitizenParkingController {
                                     ParkingScheduleService scheduleService,
                                     ParkingCatalogService catalogService,
                                     ParkingSpaceFormatService spaceFormatService,
+                                    VehicleService vehicleService,
                                     ParkingMapper mapper,
                                     AuditRecorder auditRecorder,
                                     OutboxRecorder outboxRecorder,
@@ -112,6 +117,7 @@ public class CitizenParkingController {
         this.scheduleService = scheduleService;
         this.catalogService = catalogService;
         this.spaceFormatService = spaceFormatService;
+        this.vehicleService = vehicleService;
         this.mapper = mapper;
         this.auditRecorder = auditRecorder;
         this.outboxRecorder = outboxRecorder;
@@ -159,14 +165,20 @@ public class CitizenParkingController {
         Instant now = clock.instant();
         List<ParkingZone> zones = catalogService.listActiveZones(tenantId);
         Map<UUID, ZonePriceBook> rates = catalogService.ratesInForce(tenantId, now);
-        // The durations this municipality sells, priced per zone below (CONTRACT.md v0.24).
-        List<Integer> offered = policyService.require(tenantId).sessionIncrements().values();
         // Both in one aggregate query each, never one per zone: this list grows with the
         // municipality, and an N+1 here would get slower exactly as one succeeds.
         Map<UUID, ParkingSpaceRange> ranges = catalogService.spaceRangesByZone(tenantId);
+        // The rules of every zone in two queries, for the same reason (CONTRACT.md v0.31). Since a
+        // zone may sell different durations from the municipality, the price ladder of each zone has
+        // to be priced against ITS list — pricing them all against the municipality's would show a
+        // citizen a duration this zone refuses, or hide one it sells.
+        Map<UUID, ZoneRules> rules = policyService.rulesFor(tenantId,
+                zones.stream().map(ParkingZone::getId).toList());
         List<ParkingDtos.CitizenParkingZoneResponse> body = new ArrayList<>(zones.size());
         for (ParkingZone zone : zones) {
-            body.add(mapper.toCitizenZone(zone, rates.get(zone.getId()), offered, ranges.get(zone.getId())));
+            ZoneRules zoneRules = rules.get(zone.getId());
+            body.add(mapper.toCitizenZone(zone, rates.get(zone.getId()), zoneRules.sessionIncrements().values(),
+                    ranges.get(zone.getId()), zoneRules));
         }
         return privatelyCacheable(body, ZONES_CACHE_TTL);
     }
@@ -223,7 +235,18 @@ public class CitizenParkingController {
         // The duration is judged inside `quote`, together with the saved-minute balance it depends
         // on (CONTRACT.md v0.12): one of the durations a citizen may ask for is exactly the minutes
         // they have saved, so the check cannot be made here without reading that balance twice.
-        ParkingQuote quote = quoteService.quote(tenantId, userId, request.zoneId(), request.minutes().intValue());
+        // The plate, when the client says which car it is for: courtesy is limited per plate, so
+        // without it the quote cannot tell whether this stay would be free and answers with the price.
+        // Resolved exactly the way starting a session resolves it — a registered vehicle's plate comes
+        // from the record, never from the request, so nobody can claim somebody else's courtesy.
+        String plate = null;
+        if (request.vehicleId() != null) {
+            plate = vehicleService.requireOwn(userId, request.vehicleId()).getPlateNormalized();
+        } else if (request.plate() != null && !request.plate().isBlank()) {
+            plate = PlateNormalizer.normalize(request.plate());
+        }
+        ParkingQuote quote = quoteService.quote(tenantId, userId, request.zoneId(),
+                request.minutes().intValue(), plate);
         return mapper.toQuote(quote);
     }
 

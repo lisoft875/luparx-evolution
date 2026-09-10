@@ -135,6 +135,11 @@ platform:
       # Days a credited minute stays usable; 0 means it never expires.
       credit-expiry-days: ${PARKING_CREDIT_EXPIRY_DAYS:90}
       grace-minutes: ${PARKING_GRACE_MINUTES:5}
+      # Minutos de cortesía al inicio (CONTRACT.md v0.31): una estadía que no los pase no se cobra.
+      # Cero por omisión: regalar tiempo tiene un costo de ingresos y es una decisión de cada
+      # municipalidad, no algo que la plataforma conceda de oficio en nombre de otro. Se otorga UNA
+      # vez por placa y día natural, y una zona puede apartarse del número.
+      free-minutes: ${PARKING_FREE_MINUTES:0}
       # --- charging hours (CONTRACT.md v0.3) ---
       # Defaults of THIS deployment, applied only to a municipality that has not written its own
       # timetable; the real one lives in `parking_schedules`, one row per municipality. A day left

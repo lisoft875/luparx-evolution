@@ -66,6 +66,15 @@ public class ParkingPolicy {
     @Column(name = "grace_minutes", nullable = false)
     private int graceMinutes;
 
+    /**
+     * Minutes of courtesy at the start of a stay (V30_0): a stay no longer than this is not charged.
+     *
+     * <p>Zero — the default, and what every municipality had before v0.31 — means no courtesy. A zone
+     * may depart from it; see {@code ParkingZonePolicy}.</p>
+     */
+    @Column(name = "free_minutes", nullable = false)
+    private int freeMinutes;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -84,7 +93,7 @@ public class ParkingPolicy {
                          int sessionMaxMinutes, boolean extensionEnabled, MinuteIncrements extensionIncrements,
                          int extensionMaxTotalMinutes, boolean earlyFinishEnabled,
                          boolean creditOnEarlyFinishEnabled, int creditMinRemainingMinutes, int creditExpiryDays,
-                         int graceMinutes, Instant createdAt) {
+                         int graceMinutes, int freeMinutes, Instant createdAt) {
         this.tenantId = tenantId;
         this.sessionIncrementsMinutes = sessionIncrements.toCsv();
         this.sessionMinMinutes = sessionMinMinutes;
@@ -99,6 +108,7 @@ public class ParkingPolicy {
         this.creditMinRemainingMinutes = creditMinRemainingMinutes;
         this.creditExpiryDays = creditExpiryDays;
         this.graceMinutes = graceMinutes;
+        this.freeMinutes = freeMinutes;
         this.createdAt = createdAt;
         this.updatedAt = createdAt;
     }
@@ -118,6 +128,7 @@ public class ParkingPolicy {
                 defaults.creditMinRemainingMinutes(),
                 defaults.creditExpiryDays(),
                 defaults.graceMinutes(),
+                defaults.freeMinutes(),
                 now);
     }
 
@@ -181,6 +192,10 @@ public class ParkingPolicy {
         return graceMinutes;
     }
 
+    public int getFreeMinutes() {
+        return freeMinutes;
+    }
+
     public Instant getCreatedAt() {
         return createdAt;
     }
@@ -198,7 +213,7 @@ public class ParkingPolicy {
                         boolean extensionEnabled, MinuteIncrements extensionIncrements,
                         int extensionMaxTotalMinutes, boolean earlyFinishEnabled,
                         boolean creditOnEarlyFinishEnabled, int creditMinRemainingMinutes, int creditExpiryDays,
-                        int graceMinutes, Instant now) {
+                        int graceMinutes, int freeMinutes, Instant now) {
         this.sessionIncrementsMinutes = sessionIncrements.toCsv();
         this.sessionMinMinutes = sessionMinMinutes;
         this.sessionMaxMinutes = sessionMaxMinutes;
@@ -212,6 +227,7 @@ public class ParkingPolicy {
         this.creditMinRemainingMinutes = creditMinRemainingMinutes;
         this.creditExpiryDays = creditExpiryDays;
         this.graceMinutes = graceMinutes;
+        this.freeMinutes = freeMinutes;
         this.updatedAt = now;
     }
 }
