@@ -143,7 +143,11 @@ public class InspectorEnforcementController {
         if (zoneId != null && !assigned.isEmpty() && !assigned.contains(zoneId)) {
             throw ForbiddenException.of(ErrorCode.ZONE_NOT_ASSIGNED, "error.enforcement.zone.notAssigned");
         }
-        PlateStatus status = plateStatusService.lookup(tenantId, plate, zoneId, spaceCode);
+        // The assignment narrows the ANSWER too, not only the question. Until v0.28 this guard
+        // checked the inbound zone and then handed back every running stay for the plate across the
+        // whole municipality — so an officer covering one sector learned where that car was parked
+        // everywhere, and tapping one of those rows walked them into a ZONE_NOT_ASSIGNED refusal.
+        PlateStatus status = plateStatusService.lookup(tenantId, plate, zoneId, spaceCode, assigned);
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.noStore())
                 .body(mapper.toPlateStatus(status));

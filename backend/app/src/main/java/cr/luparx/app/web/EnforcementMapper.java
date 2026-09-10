@@ -10,6 +10,7 @@ import cr.luparx.enforcement.entity.CitationEvent;
 import cr.luparx.enforcement.entity.CitationEvidence;
 import cr.luparx.enforcement.entity.InfractionType;
 import cr.luparx.enforcement.model.EvidenceKind;
+import cr.luparx.enforcement.entity.PlateExemption;
 import cr.luparx.enforcement.model.PlateStatus;
 import cr.luparx.enforcement.port.ParkingStatusPort;
 import cr.luparx.parking.entity.ParkingZone;
@@ -92,8 +93,18 @@ public class EnforcementMapper {
                         status.bay().code(), status.bay().zoneId(), status.bay().zoneCode(),
                         status.bay().zoneName()),
                 status.coveringStay() == null ? null : toStay(status.coveringStay()),
+                status.expiredStay() == null ? null : toStay(status.expiredStay()),
+                status.exemption() == null ? null : toExemptionSummary(status.exemption()),
                 others,
+                status.graceMinutes(),
                 status.checkedAt());
+    }
+
+    /** Only what an officer needs in order to justify not fining. Never who granted it. */
+    private EnforcementDtos.PlateExemptionSummary toExemptionSummary(PlateExemption exemption) {
+        return new EnforcementDtos.PlateExemptionSummary(exemption.getId(), exemption.getPlate(),
+                exemption.getReason(), exemption.getDocumentRef(), exemption.getValidFrom(),
+                exemption.getValidTo());
     }
 
     private EnforcementDtos.ActiveStayResponse toStay(ParkingStatusPort.ActiveStay stay) {

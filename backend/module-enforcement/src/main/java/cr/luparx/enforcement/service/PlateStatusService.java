@@ -4,6 +4,8 @@ import cr.luparx.core.error.ErrorCode;
 import cr.luparx.core.error.NotFoundException;
 import cr.luparx.core.error.ValidationException;
 import cr.luparx.core.id.TenantId;
+import cr.luparx.enforcement.entity.PlateExemption;
+import cr.luparx.enforcement.model.PlateFormat;
 import cr.luparx.enforcement.model.PlateStatus;
 import cr.luparx.enforcement.model.PlateVerdict;
 import cr.luparx.enforcement.port.ParkingStatusPort;
@@ -11,9 +13,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
-import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -34,14 +38,24 @@ import java.util.UUID;
 @Service
 public class PlateStatusService {
 
-    /** Longest plate accepted, matching {@code vehicles.plate_normalized} in the parking domain. */
-    private static final int MAX_PLATE_LENGTH = 16;
+    /**
+     * How far back a stay counts as "just ran out".
+     *
+     * <p>Long enough to cover the driver who is still standing by the car arguing, short enough that
+     * "venció" never describes something from another shift. Beyond it the plate reads as
+     * {@code NOT_COVERED}, which by then is the truer statement.</p>
+     */
+    private static final Duration EXPIRED_LOOKBACK = Duration.ofHours(3);
 
     private final ParkingStatusPort parkingStatus;
+    private final PlateExemptionService exemptionService;
     private final Clock clock;
 
-    public PlateStatusService(ParkingStatusPort parkingStatus, Clock clock) {
+    public PlateStatusService(ParkingStatusPort parkingStatus,
+                              PlateExemptionService exemptionService,
+                              Clock clock) {
         this.parkingStatus = parkingStatus;
+        this.exemptionService = exemptionService;
         this.clock = clock;
     }
 
@@ -52,19 +66,48 @@ public class PlateStatusService {
      */
     @Transactional(readOnly = true)
     public PlateStatus lookup(TenantId tenantId, String plate, UUID zoneId, String spaceCode) {
+        return lookup(tenantId, plate, zoneId, spaceCode, List.of());
+    }
+
+    /**
+     * @param visibleZoneIds the zones this officer covers. Empty means no restriction — the same
+     *                       reading {@code membership_zones} has everywhere else (CONTRACT.md v0.15).
+     *                       It narrows {@code otherStays}, which until v0.28 came back unfiltered and
+     *                       told an officer assigned to one sector where a plate was parked across
+     *                       the whole municipality.
+     */
+    @Transactional(readOnly = true)
+    public PlateStatus lookup(TenantId tenantId, String plate, UUID zoneId, String spaceCode,
+                              Collection<UUID> visibleZoneIds) {
         String normalized = normalize(plate);
         ParkingStatusPort.Bay bay = resolveBay(tenantId, zoneId, spaceCode);
-        List<ParkingStatusPort.ActiveStay> stays = parkingStatus.activeStays(tenantId, normalized);
+        Instant now = clock.instant();
+        int grace = parkingStatus.graceMinutes(tenantId);
 
-        if (stays.isEmpty()) {
-            // Nothing running for this plate anywhere in the municipality. The clearest case there is.
-            return new PlateStatus(plate, normalized, PlateVerdict.NOT_COVERED, bay, null, List.of(),
-                    clock.instant());
+        // FIRST, before anything about payment. An exempt vehicle is exempt whether or not it also
+        // paid, and asking about payment first would answer "no pagó" for a car this municipality
+        // had already decided never to fine.
+        Optional<PlateExemption> exemption = exemptionService.inForce(tenantId, normalized);
+        if (exemption.isPresent()) {
+            return new PlateStatus(plate, normalized, PlateVerdict.EXEMPT, bay, null, null,
+                    exemption.get(), List.of(), grace, now);
+        }
+
+        List<ParkingStatusPort.ActiveStay> stays = visible(
+                parkingStatus.activeStays(tenantId, normalized), visibleZoneIds, bay);
+        List<ParkingStatusPort.ActiveStay> expired = parkingStatus.recentlyExpiredStays(
+                tenantId, normalized, now.minus(EXPIRED_LOOKBACK));
+
+        if (stays.isEmpty() && expired.isEmpty()) {
+            // Nothing running and nothing that just ran out. The clearest case there is.
+            return new PlateStatus(plate, normalized, PlateVerdict.NOT_COVERED, bay, null, null, null,
+                    List.of(), grace, now);
         }
         if (bay == null) {
             // Matches exist but there is no bay to attribute them to. Saying "covered" here would be
             // guessing which of several cars carrying this plate is the one in front of the officer.
-            return new PlateStatus(plate, normalized, PlateVerdict.AMBIGUOUS, null, null, stays, clock.instant());
+            return new PlateStatus(plate, normalized, PlateVerdict.AMBIGUOUS, null, null, null, null,
+                    stays, grace, now);
         }
 
         ParkingStatusPort.ActiveStay covering = null;
@@ -76,8 +119,57 @@ public class PlateStatusService {
                 elsewhere.add(stay);
             }
         }
-        PlateVerdict verdict = covering != null ? PlateVerdict.COVERED : PlateVerdict.BAY_MISMATCH;
-        return new PlateStatus(plate, normalized, verdict, bay, covering, elsewhere, clock.instant());
+        if (covering != null) {
+            return new PlateStatus(plate, normalized, PlateVerdict.COVERED, bay, covering, null, null,
+                    elsewhere, grace, now);
+        }
+
+        // Nothing running HERE. Before saying "no pagó", check whether it paid for this very bay and
+        // the clock beat them: the most recent one, because a plate may have paid twice today.
+        ParkingStatusPort.ActiveStay ranOutHere = null;
+        for (ParkingStatusPort.ActiveStay stay : expired) {
+            if (bay.spaceId().equals(stay.spaceId())
+                    && (ranOutHere == null || stay.expiresAt().isAfter(ranOutHere.expiresAt()))) {
+                ranOutHere = stay;
+            }
+        }
+        if (ranOutHere != null) {
+            return new PlateStatus(plate, normalized, PlateVerdict.EXPIRED, bay, null, ranOutHere, null,
+                    elsewhere, grace, now);
+        }
+        if (!elsewhere.isEmpty()) {
+            return new PlateStatus(plate, normalized, PlateVerdict.BAY_MISMATCH, bay, null, null, null,
+                    elsewhere, grace, now);
+        }
+        // Something ran out, but on another bay. That is not this bay's business and saying
+        // "venció" here would attribute a payment to a space it never covered.
+        return new PlateStatus(plate, normalized, PlateVerdict.NOT_COVERED, bay, null, null, null,
+                List.of(), grace, now);
+    }
+
+    /**
+     * The stays this officer may be told about.
+     *
+     * <p>The bay they are standing at is always included even when its zone is not in their
+     * assignment: they were allowed to ask about it, so refusing to explain the answer would leave
+     * them with a verdict and no reason for it. Everything else is narrowed to the sectors they
+     * cover — an officer assigned to one zone has no business learning where a plate is parked
+     * across the whole municipality, and until v0.28 that is exactly what came back.</p>
+     */
+    private static List<ParkingStatusPort.ActiveStay> visible(List<ParkingStatusPort.ActiveStay> stays,
+                                                              Collection<UUID> visibleZoneIds,
+                                                              ParkingStatusPort.Bay bay) {
+        if (visibleZoneIds == null || visibleZoneIds.isEmpty()) {
+            return stays;
+        }
+        List<ParkingStatusPort.ActiveStay> allowed = new ArrayList<>(stays.size());
+        for (ParkingStatusPort.ActiveStay stay : stays) {
+            if (visibleZoneIds.contains(stay.zoneId())
+                    || (bay != null && bay.spaceId().equals(stay.spaceId()))) {
+                allowed.add(stay);
+            }
+        }
+        return allowed;
     }
 
     /**
@@ -102,25 +194,18 @@ public class PlateStatusService {
 
     /**
      * Normalises the plate the way the parking domain does — upper case, separators removed — so that
-     * {@code sjp-123} scanned off a windscreen matches {@code SJP123} in the register. No country's
-     * plate shape is validated: rejecting a valid foreign plate would leave an officer unable to cite
-     * a car that is very much parked in front of them.
+     * {@code sjp-123} read off a windscreen matches {@code SJP123} in the register.
+     *
+     * <p>Kept as a method here because it is what every caller of this service already reaches for;
+     * the rule itself lives in {@link PlateFormat}, where the exemption register shares it without
+     * the two services having to depend on each other.</p>
      */
     public String normalize(String plate) {
-        if (plate == null) {
-            throw new ValidationException("plate", ErrorCode.VALIDATION_FAILED, "error.parking.plate.invalid");
-        }
-        String upper = plate.toUpperCase(Locale.ROOT);
-        StringBuilder builder = new StringBuilder(upper.length());
-        for (int index = 0; index < upper.length(); index++) {
-            char character = upper.charAt(index);
-            if ((character >= 'A' && character <= 'Z') || (character >= '0' && character <= '9')) {
-                builder.append(character);
-            }
-        }
-        if (builder.isEmpty() || builder.length() > MAX_PLATE_LENGTH) {
-            throw new ValidationException("plate", ErrorCode.VALIDATION_FAILED, "error.parking.plate.invalid");
-        }
-        return builder.toString();
+        return PlateFormat.normalize(plate);
+    }
+
+    /** The same treatment for a fragment typed into a search box — see {@link PlateFormat}. */
+    public String normalizeFragment(String fragment) {
+        return PlateFormat.normalizeFragment(fragment);
     }
 }

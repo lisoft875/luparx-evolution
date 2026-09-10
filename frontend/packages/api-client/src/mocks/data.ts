@@ -559,6 +559,68 @@ export const mockParkingSessions: MockParkingSessionRecord[] = [
     expiresAt: new Date(now + 55 * 60_000).toISOString(),
     endedAt: null,
   },
+  {
+    // Pagó por esta misma bahía y se le venció hace doce minutos: el caso que hasta v0.28 se
+    // mostraba idéntico a «nunca pagó» (CONTRACT.md v0.28).
+    id: 'session-expired-1',
+    userId: 'user-citizen-2',
+    tenantId: 'tenant-sanjose',
+    zoneId: 'zone-centro',
+    zoneName: 'Centro',
+    spaceId: 'space-lup-0002',
+    spaceCode: 'LUP-0002',
+    vehicleId: 'vehicle-crc880',
+    plateSnapshot: 'CRC880',
+    vehicleType: 'CAR',
+    minutes: 30,
+    remainingMinutes: 0,
+    amountMinor: 30000,
+    currencyCode: 'CRC',
+    creditMinutesApplied: 0,
+    status: 'EXPIRED',
+    startedAt: new Date(now - 42 * 60_000).toISOString(),
+    expiresAt: new Date(now - 12 * 60_000).toISOString(),
+    endedAt: null,
+  },
+];
+
+/**
+ * Placas que la municipalidad no multa (CONTRACT.md v0.28).
+ *
+ * La ambulancia es el caso que justifica el modelo entero: no tiene cuenta en la aplicación, nunca
+ * la va a tener, y hasta v0.28 era indistinguible de un carro que no pagó.
+ */
+export interface MockExemption {
+  id: string;
+  tenantId: string;
+  plate: string;
+  plateRaw: string;
+  reason: string;
+  documentRef: string | null;
+  status: 'ACTIVE' | 'REVOKED';
+  validFrom: string;
+  validTo: string | null;
+  grantedAt: string;
+  revokedAt: string | null;
+  revokeReason: string | null;
+}
+
+export const mockExemptions: MockExemption[] = [
+  {
+    id: 'exemption-1',
+    tenantId: 'tenant-sanjose',
+    plate: 'CL1234',
+    plateRaw: 'CL-1234',
+    reason: 'Ambulancia de la Cruz Roja, unidad de emergencias',
+    documentRef: 'Acuerdo municipal 2026-014',
+    status: 'ACTIVE',
+    // Sin vencimiento, que es legítimo y se muestra con esas palabras en vez de con una celda vacía.
+    validFrom: new Date(now - 90 * 86400_000).toISOString(),
+    validTo: null,
+    grantedAt: new Date(now - 90 * 86400_000).toISOString(),
+    revokedAt: null,
+    revokeReason: null,
+  },
 ];
 
 let mockParkingSessionSequence = 1;

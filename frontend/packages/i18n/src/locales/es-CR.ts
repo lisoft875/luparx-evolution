@@ -1116,6 +1116,8 @@ export const esCR = {
     'La boleta se emitió sin ubicación GPS. Queda constancia de que no hubo coordenadas.',
   'citation.clockSkew.seconds': '{{seconds}} s',
 
+  'plate.verdict.exempt': 'Exonerado',
+  'plate.verdict.expired': 'Pago vencido',
   'plate.verdict.covered': 'Pago vigente en esta bahía',
   'plate.verdict.bay_mismatch': 'Pagó por otra bahía',
   'plate.verdict.not_covered': 'Sin pago vigente',
@@ -1153,6 +1155,24 @@ export const esCR = {
   'inspector.lookup.verdict.ambiguous.detail':
     'Hay sesiones vigentes para esta placa, pero sin la bahía no se puede saber si son de este carro. Indicá la bahía.',
   'inspector.lookup.cite': 'Emitir boleta',
+  'inspector.lookup.verdict.exempt.detail':
+    'Esta municipalidad exonera esta placa. No corresponde boleta por falta de pago, aunque no haya pagado.',
+  'inspector.lookup.verdict.expired.detail':
+    'Pagó por esta misma bahía y se le venció. Es distinto de no haber pagado nunca: revisá el tipo de infracción antes de emitir.',
+  'inspector.lookup.exemption.reason': 'Motivo: {{reason}}',
+  'inspector.lookup.exemption.document': 'Respaldo: {{ref}}',
+  'inspector.lookup.exemption.until': 'Vigente hasta el {{date}}',
+  'inspector.lookup.exemption.noEnd': 'Vigente sin fecha de vencimiento',
+  'inspector.lookup.stay.startedAt': 'Inició: {{datetime}}',
+  'inspector.lookup.stay.expiresAt': 'Vence: {{datetime}}',
+  'inspector.lookup.stay.expiredAt': 'Venció: {{datetime}}',
+  'inspector.lookup.stay.zone': 'Zona: {{zone}} · bahía {{bay}}',
+  'inspector.lookup.stay.remaining': 'Le quedan {{minutes}} min',
+  'inspector.lookup.stay.overdue': 'Venció hace {{minutes}} min',
+  'inspector.lookup.withinGrace':
+    'Ya pasó la hora, pero está dentro de la tolerancia de {{minutes}} min de esta municipalidad. Todavía no corresponde boleta por falta de pago.',
+  'inspector.lookup.needBayToCite':
+    'Sin la bahía no se puede emitir: el sistema no sabe todavía si este carro pagó. Indicá la bahía y volvé a consultar.',
   'inspector.lookup.error.PARKING_SPACE_NOT_FOUND': 'Esa bahía no existe en la zona seleccionada.',
   'inspector.lookup.error.VALIDATION_FAILED': 'Revisá la placa y la bahía: la zona y la bahía viajan juntas.',
 
@@ -1304,6 +1324,50 @@ export const esCR = {
   'nav.enforcement': 'Fiscalización',
   'nav.enforcement.citations': 'Boletas',
   'nav.enforcement.types': 'Infracciones',
+  'nav.enforcement.exemptions': 'Exoneraciones',
+  'admin.exemptions.title': 'Exoneraciones',
+  'admin.exemptions.description':
+    'Placas que esta municipalidad no multa por falta de pago. No es un descuento: el cobro sigue igual, lo que cambia es que al fiscalizador le sale EXONERADO en vez de «sin pago».',
+  'admin.exemptions.create': 'Exonerar una placa',
+  'admin.exemptions.createNotice':
+    'Cuelga de la placa, no de una persona ni de un vehículo registrado: la ambulancia y la flotilla municipal casi nunca tienen cuenta en la aplicación. Por eso el motivo y la vigencia son obligatorios de leer.',
+  'admin.exemptions.empty': 'No hay exoneraciones registradas.',
+  'admin.exemptions.filter.status': 'Estado',
+  'admin.exemptions.filter.all': 'Todos los estados',
+  'admin.exemptions.filter.plate': 'Buscar por placa',
+  'admin.exemptions.column.plate': 'Placa',
+  'admin.exemptions.column.reason': 'Motivo',
+  'admin.exemptions.column.validity': 'Vigencia',
+  'admin.exemptions.column.state': 'Estado',
+  'admin.exemptions.status.ACTIVE': 'Registradas',
+  'admin.exemptions.status.REVOKED': 'Retiradas',
+  'admin.exemptions.state.inForce': 'Vigente',
+  'admin.exemptions.state.pending': 'Aún no empieza',
+  'admin.exemptions.state.expired': 'Vencida',
+  'admin.exemptions.state.revoked': 'Retirada',
+  'admin.exemptions.validFrom': 'Desde el {{date}}',
+  'admin.exemptions.validUntil': 'Hasta el {{date}}',
+  'admin.exemptions.noEnd': 'Sin vencimiento',
+  'admin.exemptions.plateHint': 'Como está pintada. Se compara sin guiones ni espacios.',
+  'admin.exemptions.reasonHint':
+    'En palabras, y obligatorio: es la respuesta a «¿por qué no se multó este carro?» cuando alguien pregunte dentro de dos años.',
+  'admin.exemptions.documentRef': 'Documento de respaldo',
+  'admin.exemptions.documentRefHint': 'Número de acuerdo, oficio o resolución. Es lo primero que se pide si alguien impugna.',
+  'admin.exemptions.validToLabel': 'Vence el',
+  'admin.exemptions.validToHint': 'Déjelo en blanco sólo si de verdad no vence, como la flotilla municipal.',
+  'admin.exemptions.noEndWarning':
+    'Sin fecha de vencimiento nadie la va a revisar. Si el carro se vende, sigue exonerado hasta que alguien lo note.',
+  'admin.exemptions.granted': 'Placa exonerada.',
+  'admin.exemptions.revoked': 'Exoneración retirada.',
+  'admin.exemptions.action.revoke': 'Retirar',
+  'admin.exemptions.revoke.title': 'Retirar la exoneración',
+  'admin.exemptions.revoke.body': 'La placa {{plate}} vuelve a multarse por falta de pago desde este momento.',
+  'admin.exemptions.revoke.keepsRow':
+    'La fila se conserva: es lo que explica por qué no se multó a ese carro mientras estuvo vigente.',
+  'admin.exemptions.revoke.reasonLabel': 'Motivo de la retirada',
+  'admin.exemptions.error.alreadyExists': 'Esa placa ya tiene una exoneración vigente en esta municipalidad.',
+  'admin.exemptions.error.invalid': 'Revise la placa, el motivo y las fechas.',
+  'admin.exemptions.error.notActive': 'Esa exoneración ya no está vigente.',
   'nav.appeals': 'Descargos',
 
   // ---- Municipalidad: descargos ----------------------------------------------------------------

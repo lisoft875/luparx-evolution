@@ -22,7 +22,16 @@ import java.util.Locale;
  * its code, so the lookup takes it, and:</p>
  *
  * <ul>
+ *   <li>the plate carries an exemption in force in this municipality → {@link #EXEMPT}, checked
+ *       <b>before anything else</b>. An ambulance is not fined whether or not it also paid, and
+ *       asking about payment first would produce "no pagó" for a vehicle the municipality had
+ *       already decided never to fine (CONTRACT.md v0.28);</li>
  *   <li>a running session for that plate <em>on that bay</em> → {@link #COVERED};</li>
+ *   <li>no running session on that bay, but one that <em>ran out</em> on it recently → {@link #EXPIRED}.
+ *       "Paid and ran out twelve minutes ago" is a different conversation with the driver from "never
+ *       paid", and in many municipalities a different infraction. Collapsing both into
+ *       {@code NOT_COVERED}, as this module did until v0.28, threw away the distinction at exactly
+ *       the moment somebody needed it;</li>
  *   <li>running sessions for that plate, but all on other bays → {@link #BAY_MISMATCH}: somebody paid
  *       for a different space, which is a different infraction from not paying at all, and the
  *       inspector is shown where those stays are so they can tell the two apart;</li>
@@ -38,7 +47,11 @@ import java.util.Locale;
  */
 public enum PlateVerdict {
 
+    /** The municipality exempts this plate right now. Nothing about payment is relevant. */
+    EXEMPT,
     COVERED,
+    /** Paid for this bay, and the time ran out — including the municipality's tolerance. */
+    EXPIRED,
     BAY_MISMATCH,
     NOT_COVERED,
     AMBIGUOUS;
@@ -46,6 +59,17 @@ public enum PlateVerdict {
     /** True only when the platform can state that this bay was paid for by this plate. */
     public boolean isCovered() {
         return this == COVERED;
+    }
+
+    /**
+     * True when the platform can state that no citation for non-payment is due.
+     *
+     * <p>Two ways to get here and they are not the same fact: the stay was paid, or the vehicle is
+     * exempt. The screen must keep saying which — an officer who reports "the app said it was fine"
+     * needs the record to say why it was fine.</p>
+     */
+    public boolean forbidsNonPaymentCitation() {
+        return this == COVERED || this == EXEMPT;
     }
 
     public String labelKey() {

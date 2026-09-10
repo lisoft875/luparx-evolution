@@ -1259,8 +1259,14 @@ export interface TimeCreditsResponse {
 // administration and the citizen who was fined — read deliberately different shapes, and those
 // shapes are kept apart here for the same reason the server keeps them apart.
 
-/** The answer to "has this plate paid, on this bay, right now?" — never `COVERED` without a bay. */
-export type PlateVerdict = 'COVERED' | 'BAY_MISMATCH' | 'NOT_COVERED' | 'AMBIGUOUS';
+/**
+ * The answer to "has this plate paid, on this bay, right now?" — never `COVERED` without a bay.
+ *
+ * `EXEMPT` is decided before anything about payment: an ambulance is not fined whether or not it
+ * also paid. `EXPIRED` is "paid for this bay and the clock ran out", which until v0.28 was collapsed
+ * into `NOT_COVERED` — a different conversation with the driver, and often a different infraction.
+ */
+export type PlateVerdict = 'EXEMPT' | 'COVERED' | 'EXPIRED' | 'BAY_MISMATCH' | 'NOT_COVERED' | 'AMBIGUOUS';
 
 /** The legal life of a citation (`CitationStatus`); the transition table lives on the server. */
 export type CitationStatus =
@@ -1357,9 +1363,87 @@ export interface PlateStatus {
   requiresBay: boolean;
   bay: EnforcementBay | null;
   coveringStay: EnforcementStay | null;
-  /** Running stays for the same plate elsewhere in the municipality. What makes BAY_MISMATCH legible. */
+  /** The stay that ran out on this bay, when the verdict is `EXPIRED`. */
+  expiredStay: EnforcementStay | null;
+  /** Why this plate is not fined, when the verdict is `EXEMPT`. */
+  exemption: PlateExemptionSummary | null;
+  /**
+   * Running stays for the same plate elsewhere in the municipality. What makes BAY_MISMATCH legible.
+   * Narrowed by the server to the sectors this officer covers (CONTRACT.md v0.28).
+   */
   otherStays: EnforcementStay[];
+  /**
+   * The municipality's tolerance in minutes after the clock runs out.
+   *
+   * Carried so the screen can explain a `COVERED` whose expiry time has already passed. Without it
+   * the officer reads "vigente" beside a time in the past and has no way to know that is correct.
+   */
+  graceMinutes: number;
   checkedAt: string;
+}
+
+/**
+ * A zone as the officer's device needs it (`GET /inspector/zones`).
+ *
+ * No tariff: an officer does not quote prices, and a screen that showed one would invite the
+ * question of whether they can negotiate it.
+ */
+export interface InspectorZone {
+  id: string;
+  code: string;
+  name: string;
+  description: string | null;
+  /** The bay codes this zone actually contains, so the field can validate instead of guessing. */
+  spaceCodes?: ParkingZoneSpaceCodes;
+}
+
+/** Just enough for an officer to say out loud why they are not fining this car. */
+export interface PlateExemptionSummary {
+  id: string;
+  plate: string;
+  reason: string;
+  documentRef: string | null;
+  validFrom: string;
+  validTo: string | null;
+}
+
+// ---- Plate exemptions, administration side (CONTRACT.md v0.28) --------------------------------
+
+export type ExemptionStatus = 'ACTIVE' | 'REVOKED';
+
+export interface GrantExemptionRequest {
+  plate: string;
+  /** Required, and free text rather than a category: what one country exempts is not what another does. */
+  reason: string;
+  documentRef?: string;
+  validFrom?: string;
+  /** Omitted means **no expiry** — legitimate for a council fleet, and the screen says so in words. */
+  validTo?: string;
+}
+
+export interface AmendExemptionRequest {
+  reason: string;
+  documentRef?: string;
+  validFrom?: string;
+  validTo?: string;
+}
+
+export interface PlateExemption {
+  id: string;
+  plate: string;
+  plateRaw: string;
+  reason: string;
+  documentRef: string | null;
+  status: ExemptionStatus;
+  validFrom: string;
+  validTo: string | null;
+  /** Computed against the clock, never stored — see the three flags together. */
+  inForce: boolean;
+  pending: boolean;
+  expired: boolean;
+  grantedAt: string;
+  revokedAt: string | null;
+  revokeReason: string | null;
 }
 
 /** What the officer's device sends. Everything about location is optional and never invented. */

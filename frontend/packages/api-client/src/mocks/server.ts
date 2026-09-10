@@ -4,6 +4,8 @@ import type {
   AdminUserDetail,
   AdminUserListItem,
   CreateAdminUserRequest,
+  GrantExemptionRequest,
+  AmendExemptionRequest,
   MembershipStatus,
   CreateStaffInvitationRequest,
   AcceptInvitationRequest,
@@ -45,6 +47,7 @@ import {
   mockParkingSessions,
   mockTenantSettings,
   mockTimeCredits,
+  mockExemptions,
   mockUsersById,
   mockVehicles,
   mockWallets,
@@ -56,6 +59,7 @@ import {
   recordAuditEvent,
   walletKey,
   type MockParkingSessionRecord,
+  type MockExemption,
   type MockUserRecord,
 } from './data';
 import { mintMockTokenPair } from './token';
@@ -2036,18 +2040,61 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
       const bay = zoneId && spaceCode
         ? { spaceId: `${zoneId}:${spaceCode}`, spaceCode, zoneId, zoneCode: zoneId, zoneName: zoneNameForId(zoneId) }
         : null;
+      // Estadías que el RELOJ terminó, recientes. Es lo que permite decir «venció hace 12 minutos»
+      // en vez de «no pagó», que hasta v0.28 era la misma respuesta (CONTRACT.md v0.28).
+      const since = Date.now() - 3 * 3600 * 1000;
+      const expiredStays = mockParkingSessions
+        .filter(
+          (s) =>
+            s.tenantId === tenantId
+            && s.status === 'EXPIRED'
+            && normalizeMockPlate(s.plateSnapshot) === plate
+            && new Date(s.expiresAt).getTime() >= since,
+        )
+        .map((s) => ({
+          sessionId: s.id,
+          zoneId: s.zoneId,
+          zoneCode: s.zoneId,
+          zoneName: s.zoneName,
+          spaceId: s.spaceId,
+          spaceCode: s.spaceCode,
+          startedAt: s.startedAt,
+          expiresAt: s.expiresAt,
+        }));
+
       type MockStay = (typeof stays)[number];
+      const graceMinutes = mockParkingPolicyForTenant(tenantId).graceMinutes ?? 0;
       let verdict: string;
       let covering: MockStay | null = null;
+      let expiredHere: MockStay | null = null;
       let others: MockStay[] = stays;
-      if (stays.length === 0) {
+
+      // PRIMERO la exoneración, antes que nada sobre el pago: una ambulancia no se multa haya
+      // pagado o no, y preguntar por el pago primero contestaría «no pagó» sobre un vehículo que
+      // esta municipalidad ya decidió no multar nunca.
+      const exemption = mockExemptions.find(
+        (e) => e.tenantId === tenantId && e.plate === plate && e.status === 'ACTIVE'
+          && new Date(e.validFrom) <= new Date()
+          && (!e.validTo || new Date(e.validTo) > new Date()),
+      );
+      if (exemption) {
+        verdict = 'EXEMPT';
+        others = [];
+      } else if (stays.length === 0 && expiredStays.length === 0) {
         verdict = 'NOT_COVERED';
       } else if (!bay) {
         verdict = 'AMBIGUOUS';
       } else {
         covering = stays.find((s) => s.zoneId === zoneId && s.spaceCode === spaceCode) ?? null;
         others = stays.filter((s) => s !== covering);
-        verdict = covering ? 'COVERED' : 'BAY_MISMATCH';
+        expiredHere = expiredStays.find((s) => s.zoneId === zoneId && s.spaceCode === spaceCode) ?? null;
+        verdict = covering
+          ? 'COVERED'
+          : expiredHere
+            ? 'EXPIRED'
+            : others.length > 0
+              ? 'BAY_MISMATCH'
+              : 'NOT_COVERED';
       }
       return json({
         plate,
@@ -2057,9 +2104,127 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
         requiresBay: verdict === 'AMBIGUOUS',
         bay: verdict === 'AMBIGUOUS' ? null : bay,
         coveringStay: covering,
+        expiredStay: expiredHere,
+        exemption: exemption
+          ? {
+              id: exemption.id,
+              plate: exemption.plate,
+              reason: exemption.reason,
+              documentRef: exemption.documentRef,
+              validFrom: exemption.validFrom,
+              validTo: exemption.validTo,
+            }
+          : null,
         otherStays: others,
+        graceMinutes,
         checkedAt: new Date().toISOString(),
       });
+    }
+
+    // GET /api/v1/inspector/zones — el catálogo que el servidor publicaba desde v0.7 y ninguna
+    // pantalla llamaba, por lo que un dispositivo recién instalado no conocía ninguna zona y sólo
+    // podía obtener AMBIGUOUS (CONTRACT.md v0.28).
+    if (segments[2] === 'inspector' && segments[3] === 'zones' && method === 'GET') {
+      return json(
+        (mockCitizenZones(tenantId) as { id: string; code: string; name: string }[]).map((zone) => ({
+          id: zone.id,
+          code: zone.code,
+          name: zone.name,
+          description: null,
+        })),
+      );
+    }
+
+    // --- Exoneraciones (CONTRACT.md v0.28) ------------------------------------------------------
+    if (segments[2] === 'admin' && segments[3] === 'enforcement' && segments[4] === 'exemptions') {
+      const mine = mockExemptions.filter((e) => e.tenantId === tenantId);
+      const toResponse = (exemption: MockExemption) => {
+        const nowDate = new Date();
+        const from = new Date(exemption.validFrom);
+        const to = exemption.validTo ? new Date(exemption.validTo) : null;
+        return {
+          ...exemption,
+          // Los tres calculados contra el reloj, nunca guardados: vencer es un hecho del reloj y una
+          // columna necesitaría un trabajo para mantenerse cierta.
+          inForce: exemption.status === 'ACTIVE' && from <= nowDate && (!to || to > nowDate),
+          pending: exemption.status === 'ACTIVE' && from > nowDate,
+          expired: exemption.status === 'ACTIVE' && !!to && to <= nowDate,
+        };
+      };
+
+      if (method === 'GET' && segments.length === 5) {
+        const statusFilter = url.searchParams.get('status');
+        const plateFilter = normalizeMockPlate(url.searchParams.get('plate') ?? '');
+        const rows = mine
+          .filter((e) => !statusFilter || e.status === statusFilter)
+          .filter((e) => !plateFilter || e.plate.includes(plateFilter))
+          .map(toResponse);
+        return json(paginate(rows, Number(url.searchParams.get('page') ?? '0'),
+          Number(url.searchParams.get('size') ?? '20')));
+      }
+      if (method === 'POST' && segments.length === 5) {
+        const payload = await readBody<GrantExemptionRequest>(init);
+        const plate = normalizeMockPlate(payload.plate);
+        if (!plate) return problem(422, 'VALIDATION_FAILED', 'That plate cannot be read');
+        if (!payload.reason?.trim()) {
+          return problem(422, 'VALIDATION_FAILED', 'A reason is required');
+        }
+        // Una viva por placa: dos filas vivas significan que revocar la que se ve deja la otra
+        // exonerando, y nadie reclama por una multa que no se puso.
+        if (mine.some((e) => e.plate === plate && e.status === 'ACTIVE')) {
+          return problem(409, 'EXEMPTION_ALREADY_EXISTS', 'That plate already has a live exemption');
+        }
+        const exemption: MockExemption = {
+          id: `exemption-${crypto.randomUUID()}`,
+          tenantId: tenantId ?? '',
+          plate,
+          plateRaw: payload.plate.trim(),
+          reason: payload.reason.trim(),
+          documentRef: payload.documentRef?.trim() || null,
+          status: 'ACTIVE',
+          validFrom: payload.validFrom ?? new Date().toISOString(),
+          validTo: payload.validTo ?? null,
+          grantedAt: new Date().toISOString(),
+          revokedAt: null,
+          revokeReason: null,
+        };
+        mockExemptions.push(exemption);
+        recordAuditEvent({
+          tenantId: tenantId ?? null,
+          actorUserId: userId,
+          actorPortal: 'admin',
+          action: 'PLATE_EXEMPTION_GRANTED',
+          resourceType: 'plate-exemption',
+          resourceId: exemption.id,
+          metadata: { plate: exemption.plate },
+        });
+        return json(toResponse(exemption), 201);
+      }
+      if (segments.length >= 6) {
+        const exemption = mine.find((e) => e.id === segments[5]);
+        if (!exemption) return problem(404, 'EXEMPTION_NOT_FOUND', 'Exemption not found');
+        if (segments[6] === 'revoke' && method === 'POST') {
+          const payload = await readBody<{ reason: string }>(init);
+          if (!payload.reason?.trim()) {
+            return problem(422, 'VALIDATION_FAILED', 'A reason is required');
+          }
+          exemption.status = 'REVOKED';
+          exemption.revokedAt = new Date().toISOString();
+          exemption.revokeReason = payload.reason.trim();
+          return json(toResponse(exemption));
+        }
+        if (!segments[6] && method === 'PUT') {
+          const payload = await readBody<AmendExemptionRequest>(init);
+          if (exemption.status !== 'ACTIVE') {
+            return problem(409, 'EXEMPTION_NOT_ACTIVE', 'That exemption is no longer active');
+          }
+          exemption.reason = payload.reason.trim();
+          exemption.documentRef = payload.documentRef?.trim() || null;
+          if (payload.validFrom) exemption.validFrom = payload.validFrom;
+          exemption.validTo = payload.validTo ?? null;
+          return json(toResponse(exemption));
+        }
+      }
     }
 
     // GET /inspector/enforcement/infraction-types | GET|PUT /admin/enforcement/infraction-types

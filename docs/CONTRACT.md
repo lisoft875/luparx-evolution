@@ -2252,3 +2252,116 @@ De la lista del panel: activar/desactivar/suspender (v0.15), asignar zonas (v0.1
 un funcionario** — que no es una omisión sino una invariante escrita: desactivar toca la membresía y ni
 una sola boleta, `V22_0` lo dice en su encabezado y `MembershipService.suspend` lo repite donde se toma
 la decisión.
+
+---
+
+# v0.28 — Modo fiscalizador: exonerado, vencido, y lo que la pantalla no decía (normativo)
+
+## 1. Exoneración por placa
+
+### El hueco
+
+La plataforma sólo sabía de una forma de no ser multado: haber pagado. Un vehículo que la ley
+exonera —la flotilla municipal, una ambulancia, un cuerpo diplomático, una placa de discapacidad—
+era **indistinguible de uno que no pagó**, y la app del fiscalizador le mostraba «sin pago» junto a
+un botón para emitir la boleta.
+
+### Cuelga de la placa
+
+No de una persona y no de un vehículo registrado. La placa es lo que el fiscalizador consulta y lo
+que está pintado en el carro; los casos que de verdad importan —la ambulancia, el carro del
+municipio— casi nunca tienen cuenta en la aplicación y no la van a tener, así que exigir un vehículo
+registrado dejaría fuera precisamente a los que no se pueden multar.
+
+La contrapartida está asumida y no escondida: **una placa exonerada lo sigue estando aunque el carro
+se venda**. Por eso el motivo y la vigencia son obligatorios de leer en pantalla, «sin vencimiento»
+se dice con esas palabras en vez de con una celda vacía, y la pantalla advierte que una exoneración
+sin fecha de fin es una que nadie va a revisar.
+
+### Vive en fiscalización, no en parqueo
+
+Una exoneración dice «a este vehículo no se le multa», **no** «a este vehículo se le cobra cero». El
+dominio de parqueo cobra exactamente igual y no sabe que esto existe; el exonerado simplemente no
+inicia una estadía. Meterlo en la cotización sería poner una excepción silenciosa justo donde una
+excepción silenciosa es una pérdida de recaudación que nadie nota, y acoplaría dos dominios que hoy
+sólo se hablan por un puerto de lectura.
+
+### El registro (`plate_exemptions`, V27_0)
+
+`GET/POST/PUT /admin/enforcement/exemptions`, `POST …/{id}/revoke`, todo bajo
+**`ENFORCEMENT_MANAGE`** — la misma llave que gobierna *qué se multa*, porque decidir que un vehículo
+nunca se multa es esa misma decisión vista por el otro lado.
+
+* **`reason` obligatorio y en palabras**, deliberadamente **no** un catálogo de categorías: qué
+  exonera un país no es lo que exonera otro, y un enum sería la ley de Costa Rica incrustada en el
+  esquema. Lo invariante es que alguien tenga que escribir por qué.
+* `documentRef` opcional: número de acuerdo, oficio o resolución. Es lo primero que se pide cuando
+  alguien impugna.
+* `valid_to` nulo significa **sin vencimiento**, y es legítimo.
+* Una exoneración viva por placa y municipalidad (índice único parcial). Dos filas vivas significan
+  que retirar la que se ve deja la otra exonerando, y nadie reclama por una multa que no se puso.
+* **Retirar conserva la fila**: es lo que explica por qué ese carro no se multó entre marzo y junio.
+* Sin estado `EXPIRED`: vencer es un hecho del reloj y no una decisión de nadie. Una columna así
+  obliga a un trabajo para mantenerla cierta, y el atraso de ese trabajo es una ventana en la que lo
+  vencido se lee como vigente. `inForce`, `pending` y `expired` se calculan contra el reloj.
+* Por municipalidad, siempre. Si una ambulancia parquea gratis en el cantón vecino es decisión de
+  ese cantón; una exoneración de plataforma sería una municipalidad legislando por las demás.
+
+## 2. Los veredictos: de cuatro a seis
+
+| Veredicto | Qué dice |
+|---|---|
+| `EXEMPT` | La municipalidad exonera esta placa. **Se resuelve primero, antes que nada sobre el pago.** |
+| `COVERED` | Estadía vigente en **esta** bahía. |
+| `EXPIRED` | Pagó por **esta misma** bahía y se le venció. |
+| `BAY_MISMATCH` | Estadías vigentes, pero todas en otras bahías. |
+| `NOT_COVERED` | Nada. |
+| `AMBIGUOUS` | Hay coincidencias y no se mandó la bahía. |
+
+**`EXEMPT` va primero** porque una ambulancia no se multa haya pagado o no; preguntar por el pago
+primero contestaría «no pagó» sobre un vehículo que la municipalidad ya decidió no multar nunca.
+
+**`EXPIRED` es nuevo y es el que más cambia una conversación.** «Pagó y se le venció hace doce
+minutos» no es «nunca pagó»: en muchas municipalidades es otra infracción, y siempre es otra cosa que
+decirle al conductor. Hasta v0.28 ambos casos se veían idénticos, porque una estadía vencida
+simplemente desaparecía de la respuesta. Se busca sólo en las **tres horas** anteriores —más allá
+«venció» describiría algo de otro turno— y sólo estadías que terminó **el reloj**: una que el
+ciudadano cerró él mismo no es «vencida», dijo que se iba, y reportarla así sería ponerle palabras
+en la boca.
+
+`EXEMPT` y `COVERED` comparten el tono verde a propósito —ambos significan «no corresponde boleta por
+falta de pago»— y se distinguen por **forma**: un escudo y un visto. Es la regla de
+DESIGN_SYSTEM.md §2.4 funcionando como debe.
+
+## 3. Lo que la pantalla no decía
+
+* **La hora de inicio no se mostraba nunca**, y el vencimiento salía **sin fecha**, así que una
+  estadía de ayer a las 14:30 se veía igual que una vigente hasta las 14:30 de hoy. Ahora sale inicio,
+  vencimiento con fecha, zona y bahía, y cuánto queda o cuánto hace que venció.
+* **La tolerancia se aplicaba y no se veía.** El servidor ya devolvía como vigente una estadía dentro
+  de la tolerancia de la municipalidad, así que el fiscalizador leía «vigente» junto a una hora ya
+  pasada y no tenía forma de saber que eso era correcto. `graceMinutes` viaja en la respuesta y la
+  pantalla lo explica cuando aplica.
+* **«Emitir boleta» se ofrecía sobre `AMBIGUOUS`**, es decir sobre una respuesta que el servidor se
+  negó explícitamente a dar. Ahora ahí no hay botón: hay una frase que dice qué falta.
+
+## 4. Dos defectos que salieron en la auditoría
+
+**Fuga entre zonas.** El guardia de zona sólo validaba el `zoneId` que entraba; `otherStays` salía
+sin filtrar, así que un fiscalizador asignado a un sector recibía **dónde está parqueada esa placa en
+toda la municipalidad**, incluidas zonas que no cubre — y al tocar una de esas filas la app le pedía
+al servidor una zona que éste le rechazaba. Ahora la asignación acota también la respuesta. La bahía
+que el funcionario consultó se incluye siempre aunque su zona no esté en la asignación: le
+permitieron preguntar, así que negarle la explicación lo dejaría con un veredicto sin motivo.
+
+**`GET /api/v1/inspector/zones` era código muerto.** Existía en el servidor desde v0.7 y ninguna
+pantalla lo llamaba: la app aprendía las zonas minando sus propias boletas, de modo que un
+dispositivo recién instalado no conocía ninguna zona —y sin zona sólo se puede obtener `AMBIGUOUS`—.
+Ahora la app lo llama, y el directorio aprendido queda como lo que siempre fue en realidad: el caché
+para trabajar sin señal.
+
+## Lo que sigue pendiente de tu lista
+
+**Escanear la placa con la cámara (LPR).** No existe: la cámara está conectada para la evidencia
+fotográfica de la boleta, pero no hay reconocimiento de caracteres en ningún lado. Queda para su
+propia versión, como lo planteaste.

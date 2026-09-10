@@ -9,13 +9,15 @@
  * both exist and both are refused to an inspector token, because a portal's token never authorises
  * another portal's routes (CONTRACT.md §3), and there is no `/api/v1/inspector/**` equivalent.
  *
- * So the app learns the zones from the responses it *is* entitled to read — its own citations, and
- * every plate lookup — and keeps them on the device, where they also survive going offline. This is
- * a workaround for a missing endpoint and is written down as one:
+ * Since v0.28 the catalogue comes from `GET /api/v1/inspector/zones`, and this file is no longer a
+ * workaround for a missing endpoint: it is the **offline cache**. The app writes the catalogue into
+ * it on every successful fetch and keeps learning from the responses it reads anyway — its own
+ * citations and every plate lookup — so a phone that loses signal opens its lookup screen with the
+ * zones it saw last time instead of with nothing.
  *
- * TODO(contract): replace this with `GET /api/v1/inspector/zones` (PERM_CITATION_ISSUE) the moment
- * the backend publishes it. Until then an officer on a brand-new device knows no zone until their
- * first lookup or their first citation, which is a real gap and not a design choice.
+ * (Historical note, because the gap was real: the endpoint existed on the server from v0.7 and no
+ * screen called it, so a brand-new device knew no zone until its first citation — and an officer
+ * with an empty picker can only ever get `AMBIGUOUS`.)
  *
  * Keyed per municipality, because a zone id means nothing outside the one it belongs to.
  */
@@ -82,6 +84,27 @@ export interface ZoneSighting {
  * Deliberately a no-op when nothing changed: this runs on every list and lookup response, and
  * writing an identical array would re-render every screen subscribed to it for no reason.
  */
+/**
+ * The municipality's own zone catalogue, written into the cache (CONTRACT.md v0.28).
+ *
+ * Distinct from {@link rememberZones}, which learns from sightings: this one is authoritative, so a
+ * zone's code and name are taken from it rather than merged, while the bay codes an officer has
+ * actually typed are kept — those are the suggestions that make the field quick, and the server's
+ * range is a summary, not a list.
+ */
+export function rememberCatalogZones(
+  tenantId: string | null,
+  zones: readonly { id: string; code: string; name: string }[],
+): void {
+  if (!tenantId || zones.length === 0) return;
+  const current = snapshot(tenantId);
+  const byId = new Map(current.map((zone) => [zone.id, zone]));
+  for (const zone of zones) {
+    byId.set(zone.id, { id: zone.id, code: zone.code, name: zone.name, recentBays: byId.get(zone.id)?.recentBays ?? [] });
+  }
+  persist(tenantId, [...byId.values()]);
+}
+
 export function rememberZones(tenantId: string | null, sightings: readonly ZoneSighting[]): void {
   if (!tenantId || sightings.length === 0) return;
   const current = snapshot(tenantId);
@@ -105,7 +128,11 @@ export function rememberZones(tenantId: string | null, sightings: readonly ZoneS
   }
 
   if (!changed) return;
-  const next = [...byId.values()].sort((a, b) => a.name.localeCompare(b.name));
+  persist(tenantId, [...byId.values()]);
+}
+
+function persist(tenantId: string, zones: KnownZone[]): void {
+  const next = [...zones].sort((a, b) => a.name.localeCompare(b.name));
   cache.set(tenantId, next);
   try {
     window.localStorage.setItem(storageKey(tenantId), JSON.stringify(next));

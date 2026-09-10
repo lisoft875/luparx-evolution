@@ -5,7 +5,10 @@ import cr.luparx.parking.model.ParkingSessionStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -59,6 +62,27 @@ public interface ParkingSessionRepository extends JpaRepository<ParkingSession, 
      */
     List<ParkingSession> findByTenantIdAndPlateSnapshotAndStatusOrderByExpiresAtAsc(
             UUID tenantId, String plateSnapshot, ParkingSessionStatus status);
+
+    /**
+     * Stays for this plate that the CLOCK ended, newest first, no older than {@code since}.
+     *
+     * <p>Only {@code EXPIRED}. A {@code FINISHED} stay is one the citizen closed themselves — they
+     * said they were leaving — and reporting that to an officer as a lapsed payment would put words
+     * in their mouth (CONTRACT.md v0.28).</p>
+     *
+     * <p>Bounded by {@code since} because this answers "did it just run out", not "what did this
+     * plate ever pay": unbounded, it would eventually scan a table that grows with every stay.</p>
+     */
+    @Query("""
+            select s from ParkingSession s
+            where s.tenantId = :tenantId and s.plateSnapshot = :plate
+              and s.status = cr.luparx.parking.model.ParkingSessionStatus.EXPIRED
+              and s.expiresAt >= :since
+            order by s.expiresAt desc
+            """)
+    List<ParkingSession> findRecentlyExpired(@Param("tenantId") UUID tenantId,
+                                             @Param("plate") String plate,
+                                             @Param("since") Instant since);
 
     long countByTenantIdAndStatus(UUID tenantId, ParkingSessionStatus status);
 }

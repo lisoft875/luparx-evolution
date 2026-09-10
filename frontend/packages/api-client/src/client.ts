@@ -59,6 +59,11 @@ import type {
   UpdateParkingSpaceRequest,
   UpdateParkingZoneRequest,
   CreateAdminUserRequest,
+  InspectorZone,
+  ExemptionStatus,
+  GrantExemptionRequest,
+  AmendExemptionRequest,
+  PlateExemption,
   CreateStaffInvitationRequest,
   StaffInvitation,
   InvitationStatus,
@@ -392,6 +397,21 @@ export class ApiClient {
     remove: (id: string): Promise<void> => this.http.request('DELETE', `/api/v1/admin/memberships/${id}`),
   };
 
+  /** Plates this municipality does not fine for non-payment (CONTRACT.md v0.28). */
+  readonly adminExemptions = {
+    list: (
+      query: { status?: ExemptionStatus; plate?: string } & PageParams = {},
+    ): Promise<PagedResponse<PlateExemption>> =>
+      this.http.request('GET', '/api/v1/admin/enforcement/exemptions', { query }),
+    grant: (payload: GrantExemptionRequest): Promise<PlateExemption> =>
+      this.http.request('POST', '/api/v1/admin/enforcement/exemptions', { body: payload, idempotent: true }),
+    amend: (id: string, payload: AmendExemptionRequest): Promise<PlateExemption> =>
+      this.http.request('PUT', `/api/v1/admin/enforcement/exemptions/${id}`, { body: payload }),
+    /** A POST and not a DELETE: nothing is deleted, because the row explains a decision. */
+    revoke: (id: string, payload: { reason: string }): Promise<PlateExemption> =>
+      this.http.request('POST', `/api/v1/admin/enforcement/exemptions/${id}/revoke`, { body: payload }),
+  };
+
   readonly adminAudit = {
     list: (query: AuditEventsQuery & PageParams): Promise<PagedResponse<AuditEvent>> =>
       this.http.request('GET', '/api/v1/admin/audit-events', { query }),
@@ -666,6 +686,15 @@ export class ApiClient {
           { query: { zoneId: bay.zoneId, spaceCode: bay.spaceCode } },
         ),
       ),
+    /**
+     * The zones this officer covers, with the bay codes each one has (CONTRACT.md v0.28).
+     *
+     * The endpoint existed on the server from v0.7 and no screen called it, so the app learned zones
+     * by mining its own past citations — which left a brand-new device with an empty picker and
+     * therefore unable to get anything but `AMBIGUOUS`. This is the fix; the mined directory stays
+     * only as the offline cache it always was.
+     */
+    zones: (): Promise<InspectorZone[]> => this.http.request('GET', '/api/v1/inspector/zones'),
     /** What this municipality fines today. Only the kinds still in force. */
     infractionTypes: async (): Promise<InfractionType[]> =>
       (

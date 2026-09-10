@@ -29,6 +29,7 @@ import { ReportsPage } from './pages/ReportsPage';
 import { EnforcementCitationsPage } from './pages/EnforcementCitationsPage';
 import { EnforcementCitationDetailPage } from './pages/EnforcementCitationDetailPage';
 import { AppealsPage } from './pages/AppealsPage';
+import { ExemptionsPage } from './pages/ExemptionsPage';
 import { SettingsInfractionTypesPage } from './pages/SettingsInfractionTypesPage';
 
 const queryClient = new QueryClient({
@@ -262,6 +263,18 @@ export function App(): React.JSX.Element {
                     <RequireTenant selectTenantPath="/select-tenant">
                       <RequirePermission permission="CITATION_READ" fallback={<Navigate to="/" replace />}>
                         <AppealsPage />
+                      </RequirePermission>
+                    </RequireTenant>
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/exemptions"
+                element={
+                  <RequireAuth loginPath="/login">
+                    <RequireTenant selectTenantPath="/select-tenant">
+                      <RequirePermission permission="ENFORCEMENT_MANAGE" fallback={<Navigate to="/" replace />}>
+                        <ExemptionsPage />
                       </RequirePermission>
                     </RequireTenant>
                   </RequireAuth>

@@ -10,7 +10,13 @@ import {
   subscribeToQueue,
   type QueuedCitation,
 } from './citationQueue';
-import { knownZones, rememberZones, subscribeToZones, type KnownZone } from './zoneDirectory';
+import {
+  knownZones,
+  rememberCatalogZones,
+  rememberZones,
+  subscribeToZones,
+  type KnownZone,
+} from './zoneDirectory';
 
 /**
  * TanStack Query hooks over the inspector's v0.7 surface (CONTRACT.md §"API del fiscalizador").
@@ -99,25 +105,29 @@ export function usePlateLookup() {
 /**
  * Seeds the zone directory at app start.
  *
- * The plate lookup is the landing screen and needs a zone before it can ask a conclusive question,
- * but the enforcement portal publishes no zone catalogue (see ./zoneDirectory), so the app learns
- * them from the officer's own citations. Reading one page of those on start is what turns "no zones
- * on this device" into a usable picker for anyone who has worked a shift before. A long `staleTime`
- * keeps it to one request per session; failures are ignored on purpose, because a device with no
- * signal must still open its lookup screen with whatever it learned last time.
+ * The plate lookup is the landing screen and needs a zone before it can ask a conclusive question.
+ * Since v0.28 that comes from `GET /inspector/zones`, the endpoint the server had published since
+ * v0.7 and nothing called: the app used to learn zones by mining the officer's own past citations,
+ * which left a device that had never written one with an empty picker — and an officer with an empty
+ * picker can only ever get `AMBIGUOUS`.
+ *
+ * The learned directory is kept, demoted to what it always really was: the offline cache. The
+ * catalogue is written into it on every success, so a phone that loses signal opens its lookup
+ * screen with the zones it saw last time instead of nothing. Failures are ignored for the same
+ * reason.
  */
 export function useZoneDirectorySeed(): void {
   const { apiClient, activeTenant } = useAuth();
   const tenantId = activeTenant?.id ?? null;
   const query = useQuery({
-    queryKey: ['inspector', 'zone-seed', tenantId],
-    queryFn: () => apiClient.inspectorEnforcement.list({ page: 0, size: 50 }),
+    queryKey: ['inspector', 'zones', tenantId],
+    queryFn: () => apiClient.inspectorEnforcement.zones(),
     enabled: Boolean(tenantId),
     staleTime: 60 * 60 * 1000,
     retry: false,
   });
   useEffect(() => {
-    rememberZones(tenantId, query.data?.items ?? []);
+    rememberCatalogZones(tenantId, query.data ?? []);
   }, [tenantId, query.data]);
 }
 

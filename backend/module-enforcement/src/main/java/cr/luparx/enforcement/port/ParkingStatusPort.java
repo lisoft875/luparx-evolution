@@ -34,6 +34,32 @@ public interface ParkingStatusPort {
      */
     List<ActiveStay> activeStays(TenantId tenantId, String plateNormalized);
 
+    /**
+     * Sessions for this plate that <b>ran out</b> recently, newest first.
+     *
+     * <p>What makes "pagó y se le venció hace doce minutos" sayable at all. Until v0.28 such a stay
+     * simply vanished from the answer and the plate read as {@code NOT_COVERED}, so the officer could
+     * not tell it apart from a car that never paid — a distinction that is often a different
+     * infraction and is always a different conversation with the driver.</p>
+     *
+     * <p>Only sessions the clock ended. A stay the citizen closed early is not "expired": they said
+     * they were leaving, and reporting that as a lapsed payment would put words in their mouth.</p>
+     *
+     * <p>Bounded by {@code since} because this is a question about the recent past, not a history:
+     * an unbounded lookback would eventually scan a table that grows with every stay ever paid.</p>
+     */
+    List<ActiveStay> recentlyExpiredStays(TenantId tenantId, String plateNormalized, Instant since);
+
+    /**
+     * The municipality's tolerance, in minutes, after a session's clock runs out.
+     *
+     * <p>The parking domain already applies it — a stay inside the tolerance is still returned by
+     * {@link #activeStays} — and this exposes the number so the answer can <em>explain</em> itself.
+     * Without it the officer reads "vigente" beside an expiry time that has already passed and has
+     * no way to know that is correct.</p>
+     */
+    int graceMinutes(TenantId tenantId);
+
     /** The bay the inspector is standing at, resolved from the code painted on it. */
     Optional<Bay> findBay(TenantId tenantId, UUID zoneId, String spaceCode);
 

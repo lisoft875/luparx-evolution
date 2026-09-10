@@ -101,6 +101,17 @@ public final class ErrorCode {
     public static final String INVITATION_ALREADY_ACCEPTED = "INVITATION_ALREADY_ACCEPTED";
     /** Re-sending or revoking something that is no longer live. */
     public static final String INVITATION_NOT_PENDING = "INVITATION_NOT_PENDING";
+
+    // --- plate exemptions (CONTRACT.md v0.28) -----------------------------------------------------
+    public static final String EXEMPTION_NOT_FOUND = "EXEMPTION_NOT_FOUND";
+    /**
+     * The plate already carries a live exemption in this municipality. Refused rather than given a
+     * second one: two live rows mean revoking the one an operator can see leaves the other exempting,
+     * and nobody complains about a fine that was never issued.
+     */
+    public static final String EXEMPTION_ALREADY_EXISTS = "EXEMPTION_ALREADY_EXISTS";
+    /** Amending something already called back. Revoked is the end of the row, not a state to edit. */
+    public static final String EXEMPTION_NOT_ACTIVE = "EXEMPTION_NOT_ACTIVE";
     public static final String TENANT_SETTING_INVALID = "TENANT_SETTING_INVALID";
     /**
      * The municipality does not admit citizens on request, so switching to it could not create the

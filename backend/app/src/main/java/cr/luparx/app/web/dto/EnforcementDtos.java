@@ -6,6 +6,7 @@ import cr.luparx.enforcement.model.CitationStatus;
 import cr.luparx.enforcement.model.AppealStatus;
 import cr.luparx.enforcement.model.EvidenceKind;
 import cr.luparx.enforcement.model.EvidenceSource;
+import cr.luparx.enforcement.model.ExemptionStatus;
 import cr.luparx.enforcement.model.PlateVerdict;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMax;
@@ -96,8 +97,30 @@ public final class EnforcementDtos {
                                       boolean requiresBay,
                                       BayResponse bay,
                                       ActiveStayResponse coveringStay,
+                                      /** The stay that ran out on this bay, when the verdict is EXPIRED. */
+                                      ActiveStayResponse expiredStay,
+                                      /** Why this plate is not fined, when the verdict is EXEMPT. */
+                                      PlateExemptionSummary exemption,
                                       List<ActiveStayResponse> otherStays,
+                                      /**
+                                       * The municipality's tolerance in minutes. Carried so a COVERED
+                                       * whose expiry has already passed can explain itself instead of
+                                       * reading as a contradiction (CONTRACT.md v0.28).
+                                       */
+                                      int graceMinutes,
                                       Instant checkedAt) {
+    }
+
+    /**
+     * The exemption as the officer sees it: enough to say out loud why this car is not being fined.
+     *
+     * <p>The reason travels because an officer who declines to write a citation has to be able to
+     * explain it on the spot and, months later, to whoever asks why. Who granted it does not travel:
+     * that is the municipality's internal record, not something to hand to whoever is standing by the
+     * car.</p>
+     */
+    public record PlateExemptionSummary(UUID id, String plate, String reason, String documentRef,
+                                        Instant validFrom, Instant validTo) {
     }
 
     public record BayResponse(UUID spaceId, String spaceCode, UUID zoneId, String zoneCode, String zoneName) {
@@ -106,6 +129,63 @@ public final class EnforcementDtos {
     /** A running stay as enforcement sees it: where and until when. Never who paid for it. */
     public record ActiveStayResponse(UUID sessionId, UUID zoneId, String zoneCode, String zoneName, UUID spaceId,
                                      String spaceCode, Instant startedAt, Instant expiresAt) {
+    }
+
+    // --- plate exemptions (CONTRACT.md v0.28) ------------------------------------------------------
+
+    /**
+     * {@code POST /admin/enforcement/exemptions}.
+     *
+     * <p>{@code reason} is required and is free text rather than a category: what one country exempts
+     * is not what another does, so an enum here would be one nation's law baked into the contract.
+     * What is invariant is that somebody has to write down why.</p>
+     *
+     * <p>{@code validTo} may be omitted, and that means <b>no expiry</b> — legitimate for a council's
+     * own fleet. The screen says so in those words rather than leaving a blank cell, because an
+     * exemption nobody reviews is how a sold vehicle keeps parking free.</p>
+     */
+    public record GrantExemptionRequest(
+            @NotBlank @Size(max = 32) String plate,
+            @NotBlank @Size(max = 300) String reason,
+            @Size(max = 120) String documentRef,
+            Instant validFrom,
+            Instant validTo) {
+    }
+
+    /** {@code PUT /admin/enforcement/exemptions/{id}}. The plate is never edited: that is a new row. */
+    public record AmendExemptionRequest(
+            @NotBlank @Size(max = 300) String reason,
+            @Size(max = 120) String documentRef,
+            Instant validFrom,
+            Instant validTo) {
+    }
+
+    /** {@code POST …/{id}/revoke}. The reason is required: an empty cell is not an answer. */
+    public record RevokeExemptionRequest(@NotBlank @Size(max = 300) String reason) {
+    }
+
+    /**
+     * One exemption as the municipality's register shows it.
+     *
+     * @param inForce  whether it exempts <em>right now</em> — computed against the clock, never stored
+     * @param pending  registered, but its window has not opened yet
+     * @param expired  registered, and its window has closed. There is no {@code EXPIRED} status:
+     *                 running out is a fact about the clock, not a decision anybody took
+     */
+    public record PlateExemptionResponse(UUID id,
+                                         String plate,
+                                         String plateRaw,
+                                         String reason,
+                                         String documentRef,
+                                         ExemptionStatus status,
+                                         Instant validFrom,
+                                         Instant validTo,
+                                         boolean inForce,
+                                         boolean pending,
+                                         boolean expired,
+                                         Instant grantedAt,
+                                         Instant revokedAt,
+                                         String revokeReason) {
     }
 
     // --- citations ---------------------------------------------------------------------------------

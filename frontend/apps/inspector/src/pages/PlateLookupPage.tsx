@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { formatTime, useTranslation, type TranslationKey } from '@luparx/i18n';
+import { formatDate, formatDateTime, formatTime, useTranslation, type TranslationKey } from '@luparx/i18n';
 import { plateVerdictKey } from '@luparx/features';
 import type { PlateVerdict } from '@luparx/api-client';
 import { Alert, Button, Card, FormField, Input, ListRow, SectionHeader, Select, type CardTone } from '@luparx/ui';
@@ -68,6 +68,15 @@ export function PlateLookupPage(): React.JSX.Element {
     });
   }
 
+  // The stay the verdict is about: the one covering this bay, or the one that ran out on it.
+  const stay = result?.coveringStay ?? result?.expiredStay ?? null;
+  const minutesLeft = useMemo(() => {
+    if (!stay || !result) return null;
+    return Math.round((new Date(stay.expiresAt).getTime() - new Date(result.checkedAt).getTime()) / 60000);
+  }, [stay, result]);
+  // Covered, and yet the clock says otherwise: that is the tolerance, and it has to be said.
+  const withinGrace = result?.verdict === 'COVERED' && minutesLeft !== null && minutesLeft < 0;
+
   return (
     <InspectorShell>
       <h1 className="lx-text-screen-title">{t('inspector.lookup.title')}</h1>
@@ -102,12 +111,64 @@ export function PlateLookupPage(): React.JSX.Element {
                 <p className="lx-text-meta" style={{ margin: 0, fontVariantNumeric: 'tabular-nums' }}>
                   {result.plateNormalized} · {t('inspector.lookup.checkedAt', { time: formatTime(result.checkedAt, locale) })}
                 </p>
-                {result.coveringStay ? (
-                  <p className="lx-text-meta" style={{ margin: 0 }}>
-                    {t('inspector.lookup.coveringStay', {
-                      time: formatTime(result.coveringStay.expiresAt, locale),
-                    })}
-                  </p>
+                {/* The stay itself, spelled out. Until v0.28 the start time was never shown and the
+                    expiry was rendered time-only, so a stay that ran out yesterday at 14:30 and one
+                    running until 14:30 today looked identical on screen. */}
+                {stay ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <span className="lx-text-meta">
+                      {t('inspector.lookup.stay.zone', { zone: stay.zoneName ?? '', bay: stay.spaceCode ?? '' })}
+                    </span>
+                    <span className="lx-text-meta" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                      {t('inspector.lookup.stay.startedAt', { datetime: formatDateTime(stay.startedAt, locale) })}
+                    </span>
+                    <span className="lx-text-meta" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                      {t(
+                        result.verdict === 'EXPIRED'
+                          ? 'inspector.lookup.stay.expiredAt'
+                          : 'inspector.lookup.stay.expiresAt',
+                        { datetime: formatDateTime(stay.expiresAt, locale) },
+                      )}
+                      {minutesLeft !== null ? (
+                        <>
+                          {' · '}
+                          {t(
+                            minutesLeft >= 0
+                              ? 'inspector.lookup.stay.remaining'
+                              : 'inspector.lookup.stay.overdue',
+                            { minutes: Math.abs(minutesLeft) },
+                          )}
+                        </>
+                      ) : null}
+                    </span>
+                  </div>
+                ) : null}
+                {/* The tolerance, said out loud. The municipality's grace is applied by the server —
+                    that is why this reads "vigente" — but until v0.28 it was invisible, so the
+                    officer saw "vigente" beside a time already past and had no way to know why. */}
+                {withinGrace ? (
+                  <Alert tone="info">
+                    {t('inspector.lookup.withinGrace', { minutes: result.graceMinutes })}
+                  </Alert>
+                ) : null}
+                {result.exemption ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <span className="lx-text-body">
+                      {t('inspector.lookup.exemption.reason', { reason: result.exemption.reason })}
+                    </span>
+                    {result.exemption.documentRef ? (
+                      <span className="lx-text-meta">
+                        {t('inspector.lookup.exemption.document', { ref: result.exemption.documentRef })}
+                      </span>
+                    ) : null}
+                    <span className="lx-text-meta">
+                      {result.exemption.validTo
+                        ? t('inspector.lookup.exemption.until', {
+                            date: formatDate(result.exemption.validTo, locale),
+                          })
+                        : t('inspector.lookup.exemption.noEnd')}
+                    </span>
+                  </div>
                 ) : null}
               </div>
             </div>
@@ -137,7 +198,13 @@ export function PlateLookupPage(): React.JSX.Element {
             </Card>
           ) : null}
 
-          {result.verdict !== 'COVERED' ? (
+          {/* AMBIGUOUS means the server refused to answer without the bay, so there is nothing to
+              act on yet — offering the ticket there invited one written off an answer nobody gave.
+              EXEMPT and COVERED both mean no non-payment citation is due. */}
+          {result.verdict === 'AMBIGUOUS' ? (
+            <Alert tone="warning">{t('inspector.lookup.needBayToCite')}</Alert>
+          ) : null}
+          {result.verdict === 'EXPIRED' || result.verdict === 'BAY_MISMATCH' || result.verdict === 'NOT_COVERED' ? (
             <Button
               type="button"
               variant="secondary"
@@ -252,6 +319,8 @@ function cardToneFor(verdict: PlateVerdict): CardTone {
 }
 
 const VERDICT_DETAIL_KEYS: Record<PlateVerdict, TranslationKey> = {
+  EXEMPT: 'inspector.lookup.verdict.exempt.detail',
+  EXPIRED: 'inspector.lookup.verdict.expired.detail',
   COVERED: 'inspector.lookup.verdict.covered.detail',
   BAY_MISMATCH: 'inspector.lookup.verdict.bay_mismatch.detail',
   NOT_COVERED: 'inspector.lookup.verdict.not_covered.detail',

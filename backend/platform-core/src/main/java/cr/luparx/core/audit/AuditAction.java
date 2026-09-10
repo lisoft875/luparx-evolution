@@ -99,6 +99,18 @@ public final class AuditAction {
      */
     public static final String STAFF_INVITATION_ACCEPTED = "STAFF_INVITATION_ACCEPTED";
 
+    // --- plate exemptions (CONTRACT.md v0.28) -----------------------------------------------------
+    /**
+     * A plate this municipality decided not to fine for non-payment.
+     *
+     * <p>Audited with the plate itself, unlike most administrative entries: "why was this car never
+     * fined" is a question somebody eventually asks, and the answer has to outlive whoever made the
+     * decision. A plate is not a personal identifier — it is what is painted on a vehicle in public.</p>
+     */
+    public static final String PLATE_EXEMPTION_GRANTED = "PLATE_EXEMPTION_GRANTED";
+    public static final String PLATE_EXEMPTION_AMENDED = "PLATE_EXEMPTION_AMENDED";
+    public static final String PLATE_EXEMPTION_REVOKED = "PLATE_EXEMPTION_REVOKED";
+
     // --- account, locales and municipal operation (CONTRACT.md "v0.3") --------------------------
     public static final String USER_EMAIL_CHANGE_REQUESTED = "USER_EMAIL_CHANGE_REQUESTED";
     public static final String USER_EMAIL_CHANGED = "USER_EMAIL_CHANGED";

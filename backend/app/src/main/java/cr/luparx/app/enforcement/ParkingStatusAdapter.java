@@ -6,13 +6,16 @@ import cr.luparx.parking.entity.ParkingSession;
 import cr.luparx.parking.entity.ParkingSpace;
 import cr.luparx.parking.entity.ParkingZone;
 import cr.luparx.parking.entity.Vehicle;
+import cr.luparx.parking.repository.ParkingSessionRepository;
 import cr.luparx.parking.repository.ParkingSpaceRepository;
 import cr.luparx.parking.repository.ParkingZoneRepository;
 import cr.luparx.parking.repository.VehicleRepository;
+import cr.luparx.parking.service.ParkingPolicyService;
 import cr.luparx.parking.service.ParkingSessionService;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -37,15 +40,21 @@ import java.util.UUID;
 public class ParkingStatusAdapter implements ParkingStatusPort {
 
     private final ParkingSessionService sessionService;
+    private final ParkingSessionRepository sessionRepository;
+    private final ParkingPolicyService policyService;
     private final ParkingSpaceRepository spaceRepository;
     private final ParkingZoneRepository zoneRepository;
     private final VehicleRepository vehicleRepository;
 
     public ParkingStatusAdapter(ParkingSessionService sessionService,
+                                ParkingSessionRepository sessionRepository,
+                                ParkingPolicyService policyService,
                                 ParkingSpaceRepository spaceRepository,
                                 ParkingZoneRepository zoneRepository,
                                 VehicleRepository vehicleRepository) {
         this.sessionService = sessionService;
+        this.sessionRepository = sessionRepository;
+        this.policyService = policyService;
         this.spaceRepository = spaceRepository;
         this.zoneRepository = zoneRepository;
         this.vehicleRepository = vehicleRepository;
@@ -88,6 +97,44 @@ public class ParkingStatusAdapter implements ParkingStatusPort {
                     session.getStartedAt(), session.getExpiresAt()));
         }
         return stays;
+    }
+
+    /**
+     * Stays for this plate that the clock ended, recently.
+     *
+     * <p>Read-only, unlike {@link #activeStays}: the lazy expiry has already happened by the time
+     * anything can be found here, precisely because the running ones were asked for first.</p>
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public List<ActiveStay> recentlyExpiredStays(TenantId tenantId, String plateNormalized, Instant since) {
+        List<ParkingSession> sessions = sessionRepository.findRecentlyExpired(
+                tenantId.value(), plateNormalized, since);
+        if (sessions.isEmpty()) {
+            return List.of();
+        }
+        Map<UUID, ParkingZone> zones = new HashMap<>();
+        for (ParkingZone zone : zoneRepository.findByTenantIdOrderByCodeAsc(tenantId.value())) {
+            zones.put(zone.getId(), zone);
+        }
+        List<ActiveStay> stays = new ArrayList<>(sessions.size());
+        for (ParkingSession session : sessions) {
+            ParkingZone zone = zones.get(session.getZoneId());
+            stays.add(new ActiveStay(session.getId(), session.getZoneId(),
+                    zone == null ? null : zone.getCode(), zone == null ? null : zone.getName(),
+                    session.getSpaceId(),
+                    // The code the stay was PAID under (V25_0), not the one the bay carries today:
+                    // a bay repainted since then must not make an old receipt name another space.
+                    session.getSpaceCodeSnapshot(),
+                    session.getStartedAt(), session.getExpiresAt()));
+        }
+        return stays;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public int graceMinutes(TenantId tenantId) {
+        return policyService.require(tenantId).getGraceMinutes();
     }
 
     @Override

@@ -1097,6 +1097,8 @@ export const enUS: Record<TranslationKey, string> = {
     'The citation was issued without GPS. It is recorded that no coordinates were taken.',
   'citation.clockSkew.seconds': '{{seconds}} s',
 
+  'plate.verdict.exempt': 'Exempt',
+  'plate.verdict.expired': 'Payment expired',
   'plate.verdict.covered': 'Paid for this bay',
   'plate.verdict.bay_mismatch': 'Paid for a different bay',
   'plate.verdict.not_covered': 'No running session',
@@ -1134,6 +1136,24 @@ export const enUS: Record<TranslationKey, string> = {
   'inspector.lookup.verdict.ambiguous.detail':
     'Sessions are running for this plate, but without the bay there is no way to tell whether they belong to this car. Give the bay.',
   'inspector.lookup.cite': 'Write a citation',
+  'inspector.lookup.verdict.exempt.detail':
+    'This municipality exempts this plate. No non-payment citation is due, whether or not it paid.',
+  'inspector.lookup.verdict.expired.detail':
+    'It paid for this very bay and the time ran out. That is not the same as never having paid: check the infraction type before issuing.',
+  'inspector.lookup.exemption.reason': 'Reason: {{reason}}',
+  'inspector.lookup.exemption.document': 'Backed by: {{ref}}',
+  'inspector.lookup.exemption.until': 'In force until {{date}}',
+  'inspector.lookup.exemption.noEnd': 'In force with no expiry date',
+  'inspector.lookup.stay.startedAt': 'Started: {{datetime}}',
+  'inspector.lookup.stay.expiresAt': 'Expires: {{datetime}}',
+  'inspector.lookup.stay.expiredAt': 'Expired: {{datetime}}',
+  'inspector.lookup.stay.zone': 'Zone: {{zone}} · bay {{bay}}',
+  'inspector.lookup.stay.remaining': '{{minutes}} min left',
+  'inspector.lookup.stay.overdue': 'Ran out {{minutes}} min ago',
+  'inspector.lookup.withinGrace':
+    'The time has passed, but it is inside this municipality\'s {{minutes}} min tolerance. No non-payment citation is due yet.',
+  'inspector.lookup.needBayToCite':
+    'Without the bay nothing can be issued: the system does not yet know whether this car paid. Give the bay and look it up again.',
   'inspector.lookup.error.PARKING_SPACE_NOT_FOUND': 'That bay does not exist in the selected zone.',
   'inspector.lookup.error.VALIDATION_FAILED': 'Check the plate and the bay: the zone and the bay travel together.',
 
@@ -1282,6 +1302,50 @@ export const enUS: Record<TranslationKey, string> = {
   'nav.enforcement': 'Enforcement',
   'nav.enforcement.citations': 'Citations',
   'nav.enforcement.types': 'Infractions',
+  'nav.enforcement.exemptions': 'Exemptions',
+  'admin.exemptions.title': 'Exemptions',
+  'admin.exemptions.description':
+    'Plates this municipality does not fine for non-payment. Not a discount: charging is unchanged, what changes is that the officer sees EXEMPT instead of "no payment".',
+  'admin.exemptions.create': 'Exempt a plate',
+  'admin.exemptions.createNotice':
+    'It hangs off the plate, not off a person or a registered vehicle: an ambulance and the council fleet almost never have an account in the app. That is why the reason and the validity are mandatory reading.',
+  'admin.exemptions.empty': 'No exemptions registered.',
+  'admin.exemptions.filter.status': 'State',
+  'admin.exemptions.filter.all': 'All states',
+  'admin.exemptions.filter.plate': 'Search by plate',
+  'admin.exemptions.column.plate': 'Plate',
+  'admin.exemptions.column.reason': 'Reason',
+  'admin.exemptions.column.validity': 'Validity',
+  'admin.exemptions.column.state': 'State',
+  'admin.exemptions.status.ACTIVE': 'Registered',
+  'admin.exemptions.status.REVOKED': 'Withdrawn',
+  'admin.exemptions.state.inForce': 'In force',
+  'admin.exemptions.state.pending': 'Not started yet',
+  'admin.exemptions.state.expired': 'Expired',
+  'admin.exemptions.state.revoked': 'Withdrawn',
+  'admin.exemptions.validFrom': 'From {{date}}',
+  'admin.exemptions.validUntil': 'Until {{date}}',
+  'admin.exemptions.noEnd': 'No expiry',
+  'admin.exemptions.plateHint': 'As painted. Compared without dashes or spaces.',
+  'admin.exemptions.reasonHint':
+    'In words, and required: it is the answer to "why was this car not fined?" when somebody asks two years from now.',
+  'admin.exemptions.documentRef': 'Backing document',
+  'admin.exemptions.documentRefHint': 'Agreement, memo or resolution number. The first thing asked for in a challenge.',
+  'admin.exemptions.validToLabel': 'Expires on',
+  'admin.exemptions.validToHint': 'Leave blank only if it truly does not expire, like the council fleet.',
+  'admin.exemptions.noEndWarning':
+    'With no expiry date nobody will review it. If the car is sold, it stays exempt until somebody notices.',
+  'admin.exemptions.granted': 'Plate exempted.',
+  'admin.exemptions.revoked': 'Exemption withdrawn.',
+  'admin.exemptions.action.revoke': 'Withdraw',
+  'admin.exemptions.revoke.title': 'Withdraw the exemption',
+  'admin.exemptions.revoke.body': 'Plate {{plate}} is fined for non-payment again from now on.',
+  'admin.exemptions.revoke.keepsRow':
+    'The row is kept: it is what explains why that car was not fined while it was in force.',
+  'admin.exemptions.revoke.reasonLabel': 'Reason for withdrawing',
+  'admin.exemptions.error.alreadyExists': 'That plate already has a live exemption in this municipality.',
+  'admin.exemptions.error.invalid': 'Check the plate, the reason and the dates.',
+  'admin.exemptions.error.notActive': 'That exemption is no longer active.',
   'nav.appeals': 'Appeals',
 
   // ---- Municipality: appeals -------------------------------------------------------------------

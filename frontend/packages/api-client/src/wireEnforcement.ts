@@ -24,6 +24,7 @@ import type {
   FineDetail,
   InfractionType,
   PlateStatus,
+  PlateExemptionSummary,
 } from './types/domain';
 import type { WireMoney } from './wire';
 
@@ -69,7 +70,10 @@ export interface WirePlateStatus {
   requiresBay: boolean;
   bay?: WireBay | null;
   coveringStay?: WireStay | null;
+  expiredStay?: WireStay | null;
+  exemption?: PlateExemptionSummary | null;
   otherStays?: WireStay[] | null;
+  graceMinutes?: number | null;
   checkedAt: string;
 }
 
@@ -195,7 +199,12 @@ export function toPlateStatus(wire: WirePlateStatus): PlateStatus {
     requiresBay: wire.requiresBay,
     bay: wire.bay ?? null,
     coveringStay: wire.coveringStay ?? null,
+    expiredStay: wire.expiredStay ?? null,
+    exemption: wire.exemption ?? null,
     otherStays: wire.otherStays ?? [],
+    // Absent from a server older than v0.28: zero tolerance is the safe reading, and it makes the
+    // screen simply not offer the "within tolerance" explanation rather than invent one.
+    graceMinutes: wire.graceMinutes ?? 0,
     checkedAt: wire.checkedAt,
   };
 }

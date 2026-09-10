@@ -70,6 +70,8 @@ export function plateVerdictKey(verdict: PlateVerdict): TranslationKey {
 }
 
 const PLATE_VERDICT_KEYS: Record<PlateVerdict, TranslationKey> = {
+  EXEMPT: 'plate.verdict.exempt',
+  EXPIRED: 'plate.verdict.expired',
   COVERED: 'plate.verdict.covered',
   BAY_MISMATCH: 'plate.verdict.bay_mismatch',
   NOT_COVERED: 'plate.verdict.not_covered',
