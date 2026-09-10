@@ -3,6 +3,7 @@ package cr.luparx.app.web.dto;
 import cr.luparx.core.domain.Portal;
 import cr.luparx.enforcement.model.BeneficiaryKind;
 import cr.luparx.enforcement.model.CitationAction;
+import cr.luparx.enforcement.model.CitationSource;
 import cr.luparx.enforcement.model.CitationStatus;
 import cr.luparx.enforcement.model.AppealStatus;
 import cr.luparx.enforcement.model.EvidenceKind;
@@ -451,7 +452,111 @@ public final class EnforcementDtos {
                                    String inspectorName,
                                    UUID parkingSessionId,
                                    String notes,
-                                   int evidenceCount) {
+                                   int evidenceCount,
+                                   /**
+                                    * Where the act was born (v0.34): LUPARX or EXTERNAL.
+                                    *
+                                    * <p>Not decoration. An EXTERNAL citation is a mirror of an act
+                                    * that lives in another system — this platform shows it and does
+                                    * not settle it — and a client that renders both the same way
+                                    * offers a "pay" button that can only ever fail.</p>
+                                    */
+                                   CitationSource source,
+                                   String sourceLabelKey,
+                                   /** Which other system, when it came from one. */
+                                   String sourceSystem,
+                                   /**
+                                    * That system's own word for the state ("EN COBRO JUDICIAL").
+                                    * Beside the mapped status, not instead of it: the mapping loses
+                                    * nuance and the citizen will quote the other system's word.
+                                    */
+                                   String externalStatus,
+                                   /**
+                                    * The last time the other system confirmed this citation. What
+                                    * separates "still unpaid" from "we stopped hearing about it".
+                                    */
+                                   Instant lastSeenAt,
+                                   /**
+                                    * Whether this platform decides what happens to it. False for a
+                                    * mirror, and the one field a client should branch on rather than
+                                    * re-deriving the rule from {@code source}.
+                                    */
+                                   boolean managedHere) {
+    }
+
+    // --- ingest of citations raised elsewhere (CONTRACT.md v0.34) --------------------------------
+
+    /**
+     * One citation as another system describes it.
+     *
+     * <p>Everything the checklist asks a citation to carry, in the vocabulary of a system that is not
+     * this one: its own number, its own causal, its own officer. It knows none of our identifiers,
+     * which is why the sector arrives as a code and the causal as a code and a name.</p>
+     */
+    public record CitationIngestRequest(
+            @NotBlank @Size(max = 64) String sourceSystem,
+            /** The citation's identifier over there. The idempotency key: same value, same citation. */
+            @NotBlank @Size(max = 128) String externalId,
+            /** The number the citizen quotes. That system's, kept verbatim — we mint nothing here. */
+            @NotBlank @Size(max = 40) String number,
+            @NotBlank @Size(max = 32) String plate,
+            @NotBlank @Size(max = 32) String infractionCode,
+            @NotBlank @Size(max = 160) String infractionName,
+            @Min(0) long fineAmountMinor,
+            @NotBlank @Size(min = 3, max = 3) String currencyCode,
+            @NotNull Instant occurredAt,
+            /** When that system emitted it. Absent means it was emitted when it happened. */
+            Instant issuedAt,
+            Instant dueAt,
+            /** The sector as that system calls it; linked when it matches one of ours, ignored otherwise. */
+            @Size(max = 32) String zoneCode,
+            @Size(max = 32) String spaceCode,
+            @DecimalMin("-90") @DecimalMax("90") BigDecimal latitude,
+            @DecimalMin("-180") @DecimalMax("180") BigDecimal longitude,
+            @Size(max = 300) String addressText,
+            /** Who raised it over there: a document number, a staff code — whatever they have. */
+            @Size(max = 128) String inspectorExternalRef,
+            @Size(max = 200) String inspectorName,
+            /**
+             * Mapped into our vocabulary, because a citizen's screen has to say something they can
+             * act on. DRAFT is refused: a draft is an act half-raised on one of our own devices.
+             */
+            @NotBlank @Size(max = 32) String status,
+            @Size(max = 64) String externalStatus,
+            @Size(max = 2000) String notes) {
+    }
+
+    /**
+     * @param outcome       CREATED the first time this external id is seen, REFRESHED every time
+     *                      after. A repeat is the ordinary case, not an error
+     * @param discrepancies fields that arrived different from what is written, among the ones a
+     *                      re-ingest may not change. Reported, never applied: two systems disagreeing
+     *                      about which plate was fined is for a person to resolve
+     */
+    public record CitationIngestResponse(CitationResponse citation, String outcome, List<String> discrepancies) {
+    }
+
+    public record MapCausalRequest(@NotBlank @Size(max = 64) String sourceSystem,
+                                   @NotBlank @Size(max = 64) String externalCode,
+                                   @NotNull UUID infractionTypeId) {
+    }
+
+    /**
+     * @param relinked how many citations already here were attached to the catalogue causal
+     * @param more     true when the batch filled up and there are more waiting. The caller repeats
+     *                 until it is false, which is also what makes the call safe to retry
+     */
+    public record MapCausalResponse(int relinked, boolean more) {
+    }
+
+    public record ExternalInfractionMappingResponse(UUID id, String sourceSystem, String externalCode,
+                                                    String externalName, UUID infractionTypeId,
+                                                    Instant updatedAt) {
+    }
+
+    /** A foreign causal nobody mapped yet, and how many citations are waiting on it. */
+    public record UnmappedCausalResponse(String sourceSystem, String externalCode, String externalName,
+                                         long citations) {
     }
 
     /** The citation with everything a defence is entitled to read: its evidence and its history. */
@@ -515,7 +620,18 @@ public final class EnforcementDtos {
                                Instant occurredAt,
                                Instant issuedAt,
                                boolean appealable,
-                               int evidenceCount) {
+                               int evidenceCount,
+                               /**
+                                * Where the act was born (v0.34). A citizen looking at a mirrored
+                                * fine has to be told plainly that it is paid and challenged at the
+                                * municipality's other window — a screen that hides this is a screen
+                                * that sends them to the wrong counter.
+                                */
+                               CitationSource source,
+                               String sourceLabelKey,
+                               String sourceSystem,
+                               String externalStatus,
+                               boolean managedHere) {
     }
 
     /** The citizen's detail: the fine, its evidence and its history — the same history the office reads. */

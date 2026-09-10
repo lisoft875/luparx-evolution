@@ -211,6 +211,20 @@ public final class ErrorCode {
     public static final String CITATION_NOT_EDITABLE = "CITATION_NOT_EDITABLE";
     /** This kind of infraction does not admit a defence, by the municipality's own configuration. */
     public static final String CITATION_APPEAL_NOT_ALLOWED = "CITATION_APPEAL_NOT_ALLOWED";
+
+    /**
+     * The citation was raised in another system and this platform is only mirroring it
+     * (CONTRACT.md v0.34).
+     *
+     * <p>Its own code and not a generic conflict, because the answer a person needs is specific and
+     * actionable: this is not "you may not", it is "not here — the municipality manages this one in
+     * its other system". A client that cannot tell those apart sends the citizen to argue with the
+     * wrong window.</p>
+     */
+    public static final String CITATION_NOT_MANAGED_HERE = "CITATION_NOT_MANAGED_HERE";
+
+    /** An ingest tried to rewrite the act itself — plate, causal, place or moment (v0.34). */
+    public static final String CITATION_EXTERNAL_IMMUTABLE = "CITATION_EXTERNAL_IMMUTABLE";
     public static final String INFRACTION_TYPE_NOT_FOUND = "INFRACTION_TYPE_NOT_FOUND";
     /** The kind exists but the municipality retired it, so no new citation may be written under it. */
     public static final String INFRACTION_TYPE_INACTIVE = "INFRACTION_TYPE_INACTIVE";

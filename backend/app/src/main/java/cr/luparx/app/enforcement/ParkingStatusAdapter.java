@@ -158,6 +158,16 @@ public class ParkingStatusAdapter implements ParkingStatusPort {
 
     @Override
     @Transactional(readOnly = true)
+    public Optional<Zone> findZoneByCode(TenantId tenantId, String zoneCode) {
+        if (zoneCode == null || zoneCode.isBlank()) {
+            return Optional.empty();
+        }
+        return zoneRepository.findByTenantIdAndCode(tenantId.value(), zoneCode.trim())
+                .map(zone -> new Zone(zone.getId(), zone.getCode(), zone.getName()));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public Optional<Bay> findBayById(TenantId tenantId, UUID spaceId) {
         return spaceRepository.findByTenantIdAndId(tenantId.value(), spaceId).map(this::toBay);
     }

@@ -31,6 +31,17 @@ public enum Permission {
     ENFORCEMENT_MANAGE,
 
     /**
+     * Push citations raised in another system into this one (CONTRACT.md v0.34).
+     *
+     * <p>Its own capability, held by an integration account and by nobody who walks around. It is
+     * not {@code CITATION_ISSUE}: that one raises an administrative act in this municipality's name,
+     * and this one only mirrors an act somebody else already raised. Giving the other system the
+     * officer's capability would let a misconfigured integration issue real citations, and would
+     * leave the municipality unable to answer which of the two systems fined a citizen.</p>
+     */
+    CITATION_INGEST,
+
+    /**
      * Credit a citizen's wallet at the municipality's counter.
      *
      * <p>Its own capability rather than "whatever an administrator may do": handing out money is the

@@ -2,6 +2,7 @@ package cr.luparx.enforcement.entity;
 
 import cr.luparx.core.id.TenantId;
 import cr.luparx.core.money.Money;
+import cr.luparx.enforcement.model.CitationSource;
 import cr.luparx.enforcement.model.CitationStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -157,6 +158,55 @@ public class Citation {
     private String inspectorNameSnapshot;
 
     /**
+     * Where the act was born (V32_0 — CONTRACT.md v0.34).
+     *
+     * <p>Not a label: it decides what may be done to the row. An {@link CitationSource#EXTERNAL}
+     * citation is a mirror of an act that lives in another system — readable here, never settled
+     * here. Every guard in the service asks this before it asks anything else.</p>
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "source", nullable = false, length = 16)
+    private CitationSource source;
+
+    /** Which other system, when there is one. Free text: a municipality may have two. */
+    @Column(name = "source_system", length = 64)
+    private String sourceSystem;
+
+    /**
+     * The citation's identifier <em>in that system</em>. The idempotency key of the ingest: the same
+     * value twice updates this row and never writes a second one.
+     */
+    @Column(name = "external_id", length = 128)
+    private String externalId;
+
+    /**
+     * The other system's own word for the state ("EN COBRO JUDICIAL").
+     *
+     * <p>Kept beside the mapped {@link #status} rather than instead of it. The mapping loses nuance,
+     * and the citizen who telephones is going to quote the other system's word — the office has to
+     * be able to find it.</p>
+     */
+    @Column(name = "external_status", length = 64)
+    private String externalStatus;
+
+    /** Who raised it over there: a document number, a staff code, a name. Whatever they send. */
+    @Column(name = "inspector_external_ref", length = 128)
+    private String inspectorExternalRef;
+
+    @Column(name = "imported_at")
+    private Instant importedAt;
+
+    /**
+     * The last ingest that confirmed this citation.
+     *
+     * <p>Answers "how long since the other system last spoke", which is the first question anybody
+     * asks when a mirrored state looks stale — and the difference between "it is still unpaid" and
+     * "we stopped hearing about it in March".</p>
+     */
+    @Column(name = "last_seen_at")
+    private Instant lastSeenAt;
+
+    /**
      * Identifier generated on the officer's device. Unique per municipality, which is what makes a
      * resend after a lost connection resolve to the same citation even when the client is a new
      * install with a new {@code Idempotency-Key}.
@@ -238,9 +288,97 @@ public class Citation {
         this.enforcementCheckId = enforcementCheckId;
         this.notes = notes;
         this.status = initialStatus;
+        this.source = CitationSource.LUPARX;
         this.createdAt = now;
         this.updatedAt = now;
         this.deviceClockSkewSeconds = Math.abs(now.getEpochSecond() - occurredAt.getEpochSecond());
+    }
+
+    /**
+     * A citation that was raised in another system, mirrored here (CONTRACT.md v0.34).
+     *
+     * <p>A separate constructor and not a flag on the other one, because the two build different
+     * things. Ours starts as a draft on a device and becomes an act when the platform issues it and
+     * gives it a number; this one <b>arrives already issued</b>, with somebody else's number,
+     * somebody else's causal and somebody else's officer. There is no path from here to
+     * {@link CitationStatus#DRAFT}, and no number is taken from the municipality's series — burning a
+     * consecutive on an act we did not raise would put a gap in our own book.</p>
+     *
+     * <p>The causal is carried in the snapshot columns the row already had. That is the whole reason
+     * an unknown causal costs nothing: the code, the name and the amount were always copied onto the
+     * citation, so a code that exists in no catalogue of ours is still completely recorded. The link
+     * to {@code infraction_types} stays null until somebody maps it, and the mapping is for the
+     * reports, never for the record.</p>
+     */
+    public Citation(UUID id, UUID tenantId, String sourceSystem, String externalId, String number,
+                    String plate, String plateNormalized, UUID vehicleId, UUID zoneId, UUID spaceId,
+                    String spaceCode, BigDecimal latitude, BigDecimal longitude, String addressText,
+                    UUID infractionTypeId, String infractionCode, String infractionName,
+                    long fineAmountMinor, String currencyCode, Instant occurredAt, Instant issuedAt,
+                    Instant dueAt, String inspectorExternalRef, String inspectorNameSnapshot,
+                    CitationStatus status, String externalStatus, String notes, Instant now) {
+        this.id = id;
+        this.tenantId = tenantId;
+        this.source = CitationSource.EXTERNAL;
+        this.sourceSystem = sourceSystem;
+        this.externalId = externalId;
+        this.number = number;
+        this.plate = plate;
+        this.plateNormalized = plateNormalized;
+        this.vehicleId = vehicleId;
+        this.zoneId = zoneId;
+        this.spaceId = spaceId;
+        this.spaceCode = spaceCode;
+        this.latitude = latitude;
+        this.longitude = longitude;
+        this.addressText = addressText;
+        this.infractionTypeId = infractionTypeId;
+        this.infractionCode = infractionCode;
+        this.infractionName = infractionName;
+        this.fineAmountMinor = fineAmountMinor;
+        this.currencyCode = currencyCode;
+        this.occurredAt = occurredAt;
+        this.issuedAt = issuedAt;
+        this.dueAt = dueAt;
+        this.inspectorExternalRef = inspectorExternalRef;
+        this.inspectorNameSnapshot = inspectorNameSnapshot;
+        this.status = status;
+        this.externalStatus = externalStatus;
+        this.notes = notes;
+        this.importedAt = now;
+        this.lastSeenAt = now;
+        this.createdAt = now;
+        this.updatedAt = now;
+        // Deliberately not computed for a mirror. The skew is the distance between what an officer's
+        // device declared and when OUR server accepted it; for an act raised elsewhere both instants
+        // come from the same other system, and a number derived from them would look like a
+        // measurement while measuring nothing.
+    }
+
+    /**
+     * A later ingest of the same external citation.
+     *
+     * <p>Only the things the other system may legitimately have changed: the state, its own word for
+     * it, the deadline and the amount. The act itself — plate, causal, place, moment, officer — is
+     * <b>not</b> rewritten. An ingest that could change what somebody was fined for would make the
+     * mirror a channel for editing history from outside, and the whole point of mirroring is that
+     * this platform is not the one deciding.</p>
+     *
+     * <p>A change that arrives anyway is a discrepancy for a person to look at, not something to
+     * apply quietly; the service reports it and leaves the row as it stands.</p>
+     */
+    public void refreshFromSource(CitationStatus status, String externalStatus, Instant dueAt,
+                                  Long fineAmountMinor, Instant now) {
+        this.status = status;
+        this.externalStatus = externalStatus;
+        if (dueAt != null) {
+            this.dueAt = dueAt;
+        }
+        if (fineAmountMinor != null) {
+            this.fineAmountMinor = fineAmountMinor.longValue();
+        }
+        this.lastSeenAt = now;
+        this.updatedAt = now;
     }
 
     /**
@@ -260,6 +398,19 @@ public class Citation {
         this.status = CitationStatus.ISSUED;
         this.updatedAt = issuedAt;
         this.deviceClockSkewSeconds = Math.abs(issuedAt.getEpochSecond() - occurredAt.getEpochSecond());
+    }
+
+    /**
+     * Attaches the catalogue causal to a mirrored citation once somebody mapped its foreign code
+     * (CONTRACT.md v0.34).
+     *
+     * <p>The link and nothing else. The code, the name and the amount stay exactly as they arrived —
+     * they are the record of what the other system fined this person for, and a mapping is how the
+     * municipality's reports add these up, never a correction of the act.</p>
+     */
+    public void linkInfractionType(UUID infractionTypeId, Instant now) {
+        this.infractionTypeId = infractionTypeId;
+        this.updatedAt = now;
     }
 
     /**
@@ -446,5 +597,38 @@ public class Citation {
     /** True when the payment window has closed and nobody has paid. */
     public boolean isOverdueAt(Instant now) {
         return status == CitationStatus.ISSUED && dueAt != null && now.isAfter(dueAt);
+    }
+
+    public CitationSource getSource() {
+        return source == null ? CitationSource.LUPARX : source;
+    }
+
+    public String getSourceSystem() {
+        return sourceSystem;
+    }
+
+    public String getExternalId() {
+        return externalId;
+    }
+
+    public String getExternalStatus() {
+        return externalStatus;
+    }
+
+    public String getInspectorExternalRef() {
+        return inspectorExternalRef;
+    }
+
+    public Instant getImportedAt() {
+        return importedAt;
+    }
+
+    public Instant getLastSeenAt() {
+        return lastSeenAt;
+    }
+
+    /** True when this row only reflects an act that lives in another system. */
+    public boolean isMirror() {
+        return getSource().isMirror();
     }
 }

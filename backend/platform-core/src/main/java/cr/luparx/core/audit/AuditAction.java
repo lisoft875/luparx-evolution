@@ -179,6 +179,18 @@ public final class AuditAction {
     public static final String CITATION_CANCELLED = "CITATION_CANCELLED";
     public static final String INFRACTION_TYPES_UPDATED = "INFRACTION_TYPES_UPDATED";
 
+    /**
+     * A citation raised in another system was mirrored here (CONTRACT.md v0.34).
+     *
+     * <p>Recorded on a repeat as well as on a first delivery. "The other system re-sent this one four
+     * hundred times" is a real finding about an integration, and a trail that only wrote down first
+     * deliveries could not show it.</p>
+     */
+    public static final String CITATION_INGESTED = "CITATION_INGESTED";
+
+    /** A foreign causal was pointed at one of the municipality's own (v0.34). */
+    public static final String EXTERNAL_CAUSAL_MAPPED = "EXTERNAL_CAUSAL_MAPPED";
+
     // --- appeals, notices and wallet top-ups (CONTRACT.md "v0.8") -------------------------------
     public static final String CITATION_APPEAL_FILED = "CITATION_APPEAL_FILED";
     public static final String CITATION_APPEAL_RESOLVED = "CITATION_APPEAL_RESOLVED";

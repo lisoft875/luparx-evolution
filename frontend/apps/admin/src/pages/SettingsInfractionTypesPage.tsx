@@ -1,5 +1,7 @@
 import * as React from 'react';
 import { useEffect, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '@luparx/auth';
 import { useTranslation, formatCurrencyMinor, minorToMajor, majorToMinor } from '@luparx/i18n';
 import type { InfractionType, InfractionTypeDraft } from '@luparx/api-client';
 import { Alert, Badge, Button, Card, Checkbox, FormField, Input, SectionHeader } from '@luparx/ui';
@@ -283,6 +285,122 @@ export function SettingsInfractionTypesPage(): React.JSX.Element {
           {t('admin.enforcement.types.save')}
         </Button>
       </div>
+
+      <UnmappedCausals types={query.data ?? []} />
     </AdminShell>
+  );
+}
+
+/**
+ * Causals that arrived from another system and match nothing in this catalogue (CONTRACT.md v0.34).
+ *
+ * <p>On this screen and not one of its own, because this is where the catalogue lives and a mapping
+ * is a sentence about the catalogue: "what they call ART-142-B, we call EST-01". A separate page
+ * would mean opening two screens to answer one question.</p>
+ *
+ * <p>Absent entirely when there is nothing to map, which is the ordinary state of a municipality
+ * that never connected another system. An empty section explaining a feature nobody is using is how
+ * a settings screen becomes unreadable.</p>
+ */
+function UnmappedCausals({ types }: { types: InfractionType[] }): React.JSX.Element | null {
+  const { t } = useTranslation();
+  const { apiClient } = useAuth();
+  const queryClient = useQueryClient();
+  const [chosen, setChosen] = useState<Record<string, string>>({});
+  const [done, setDone] = useState<string | null>(null);
+
+  const pending = useQuery({
+    queryKey: ['admin', 'enforcement', 'unmapped-causals'],
+    queryFn: () => apiClient.adminCitationIngest.unmappedCausals(),
+  });
+
+  const map = useMutation({
+    mutationFn: (input: { sourceSystem: string; externalCode: string; infractionTypeId: string }) =>
+      apiClient.adminCitationIngest.map(input),
+    onSuccess: (result, input) => {
+      setDone(t('admin.enforcement.mapping.done', { count: result.relinked, code: input.externalCode }));
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'enforcement', 'unmapped-causals'] });
+    },
+  });
+
+  const rows = pending.data ?? [];
+  // Gone when there is nothing to map — an empty section explaining a feature nobody uses is how a
+  // settings screen becomes unreadable. But NOT while a confirmation is still on screen: mapping the
+  // last causal empties the list, and unmounting the card at that moment takes the "42 citations
+  // relinked" away with it, so the one click that did the most work is the one that looks like it
+  // did nothing.
+  if (rows.length === 0 && !done) {
+    return null;
+  }
+
+  return (
+    <Card>
+      <SectionHeader
+        title={t('admin.enforcement.mapping.title')}
+        description={t('admin.enforcement.mapping.description')}
+      />
+      {done ? <Alert tone="success">{done}</Alert> : null}
+      {rows.map((row) => {
+        const key = `${row.sourceSystem}:${row.externalCode}`;
+        return (
+          <div
+            key={key}
+            style={{
+              display: 'flex',
+              gap: 'var(--lx-space-3)',
+              alignItems: 'flex-end',
+              flexWrap: 'wrap',
+              padding: 'var(--lx-space-2) 0',
+            }}
+          >
+            <div style={{ minWidth: 220 }}>
+              <strong style={{ fontVariantNumeric: 'tabular-nums' }}>{row.externalCode}</strong>
+              <p className="lx-text-meta" style={{ margin: 0 }}>
+                {row.externalName ?? '—'}
+              </p>
+              {/* How many are waiting, because it is what decides which of these is worth doing
+                  first — and because a mapping that relinks four hundred citations should not be
+                  clicked without knowing that. */}
+              <p className="lx-text-meta" style={{ margin: 0 }}>
+                {t('admin.enforcement.mapping.waiting', { system: row.sourceSystem, count: row.citations })}
+              </p>
+            </div>
+            <FormField label={t('admin.enforcement.mapping.target')}>
+              <select
+                className="lx-input"
+                value={chosen[key] ?? ''}
+                onChange={(event) => setChosen((current) => ({ ...current, [key]: event.target.value }))}
+              >
+                <option value="">{t('admin.enforcement.mapping.choose')}</option>
+                {types
+                  .filter((type) => type.active)
+                  .map((type) => (
+                    <option key={type.id} value={type.id}>
+                      {type.code} · {type.name}
+                    </option>
+                  ))}
+              </select>
+            </FormField>
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={!chosen[key] || map.isPending}
+              onClick={() =>
+                map.mutate({
+                  sourceSystem: row.sourceSystem,
+                  externalCode: row.externalCode,
+                  infractionTypeId: chosen[key] as string,
+                })
+              }
+            >
+              {t('admin.enforcement.mapping.apply')}
+            </Button>
+          </div>
+        );
+      })}
+      {/* Said plainly, because somebody about to click this is entitled to know it changes reports
+          and not the citations themselves. */}
+      <Alert tone="info">{t('admin.enforcement.mapping.notice')}</Alert>
+    </Card>
   );
 }

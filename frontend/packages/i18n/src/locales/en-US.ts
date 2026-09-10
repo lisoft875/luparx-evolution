@@ -1149,6 +1149,22 @@ export const enUS: Record<TranslationKey, string> = {
   'citation.history.portal.platform': 'Platform',
 
   'citation.field.number': 'Number',
+  'citation.source.luparx': 'This municipality',
+  'citation.source.external': 'Another system',
+  'citation.source.external.named': 'Another system · {{system}}',
+  'citation.source.mirrorNotice':
+    'This citation was raised in another of the municipality\u2019s systems. It is read here; it is settled there.',
+  'citation.source.mirrorNotice.named':
+    'This citation was raised in {{system}}, another of the municipality\u2019s systems. It is read here; it is settled there.',
+  'citation.field.externalStatus': 'Status in the other system',
+  'citation.field.lastSeenAt': 'Last confirmed by the other system',
+  'admin.enforcement.citation.notManagedHere':
+    'This citation was raised in another system. It is annulled there, not here.',
+  'citizen.fines.managedElsewhere':
+    'The municipality manages this fine in another system. You can read it here, but pay it or file your defence where the municipality tells you.',
+  'citizen.fines.managedElsewhere.named':
+    'The municipality manages this fine in {{system}}. You can read it here, but pay it or file your defence where the municipality tells you.',
+  'citizen.fines.payElsewhere': 'This fine is not paid in LupaRX: the municipality collects it in its other system.',
   'citation.field.plate': 'Plate',
   'citation.field.infraction': 'Infraction',
   'citation.field.zone': 'Zone',
@@ -1358,6 +1374,16 @@ export const enUS: Record<TranslationKey, string> = {
   'admin.enforcement.citation.notCancellable': 'This citation can no longer be annulled.',
   'admin.enforcement.citation.noVoidPermission': 'Your role cannot annul citations.',
 
+  'admin.enforcement.mapping.title': 'Causals from other systems with no equivalent',
+  'admin.enforcement.mapping.description':
+    'These causals arrived from another system and match nothing in the catalogue. The citations are already complete — they carry the code, the name and the amount as they arrived. What is missing is the equivalence, so reports can add them up with your own.',
+  'admin.enforcement.mapping.waiting': '{{system}} · {{count}} citation(s) waiting',
+  'admin.enforcement.mapping.target': 'Equivalent to',
+  'admin.enforcement.mapping.choose': 'Choose an infraction from the catalogue',
+  'admin.enforcement.mapping.apply': 'Apply',
+  'admin.enforcement.mapping.done': '{{code}}: {{count}} citation(s) relinked.',
+  'admin.enforcement.mapping.notice':
+    'The equivalence only affects reports. The citation still says exactly what the other system fined the person for.',
   'admin.enforcement.types.title': 'Infraction catalogue',
   'admin.enforcement.types.description':
     'What this municipality fines, and for how much. The whole catalogue is saved at once: a row taken out is deactivated, never deleted, because citations years old reference it.',

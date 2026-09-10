@@ -1168,6 +1168,22 @@ export const esCR = {
   'citation.history.portal.platform': 'Plataforma',
 
   'citation.field.number': 'Número',
+  'citation.source.luparx': 'Esta municipalidad',
+  'citation.source.external': 'Otro sistema',
+  'citation.source.external.named': 'Otro sistema · {{system}}',
+  'citation.source.mirrorNotice':
+    'Esta boleta se levantó en otro sistema de la municipalidad. Aquí se consulta; allá se cobra y se resuelve.',
+  'citation.source.mirrorNotice.named':
+    'Esta boleta se levantó en {{system}}, otro sistema de la municipalidad. Aquí se consulta; allá se cobra y se resuelve.',
+  'citation.field.externalStatus': 'Estado en el otro sistema',
+  'citation.field.lastSeenAt': 'Última confirmación del otro sistema',
+  'admin.enforcement.citation.notManagedHere':
+    'Esta boleta se levantó en otro sistema. Se anula allá, no aquí.',
+  'citizen.fines.managedElsewhere':
+    'Esta multa la gestiona la municipalidad en otro sistema. Consúltela aquí, pero páguela o presente su descargo donde la municipalidad le indique.',
+  'citizen.fines.managedElsewhere.named':
+    'Esta multa la gestiona la municipalidad en {{system}}. Consúltela aquí, pero páguela o presente su descargo donde la municipalidad le indique.',
+  'citizen.fines.payElsewhere': 'Esta multa no se paga en LupaRX: la cobra la municipalidad en su otro sistema.',
   'citation.field.plate': 'Placa',
   'citation.field.infraction': 'Infracción',
   'citation.field.zone': 'Zona',
@@ -1380,6 +1396,16 @@ export const esCR = {
   'admin.enforcement.citation.notCancellable': 'Esta boleta ya no admite anulación.',
   'admin.enforcement.citation.noVoidPermission': 'Tu rol no puede anular boletas.',
 
+  'admin.enforcement.mapping.title': 'Causales de otros sistemas sin equivalencia',
+  'admin.enforcement.mapping.description':
+    'Estas causales llegaron de otro sistema y no coinciden con ninguna del catálogo. Las boletas ya están completas: traen el código, el nombre y el monto tal como vinieron. Lo que falta es la equivalencia para que los reportes puedan sumarlas junto con las suyas.',
+  'admin.enforcement.mapping.waiting': '{{system}} · {{count}} boleta(s) esperando',
+  'admin.enforcement.mapping.target': 'Equivale a',
+  'admin.enforcement.mapping.choose': 'Elija una infracción del catálogo',
+  'admin.enforcement.mapping.apply': 'Aplicar',
+  'admin.enforcement.mapping.done': '{{code}}: se enlazaron {{count}} boleta(s).',
+  'admin.enforcement.mapping.notice':
+    'La equivalencia sólo afecta los reportes. La boleta sigue diciendo exactamente por qué la multaron en el otro sistema.',
   'admin.enforcement.types.title': 'Catálogo de infracciones',
   'admin.enforcement.types.description':
     'Lo que esta municipalidad multa, y por cuánto. Se guarda el catálogo completo: una fila quitada se desactiva, nunca se borra, porque hay boletas de años anteriores que la referencian.',

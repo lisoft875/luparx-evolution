@@ -67,6 +67,19 @@ public interface ParkingStatusPort {
     Optional<Bay> findBayById(TenantId tenantId, UUID spaceId);
 
     /**
+     * The zone a mirrored citation names, resolved from its code (CONTRACT.md v0.34).
+     *
+     * <p>Another system knows its own sectors by whatever it calls them, not by our identifiers. When
+     * the code happens to be one of ours the citation lands in the right zone and the municipality's
+     * reports add it up with everything else; when it does not, the citation is still complete — the
+     * place is written in its address and its own text — and it simply belongs to no zone of ours.</p>
+     *
+     * <p>Empty is an ordinary answer here and never an error. Refusing a citation because its sector
+     * is unknown would be refusing an act that already happened.</p>
+     */
+    Optional<Zone> findZoneByCode(TenantId tenantId, String zoneCode);
+
+    /**
      * The single registered vehicle carrying this plate, if there is exactly one on the platform.
      *
      * <p>Empty when nobody registered it (the ordinary case for a car that never used the app) and
@@ -107,6 +120,10 @@ public interface ParkingStatusPort {
     }
 
     /** A numbered bay and the zone it belongs to. */
+    /** A sector of the municipality, as much of it as enforcement has any business knowing. */
+    record Zone(UUID zoneId, String code, String name) {
+    }
+
     record Bay(UUID spaceId, String code, UUID zoneId, String zoneCode, String zoneName) {
     }
 

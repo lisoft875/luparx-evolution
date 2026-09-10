@@ -38,6 +38,15 @@ export function CitationFacts({ citation, timeZone, showInternal = false }: Cita
               {citation.number ?? t('citation.field.noNumber')}
             </span>
             <Badge tone={citationStatusTone(citation.status)}>{t(citationStatusKey(citation.status))}</Badge>
+            {/* Said next to the status and not buried among the rows: whether this platform is the
+                one that decides changes what every other line on the screen means (v0.34). */}
+            {citation.source === 'EXTERNAL' ? (
+              <Badge tone="info">
+                {citation.sourceSystem
+                  ? t('citation.source.external.named', { system: citation.sourceSystem })
+                  : t('citation.source.external')}
+              </Badge>
+            ) : null}
           </span>
         }
         description={citation.infractionName}
@@ -94,11 +103,32 @@ export function CitationFacts({ citation, timeZone, showInternal = false }: Cita
             value={t('citation.clockSkew.seconds', { seconds: citation.deviceClockSkewSeconds })}
           />
         ) : null}
+        {/* The other system's own word for the state. The office is going to be quoted this on the
+            telephone, and our mapped status will not be the phrase the citizen read. */}
+        {citation.externalStatus ? (
+          <SummaryRow label={t('citation.field.externalStatus')} value={citation.externalStatus} />
+        ) : null}
+        {showInternal && citation.lastSeenAt ? (
+          <SummaryRow
+            label={t('citation.field.lastSeenAt')}
+            value={formatDateTime(citation.lastSeenAt, locale, zone)}
+          />
+        ) : null}
         {citation.notes ? <SummaryRow label={t('citation.field.notes')} value={citation.notes} /> : null}
         {citation.statusReason ? (
           <SummaryRow label={t('citation.field.statusReason')} value={citation.statusReason} />
         ) : null}
       </SummaryList>
+      {/* Before the missing-coordinates hint, because it is the more consequential of the two: it is
+          the difference between "this citation is incomplete" and "this citation is not ours to
+          settle". Somebody reading this screen is about to try to do something with it. */}
+      {citation.managedHere === false ? (
+        <Alert tone="info">
+          {citation.sourceSystem
+            ? t('citation.source.mirrorNotice.named', { system: citation.sourceSystem })
+            : t('citation.source.mirrorNotice')}
+        </Alert>
+      ) : null}
       {!hasCoordinates ? <Alert tone="info">{t('citation.field.noCoordinates.hint')}</Alert> : null}
     </Card>
   );

@@ -15,6 +15,15 @@ public enum Role {
     TENANT_ADMIN(Portal.ADMIN, RoleScope.TENANT),
     TENANT_FINANCE(Portal.ADMIN, RoleScope.TENANT),
     TENANT_SUPPORT(Portal.ADMIN, RoleScope.TENANT),
+    /**
+     * The other system's account (CONTRACT.md v0.34).
+     *
+     * <p>A machine, not a person: it mirrors citations in and reads them back, and it can do nothing
+     * else — it cannot annul, cannot configure, cannot see a citizen's file. A municipality that
+     * integrates its old system should not have to hand it an administrator's credentials, which is
+     * what happens every time a product has no role for an integration.</p>
+     */
+    TENANT_INTEGRATION(Portal.ADMIN, RoleScope.TENANT),
     INSPECTOR(Portal.INSPECTOR, RoleScope.TENANT),
     INSPECTOR_LEAD(Portal.INSPECTOR, RoleScope.TENANT),
     CITIZEN(Portal.CITIZEN, RoleScope.TENANT);
@@ -59,6 +68,9 @@ public enum Role {
     public boolean grantableByTenantAdmin() {
         return switch (this) {
             case INSPECTOR, INSPECTOR_LEAD, TENANT_FINANCE, TENANT_SUPPORT -> true;
+            // The municipality connects its own system; asking the platform for permission to do it
+            // would make the platform a help desk for an integration it has no part in.
+            case TENANT_INTEGRATION -> true;
             case TENANT_ADMIN, PLATFORM_ADMIN, PLATFORM_SUPPORT, CITIZEN -> false;
         };
     }

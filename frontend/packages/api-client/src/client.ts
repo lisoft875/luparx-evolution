@@ -94,6 +94,12 @@ import type {
   AuditEventsQuery,
   AuditChain,
   AuditOriginProbe,
+  CitationIngestRequest,
+  CitationIngestResult,
+  ExternalInfractionMapping,
+  MapCausalRequest,
+  MapCausalResult,
+  UnmappedCausal,
   AuditOriginProbeRequest,
   BlockUserRequest,
   CountryCatalogEntry,
@@ -883,6 +889,41 @@ export class ApiClient {
     /** The bytes of one photograph. Authenticated, so it can never be a bare `<img src>`. */
     evidenceContent: (citationId: string, evidenceId: string): Promise<Blob> =>
       this.http.blob(`/api/v1/inspector/citations/${citationId}/evidence/${evidenceId}`),
+  };
+
+  /**
+   * Citations raised in another system (v0.34).
+   *
+   * Mirroring, not a second issuing path: nothing here mints a number, computes a fine or takes
+   * money. `push` is idempotent by `(sourceSystem, externalId)` — a repeat is the ordinary case, and
+   * `outcome` says which one happened so the caller need not infer it from a status code.
+   */
+  readonly adminCitationIngest = {
+    push: async (payload: CitationIngestRequest): Promise<CitationIngestResult> => {
+      const wire = await this.http.request<{
+        citation: WireCitation;
+        outcome: CitationIngestResult['outcome'];
+        discrepancies?: string[] | null;
+      }>('POST', '/api/v1/admin/enforcement/ingest/citations', { body: payload });
+      return {
+        citation: toCitation(wire.citation),
+        outcome: wire.outcome,
+        discrepancies: wire.discrepancies ?? [],
+      };
+    },
+    /** Foreign causals that have arrived and nobody mapped yet, busiest first. */
+    unmappedCausals: (limit = 50): Promise<UnmappedCausal[]> =>
+      this.http.request('GET', '/api/v1/admin/enforcement/ingest/unmapped-causals', { query: { limit } }),
+    mappings: (): Promise<ExternalInfractionMapping[]> =>
+      this.http.request('GET', '/api/v1/admin/enforcement/ingest/mappings'),
+    /**
+     * Points a foreign causal at one of ours and relinks the citations already here.
+     *
+     * Bounded per call: `more` true means the batch filled up and there are others waiting, so the
+     * caller repeats. That is also what makes it safe to retry after a timeout.
+     */
+    map: (payload: MapCausalRequest): Promise<MapCausalResult> =>
+      this.http.request('PUT', '/api/v1/admin/enforcement/ingest/mappings', { body: payload }),
   };
 
   readonly adminEnforcement = {

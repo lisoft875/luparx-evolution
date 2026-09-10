@@ -98,6 +98,14 @@ public class AppealService {
     public CitationAppeal file(TenantId tenantId, EnforcementActor actor, Collection<UUID> ownVehicleIds,
                                UUID citationId, String body, UUID acceptedNoticeId, String locale) {
         Citation citation = citationService.requireForVehicles(tenantId, ownVehicleIds, citationId);
+        // Before anything else, including before reading the catalogue: a mirrored citation may have
+        // no infraction type of ours at all, so asking whether "the type allows an appeal" would fail
+        // on a lookup instead of answering the question the citizen asked (CONTRACT.md v0.34). The
+        // defence against an act raised elsewhere is filed where that act lives.
+        if (citation.isMirror()) {
+            throw ConflictException.of(ErrorCode.CITATION_NOT_MANAGED_HERE,
+                    "error.enforcement.citation.notManagedHere");
+        }
         InfractionType type = infractionTypeService.require(tenantId, citation.getInfractionTypeId());
         if (!type.isAllowsAppeal()) {
             throw ConflictException.of(ErrorCode.CITATION_APPEAL_NOT_ALLOWED,

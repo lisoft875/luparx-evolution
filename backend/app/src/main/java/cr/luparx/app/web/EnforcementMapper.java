@@ -359,7 +359,13 @@ public class EnforcementMapper {
                 citation.getInspectorNameSnapshot(),
                 citation.getParkingSessionId(),
                 citation.getNotes(),
-                evidenceCount);
+                evidenceCount,
+                citation.getSource(),
+                citation.getSource().labelKey(),
+                citation.getSourceSystem(),
+                citation.getExternalStatus(),
+                citation.getLastSeenAt(),
+                citation.getSource().isManagedHere());
     }
 
     public List<EnforcementDtos.CitationResponse> toCitations(List<Citation> citations, UUID tenantId) {
@@ -395,8 +401,16 @@ public class EnforcementMapper {
                 citation.getDueAt(),
                 citation.getOccurredAt(),
                 citation.getIssuedAt(),
-                appealable,
-                evidenceCount);
+                // A mirrored fine is never appealable here, whatever its causal allows: the defence
+                // against an act raised elsewhere is filed where that act lives, and offering the
+                // button would be offering a door that opens onto a refusal.
+                appealable && citation.getSource().isManagedHere(),
+                evidenceCount,
+                citation.getSource(),
+                citation.getSource().labelKey(),
+                citation.getSourceSystem(),
+                citation.getExternalStatus(),
+                citation.getSource().isManagedHere());
     }
 
     public List<EnforcementDtos.FineResponse> toFines(List<Citation> citations, UUID tenantId,

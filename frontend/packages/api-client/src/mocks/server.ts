@@ -2838,7 +2838,12 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
     if (segments[segments.length - 1] === 'infraction-types') {
       const types = mockInfractionTypes(tenantId);
       if (method === 'GET') {
-        return json(segments[2] === 'inspector' ? types.filter((type) => type.active) : types);
+        // Envuelto en MoneyDto, como lo manda el servidor. Iba crudo, el adaptador leía
+        // `wire.fine.amountMinor` y el catálogo se caía con «Ocurrió un error» en toda build de
+        // demostración —el mismo defecto de siempre, sólo que aquí el simulador no era más amable
+        // sino distinto. `replaceMockInfractionTypes` ya lo envolvía; esta rama no (ADR 0009).
+        const visible = segments[2] === 'inspector' ? types.filter((type) => type.active) : types;
+        return json(visible.map(toWireInfractionType));
       }
       if (method === 'PUT') {
         const payload = await readBody<{ infractionTypes: Record<string, unknown>[] }>(init);
@@ -2880,6 +2885,122 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
         notices.push(notice);
         return json(notice);
       }
+    }
+
+    // Las causales ajenas que nadie ha mapeado, y el mapeo. El simulador las deriva de las propias
+    // boletas espejo, igual que el servidor: una lista fija habría mostrado una pantalla bonita que
+    // no corresponde a nada, que es exactamente cómo se cuela un filtro que no filtra.
+    if (segments[4] === 'ingest' && segments[5] === 'unmapped-causals' && method === 'GET') {
+      const groups = new Map<string, { sourceSystem: string; externalCode: string; externalName: string | null; citations: number }>();
+      for (const citation of mockCitations) {
+        if (citation.tenantId !== tenantId || citation.source !== 'EXTERNAL' || citation.infractionTypeId) {
+          continue;
+        }
+        const key = `${citation.sourceSystem}:${citation.infractionCode}`;
+        const row = groups.get(key) ?? {
+          sourceSystem: citation.sourceSystem ?? '',
+          externalCode: citation.infractionCode,
+          externalName: citation.infractionName,
+          citations: 0,
+        };
+        row.citations += 1;
+        groups.set(key, row);
+      }
+      // Por volumen: el código que está en cuatrocientas boletas es el que vale la pena mapear
+      // primero, y una lista alfabética lo entierra.
+      return json([...groups.values()].sort((a, b) => b.citations - a.citations));
+    }
+
+    if (segments[4] === 'ingest' && segments[5] === 'mappings' && method === 'PUT') {
+      const payload = await readBody<{ sourceSystem: string; externalCode: string; infractionTypeId: string }>(init);
+      let relinked = 0;
+      for (const citation of mockCitations) {
+        if (
+          citation.tenantId === tenantId &&
+          citation.source === 'EXTERNAL' &&
+          citation.sourceSystem === payload.sourceSystem &&
+          citation.infractionCode === payload.externalCode &&
+          !citation.infractionTypeId
+        ) {
+          // Sólo el enlace. El código, el nombre y el monto se quedan como llegaron: el mapeo es
+          // para que los reportes sumen, nunca una corrección del acto.
+          citation.infractionTypeId = payload.infractionTypeId;
+          relinked += 1;
+        }
+      }
+      return json({ relinked, more: false });
+    }
+
+    // El ingreso de boletas de otro sistema (CONTRACT.md v0.34). Idempotente por (sistema, id
+    // externo), igual que el servidor: el mismo identificador dos veces refresca la misma fila.
+    if (segments[4] === 'ingest' && segments[5] === 'citations' && method === 'POST') {
+      const payload = await readBody<Record<string, string | number | undefined>>(init);
+      const system = String(payload.sourceSystem ?? '').trim();
+      const externalId = String(payload.externalId ?? '').trim();
+      if (!system || !externalId || !payload.number || !payload.plate) {
+        return problem(422, 'VALIDATION_FAILED', 'error.enforcement.ingest.required');
+      }
+      if (payload.status === 'DRAFT') {
+        return problem(422, 'VALIDATION_FAILED', 'error.enforcement.ingest.statusDraft');
+      }
+      const already = mockCitations.find(
+        (c) => c.tenantId === tenantId && c.sourceSystem === system && c.externalId === externalId,
+      );
+      const discrepancies: string[] = [];
+      if (already) {
+        // Un reingreso refresca el estado y NO reescribe el acto. Lo que llegue distinto se reporta.
+        if (normalizeMockPlate(String(payload.plate)) !== already.plate) discrepancies.push('plate');
+        if (payload.infractionCode !== already.infractionCode) discrepancies.push('infractionCode');
+        already.status = String(payload.status ?? already.status);
+        already.externalStatus = (payload.externalStatus as string | undefined) ?? null;
+        already.lastSeenAt = new Date().toISOString();
+        return json({ citation: toWireCitation(already, 0), outcome: 'REFRESHED', discrepancies }, 200);
+      }
+      const zone = mockAdminZones(tenantId).find((candidate) => candidate.code === payload.zoneCode);
+      const record: MockCitationRecord = {
+        id: `citation-ext-${mockCitations.length + 1}`,
+        tenantId,
+        // Sin inspector nuestro: el acto lo levantó otro. Sólo queda el nombre que mandaron.
+        inspectorUserId: '',
+        deviceCitationId: null,
+        number: String(payload.number),
+        seriesYear: null,
+        status: String(payload.status ?? 'ISSUED'),
+        statusReason: null,
+        plate: normalizeMockPlate(String(payload.plate)),
+        zoneId: zone?.id ?? null,
+        zoneName: zone?.name ?? null,
+        spaceCode: (payload.spaceCode as string | undefined) ?? null,
+        latitude: null,
+        longitude: null,
+        locationAccuracyM: null,
+        addressText: (payload.addressText as string | undefined) ?? null,
+        // Sin enlace al catálogo hasta que alguien mapee el código: el acto queda completo igual,
+        // porque el código, el nombre y el monto siempre fueron copias dentro de la boleta.
+        infractionTypeId: '',
+        infractionCode: String(payload.infractionCode ?? ''),
+        infractionName: String(payload.infractionName ?? ''),
+        fineMinor: Number(payload.fineAmountMinor ?? 0),
+        discountedFineMinor: null,
+        currencyCode: String(payload.currencyCode ?? 'CRC'),
+        discountUntil: null,
+        dueAt: (payload.dueAt as string | undefined) ?? null,
+        occurredAt: String(payload.occurredAt ?? new Date().toISOString()),
+        issuedAt: (payload.issuedAt as string | undefined) ?? String(payload.occurredAt ?? ''),
+        notes: (payload.notes as string | undefined) ?? null,
+        requiresPhoto: false,
+        allowsAppeal: false,
+        evidence: [],
+        events: [],
+        appeal: null,
+        source: 'EXTERNAL',
+        sourceSystem: system,
+        externalId,
+        externalStatus: (payload.externalStatus as string | undefined) ?? null,
+        lastSeenAt: new Date().toISOString(),
+      };
+      mockCitations.push(record);
+      return json({ citation: toWireCitation(record, 0), outcome: 'CREATED', discrepancies: [] }, 201);
     }
 
     // Citations, for both portals.
@@ -2970,6 +3091,14 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
         }
         resolveMockAppeal(record, Boolean(accept), reason);
         return json(toWireDetail(record));
+      }
+
+      // El espejo no se mueve aquí, y el simulador lo rechaza igual que el servidor. Uno que lo
+      // permitiera dejaría pasar justo el defecto que importa: una boleta anulada en LupaRX que en
+      // el sistema de la municipalidad sigue viva.
+      if (method === 'POST' && (record.source ?? 'LUPARX') === 'EXTERNAL') {
+        return problem(409, 'CITATION_NOT_MANAGED_HERE',
+          'This citation was raised in another system. The municipality manages it there.');
       }
 
       if (method === 'POST' && action === 'cancel') {
@@ -3651,6 +3780,15 @@ interface MockCitationRecord {
   events: Record<string, unknown>[];
   /** The defence filed against this citation, if one was. One per citation, as on the server. */
   appeal: MockAppeal | null;
+  /**
+   * De dónde viene el acto (CONTRACT.md v0.34). Ausente es 'LUPARX': todo lo que el simulador ya
+   * creaba se levantó aquí, que es exactamente lo que era.
+   */
+  source?: 'LUPARX' | 'EXTERNAL';
+  sourceSystem?: string | null;
+  externalId?: string | null;
+  externalStatus?: string | null;
+  lastSeenAt?: string | null;
 }
 
 interface MockAppeal {
@@ -3680,7 +3818,57 @@ interface MockInfractionType {
   active: boolean;
 }
 
-const mockCitations: MockCitationRecord[] = [];
+const mockCitations: MockCitationRecord[] = [
+  /**
+   * Una boleta espejo sembrada (CONTRACT.md v0.34).
+   *
+   * Está aquí para que la pantalla tenga qué enseñar la primera vez que se abre, y porque es el caso
+   * que sólo se ve cuando existe: número que no es de nuestra serie, causal que no está en nuestro
+   * catálogo, un inspector que no es usuario de la plataforma, y la palabra del otro sistema
+   * («EN COBRO ADMINISTRATIVO») al lado de nuestro estado.
+   */
+  {
+    id: 'citation-ext-seed-1',
+    tenantId: 'tenant-sanjose',
+    inspectorUserId: '',
+    deviceCitationId: null,
+    number: 'SIM-2026-004417',
+    seriesYear: null,
+    status: 'ISSUED',
+    statusReason: null,
+    // La placa del ciudadano de demostración, a propósito: el caso que hay que poder enseñar es el
+    // suyo —abre sus multas, ve una que no puede pagar aquí, y la pantalla se lo explica.
+    plate: 'BHL019',
+    zoneId: null,
+    zoneName: null,
+    spaceCode: null,
+    latitude: null,
+    longitude: null,
+    locationAccuracyM: null,
+    addressText: 'Avenida 2, frente al Banco Nacional',
+    infractionTypeId: '',
+    infractionCode: 'ART-142-B',
+    infractionName: 'Estacionar en zona de carga y descarga',
+    fineMinor: 2300000,
+    discountedFineMinor: null,
+    currencyCode: 'CRC',
+    discountUntil: null,
+    dueAt: new Date(Date.now() + 12 * 86_400_000).toISOString(),
+    occurredAt: new Date(Date.now() - 4 * 86_400_000).toISOString(),
+    issuedAt: new Date(Date.now() - 4 * 86_400_000).toISOString(),
+    notes: null,
+    requiresPhoto: false,
+    allowsAppeal: false,
+    evidence: [],
+    events: [],
+    appeal: null,
+    source: 'EXTERNAL',
+    sourceSystem: 'SIM',
+    externalId: 'SIM-4417',
+    externalStatus: 'EN COBRO ADMINISTRATIVO',
+    lastSeenAt: new Date(Date.now() - 3_600_000).toISOString(),
+  },
+];
 const mockInfractionTypesByTenant = new Map<string, MockInfractionType[]>();
 let mockCitationSequence = 0;
 
@@ -3897,6 +4085,12 @@ function toWireCitation(record: MockCitationRecord, evidenceCount: number): unkn
     parkingSessionId: null,
     notes: record.notes,
     evidenceCount,
+    source: record.source ?? 'LUPARX',
+    sourceLabelKey: `citation.source.${(record.source ?? 'LUPARX').toLowerCase()}`,
+    sourceSystem: record.sourceSystem ?? null,
+    externalStatus: record.externalStatus ?? null,
+    lastSeenAt: record.lastSeenAt ?? null,
+    managedHere: (record.source ?? 'LUPARX') === 'LUPARX',
   };
 }
 
@@ -4101,7 +4295,17 @@ function toWireFine(record: MockCitationRecord): unknown {
     dueAt: record.dueAt,
     occurredAt: record.occurredAt,
     issuedAt: record.issuedAt,
-    appealable: record.allowsAppeal && ['ISSUED', 'UPHELD', 'EXPIRED'].includes(record.status),
+    // Una boleta espejo no es apelable aquí por mucho que su causal lo permita: el descargo contra
+    // un acto levantado en otro sistema se presenta allá (v0.34).
+    appealable:
+      record.allowsAppeal &&
+      (record.source ?? 'LUPARX') === 'LUPARX' &&
+      ['ISSUED', 'UPHELD', 'EXPIRED'].includes(record.status),
     evidenceCount: record.evidence.length,
+    source: record.source ?? 'LUPARX',
+    sourceLabelKey: `citation.source.${(record.source ?? 'LUPARX').toLowerCase()}`,
+    sourceSystem: record.sourceSystem ?? null,
+    externalStatus: record.externalStatus ?? null,
+    managedHere: (record.source ?? 'LUPARX') === 'LUPARX',
   };
 }

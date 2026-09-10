@@ -96,7 +96,7 @@ export interface WireCitation {
   longitude?: number | null;
   locationAccuracyM?: number | null;
   addressText?: string | null;
-  infractionTypeId: string;
+  infractionTypeId?: string | null;
   infractionCode: string;
   infractionName: string;
   fine: WireMoney;
@@ -111,6 +111,12 @@ export interface WireCitation {
   parkingSessionId?: string | null;
   notes?: string | null;
   evidenceCount: number;
+  source?: Citation['source'];
+  sourceLabelKey?: string;
+  sourceSystem?: string | null;
+  externalStatus?: string | null;
+  lastSeenAt?: string | null;
+  managedHere?: boolean;
 }
 
 export interface WireEvidence {
@@ -164,6 +170,11 @@ export interface WireFine {
   issuedAt?: string | null;
   appealable: boolean;
   evidenceCount: number;
+  source?: Citation['source'];
+  sourceLabelKey?: string;
+  sourceSystem?: string | null;
+  externalStatus?: string | null;
+  managedHere?: boolean;
 }
 
 export interface WireFineDetail {
@@ -230,7 +241,7 @@ export function toCitation(wire: WireCitation): Citation {
     longitude: wire.longitude ?? null,
     locationAccuracyM: wire.locationAccuracyM ?? null,
     addressText: wire.addressText ?? null,
-    infractionTypeId: wire.infractionTypeId,
+    infractionTypeId: wire.infractionTypeId ?? null,
     infractionCode: wire.infractionCode,
     infractionName: wire.infractionName,
     fineMinor: wire.fine.amountMinor,
@@ -246,6 +257,14 @@ export function toCitation(wire: WireCitation): Citation {
     parkingSessionId: wire.parkingSessionId ?? null,
     notes: wire.notes ?? null,
     evidenceCount: wire.evidenceCount,
+    source: wire.source ?? 'LUPARX',
+    sourceLabelKey: wire.sourceLabelKey ?? 'citation.source.luparx',
+    sourceSystem: wire.sourceSystem ?? null,
+    externalStatus: wire.externalStatus ?? null,
+    lastSeenAt: wire.lastSeenAt ?? null,
+    // A server older than v0.34 has no mirrored citations at all, so everything it sends is managed
+    // here. Defaulting to false would grey out every button against every citation on the platform.
+    managedHere: wire.managedHere ?? true,
   };
 }
 
@@ -338,6 +357,11 @@ export function toFine(wire: WireFine): Fine {
     issuedAt: wire.issuedAt ?? null,
     appealable: wire.appealable,
     evidenceCount: wire.evidenceCount,
+    source: wire.source ?? 'LUPARX',
+    sourceLabelKey: wire.sourceLabelKey ?? 'citation.source.luparx',
+    sourceSystem: wire.sourceSystem ?? null,
+    externalStatus: wire.externalStatus ?? null,
+    managedHere: wire.managedHere ?? true,
   };
 }
 

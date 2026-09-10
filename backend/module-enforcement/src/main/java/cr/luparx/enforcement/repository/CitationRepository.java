@@ -52,6 +52,53 @@ public interface CitationRepository extends JpaRepository<Citation, UUID> {
      */
     Optional<Citation> findByTenantIdAndDeviceCitationId(UUID tenantId, String deviceCitationId);
 
+    /**
+     * A mirrored citation by its identity in the system it came from (CONTRACT.md v0.34).
+     *
+     * <p>The idempotency of the ingest. The other system's identifier is what makes an act the same
+     * act, so a retry after a timeout, a nightly re-send of the whole open ledger, or two instances
+     * receiving the same push all resolve here — and the unique index behind it is what settles the
+     * race the lookup alone cannot.</p>
+     */
+    Optional<Citation> findByTenantIdAndSourceSystemAndExternalId(UUID tenantId, String sourceSystem,
+                                                                  String externalId);
+
+    /**
+     * Mirrored citations whose causal came in with a code the catalogue did not know, for one system.
+     *
+     * <p>What the mapping backfill walks. Bounded by a page, because a municipality that switches on
+     * the mirror for the first time imports its whole open ledger and mapping one code could touch
+     * thousands of rows — a backfill that took them all in one transaction would be the first thing
+     * to time out on the day the feature is demonstrated.</p>
+     */
+    @Query("""
+            select c from Citation c
+            where c.tenantId = :tenantId and c.sourceSystem = :sourceSystem
+              and c.infractionCode = :externalCode and c.infractionTypeId is null
+            """)
+    Page<Citation> findUnmappedByCode(@Param("tenantId") UUID tenantId,
+                                      @Param("sourceSystem") String sourceSystem,
+                                      @Param("externalCode") String externalCode,
+                                      Pageable pageable);
+
+    /**
+     * The distinct causals that arrived from one system and are not mapped yet, with how many
+     * citations each one carries.
+     *
+     * <p>The screen an administrator opens to do the mapping. Ordered by volume, because the code
+     * that appears on four hundred citations is the one worth mapping first and a list ordered
+     * alphabetically buries it.</p>
+     */
+    @Query("""
+            select c.sourceSystem, c.infractionCode, min(c.infractionName), count(c)
+            from Citation c
+            where c.tenantId = :tenantId and c.source = cr.luparx.enforcement.model.CitationSource.EXTERNAL
+              and c.infractionTypeId is null
+            group by c.sourceSystem, c.infractionCode
+            order by count(c) desc
+            """)
+    List<Object[]> findUnmappedCausals(@Param("tenantId") UUID tenantId, Pageable pageable);
+
     /** The officer's own work, newest first: what their app opens on. */
     Page<Citation> findByTenantIdAndInspectorUserIdOrderByOccurredAtDesc(UUID tenantId, UUID inspectorUserId,
                                                                         Pageable pageable);

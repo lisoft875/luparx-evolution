@@ -1985,7 +1985,12 @@ export interface Citation {
   longitude: number | null;
   locationAccuracyM: number | null;
   addressText: string | null;
-  infractionTypeId: string;
+  /**
+   * Null on a mirrored citation whose foreign causal nobody has mapped yet (v0.34). The code, the
+   * name and the amount are still there — they were always snapshots — so nothing about what the
+   * person was fined for is missing; only the link that lets reports add it up.
+   */
+  infractionTypeId: string | null;
   infractionCode: string;
   infractionName: string;
   fineMinor: number;
@@ -2008,6 +2013,109 @@ export interface Citation {
    * it, and none does.
    */
   evidenceCount: number;
+  /**
+   * Where the act was born (v0.34). `EXTERNAL` means this row mirrors a citation another system
+   * raised: it is shown here and settled there. Absent from servers older than v0.34.
+   */
+  source?: CitationSource;
+  sourceLabelKey?: string;
+  sourceSystem?: string | null;
+  /** The other system's own word for the state, beside the mapped one ("EN COBRO JUDICIAL"). */
+  externalStatus?: string | null;
+  /** The last time that system confirmed it. Separates "still unpaid" from "we stopped hearing". */
+  lastSeenAt?: string | null;
+  /**
+   * Whether this platform decides what happens to it. Branch on this rather than re-deriving the
+   * rule from `source`: a client that offers "annul" on a mirrored citation offers a button that can
+   * only fail. Treated as true when absent, which is what every pre-v0.34 citation was.
+   */
+  managedHere?: boolean;
+}
+
+/**
+ * Where a citation was born (v0.34).
+ *
+ * Not a label: it decides what may be done to the row. A municipality that keeps issuing and
+ * collecting in the system it already has still wants its citations visible here — so LupaRX mirrors
+ * them, and refuses to behave as if it had raised them.
+ */
+export type CitationSource = 'LUPARX' | 'EXTERNAL';
+
+/**
+ * One citation as another system describes it (v0.34).
+ *
+ * Its own number, its own causal, its own officer — it knows none of our identifiers, which is why
+ * the sector arrives as a code and the causal as a code and a name.
+ */
+export interface CitationIngestRequest {
+  sourceSystem: string;
+  /** Its identifier over there. The idempotency key: same value, same citation. */
+  externalId: string;
+  /** The number the citizen quotes. That system's, kept verbatim — nothing is minted here. */
+  number: string;
+  plate: string;
+  infractionCode: string;
+  infractionName: string;
+  fineAmountMinor: number;
+  currencyCode: string;
+  occurredAt: string;
+  /** When that system emitted it. Absent means it was emitted when it happened. */
+  issuedAt?: string;
+  dueAt?: string;
+  /** The sector as that system calls it; linked when it matches one of ours, ignored otherwise. */
+  zoneCode?: string;
+  spaceCode?: string;
+  latitude?: number;
+  longitude?: number;
+  addressText?: string;
+  /** Who raised it over there: a document number, a staff code — whatever they have. */
+  inspectorExternalRef?: string;
+  inspectorName?: string;
+  /** Mapped into our vocabulary. `DRAFT` is refused: a draft is an act half-raised on our devices. */
+  status: CitationStatus;
+  externalStatus?: string;
+  notes?: string;
+}
+
+export interface CitationIngestResult {
+  citation: Citation;
+  /** `CREATED` the first time this external id is seen, `REFRESHED` after. A repeat is ordinary. */
+  outcome: 'CREATED' | 'REFRESHED';
+  /**
+   * Fields that arrived different from what is written, among the ones a re-ingest may not change.
+   * Reported, never applied: two systems disagreeing about which plate was fined is for a person.
+   */
+  discrepancies: string[];
+}
+
+/** A foreign causal nobody mapped yet, and how many citations are waiting on it. */
+export interface UnmappedCausal {
+  sourceSystem: string;
+  externalCode: string;
+  externalName: string | null;
+  citations: number;
+}
+
+export interface ExternalInfractionMapping {
+  id: string;
+  sourceSystem: string;
+  externalCode: string;
+  externalName: string | null;
+  infractionTypeId: string;
+  updatedAt: string;
+}
+
+export interface MapCausalRequest {
+  sourceSystem: string;
+  externalCode: string;
+  infractionTypeId: string;
+}
+
+export interface MapCausalResult {
+  /** How many citations already here were attached to the catalogue causal. */
+  relinked: number;
+  /** True when the batch filled up and more are waiting; the caller repeats until it is false. */
+  more: boolean;
 }
 
 /** A piece of evidence. The digest is what proves, later, that the photograph is the one taken. */
@@ -2091,6 +2199,13 @@ export interface Fine {
   appealable: boolean;
   /** Zero in listings by design, like {@link Citation.evidenceCount}; read it from the detail. */
   evidenceCount: number;
+  /** Where the act was born (v0.34). A mirrored fine is paid and challenged at the other window. */
+  source?: CitationSource;
+  sourceLabelKey?: string;
+  sourceSystem?: string | null;
+  externalStatus?: string | null;
+  /** False for a mirror. True when absent, which is what every pre-v0.34 fine was. */
+  managedHere?: boolean;
 }
 
 export interface FineDetail {

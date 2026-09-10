@@ -2996,3 +2996,143 @@ igual que el backend. Uno que devolviera siempre la lista entera dejaría pasar 
 que no se nota hasta producción: la pantalla se ve bien, el filtro no filtra, y nadie se entera hasta
 que un auditor pregunta por una persona. Las semillas incluyen dos actos desde la misma conexión y
 uno desde otra, para que la huella se vea haciendo su trabajo, y una entrada sin persona.
+
+---
+
+# v0.34 — De dónde viene una boleta
+
+Punto 9 de la lista, y la parte que faltaba no eran las nueve viñetas: **placa, inspector, causal,
+fecha/hora, ubicación/zona, evidencia, observaciones, número y estado ya existían desde la v0.7**. Lo
+que no cabía en el modelo era la primera frase del punto: *«aunque inicialmente una municipalidad siga
+utilizando otro sistema»*.
+
+Hoy `citations` exige un inspector que sea usuario de la plataforma, exige una causal del catálogo
+propio, y su número sale de la serie propia. Una boleta nacida en otro lado no tenía por dónde entrar,
+y la salida fácil —que el integrador invente un inspector y mapee la causal a la más parecida— llena
+de datos falsos justamente las tres columnas por las que después pregunta un auditor.
+
+## El origen decide quién manda
+
+`citations.source`:
+
+- **`LUPARX`** — el acto se levantó aquí. La plataforma lo emite, lo numera, lo mueve, lo cobra y
+  responde por él.
+- **`EXTERNAL`** — nació en otro sistema y esta fila es un **espejo**: se lee, se busca y se muestra;
+  no se paga aquí, no se mueve aquí y no se apela aquí.
+
+No es una etiqueta: es lo primero que pregunta cada guarda. `CitationService.transition` —el único
+punto por donde pasa todo cambio de estado— lo rechaza con `CITATION_NOT_MANAGED_HERE`, y el descargo
+del ciudadano también, **antes** de leer el catálogo: una boleta espejo puede no tener causal nuestra,
+y preguntar «¿este tipo admite descargo?» fallaría en una consulta en vez de contestar lo que el
+ciudadano preguntó.
+
+Y lo dice la base, no sólo el servicio: un job, una migración o una consola pueden mover un estado sin
+pasar por ahí, y entonces la municipalidad tendría aquí una boleta pagada que allá sigue debiéndose.
+Eso no es un defecto de pantalla, es plata.
+
+```sql
+CHECK (source <> 'EXTERNAL' OR status <> 'PAID' OR external_status IS NOT NULL)
+```
+
+**Por qué el espejo no cobra:** porque la alternativa es una municipalidad con dos respuestas a
+«¿pagó?» y ninguna forma de saber cuál vale. Aceptar un pago por un acto que no emitimos nos deja
+debiéndole un mensaje al otro sistema, y el día que ese mensaje falle alguien pagó y sigue debiendo.
+El día que una municipalidad quiera que LupaRX sí cobre lo ajeno, hace falta un dueño del cobro por
+municipalidad y una llamada de vuelta — no una reescritura, porque la regla vive en un solo método.
+
+## Lo que se afloja, y sólo para lo externo
+
+Los dos `NOT NULL` se van y entra un CHECK consciente del origen:
+
+```sql
+CHECK (source <> 'LUPARX' OR (inspector_user_id IS NOT NULL AND infraction_type_id IS NOT NULL))
+```
+
+Es **más exacto** que lo que reemplaza: la regla nunca fue «toda boleta tiene inspector» sino «toda
+boleta *nuestra* tiene inspector». Igual con el consecutivo — `number` es lo que el ciudadano cita, y
+para una externa eso es el número del otro sistema; `series_year` y `sequence_number` son de nuestra
+serie, y quemar un consecutivo nuestro en un acto ajeno dejaría un hueco en nuestro propio libro. Una
+boleta externa tampoco puede llegar como borrador: un borrador es un acto a medio levantar en el
+teléfono de un inspector nuestro.
+
+## La causal ajena entra completa
+
+El código, el nombre y el monto de la infracción **ya se copiaban dentro de la boleta** desde la v0.7,
+porque el catálogo es configuración y se edita. Ese snapshot es justo lo que hace que una causal ajena
+quepa sin tocar nada: entra completa, y lo único que falta es el enlace al catálogo.
+
+`external_infraction_mappings` lo agrega después y **sin bloquear**. Un ingreso nunca se rechaza por
+falta de mapeo: las boletas llegando a las dos de la mañana no pueden depender de que alguien haya
+configurado una tabla de traducción, porque un rechazo a esa hora es una boleta que nadie se entera
+que se perdió. Al mapear se enlazan también las que ya estaban, por lotes (`relinked` / `more`),
+porque encender el espejo importa el libro completo y un código puede estar en miles de filas. El
+mapeo **no corrige el acto**: es para que los reportes sumen.
+
+La pantalla vive en el catálogo de infracciones —es donde uno dice «lo que ellos llaman ART-142-B,
+nosotros lo llamamos EST-01»— y desaparece cuando no hay nada que mapear.
+
+## El ingreso
+
+```
+POST /api/v1/admin/enforcement/ingest/citations
+→ 201 { outcome: "CREATED",   citation: {...}, discrepancies: [] }
+→ 200 { outcome: "REFRESHED", citation: {...}, discrepancies: ["plate"] }
+```
+
+Idempotente por `(municipalidad, sistema, id externo)`, y es un **índice único**, no una comprobación
+en el método. El otro sistema va a reenviar —tras un timeout cuya respuesta nunca vio, como reenvío
+nocturno de todo su libro abierto, o simplemente dos veces— y con dos instancias detrás del
+balanceador dos de esos llegan a dos procesos que ambos no encuentran nada y ambos insertan. El índice
+lo resuelve; atrapar su violación y releer la fila convierte la carrera en la respuesta correcta en
+vez de un 500 que el integrador tiene que interpretar.
+
+Un reingreso actualiza estado, palabra del otro sistema, fecha límite y monto. **No** toca placa,
+causal, lugar, momento ni inspector — sería un canal para editar historia desde afuera. Lo que llegue
+distinto se **reporta** en `discrepancies`: dos sistemas en desacuerdo sobre a qué placa multaron no
+es un conflicto de merge.
+
+`CITATION_INGESTED` se escribe en las dos salidas, también en el reenvío. «El otro sistema mandó ésta
+cuatrocientas veces» es un hallazgo real sobre una integración, y una traza que sólo anotara las
+primeras entregas no podría enseñarlo.
+
+## Quién puede
+
+`CITATION_INGEST`, y un rol nuevo `TENANT_INTEGRATION` que sólo tiene esa y `CITATION_READ`.
+Deliberadamente **no** es `CITATION_ISSUE`: espejar un acto ajeno no es la misma autoridad que
+levantar uno en nombre de la municipalidad, y una integración mal configurada con la capacidad del
+inspector podría emitir boletas de verdad sobre placas de verdad. Sin un rol para la integración, lo
+que pasa siempre es que se le entregan credenciales de administrador.
+
+El endpoint vive bajo el portal de administración porque el que habla es una máquina **de una
+municipalidad**, y el tenant, la audiencia del token y la auditoría ya cuelgan de ese portal. Dos
+formas de establecer qué municipalidad habla es como una plataforma multi-tenant termina sirviéndole a
+un municipio las boletas de otro.
+
+## En las pantallas
+
+`source`, `sourceSystem`, `externalStatus`, `lastSeenAt` y `managedHere` viajan en la boleta y en la
+multa del ciudadano. Los clientes ramifican por `managedHere`, no por `source`, y lo tratan como
+verdadero cuando falta —un servidor anterior a la v0.34 no tiene boletas espejo, así que todo lo que
+manda se gestiona aquí; poner falso por defecto apagaría todos los botones de toda la plataforma.
+
+- **Administración**: distintivo «Otro sistema · SIM» junto al estado, el estado del otro sistema y la
+  última confirmación entre los datos, y «Esta boleta se levantó en otro sistema. Se anula allá, no
+  aquí» en vez del genérico «no se puede anular en este estado» — el motivo no es el estado, y decirle
+  a alguien el motivo equivocado lo manda al lugar equivocado.
+- **Ciudadano**: el aviso va **antes** del monto, no al final. Quien lee «pagar no disponible» abajo
+  concluye que la plataforma está rota; lo que es cierto es que esa multa es de la otra ventanilla.
+- **Inspector**: lo mismo, por el componente compartido `CitationFacts`.
+
+## Simulador
+
+Espeja las reglas: el ingreso es idempotente de verdad, un reingreso con otra placa devuelve
+`discrepancies: ["plate"]` sin reescribir nada, un `DRAFT` se rechaza, y cualquier `POST` sobre una
+boleta espejo contesta 409. Trae una boleta sembrada del sistema «SIM» —número que no es de nuestra
+serie, causal que no está en nuestro catálogo, inspector que no es usuario de la plataforma— sobre la
+placa del ciudadano de demostración, que es el caso que hay que poder enseñar.
+
+**Defecto corregido de paso**: el simulador devolvía los tipos de infracción con `fineAmountMinor`
+suelto mientras el adaptador leía `wire.fine.amountMinor`, así que **el catálogo de infracciones se
+caía con «Ocurrió un error» en toda build de demostración** —y con él la captura del inspector.
+`replaceMockInfractionTypes` ya envolvía el monto; la rama del `GET` no. Es la lección de siempre con
+otra cara: el simulador no era más amable, era distinto (ADR 0009).

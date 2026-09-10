@@ -43,7 +43,11 @@ export function EnforcementCitationDetailPage(): React.JSX.Element {
   const citation = query.data?.citation;
   // The transition table lives on the server; these are the states it accepts CANCELLED from.
   const cancellable =
-    citation !== undefined && ['DRAFT', 'ISSUED', 'APPEALED', 'UPHELD', 'EXPIRED'].includes(citation.status);
+    citation !== undefined &&
+    // A mirrored citation is not annulled here whatever state it is in: the act lives in the other
+    // system and annulling our copy would leave the municipality holding two answers (v0.34).
+    citation.managedHere !== false &&
+    ['DRAFT', 'ISSUED', 'APPEALED', 'UPHELD', 'EXPIRED'].includes(citation.status);
 
   async function confirmCancel(): Promise<void> {
     if (reason.trim().length === 0) {
@@ -89,6 +93,10 @@ export function EnforcementCitationDetailPage(): React.JSX.Element {
             <SectionHeader title={t('admin.enforcement.citation.cancel')} />
             {!permissions.has('CITATION_VOID') ? (
               <Alert tone="info">{t('admin.enforcement.citation.noVoidPermission')}</Alert>
+            ) : citation.managedHere === false ? (
+              // Its own sentence, not the generic "cannot be annulled in this state": the reason is
+              // not the state, and telling somebody the wrong reason sends them to the wrong place.
+              <Alert tone="info">{t('admin.enforcement.citation.notManagedHere')}</Alert>
             ) : !cancellable ? (
               <Alert tone="info">{t('admin.enforcement.citation.notCancellable')}</Alert>
             ) : (

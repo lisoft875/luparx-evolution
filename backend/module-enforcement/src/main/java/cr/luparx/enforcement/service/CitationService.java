@@ -397,7 +397,28 @@ public class CitationService {
                 actor == null ? null : actor.ipHash(), now));
     }
 
+    /**
+     * The one rule that makes "sólo espejo" real (CONTRACT.md v0.34).
+     *
+     * <p>Placed here, in the single choke point every change of state already passes through, rather
+     * than repeated at each caller. A rule that has to be remembered in eight places is a rule that
+     * will be missing from the ninth — and the ninth would be a citation this platform marked paid
+     * while the municipality's other system still shows it owing.</p>
+     *
+     * <p>Checked <b>before</b> the transition table on purpose. "That move is not allowed from this
+     * state" and "this citation is not managed here" are different answers, and giving the first one
+     * to somebody holding a mirrored citation sends them off to argue about a state machine that was
+     * never the point.</p>
+     */
+    private void requireManagedHere(Citation citation) {
+        if (citation.isMirror()) {
+            throw ConflictException.of(ErrorCode.CITATION_NOT_MANAGED_HERE,
+                    "error.enforcement.citation.notManagedHere");
+        }
+    }
+
     private void requireTransition(Citation citation, CitationStatus target) {
+        requireManagedHere(citation);
         if (!citation.getStatus().canMoveTo(target)) {
             throw ConflictException.of(ErrorCode.CITATION_INVALID_TRANSITION,
                     "error.enforcement.citation.invalidTransition");

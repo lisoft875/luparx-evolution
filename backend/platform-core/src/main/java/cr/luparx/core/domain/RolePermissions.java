@@ -44,6 +44,9 @@ public final class RolePermissions {
                 Permission.CITATION_READ,
                 Permission.CITATION_VOID,
                 Permission.ENFORCEMENT_MANAGE,
+                // So an administrator can map foreign causals and load a backlog by hand; the
+                // day-to-day pushing is the integration account's job.
+                Permission.CITATION_INGEST,
                 Permission.WALLET_TOPUP));
         // Finance reads citations because collecting on them is its job; it cannot annul one, which
         // is precisely the separation of duties a municipality's own auditor asks about.
@@ -69,6 +72,11 @@ public final class RolePermissions {
                 Permission.CITATION_ISSUE,
                 Permission.CITATION_READ,
                 Permission.CITATION_VOID));
+        // Two capabilities and not one more. It mirrors citations in and reads them back so it can
+        // reconcile; everything else an integration might "need" is a conversation, not a default.
+        table.put(Role.TENANT_INTEGRATION, EnumSet.of(
+                Permission.CITATION_INGEST,
+                Permission.CITATION_READ));
         table.put(Role.CITIZEN, EnumSet.noneOf(Permission.class));
 
         EnumMap<Role, Set<Permission>> immutable = new EnumMap<>(Role.class);

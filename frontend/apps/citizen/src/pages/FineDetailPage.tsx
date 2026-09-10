@@ -75,8 +75,23 @@ export function FineDetailPage(): React.JSX.Element {
                       })}`
                     : ''}
                 </p>
+                {/* Said before the amount is acted on, not after. Somebody who reads "pagar no
+                    disponible" at the bottom of the screen concludes the platform is broken; what is
+                    true is that this fine belongs to the municipality's other window (v0.34). */}
+                {fine.managedHere === false ? (
+                  <div style={{ margin: '0 0 var(--lx-space-3) 0' }}>
+                    <Alert tone="info">
+                      {fine.sourceSystem
+                        ? t('citizen.fines.managedElsewhere.named', { system: fine.sourceSystem })
+                        : t('citizen.fines.managedElsewhere')}
+                    </Alert>
+                  </div>
+                ) : null}
                 <SummaryList>
                   <SummaryRow label={t('citation.field.plate')} value={fine.plate} />
+                  {fine.externalStatus ? (
+                    <SummaryRow label={t('citation.field.externalStatus')} value={fine.externalStatus} />
+                  ) : null}
                   <SummaryRow
                     label={t('citation.field.infraction')}
                     value={`${fine.infractionCode} · ${fine.infractionName}`}
@@ -132,7 +147,11 @@ export function FineDetailPage(): React.JSX.Element {
                   {t('citizen.fines.pay')}
                 </Button>
                 <div style={{ marginTop: 'var(--lx-space-3)' }}>
-                  <Alert tone="info">{t('citizen.fines.payUnavailable')}</Alert>
+                  <Alert tone="info">
+                    {fine.managedHere === false
+                      ? t('citizen.fines.payElsewhere')
+                      : t('citizen.fines.payUnavailable')}
+                  </Alert>
                 </div>
               </Card>
 
