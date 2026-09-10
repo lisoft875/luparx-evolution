@@ -175,6 +175,21 @@ public class Citation {
     @Column(name = "status_reason", length = 500)
     private String statusReason;
 
+    /**
+     * The plate lookup this citation came out of, when it came out of one (V28_0).
+     *
+     * <p>The link lives here and not on the check because the check is append-only: the citation is
+     * written afterwards — sometimes hours afterwards, out of the offline queue — and a column on
+     * that table to be filled in later would turn a record of what somebody did into a record that
+     * can be changed.</p>
+     *
+     * <p>Nullable, always. A citation can be written without a prior lookup (the officer saw the car
+     * yesterday, the app had no signal), and requiring the link would turn a traceability field into
+     * something that stops the work.</p>
+     */
+    @Column(name = "enforcement_check_id")
+    private UUID enforcementCheckId;
+
     @Column(name = "notes", length = 2000)
     private String notes;
 
@@ -196,7 +211,7 @@ public class Citation {
                     UUID spaceId, String spaceCode, BigDecimal latitude, BigDecimal longitude,
                     BigDecimal locationAccuracyM, String addressText, InfractionType type, Instant occurredAt,
                     UUID inspectorUserId, String inspectorNameSnapshot, String deviceCitationId,
-                    UUID parkingSessionId, String notes,
+                    UUID parkingSessionId, UUID enforcementCheckId, String notes,
                     CitationStatus initialStatus, Instant now) {
         this.id = id;
         this.tenantId = tenantId;
@@ -220,6 +235,7 @@ public class Citation {
         this.inspectorNameSnapshot = inspectorNameSnapshot;
         this.deviceCitationId = deviceCitationId;
         this.parkingSessionId = parkingSessionId;
+        this.enforcementCheckId = enforcementCheckId;
         this.notes = notes;
         this.status = initialStatus;
         this.createdAt = now;
@@ -396,6 +412,11 @@ public class Citation {
 
     public String getStatusReason() {
         return statusReason;
+    }
+
+    /** The lookup this citation came from, or null when it was written without one. */
+    public UUID getEnforcementCheckId() {
+        return enforcementCheckId;
     }
 
     public String getNotes() {

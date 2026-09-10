@@ -195,6 +195,19 @@ luparx:
       admin: ${CORS_ALLOWED_ORIGIN_ADMIN:http://localhost:5184}
       inspector: ${CORS_ALLOWED_ORIGIN_INSPECTOR:http://localhost:5185}
       platform: ${CORS_ALLOWED_ORIGIN_PLATFORM:http://localhost:5186}
+  retention:
+    # Cuánto se conserva lo que es grande, personal, o las dos cosas (CONTRACT.md v0.29, ADR 0013).
+    # Configuración y no constante porque la respuesta legal cambia por país: el plazo en que una
+    # municipalidad tiene que poder justificar una boleta no es el mismo en todas partes.
+    enabled: ${RETENTION_ENABLED:true}
+    # El registro de consultas de fiscalización. Doce meses cubre el plazo en que alguien impugna
+    # una boleta y pregunta qué se consultó ese día, sin acumular años de recorridos de cada
+    # funcionario.
+    enforcement-checks: ${RETENTION_ENFORCEMENT_CHECKS:365d}
+    # Por transacción, para no bloquear una tabla en la que los funcionarios están escribiendo ahora.
+    batch-size: ${RETENTION_BATCH_SIZE:1000}
+    # Techo por corrida: un atraso enorme nunca se convierte en una transacción enorme.
+    max-per-run: ${RETENTION_MAX_PER_RUN:100000}
   federation:
     redirect-base-url: ${OAUTH_REDIRECT_BASE_URL:http://localhost:8090}
     providers:

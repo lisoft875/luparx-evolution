@@ -1379,6 +1379,13 @@ export interface PlateStatus {
    * the officer reads "vigente" beside a time in the past and has no way to know that is correct.
    */
   graceMinutes: number;
+  /**
+   * The fiscalisation-log entry this lookup produced (CONTRACT.md v0.29).
+   *
+   * Sent back on the citation the officer may write next, which is what links "he looked" to "he
+   * looked and then fined" — and answers the other direction, "they fined me without coming to see".
+   */
+  checkId: string | null;
   checkedAt: string;
 }
 
@@ -1395,6 +1402,65 @@ export interface InspectorZone {
   description: string | null;
   /** The bay codes this zone actually contains, so the field can validate instead of guessing. */
   spaceCodes?: ParkingZoneSpaceCodes;
+}
+
+/**
+ * Why an act does or does not carry coordinates (CONTRACT.md v0.29).
+ *
+ * Until v0.29 all three collapsed into "latitude is null", so a refusal, a timeout and a phone with
+ * no signal were the same row — and none could be told apart when somebody later asked whether the
+ * officer had actually been there.
+ */
+export type LocationState = 'FIX' | 'NO_FIX' | 'NOT_GRANTED';
+
+/**
+ * `POST /inspector/plate-checks` — the plate lookup since v0.29.
+ *
+ * A POST because it is no longer safe: every lookup writes a row in the fiscalisation log, and
+ * because it carries the officer's coordinates, which are personal data and do not belong in a URL.
+ */
+export interface PlateCheckRequest {
+  plate: string;
+  zoneId?: string;
+  spaceCode?: string;
+  /** What the device actually knows — never derived from whether the coordinates are present. */
+  locationState?: LocationState;
+  latitude?: number;
+  longitude?: number;
+  locationAccuracyM?: number;
+}
+
+/** One recorded lookup, as the municipality's activity screen reads it. */
+export interface EnforcementCheck {
+  id: string;
+  inspectorUserId: string;
+  inspectorName: string | null;
+  plate: string;
+  plateRaw: string;
+  zoneId: string | null;
+  zoneName: string | null;
+  spaceCode: string | null;
+  /** The verdict, when the server answered. Null when it refused — see `refusalCode`. */
+  verdict: PlateVerdict | null;
+  /** Why the server refused to answer. A refusal is a result too, and it is kept. */
+  refusalCode: string | null;
+  locationState: LocationState;
+  latitude: number | null;
+  longitude: number | null;
+  locationAccuracyM: number | null;
+  userAgent: string | null;
+  /** Whether a citation came out of this lookup — "he looked" versus "he looked and then fined". */
+  citationIssued: boolean;
+  occurredAt: string;
+}
+
+export interface EnforcementChecksQuery {
+  inspectorUserId?: string;
+  zoneId?: string;
+  plate?: string;
+  verdict?: PlateVerdict;
+  from?: string;
+  to?: string;
 }
 
 /** Just enough for an officer to say out loud why they are not fining this car. */
@@ -1465,6 +1531,13 @@ export interface CreateCitationRequest {
    * carries a brand-new `Idempotency-Key`: the header protects the request, this protects the act.
    */
   deviceCitationId?: string;
+  /**
+   * The plate lookup this citation came out of (CONTRACT.md v0.29).
+   *
+   * Optional: a citation can be written without one — the officer saw the car yesterday, the app had
+   * no signal — and requiring it would turn a traceability field into something that stops the work.
+   */
+  enforcementCheckId?: string;
   parkingSessionId?: string;
   notes?: string;
 }

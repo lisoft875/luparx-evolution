@@ -28,6 +28,18 @@ import java.util.UUID;
  */
 public interface CitationRepository extends JpaRepository<Citation, UUID> {
 
+    /**
+     * Which of these lookups ended in a citation (v0.29).
+     *
+     * <p>One query for a whole page of the activity screen, rather than a join on the log itself: the
+     * fiscalisation log is the platform's largest table and the vast majority of its rows never
+     * produce a citation, so the join would carry the cost of the exception on every row of the rule.</p>
+     */
+    @Query("select c.enforcementCheckId from Citation c "
+            + "where c.tenantId = :tenantId and c.enforcementCheckId in :checkIds")
+    List<UUID> findCheckIdsWithCitation(@Param("tenantId") UUID tenantId,
+                                        @Param("checkIds") Collection<UUID> checkIds);
+
     Optional<Citation> findByTenantIdAndId(UUID tenantId, UUID id);
 
     Optional<Citation> findByTenantIdAndNumber(UUID tenantId, String number);

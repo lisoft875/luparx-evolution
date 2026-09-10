@@ -266,7 +266,7 @@ public class DevEnforcementSeeder {
         CitationService.Capture command = new CitationService.Capture(type.getId(), plate, zone.getId(),
                 space == null ? null : space.getId(), space == null ? null : space.getCode(),
                 new BigDecimal("9.932100"), new BigDecimal("-84.079500"), new BigDecimal("8.0"), address,
-                occurredAt, deviceId, null, null);
+                occurredAt, deviceId, null, null, null);
         return citationService.capture(tenantId, actor, command).citation();
     }
 

@@ -59,6 +59,9 @@ import type {
   UpdateParkingSpaceRequest,
   UpdateParkingZoneRequest,
   CreateAdminUserRequest,
+  PlateCheckRequest,
+  EnforcementCheck,
+  EnforcementChecksQuery,
   InspectorZone,
   ExemptionStatus,
   GrantExemptionRequest,
@@ -398,6 +401,25 @@ export class ApiClient {
   };
 
   /** Plates this municipality does not fine for non-payment (CONTRACT.md v0.28). */
+  /** The fiscalisation log: what each officer consulted, and whether it ended in a citation. */
+  readonly adminEnforcementChecks = {
+    list: (query: EnforcementChecksQuery & PageParams = {}): Promise<PagedResponse<EnforcementCheck>> =>
+      // Spelled out field by field, like every other filtered listing here: an interface has no index
+      // signature, and spreading one into the query object would let a renamed field travel silently.
+      this.http.request('GET', '/api/v1/admin/enforcement/checks', {
+        query: {
+          inspectorUserId: query.inspectorUserId,
+          zoneId: query.zoneId,
+          plate: query.plate,
+          verdict: query.verdict,
+          from: query.from,
+          to: query.to,
+          page: query.page,
+          size: query.size,
+        },
+      }),
+  };
+
   readonly adminExemptions = {
     list: (
       query: { status?: ExemptionStatus; plate?: string } & PageParams = {},
@@ -675,16 +697,11 @@ export class ApiClient {
      * `AMBIGUOUS`: the platform refuses to guess which of several cars carrying a plate is the one
      * in front of the officer, and the client must not paper over that with a hopeful default.
      */
-    plateStatus: async (
-      plate: string,
-      bay: { zoneId?: string; spaceCode?: string } = {},
-    ): Promise<PlateStatus> =>
+    plateStatus: async (payload: PlateCheckRequest): Promise<PlateStatus> =>
       toPlateStatus(
-        await this.http.request<WirePlateStatus>(
-          'GET',
-          `/api/v1/inspector/plates/${encodeURIComponent(plate)}/status`,
-          { query: { zoneId: bay.zoneId, spaceCode: bay.spaceCode } },
-        ),
+        await this.http.request<WirePlateStatus>('POST', '/api/v1/inspector/plate-checks', {
+          body: payload,
+        }),
       ),
     /**
      * The zones this officer covers, with the bay codes each one has (CONTRACT.md v0.28).

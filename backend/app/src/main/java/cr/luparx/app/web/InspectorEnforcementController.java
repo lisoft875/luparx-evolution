@@ -12,13 +12,17 @@ import cr.luparx.core.id.UserId;
 import cr.luparx.core.page.PageRequest;
 import cr.luparx.core.page.PageResponse;
 import cr.luparx.core.tenant.TenantContextHolder;
+import cr.luparx.core.error.DomainException;
 import cr.luparx.enforcement.entity.Citation;
+import cr.luparx.enforcement.entity.EnforcementCheck;
 import cr.luparx.enforcement.entity.CitationEvidence;
 import cr.luparx.enforcement.entity.InfractionType;
 import cr.luparx.enforcement.model.EnforcementActor;
+import cr.luparx.enforcement.model.LocationState;
 import cr.luparx.enforcement.model.PlateStatus;
 import cr.luparx.enforcement.port.EvidenceStorage;
 import cr.luparx.enforcement.service.CitationService;
+import cr.luparx.enforcement.service.EnforcementCheckService;
 import cr.luparx.enforcement.service.EvidenceService;
 import cr.luparx.enforcement.service.InfractionTypeService;
 import cr.luparx.enforcement.service.PlateStatusService;
@@ -91,6 +95,7 @@ public class InspectorEnforcementController {
 
     private final PlateStatusService plateStatusService;
     private final CitationService citationService;
+    private final EnforcementCheckService checkService;
     private final EvidenceService evidenceService;
     private final InfractionTypeService infractionTypeService;
     private final ParkingCatalogService catalogService;
@@ -101,6 +106,7 @@ public class InspectorEnforcementController {
 
     public InspectorEnforcementController(PlateStatusService plateStatusService,
                                           CitationService citationService,
+                                          EnforcementCheckService checkService,
                                           EvidenceService evidenceService,
                                           InfractionTypeService infractionTypeService,
                                           ParkingCatalogService catalogService,
@@ -110,6 +116,7 @@ public class InspectorEnforcementController {
                                           AuditRecorder auditRecorder) {
         this.plateStatusService = plateStatusService;
         this.citationService = citationService;
+        this.checkService = checkService;
         this.evidenceService = evidenceService;
         this.infractionTypeService = infractionTypeService;
         this.catalogService = catalogService;
@@ -120,37 +127,111 @@ public class InspectorEnforcementController {
     }
 
     /**
-     * Has this plate paid, on this bay, right now?
+     * Has this plate paid, on this bay, right now? — and the record that the officer asked.
      *
      * <p>The bay is optional in the signature and decisive in the answer: without it the verdict is
      * {@code AMBIGUOUS} whenever any session matches, because plates repeat between citizens and the
      * platform will not guess which car in the street is the one that paid. See {@code PlateVerdict}
      * for the whole rule — it is the resolution of the open question the parking module left.</p>
      *
+     * <h2>Why this is a POST since v0.29</h2>
+     *
+     * <p>Because it is <b>no longer a safe request</b>. Every lookup now writes a row in the
+     * fiscalisation log, and a GET that records what somebody did lies about itself to every cache,
+     * proxy and automatic retry in the chain. And it carries the officer's <b>coordinates</b>, which
+     * are personal data and have no business in a URL that ends up in browser history and access logs
+     * (SECURITY.md §11). The old GET stays for one version, deprecated, so that a handset in the
+     * street running last month's build keeps working — it simply records the lookup without a
+     * position.</p>
+     *
+     * <p><b>The refusals are recorded too.</b> An officer querying a sector they do not cover is
+     * exactly the attempt worth keeping, and until v0.29 it left no trace anywhere: the guard threw
+     * and nothing was written. The record is committed in its own transaction so it survives the
+     * exception that follows it.</p>
+     *
      * <p>Never cached. A citizen who pays while the officer is walking up to the car must be covered
      * by the time the officer looks, and a cached "not covered" from thirty seconds ago is how an
      * unjust citation gets written.</p>
      */
+    @PostMapping("/plate-checks")
+    @PreAuthorize("hasAuthority('PERM_CITATION_READ')")
+    @Operation(summary = "Look a plate up and record the consultation in the fiscalisation log")
+    public ResponseEntity<EnforcementDtos.PlateStatusResponse> plateCheck(
+            @Valid @RequestBody EnforcementDtos.PlateCheckRequest request) {
+        return respond(recordedLookup(request.plate(), request.zoneId(), request.spaceCode(),
+                request.locationState(), request.latitude(), request.longitude(),
+                request.locationAccuracyM()));
+    }
+
+    /**
+     * @deprecated since v0.29 in favour of {@code POST /plate-checks}. Kept for one version so a
+     *         handset running an older build keeps working; it records the lookup like the new route,
+     *         but with no position, because coordinates must not travel in a query string.
+     */
+    @Deprecated(since = "0.29")
     @GetMapping("/plates/{plate}/status")
     @PreAuthorize("hasAuthority('PERM_CITATION_READ')")
-    @Operation(summary = "Whether a plate has a running parking session on the bay being inspected")
+    @Operation(summary = "Deprecated: use POST /inspector/plate-checks", deprecated = true)
     public ResponseEntity<EnforcementDtos.PlateStatusResponse> plateStatus(
             @PathVariable String plate,
             @RequestParam(required = false) UUID zoneId,
             @RequestParam(required = false) String spaceCode) {
+        return respond(recordedLookup(plate, zoneId, spaceCode, LocationState.NOT_GRANTED, null, null, null));
+    }
+
+    /**
+     * The lookup, plus its entry in the log — answered and refused alike.
+     *
+     * <p>The check's identifier travels back on the response so the citation the officer may write
+     * next can point at it. That link is what turns "he looked" into "he looked and then fined", and
+     * answers the other direction too: "they fined me without coming to see the car".</p>
+     */
+    private Recorded recordedLookup(String plate, UUID zoneId, String spaceCode, LocationState locationState,
+                                    BigDecimal latitude, BigDecimal longitude, BigDecimal accuracyM) {
         TenantId tenantId = TenantContextHolder.requireTenantId();
+        UserId inspector = TenantContextHolder.requireUserId();
+        String userAgent = userAgent();
+        String ipHash = auditRecorder.currentIpHash();
+        LocationState state = locationState == null ? LocationState.NOT_GRANTED : locationState;
+
         List<UUID> assigned = assignedZones(tenantId);
         if (zoneId != null && !assigned.isEmpty() && !assigned.contains(zoneId)) {
+            checkService.record(tenantId, inspector, plate, zoneId, spaceCode, null,
+                    ErrorCode.ZONE_NOT_ASSIGNED, state, latitude, longitude, accuracyM, userAgent, ipHash);
             throw ForbiddenException.of(ErrorCode.ZONE_NOT_ASSIGNED, "error.enforcement.zone.notAssigned");
         }
-        // The assignment narrows the ANSWER too, not only the question. Until v0.28 this guard
-        // checked the inbound zone and then handed back every running stay for the plate across the
-        // whole municipality — so an officer covering one sector learned where that car was parked
-        // everywhere, and tapping one of those rows walked them into a ZONE_NOT_ASSIGNED refusal.
-        PlateStatus status = plateStatusService.lookup(tenantId, plate, zoneId, spaceCode, assigned);
+        try {
+            // The assignment narrows the ANSWER too, not only the question. Until v0.28 this guard
+            // checked the inbound zone and then handed back every running stay for the plate across
+            // the whole municipality — so an officer covering one sector learned where that car was
+            // parked everywhere, and tapping one of those rows walked them into a refusal.
+            PlateStatus status = plateStatusService.lookup(tenantId, plate, zoneId, spaceCode, assigned);
+            EnforcementCheck check = checkService.record(tenantId, inspector, plate, zoneId, spaceCode,
+                    status.verdict(), null, state, latitude, longitude, accuracyM, userAgent, ipHash);
+            return new Recorded(status, check.getId());
+        } catch (DomainException refused) {
+            // A bay that does not exist, a plate that cannot be read: the attempt happened, so it is
+            // recorded before the refusal travels on.
+            checkService.record(tenantId, inspector, plate, zoneId, spaceCode, null, refused.code(),
+                    state, latitude, longitude, accuracyM, userAgent, ipHash);
+            throw refused;
+        }
+    }
+
+    private ResponseEntity<EnforcementDtos.PlateStatusResponse> respond(Recorded recorded) {
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.noStore())
-                .body(mapper.toPlateStatus(status));
+                .body(mapper.toPlateStatus(recorded.status(), recorded.checkId()));
+    }
+
+    /** A lookup and the log entry it produced. */
+    private record Recorded(PlateStatus status, UUID checkId) {
+    }
+
+    /** What the browser says it is. Weak on a Capacitor WebView, and written down as weak. */
+    private static String userAgent() {
+        jakarta.servlet.http.HttpServletRequest request = AuditRecorder.currentRequest();
+        return request == null ? null : request.getHeader(HttpHeaders.USER_AGENT);
     }
 
     /**
@@ -259,7 +340,8 @@ public class InspectorEnforcementController {
                 new CitationService.Capture(request.infractionTypeId(), request.plate(), request.zoneId(),
                         request.spaceId(), request.spaceCode(), request.latitude(), request.longitude(),
                         request.locationAccuracyM(), request.addressText(), request.occurredAt(),
-                        request.deviceCitationId(), request.parkingSessionId(), request.notes()));
+                        request.deviceCitationId(), request.parkingSessionId(),
+                        request.enforcementCheckId(), request.notes()));
         Citation citation = captured.citation();
         if (captured.created()) {
             audit(citation.getStatus().isDraft() ? AuditAction.CITATION_DRAFTED : AuditAction.CITATION_ISSUED,

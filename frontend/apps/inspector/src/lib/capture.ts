@@ -47,7 +47,7 @@ interface NativeGeolocationPlugin {
     coords: { latitude: number; longitude: number; accuracy?: number };
     timestamp?: number;
   }>;
-  checkPermissions?(): Promise<{ location?: string }>;
+  checkPermissions?(): Promise<{ location?: string; coarseLocation?: string }>;
   requestPermissions?(): Promise<{ location?: string }>;
 }
 
@@ -151,6 +151,38 @@ export async function takeNativePhoto(): Promise<CapturedPhoto | null> {
   } catch {
     // Cancelled, or refused after the fact. Either way there is no photograph and no error to show.
     return null;
+  }
+}
+
+/**
+ * Whether location is ALREADY granted on this device — asked without prompting anybody.
+ *
+ * <p>This is what lets a plate lookup carry a position without turning the app into something that
+ * asks for the satellite every time an officer types a plate. The permission is requested exactly
+ * where it always was, on the citation form, with its sheet of explanation; the lookup only uses what
+ * is already there.</p>
+ *
+ * <p>Answers `'granted'` only when it is certain. A browser that will not say, or a plugin that is
+ * not there, reads as not granted — the honest default, and the one that never records a position
+ * the officer did not agree to give.</p>
+ */
+export async function locationPermissionGranted(): Promise<boolean> {
+  const plugin = nativeGeolocation();
+  if (plugin && typeof plugin.checkPermissions === 'function') {
+    try {
+      const status = await plugin.checkPermissions();
+      return status?.location === 'granted' || status?.coarseLocation === 'granted';
+    } catch {
+      return false;
+    }
+  }
+  if (typeof navigator === 'undefined' || !navigator.permissions?.query) return false;
+  try {
+    const status = await navigator.permissions.query({ name: 'geolocation' as PermissionName });
+    return status.state === 'granted';
+  } catch {
+    // Some browsers refuse the query itself. Not knowing is not the same as knowing it is granted.
+    return false;
   }
 }
 

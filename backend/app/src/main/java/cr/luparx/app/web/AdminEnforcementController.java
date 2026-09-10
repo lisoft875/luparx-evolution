@@ -19,7 +19,10 @@ import cr.luparx.enforcement.model.EnforcementActor;
 import cr.luparx.enforcement.port.EvidenceStorage;
 import cr.luparx.enforcement.service.AppealNoticeService;
 import cr.luparx.enforcement.service.AppealService;
+import cr.luparx.enforcement.entity.EnforcementCheck;
+import cr.luparx.enforcement.model.PlateVerdict;
 import cr.luparx.enforcement.service.CitationService;
+import cr.luparx.enforcement.service.EnforcementCheckService;
 import cr.luparx.enforcement.service.EvidenceService;
 import cr.luparx.enforcement.service.InfractionTypeService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -39,6 +42,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -64,7 +69,12 @@ import java.util.UUID;
         description = "Citations of the municipality, their annulment, and the infraction catalogue.")
 public class AdminEnforcementController {
 
+    /** Default span of the activity screen when the caller names no dates. */
+    private static final Duration DEFAULT_CHECK_WINDOW = Duration.ofDays(30);
+
     private final CitationService citationService;
+    private final EnforcementCheckService checkService;
+    private final Clock clock;
     private final EvidenceService evidenceService;
     private final InfractionTypeService infractionTypeService;
     private final AppealService appealService;
@@ -73,6 +83,8 @@ public class AdminEnforcementController {
     private final AuditRecorder auditRecorder;
 
     public AdminEnforcementController(CitationService citationService,
+                                      EnforcementCheckService checkService,
+                                      Clock clock,
                                       EvidenceService evidenceService,
                                       InfractionTypeService infractionTypeService,
                                       AppealService appealService,
@@ -80,12 +92,56 @@ public class AdminEnforcementController {
                                       EnforcementMapper mapper,
                                       AuditRecorder auditRecorder) {
         this.citationService = citationService;
+        this.checkService = checkService;
+        this.clock = clock;
         this.evidenceService = evidenceService;
         this.infractionTypeService = infractionTypeService;
         this.appealService = appealService;
         this.noticeService = noticeService;
         this.mapper = mapper;
         this.auditRecorder = auditRecorder;
+    }
+
+    /**
+     * The fiscalisation log: what each officer consulted, where, with what result, and whether a
+     * citation came out of it (CONTRACT.md v0.29).
+     *
+     * <p>This is the screen somebody opens when a citizen says "they fined me without coming to look
+     * at my car", and the one a supervisor opens to see a shift. Until v0.29 neither question had an
+     * answer: the citation was recorded three ways over and the <em>consultation</em> was recorded
+     * nowhere.</p>
+     *
+     * <p>Behind {@code ENFORCEMENT_MANAGE} rather than the broader {@code CITATION_READ}. These rows
+     * carry an officer's movements through a shift — where they were and when — which is personal
+     * data about an employee, and the people who need it are the ones who run enforcement, not
+     * everyone who may read a citation.</p>
+     *
+     * <p>The window is mandatory and bounded by the server. This is the largest table the platform
+     * has, and "everything, newest first" is a query that gets slower every day the municipality
+     * operates.</p>
+     */
+    @GetMapping("/checks")
+    @PreAuthorize("hasAuthority('PERM_ENFORCEMENT_MANAGE')")
+    @Operation(summary = "Plate lookups made by this municipality's officers (paginated)")
+    public PageResponse<EnforcementDtos.EnforcementCheckResponse> checks(
+            @RequestParam(required = false) UUID inspectorUserId,
+            @RequestParam(required = false) UUID zoneId,
+            @RequestParam(required = false) String plate,
+            @RequestParam(required = false) PlateVerdict verdict,
+            @RequestParam(required = false) Instant from,
+            @RequestParam(required = false) Instant to,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size) {
+        TenantId tenantId = TenantContextHolder.requireTenantId();
+        PageRequest request = PageRequest.parse(page, size, null);
+        Instant end = to == null ? clock.instant() : to;
+        // A month back by default: long enough for the appeal window that prompts most of these
+        // queries, short enough that opening the screen is never an accidental full scan.
+        Instant start = from == null ? end.minus(DEFAULT_CHECK_WINDOW) : from;
+        PageResponse<EnforcementCheck> checks = checkService.search(tenantId, inspectorUserId, zoneId,
+                plate, verdict, start, end, request);
+        return PageResponse.of(mapper.toChecks(tenantId, checks.items()), request.page(), request.size(),
+                checks.totalElements());
     }
 
     private String appealBasePath(UUID citationId) {

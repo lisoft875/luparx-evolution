@@ -7,6 +7,7 @@ import cr.luparx.enforcement.model.AppealStatus;
 import cr.luparx.enforcement.model.EvidenceKind;
 import cr.luparx.enforcement.model.EvidenceSource;
 import cr.luparx.enforcement.model.ExemptionStatus;
+import cr.luparx.enforcement.model.LocationState;
 import cr.luparx.enforcement.model.PlateVerdict;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMax;
@@ -108,6 +109,12 @@ public final class EnforcementDtos {
                                        * reading as a contradiction (CONTRACT.md v0.28).
                                        */
                                       int graceMinutes,
+                                      /**
+                                       * The fiscalisation-log entry this lookup produced (v0.29).
+                                       * The device sends it back on the citation, which is what links
+                                       * "he looked" to "he then fined".
+                                       */
+                                      UUID checkId,
                                       Instant checkedAt) {
     }
 
@@ -124,6 +131,55 @@ public final class EnforcementDtos {
     }
 
     public record BayResponse(UUID spaceId, String spaceCode, UUID zoneId, String zoneCode, String zoneName) {
+    }
+
+    /**
+     * {@code POST /inspector/plate-checks} — the plate lookup, since v0.29.
+     *
+     * <p>A POST for two reasons, both of them substantive. It is <b>no longer safe</b>: every lookup
+     * writes a row in the fiscalisation log, and a GET that records what somebody did is a GET that
+     * lies about itself to every cache and every retry in the chain. And it now carries the officer's
+     * <b>coordinates</b>, which are personal data and do not belong in a URL — query strings end up in
+     * browser history, proxy logs and access logs (SECURITY.md §11).</p>
+     *
+     * <p>{@code locationState} is what the device actually knows. It is not derived from whether the
+     * coordinates are present: "not granted", "granted but no fix" and "granted with a fix" are three
+     * different facts, and until v0.29 all three arrived as an absent latitude.</p>
+     */
+    public record PlateCheckRequest(
+            @NotBlank @Size(max = 32) String plate,
+            UUID zoneId,
+            @Size(max = 32) String spaceCode,
+            LocationState locationState,
+            @DecimalMin("-90.0") @DecimalMax("90.0") BigDecimal latitude,
+            @DecimalMin("-180.0") @DecimalMax("180.0") BigDecimal longitude,
+            @DecimalMin("0.0") BigDecimal locationAccuracyM) {
+    }
+
+    /**
+     * One recorded lookup, as the municipality's activity screen reads it.
+     *
+     * @param citationIssued whether a citation came out of this lookup. It is what turns "he looked"
+     *                       into "he looked and then fined", and it answers the other direction too —
+     *                       "they fined me without coming to look" — which had no answer before v0.29
+     */
+    public record EnforcementCheckResponse(UUID id,
+                                           UUID inspectorUserId,
+                                           String inspectorName,
+                                           String plate,
+                                           String plateRaw,
+                                           UUID zoneId,
+                                           String zoneName,
+                                           String spaceCode,
+                                           PlateVerdict verdict,
+                                           String refusalCode,
+                                           LocationState locationState,
+                                           BigDecimal latitude,
+                                           BigDecimal longitude,
+                                           BigDecimal locationAccuracyM,
+                                           String userAgent,
+                                           boolean citationIssued,
+                                           Instant occurredAt) {
     }
 
     /** A running stay as enforcement sees it: where and until when. Never who paid for it. */
@@ -211,6 +267,12 @@ public final class EnforcementDtos {
             @Size(max = 300) String addressText,
             Instant occurredAt,
             @Size(max = 64) String deviceCitationId,
+            /**
+             * The plate lookup this citation came out of (CONTRACT.md v0.29). Optional: a citation
+             * can be written without one — the officer saw the car yesterday, the app had no signal —
+             * and requiring it would turn a traceability field into something that stops the work.
+             */
+            UUID enforcementCheckId,
             UUID parkingSessionId,
             @Size(max = 2000) String notes) {
     }

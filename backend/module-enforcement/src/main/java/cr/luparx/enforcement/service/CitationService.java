@@ -170,6 +170,9 @@ public class CitationService {
                 vehicleId, zoneId, bay != null ? bay.spaceId() : null, spaceCode, command.latitude(),
                 command.longitude(), command.locationAccuracyM(), trimToNull(command.addressText()), type, occurredAt,
                 actor.userIdValue(), actor.displayName(), command.deviceCitationId(), parkingSessionId,
+                // What turns "he looked" into "he looked and then fined": the check the officer's
+                // device came from, when it came from one (CONTRACT.md v0.29).
+                command.enforcementCheckId(),
                 trimToNull(command.notes()),
                 CitationStatus.DRAFT, now);
 
@@ -486,7 +489,10 @@ public class CitationService {
      */
     public record Capture(UUID infractionTypeId, String plate, UUID zoneId, UUID spaceId, String spaceCode,
                           BigDecimal latitude, BigDecimal longitude, BigDecimal locationAccuracyM, String addressText,
-                          Instant occurredAt, String deviceCitationId, UUID parkingSessionId, String notes) {
+                          Instant occurredAt, String deviceCitationId, UUID parkingSessionId,
+                          /** The plate lookup this came out of, when it came out of one (v0.29). */
+                          UUID enforcementCheckId,
+                          String notes) {
     }
 
     /** A citation and whether this call is the one that created it. */

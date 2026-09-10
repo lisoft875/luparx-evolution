@@ -10,7 +10,12 @@ import cr.luparx.enforcement.entity.CitationEvent;
 import cr.luparx.enforcement.entity.CitationEvidence;
 import cr.luparx.enforcement.entity.InfractionType;
 import cr.luparx.enforcement.model.EvidenceKind;
+import cr.luparx.core.id.TenantId;
+import cr.luparx.enforcement.entity.EnforcementCheck;
 import cr.luparx.enforcement.entity.PlateExemption;
+import cr.luparx.enforcement.repository.CitationRepository;
+import cr.luparx.identity.entity.User;
+import cr.luparx.identity.service.UserDirectoryService;
 import cr.luparx.enforcement.model.PlateStatus;
 import cr.luparx.enforcement.port.ParkingStatusPort;
 import cr.luparx.parking.entity.ParkingZone;
@@ -43,10 +48,17 @@ import java.util.UUID;
 public class EnforcementMapper {
 
     private final ParkingZoneRepository zoneRepository;
+    private final CitationRepository citationRepository;
+    private final UserDirectoryService userDirectoryService;
     private final Clock clock;
 
-    public EnforcementMapper(ParkingZoneRepository zoneRepository, Clock clock) {
+    public EnforcementMapper(ParkingZoneRepository zoneRepository,
+                             CitationRepository citationRepository,
+                             UserDirectoryService userDirectoryService,
+                             Clock clock) {
         this.zoneRepository = zoneRepository;
+        this.citationRepository = citationRepository;
+        this.userDirectoryService = userDirectoryService;
         this.clock = clock;
     }
 
@@ -79,6 +91,14 @@ public class EnforcementMapper {
     // --- plate lookup -------------------------------------------------------------------------------
 
     public EnforcementDtos.PlateStatusResponse toPlateStatus(PlateStatus status) {
+        return toPlateStatus(status, null);
+    }
+
+    /**
+     * @param checkId the fiscalisation-log entry this lookup produced (v0.29). It travels back so the
+     *                citation the officer may write next can point at it.
+     */
+    public EnforcementDtos.PlateStatusResponse toPlateStatus(PlateStatus status, java.util.UUID checkId) {
         List<EnforcementDtos.ActiveStayResponse> others = new ArrayList<>(status.otherStays().size());
         for (ParkingStatusPort.ActiveStay stay : status.otherStays()) {
             others.add(toStay(stay));
@@ -97,6 +117,7 @@ public class EnforcementMapper {
                 status.exemption() == null ? null : toExemptionSummary(status.exemption()),
                 others,
                 status.graceMinutes(),
+                checkId,
                 status.checkedAt());
     }
 
@@ -105,6 +126,55 @@ public class EnforcementMapper {
         return new EnforcementDtos.PlateExemptionSummary(exemption.getId(), exemption.getPlate(),
                 exemption.getReason(), exemption.getDocumentRef(), exemption.getValidFrom(),
                 exemption.getValidTo());
+    }
+
+    /**
+     * A page of the fiscalisation log, with the names and the citation flag resolved in two queries
+     * for the whole page.
+     *
+     * <p>Never one query per row. This table grows by hundreds of rows per officer per shift, so a
+     * screen that resolved a name per row would get slower every day the municipality operates —
+     * which is the definition of a page that eventually stops opening.</p>
+     */
+    public List<EnforcementDtos.EnforcementCheckResponse> toChecks(TenantId tenantId,
+                                                                  List<EnforcementCheck> checks) {
+        if (checks == null || checks.isEmpty()) {
+            return List.of();
+        }
+        List<java.util.UUID> ids = checks.stream().map(EnforcementCheck::getId).toList();
+        java.util.Set<java.util.UUID> withCitation = new java.util.HashSet<>(
+                citationRepository.findCheckIdsWithCitation(tenantId.value(), ids));
+        java.util.Map<java.util.UUID, String> names = new java.util.HashMap<>();
+        for (User person : userDirectoryService.findAllById(
+                checks.stream().map(EnforcementCheck::getInspectorUserId).distinct().toList())) {
+            names.put(person.getId(), person.displayName());
+        }
+        java.util.Map<java.util.UUID, String> zoneNames = new java.util.HashMap<>();
+        for (ParkingZone zone : zoneRepository.findByTenantIdOrderByCodeAsc(tenantId.value())) {
+            zoneNames.put(zone.getId(), zone.getName());
+        }
+        List<EnforcementDtos.EnforcementCheckResponse> rows = new ArrayList<>(checks.size());
+        for (EnforcementCheck check : checks) {
+            rows.add(new EnforcementDtos.EnforcementCheckResponse(
+                    check.getId(),
+                    check.getInspectorUserId(),
+                    names.get(check.getInspectorUserId()),
+                    check.getPlate(),
+                    check.getPlateRaw(),
+                    check.getZoneId(),
+                    check.getZoneId() == null ? null : zoneNames.get(check.getZoneId()),
+                    check.getSpaceCode(),
+                    check.getVerdict(),
+                    check.getRefusalCode(),
+                    check.getLocationState(),
+                    check.getLatitude(),
+                    check.getLongitude(),
+                    check.getLocationAccuracyM(),
+                    check.getUserAgent(),
+                    withCitation.contains(check.getId()),
+                    check.getOccurredAt()));
+        }
+        return rows;
     }
 
     private EnforcementDtos.ActiveStayResponse toStay(ParkingStatusPort.ActiveStay stay) {

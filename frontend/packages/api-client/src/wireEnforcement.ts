@@ -74,6 +74,7 @@ export interface WirePlateStatus {
   exemption?: PlateExemptionSummary | null;
   otherStays?: WireStay[] | null;
   graceMinutes?: number | null;
+  checkId?: string | null;
   checkedAt: string;
 }
 
@@ -205,6 +206,7 @@ export function toPlateStatus(wire: WirePlateStatus): PlateStatus {
     // Absent from a server older than v0.28: zero tolerance is the safe reading, and it makes the
     // screen simply not offer the "within tolerance" explanation rather than invent one.
     graceMinutes: wire.graceMinutes ?? 0,
+    checkId: wire.checkId ?? null,
     checkedAt: wire.checkedAt,
   };
 }

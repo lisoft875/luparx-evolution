@@ -216,6 +216,8 @@ export function PlateLookupPage(): React.JSX.Element {
                     zoneId: result.bay?.zoneId ?? zoneId ?? '',
                     spaceCode: result.bay?.spaceCode ?? bay,
                     spaceId: result.bay?.spaceId ?? '',
+                    // The consultation this ticket is being written from (CONTRACT.md v0.29).
+                    checkId: result.checkId ?? undefined,
                   },
                 })
               }

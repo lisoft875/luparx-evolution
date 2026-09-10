@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useSyncExternalStore } from 'react';
 import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 import { useAuth } from '@luparx/auth';
+import { locationPermissionGranted, takePosition } from './capture';
 import type { CitationDetail, InfractionType, PagedResponse, PlateStatus, Citation } from '@luparx/api-client';
 import {
   flushQueue,
@@ -82,16 +83,32 @@ export interface PlateLookupInput {
  * served from a cache: someone who pays while the officer walks up has to be covered by the time
  * the officer looks. The server says so too (`Cache-Control: no-store`); modelling it as a query
  * with a key would invite exactly the staleness both sides are trying to avoid.
+ *
+ * Since v0.29 it is also a **recorded** act: the server writes it to the fiscalisation log, which is
+ * why the request now carries where the officer was — but only when they had already granted
+ * location on this device. The lookup never asks for the permission itself; that still happens on the
+ * citation form, with its sheet of explanation. An officer typing plates is not consenting to be
+ * followed around a shift.
  */
 export function usePlateLookup() {
   const { apiClient, activeTenant } = useAuth();
   const tenantId = activeTenant?.id ?? null;
   return useMutation({
-    mutationFn: (input: PlateLookupInput): Promise<PlateStatus> =>
-      apiClient.inspectorEnforcement.plateStatus(input.plate, {
+    mutationFn: async (input: PlateLookupInput): Promise<PlateStatus> => {
+      const granted = await locationPermissionGranted();
+      // Three outcomes, told apart. Until v0.29 "refused", "timed out" and "no signal" all arrived
+      // at the server as an absent latitude and none could be distinguished afterwards.
+      const fix = granted ? await takePosition(4_000) : null;
+      return apiClient.inspectorEnforcement.plateStatus({
+        plate: input.plate,
         zoneId: input.zoneId,
         spaceCode: input.spaceCode,
-      }),
+        locationState: granted ? (fix ? 'FIX' : 'NO_FIX') : 'NOT_GRANTED',
+        latitude: fix?.latitude,
+        longitude: fix?.longitude,
+        locationAccuracyM: fix?.accuracyM ?? undefined,
+      });
+    },
     onSuccess: (status) => {
       rememberZones(tenantId, [
         ...(status.bay ? [status.bay] : []),

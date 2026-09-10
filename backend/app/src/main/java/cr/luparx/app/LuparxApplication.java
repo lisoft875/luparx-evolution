@@ -5,6 +5,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
+import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 
 /**
@@ -20,6 +21,13 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 @EnableJpaRepositories(basePackages = "cr.luparx")
 @ConfigurationPropertiesScan(basePackages = "cr.luparx.app.config")
 @EnableTransactionManagement
+/*
+ * Scheduling, as of v0.29 and not before: until the retention purge there was nothing to schedule,
+ * and a scheduler with no jobs is a thread pool and a promise. Every job that runs under it must be
+ * safe on several instances at once — they all run the same schedule — which is what
+ * {@code PlatformJobLock} is for.
+ */
+@EnableScheduling
 public class LuparxApplication {
 
     public static void main(String[] args) {

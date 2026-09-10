@@ -42,6 +42,13 @@ interface PrefilledLocation {
   zoneId?: string;
   spaceId?: string;
   spaceCode?: string;
+  /**
+   * The lookup this citation is being written from (CONTRACT.md v0.29).
+   *
+   * It is what links "he looked" to "he looked and then fined", and answers the other direction:
+   * "they fined me without coming to see the car".
+   */
+  checkId?: string;
 }
 
 /**
@@ -240,6 +247,11 @@ export function NewCitationPage(): React.JSX.Element {
           // The officer's declaration of when it happened. The server never overwrites it, and
           // records the difference against its own clock as `deviceClockSkewSeconds`.
           occurredAt: new Date().toISOString(),
+          // Only when the bay still matches the lookup it came from. An officer who arrived here
+          // from a lookup and then retyped the zone is writing about a different car, and claiming
+          // the earlier consultation covers it would be the one lie this field must not tell.
+          enforcementCheckId:
+            prefilled.checkId && prefilled.zoneId === zoneId ? prefilled.checkId : undefined,
           notes: notes.trim() || undefined,
         },
         photos: photos.map((photo) => ({

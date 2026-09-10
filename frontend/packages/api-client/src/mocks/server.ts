@@ -4,6 +4,8 @@ import type {
   AdminUserDetail,
   AdminUserListItem,
   CreateAdminUserRequest,
+  PlateCheckRequest,
+  LocationState,
   GrantExemptionRequest,
   AmendExemptionRequest,
   MembershipStatus,
@@ -97,6 +99,98 @@ interface MockInvitation {
   revokedAt: string | null;
 }
 const mockInvitations: MockInvitation[] = [];
+
+/**
+ * El registro de consultas de fiscalización (CONTRACT.md v0.29).
+ *
+ * Se siembra con un turno corto —una consulta que terminó en boleta, una que no, y una rechazada por
+ * zona no asignada— y además se llena durante la sesión: la gracia es ver las dos cosas, que la
+ * pantalla tiene qué mostrar y que consultar deja rastro.
+ */
+interface MockEnforcementCheck {
+  id: string;
+  tenantId: string;
+  inspectorUserId: string;
+  inspectorName: string | null;
+  plate: string;
+  plateRaw: string;
+  zoneId: string | null;
+  zoneName: string | null;
+  spaceCode: string | null;
+  verdict: string | null;
+  refusalCode: string | null;
+  locationState: LocationState;
+  latitude: number | null;
+  longitude: number | null;
+  locationAccuracyM: number | null;
+  userAgent: string | null;
+  citationIssued: boolean;
+  occurredAt: string;
+}
+const mockEnforcementChecks: MockEnforcementCheck[] = [
+  {
+    id: 'check-seed-1',
+    tenantId: 'tenant-sanjose',
+    inspectorUserId: 'user-inspector-1',
+    inspectorName: 'Ana Vargas',
+    plate: 'XYZ999',
+    plateRaw: 'XYZ-999',
+    zoneId: 'zone-centro',
+    zoneName: 'Centro',
+    spaceCode: 'LUP-0003',
+    verdict: 'NOT_COVERED',
+    refusalCode: null,
+    locationState: 'FIX',
+    latitude: 9.9321,
+    longitude: -84.0795,
+    locationAccuracyM: 8,
+    userAgent: 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36',
+    citationIssued: true,
+    occurredAt: new Date(Date.now() - 55 * 60_000).toISOString(),
+  },
+  {
+    id: 'check-seed-2',
+    tenantId: 'tenant-sanjose',
+    inspectorUserId: 'user-inspector-1',
+    inspectorName: 'Ana Vargas',
+    plate: 'BHL019',
+    plateRaw: 'BHL019',
+    zoneId: 'zone-centro',
+    zoneName: 'Centro',
+    spaceCode: 'LUP-0001',
+    verdict: 'COVERED',
+    refusalCode: null,
+    // Permiso dado y sin fijación: el caso que hasta v0.29 se veía igual que «no dio permiso».
+    locationState: 'NO_FIX',
+    latitude: null,
+    longitude: null,
+    locationAccuracyM: null,
+    userAgent: 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36',
+    citationIssued: false,
+    occurredAt: new Date(Date.now() - 47 * 60_000).toISOString(),
+  },
+  {
+    id: 'check-seed-3',
+    tenantId: 'tenant-sanjose',
+    inspectorUserId: 'user-inspector-1',
+    inspectorName: 'Ana Vargas',
+    plate: 'AAA111',
+    plateRaw: 'aaa-111',
+    zoneId: 'zone-sabana',
+    zoneName: 'La Sabana',
+    spaceCode: 'LUP-0400',
+    // Rechazada: consultó una zona que no cubre. Hasta v0.29 no quedaba constancia de que ocurriera.
+    verdict: null,
+    refusalCode: 'ZONE_NOT_ASSIGNED',
+    locationState: 'NOT_GRANTED',
+    latitude: null,
+    longitude: null,
+    locationAccuracyM: null,
+    userAgent: 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36',
+    citationIssued: false,
+    occurredAt: new Date(Date.now() - 40 * 60_000).toISOString(),
+  },
+];
 
 /**
  * Token predecible, sólo en el mock.
@@ -2013,14 +2107,53 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
     const tenantId = claims.tid ?? '';
     seedMockAppeals();
 
-    // GET /inspector/plates/{plate}/status?zoneId=&spaceCode=
-    if (segments[2] === 'inspector' && segments[3] === 'plates' && segments[5] === 'status' && method === 'GET') {
-      const plate = normalizeMockPlate(decodeURIComponent(segments[4] ?? ''));
-      const zoneId = url.searchParams.get('zoneId');
-      const spaceCode = url.searchParams.get('spaceCode');
+    // POST /inspector/plate-checks (v0.29) y el GET obsoleto que se mantiene una versión.
+    const isPlateCheck = segments[2] === 'inspector'
+      && ((segments[3] === 'plate-checks' && method === 'POST')
+        || (segments[3] === 'plates' && segments[5] === 'status' && method === 'GET'));
+    if (isPlateCheck) {
+      const body = method === 'POST' ? await readBody<PlateCheckRequest>(init) : null;
+      const plate = normalizeMockPlate(
+        body ? body.plate : decodeURIComponent(segments[4] ?? ''),
+      );
+      const zoneId = body ? body.zoneId ?? null : url.searchParams.get('zoneId');
+      const spaceCode = body ? body.spaceCode ?? null : url.searchParams.get('spaceCode');
+      // El GET obsoleto no puede traer coordenadas: unas coordenadas en la barra de direcciones son
+      // datos personales en el historial y en los registros del proxy.
+      const locationState = (body?.locationState ?? 'NOT_GRANTED') as LocationState;
       // Half a pair identifies no bay — the server's own rule, mirrored so the client is exercised
       // against it rather than against a mock that is more forgiving than production.
+      // Se registra el intento ANTES de contestar, para que un rechazo también deje rastro: hasta
+      // v0.29 una consulta a una zona no asignada no se sabía siquiera que había ocurrido.
+      const recordCheck = (verdictOrNull: string | null, refusal: string | null): string => {
+        const id = `check-${crypto.randomUUID()}`;
+        mockEnforcementChecks.unshift({
+          id,
+          tenantId: tenantId ?? '',
+          inspectorUserId: userId,
+          inspectorName: mockUsersById.get(userId)
+            ? `${mockUsersById.get(userId)!.profile.givenName} ${mockUsersById.get(userId)!.profile.familyName}`
+            : null,
+          plate,
+          plateRaw: body ? body.plate : decodeURIComponent(segments[4] ?? ''),
+          zoneId: zoneId ?? null,
+          zoneName: zoneId ? zoneNameForId(zoneId) : null,
+          spaceCode: spaceCode ?? null,
+          verdict: verdictOrNull,
+          refusalCode: refusal,
+          locationState,
+          latitude: locationState === 'FIX' ? body?.latitude ?? null : null,
+          longitude: locationState === 'FIX' ? body?.longitude ?? null : null,
+          locationAccuracyM: locationState === 'FIX' ? body?.locationAccuracyM ?? null : null,
+          userAgent: new Headers(init?.headers).get('User-Agent'),
+          citationIssued: false,
+          occurredAt: new Date().toISOString(),
+        });
+        return id;
+      };
+
       if (Boolean(zoneId) !== Boolean(spaceCode)) {
+        recordCheck(null, 'VALIDATION_FAILED');
         return problem(400, 'VALIDATION_FAILED', 'Validation failed', undefined, [
           { field: zoneId ? 'spaceCode' : 'zoneId', code: 'VALIDATION_FAILED', message: 'Zone and bay travel together' },
         ]);
@@ -2096,11 +2229,13 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
               ? 'BAY_MISMATCH'
               : 'NOT_COVERED';
       }
+      const checkId = recordCheck(verdict, null);
       return json({
         plate,
         plateNormalized: plate,
         verdict,
         verdictLabelKey: `plate.verdict.${verdict.toLowerCase()}`,
+        checkId,
         requiresBay: verdict === 'AMBIGUOUS',
         bay: verdict === 'AMBIGUOUS' ? null : bay,
         coveringStay: covering,
@@ -2133,6 +2268,23 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
           description: null,
         })),
       );
+    }
+
+    // GET /api/v1/admin/enforcement/checks — el registro de fiscalización (CONTRACT.md v0.29).
+    if (segments[2] === 'admin' && segments[3] === 'enforcement' && segments[4] === 'checks'
+      && method === 'GET') {
+      const inspectorFilter = url.searchParams.get('inspectorUserId');
+      const zoneFilter = url.searchParams.get('zoneId');
+      const plateFilter = normalizeMockPlate(url.searchParams.get('plate') ?? '');
+      const verdictFilter = url.searchParams.get('verdict');
+      const rows = mockEnforcementChecks
+        .filter((c) => c.tenantId === tenantId)
+        .filter((c) => !inspectorFilter || c.inspectorUserId === inspectorFilter)
+        .filter((c) => !zoneFilter || c.zoneId === zoneFilter)
+        .filter((c) => !plateFilter || c.plate.includes(plateFilter))
+        .filter((c) => !verdictFilter || c.verdict === verdictFilter);
+      return json(paginate(rows, Number(url.searchParams.get('page') ?? '0'),
+        Number(url.searchParams.get('size') ?? '20')));
     }
 
     // --- Exoneraciones (CONTRACT.md v0.28) ------------------------------------------------------
@@ -2308,6 +2460,10 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
         );
         if (existing) return json(toWireDetail(existing), 200);
         const record = createMockCitation(tenantId, userId, payload, type);
+        // La consulta de la que salió queda marcada. Es lo que contesta «acción realizada» y, al
+        // revés, «me multaron sin ir a ver el carro» (CONTRACT.md v0.29).
+        const fromCheck = mockEnforcementChecks.find((c) => c.id === payload.enforcementCheckId);
+        if (fromCheck) fromCheck.citationIssued = true;
         return json(toWireDetail(record), 201);
       }
 

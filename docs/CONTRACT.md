@@ -2365,3 +2365,125 @@ para trabajar sin señal.
 **Escanear la placa con la cámara (LPR).** No existe: la cámara está conectada para la evidencia
 fotográfica de la boleta, pero no hay reconocimiento de caracteres en ningún lado. Queda para su
 propia versión, como lo planteaste.
+
+---
+
+# v0.29 — El registro de fiscalización (normativo)
+
+## El hueco
+
+La boleta quedaba registrada tres veces: su propio historial (`citation_events`), la bitácora de la
+plataforma (`audit_events`) y su evidencia. **La consulta no quedaba registrada en ninguna parte.**
+Ni una fila, ni una línea de log, ni una tabla. Un fiscalizador podía correr el padrón de placas un
+turno entero y el sistema no guardaba que lo hubiera hecho.
+
+Eso deja tres preguntas sin respuesta, y las tres se hacen:
+
+* **«me multaron sin ir a ver el carro»** — no había con qué contestarla;
+* **«este funcionario consultó la placa de un conocido»** — invisible;
+* **«¿qué hizo este funcionario el martes?»** — sólo se sabía si emitió boletas.
+
+## `enforcement_checks` (V28_0)
+
+Una tabla propia y no `audit_events`. Volumen: un fiscalizador consulta cientos de placas por turno,
+y meter eso en la bitácora administrativa —que existe para encontrar actos de administración, que son
+decenas al día— la ahogaría. Además ésta tiene su propia retención, sus propios índices y su propia
+pantalla, que es la definición de otra tabla.
+
+Cada fila: **funcionario, placa (como se tecleó y como se comparó), fecha y hora, zona, bahía,
+resultado, ubicación, dispositivo** e IP hasheada.
+
+**Sólo se agrega.** Nunca se actualiza ni se borra desde la aplicación. El único borrado es la
+depuración por retención, que es un trabajo explícito y auditado.
+
+### El resultado incluye los rechazos
+
+Exactamente uno de `verdict` o `refusal_code`, y la base de datos lo obliga. Un rechazo también es un
+resultado: una consulta a una zona no asignada era, hasta v0.29, un `403` que no dejaba constancia de
+haber ocurrido — y es justo el intento que más vale la pena conservar. El registro se escribe **en su
+propia transacción**, antes de que la excepción viaje, porque una fila escrita dentro de la
+transacción que falla se va con ella.
+
+### La ubicación dice cuál de los tres casos fue
+
+`location_state` es `FIX`, `NO_FIX` o `NOT_GRANTED`. Hasta v0.29 los tres terminaban en una latitud
+nula y eran indistinguibles: no se podía saber si el funcionario se había negado, si el teléfono no
+tenía señal o si el intento se había vencido. Son tres hechos distintos y sólo uno es una decisión
+del funcionario.
+
+**Se toma posición únicamente si ya la había concedido en ese dispositivo.** La consulta nunca pide
+el permiso; eso sigue ocurriendo en el formulario de boleta, con su hoja de explicación. Un
+funcionario que teclea placas no está consintiendo que se le siga durante el turno.
+
+Y nada se inventa nunca: una última posición conocida o el centroide de la zona harían que los tres
+casos se leyeran como `FIX`, que es la única mentira que este registro no puede decir.
+
+### El dispositivo es lo que manda el navegador, y nada más
+
+Decisión tomada con el producto. Es poco: en una aplicación de Capacitor todos los teléfonos Android
+se parecen, así que contesta «fue un teléfono o un escritorio» y poco más. **No identifica un
+aparato**, y está anotado como tal en la columna, en el DTO y aquí, para que nadie construya encima
+creyendo que sí. Un identificador por instalación o un inventario de dispositivos son las dos
+mejoras posibles y ninguna está hecha.
+
+## La consulta es un POST
+
+`POST /api/v1/inspector/plate-checks`. Dos razones y las dos son de fondo:
+
+1. **Ya no es una petición segura.** Cada consulta escribe una fila, y un `GET` que registra lo que
+   alguien hizo le miente a cada caché, proxy y reintento automático de la cadena.
+2. **Lleva las coordenadas del funcionario**, que son datos personales y no van en una URL: las
+   cadenas de consulta terminan en el historial del navegador, en los registros del proxy y en los
+   del servidor (SECURITY.md §11).
+
+`GET /inspector/plates/{plate}/status` se mantiene **una versión**, marcado obsoleto, para que un
+teléfono con la compilación del mes pasado siga funcionando; registra la consulta igual, sin
+posición. Es la misma disciplina de expandir y contraer que se aplica al esquema.
+
+## «Acción realizada»: la boleta apunta a la consulta
+
+`citations.enforcement_check_id`. **En la boleta y no en la consulta**, porque la boleta se escribe
+después —a veces horas después, desde la cola sin conexión— y una columna aquí para llenarla más
+tarde convertiría un registro de lo que alguien hizo en un registro que se puede cambiar.
+
+Anulable siempre: se puede multar sin consultar antes, y exigirlo convertiría un dato de trazabilidad
+en un impedimento para trabajar. El teléfono sólo manda el enlace si la bahía sigue siendo la de la
+consulta de la que venía; si el funcionario reescribió la zona, está escribiendo sobre otro carro.
+
+## Retención: 12 meses, configurable — y el primer trabajo programado de la plataforma
+
+ADR 0013 y SECURITY.md §11 prometen una política de retención desde v0.1. **No existía ningún trabajo
+programado en toda la plataforma**: ni un `@Scheduled`, ni un `@EnableScheduling`; el único método de
+repositorio escrito para depurar (`AuthAttemptRepository.deleteOlderThan`) no tenía llamadores.
+
+`luparx.retention.*`, con 365 días por omisión. Configuración y no constante porque la respuesta legal
+cambia por país. Un valor sin definir **no significa «guardar para siempre»**: significa la política
+documentada, porque una plataforma que acumula posiciones y placas porque alguien olvidó una
+propiedad es exactamente el fallo que esto existe para evitar.
+
+Tres cosas que una depuración tiene que hacer bien, y que ésta hace:
+
+* **Una instancia a la vez.** Todas las réplicas corren el mismo horario, así que el trabajo toma un
+  candado consultivo de PostgreSQL y las que no lo obtienen **se saltan la corrida** en vez de hacer
+  fila. Un candado en memoria sería invisible para las otras réplicas, que es justo lo que
+  ARCHITECTURE.md §7 prohíbe.
+* **Por lotes.** Una sola sentencia sobre un año de consultas de una municipalidad activa bloquea
+  largo rato la tabla en la que los funcionarios están escribiendo ahora mismo, y al funcionario en
+  la calle no le importa que sea noche de depuración. Cada lote es su propia transacción.
+* **Auditada ella misma.** `RETENTION_PURGE_RAN`, sin municipalidad y sin actor —es la plataforma
+  aplicando su política, no un cantón ni una persona— con el corte, cuántas filas correspondían y
+  cuántas se borraron. Un borrado que no deja rastro es indistinguible de una pérdida de datos.
+
+## La pantalla
+
+`GET /admin/enforcement/checks` bajo **`ENFORCEMENT_MANAGE`**, no bajo el más amplio
+`CITATION_READ`: estas filas llevan los movimientos de un funcionario durante su turno, que son datos
+personales de un empleado, y quienes los necesitan son los que dirigen fiscalización y no todo el que
+pueda leer una boleta.
+
+Filtros por funcionario, zona, placa y resultado. La ventana es obligatoria y el servidor la acota
+—un mes por omisión—: ésta es la tabla más grande de la plataforma y «todo, del más nuevo al más
+viejo» es una consulta que se hace más lenta cada día que la municipalidad opera.
+
+La pantalla dice en pantalla, no en un manual, que esas filas dicen dónde estuvo un funcionario y que
+se conservan doce meses.

@@ -97,6 +97,7 @@ export function AdminShell({ children }: AdminShellProps): React.JSX.Element {
                 <>
                   <NavItem to="/settings/infraction-types">{t('nav.enforcement.types')}</NavItem>
                   <NavItem to="/exemptions">{t('nav.enforcement.exemptions')}</NavItem>
+                  <NavItem to="/enforcement/checks">{t('nav.enforcement.checks')}</NavItem>
                 </>
               ) : null}
             </div>

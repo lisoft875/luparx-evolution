@@ -111,6 +111,15 @@ public final class AuditAction {
     public static final String PLATE_EXEMPTION_AMENDED = "PLATE_EXEMPTION_AMENDED";
     public static final String PLATE_EXEMPTION_REVOKED = "PLATE_EXEMPTION_REVOKED";
 
+    /**
+     * The retention purge ran (CONTRACT.md v0.29, ADR 0013).
+     *
+     * <p>Written with no tenant and no actor: the platform acting on its own retention policy, not a
+     * municipality and not a person. The entry says which cutoff was applied and how many rows went,
+     * because a deletion that leaves no trace is indistinguishable from data loss.</p>
+     */
+    public static final String RETENTION_PURGE_RAN = "RETENTION_PURGE_RAN";
+
     // --- account, locales and municipal operation (CONTRACT.md "v0.3") --------------------------
     public static final String USER_EMAIL_CHANGE_REQUESTED = "USER_EMAIL_CHANGE_REQUESTED";
     public static final String USER_EMAIL_CHANGED = "USER_EMAIL_CHANGED";
