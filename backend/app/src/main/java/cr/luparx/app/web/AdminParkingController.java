@@ -298,15 +298,23 @@ public class AdminParkingController {
 
     @PutMapping("/spaces/{id}")
     @PreAuthorize("hasAuthority('PERM_TENANT_MANAGE')")
-    @Operation(summary = "Take a bay out of service, put it back, or move it to another zone")
+    @Operation(summary = "Take a bay out of service, put it back, move it to another zone, or correct its code")
     public ParkingDtos.ParkingSpaceResponse updateSpace(
             @PathVariable UUID id,
             @Valid @RequestBody ParkingDtos.UpdateParkingSpaceRequest request) {
         TenantId tenantId = TenantContextHolder.requireTenantId();
-        ParkingSpace space = catalogService.updateSpace(tenantId, id, request.status(), request.zoneId());
+        // Read before the change so the audit entry can name the code the bay used to carry: that
+        // string is what every printed receipt and every officer's memory still says.
+        String previousCode = catalogService.requireSpace(tenantId, id).getCode();
+        ParkingSpace space = catalogService.updateSpace(tenantId, id, request.status(), request.zoneId(),
+                request.code());
         auditRecorder.record(AuditAction.PARKING_SPACE_UPDATED, "parking-space", id.toString(),
                 Map.of("code", space.getCode(), "status", space.getStatus().name(),
                         "zoneId", space.getZoneId().toString()));
+        if (!previousCode.equals(space.getCode())) {
+            auditRecorder.record(AuditAction.PARKING_SPACE_RENAMED, "parking-space", id.toString(),
+                    Map.of("previousCode", previousCode, "code", space.getCode()));
+        }
         return mapper.toSpace(space);
     }
 

@@ -152,37 +152,54 @@ public class ParkingMapper {
         String zoneName = zoneRepository.findById(session.getZoneId())
                 .map(ParkingZone::getName)
                 .orElse(null);
-        String spaceCode = spaceRepository.findById(session.getSpaceId())
-                .map(ParkingSpace::getCode)
-                .orElse(null);
+        // The stay carries its own copy of the bay code since V25_0. The live lookup is the fallback
+        // for rows an older instance wrote, not the normal path — see toSessions.
+        String spaceCode = session.getSpaceCodeSnapshot();
+        if (spaceCode == null) {
+            spaceCode = spaceRepository.findById(session.getSpaceId())
+                    .map(ParkingSpace::getCode)
+                    .orElse(null);
+        }
         return toSession(session, zoneName, spaceCode);
     }
 
     /**
-     * A collection of sessions, with the zone names and bay codes resolved in one query each.
+     * A collection of sessions, with the zone names resolved in one query.
      *
-     * <p>The two lookups are by identifier and are not narrowed by tenant, which is safe precisely
-     * because the identifiers come from rows that were already read through their tenant: a session
-     * cannot reference a zone of another municipality (foreign key plus the tenant column on both).</p>
+     * <p>The lookup is by identifier and is not narrowed by tenant, which is safe precisely because
+     * the identifiers come from rows that were already read through their tenant: a session cannot
+     * reference a zone of another municipality (foreign key plus the tenant column on both).</p>
+     *
+     * <p>The bay code needs no query at all since V25_0: the stay carries the code it was started
+     * with. Only rows written before that migration are looked up, and after the backfill there are
+     * none — the query is skipped entirely rather than asking for an empty list of identifiers.</p>
      */
     public List<ParkingDtos.ParkingSessionResponse> toSessions(List<ParkingSession> sessions) {
         if (sessions == null || sessions.isEmpty()) {
             return List.of();
         }
         List<UUID> zoneIds = sessions.stream().map(ParkingSession::getZoneId).distinct().toList();
-        List<UUID> spaceIds = sessions.stream().map(ParkingSession::getSpaceId).distinct().toList();
         Map<UUID, String> zoneNames = new HashMap<>();
         for (ParkingZone zone : zoneRepository.findAllById(zoneIds)) {
             zoneNames.put(zone.getId(), zone.getName());
         }
+        List<UUID> legacySpaceIds = sessions.stream()
+                .filter((session) -> session.getSpaceCodeSnapshot() == null)
+                .map(ParkingSession::getSpaceId)
+                .distinct()
+                .toList();
         Map<UUID, String> spaceCodes = new HashMap<>();
-        for (ParkingSpace space : spaceRepository.findAllById(spaceIds)) {
-            spaceCodes.put(space.getId(), space.getCode());
+        if (!legacySpaceIds.isEmpty()) {
+            for (ParkingSpace space : spaceRepository.findAllById(legacySpaceIds)) {
+                spaceCodes.put(space.getId(), space.getCode());
+            }
         }
         List<ParkingDtos.ParkingSessionResponse> result = new ArrayList<>(sessions.size());
         for (ParkingSession session : sessions) {
-            result.add(toSession(session, zoneNames.get(session.getZoneId()),
-                    spaceCodes.get(session.getSpaceId())));
+            String spaceCode = session.getSpaceCodeSnapshot() != null
+                    ? session.getSpaceCodeSnapshot()
+                    : spaceCodes.get(session.getSpaceId());
+            result.add(toSession(session, zoneNames.get(session.getZoneId()), spaceCode));
         }
         return result;
     }

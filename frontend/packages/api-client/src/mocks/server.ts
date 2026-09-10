@@ -679,9 +679,25 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
         return json(space, 201);
       }
       if (method === 'PUT' && segments.length === 6) {
-        const payload = await readBody<{ status?: 'AVAILABLE' | 'OUT_OF_SERVICE'; zoneId?: string }>(init);
+        const payload = await readBody<{
+          status?: 'AVAILABLE' | 'OUT_OF_SERVICE';
+          zoneId?: string;
+          code?: string;
+        }>(init);
         const space = mockAdminSpaces.find((s) => s.id === segments[5]);
         if (!space) return problem(404, 'PARKING_SPACE_NOT_FOUND', 'Bay not found');
+        if (payload.code !== undefined && payload.code.trim() !== '') {
+          // The same two refusals as POST, with the bay itself excluded from the uniqueness check:
+          // re-sending the code a bay already has is a no-op, not a conflict (CONTRACT.md v0.25).
+          const code = payload.code.trim().toUpperCase();
+          if (!/^LUP-\d{4}$/.test(code)) {
+            return problem(422, 'PARKING_SPACE_CODE_INVALID', "That code doesn't match the format");
+          }
+          if (mockAdminSpaces.some((s) => s.code === code && s.id !== space.id)) {
+            return problem(409, 'PARKING_SPACE_CODE_TAKEN', 'That bay code is taken');
+          }
+          space.code = code;
+        }
         if (payload.status) space.status = payload.status;
         if (payload.zoneId) space.zoneId = payload.zoneId;
         return json(space);

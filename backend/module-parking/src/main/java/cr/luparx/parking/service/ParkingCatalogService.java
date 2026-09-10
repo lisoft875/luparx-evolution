@@ -208,22 +208,43 @@ public class ParkingCatalogService {
     }
 
     /**
-     * Takes a bay out of service, puts it back, or moves it to another zone.
+     * Takes a bay out of service, puts it back, moves it to another zone, or corrects its code.
      *
-     * <p>The <b>code is not editable</b>, for the same reason the zone's is not: it is painted on
-     * the ground, and a row whose code changes silently rewrites every session and every citation
-     * that ever named that bay. A municipality that renumbers paints new bays and retires the old
-     * ones — which is exactly what happens on the street, and exactly what these two operations
-     * express.</p>
+     * <p>The code became editable in v0.25, reversing the v0.16 rule. The argument that changed it:
+     * when a municipality repaints bay 0007 as 0012, that is <em>the same bay</em> — same asphalt,
+     * same zone, same history — and forcing an operator to retire a row and create another one to
+     * describe a coat of paint splits one bay's record in two. What made the old rule necessary was
+     * that a rename used to rewrite the past: the bay code of a stay was resolved live. It no longer
+     * is. Every stay carries {@code space_code_snapshot} (V25_0) and every citation carries
+     * {@code space_code} (V17_0), so a receipt keeps naming the bay the citizen actually parked in.
+     * <b>Do not remove either snapshot without removing this operation first.</b></p>
      *
-     * <p>A bay is never deleted either. {@code OUT_OF_SERVICE} is the answer for a bay that is dug
-     * up, and it keeps every stay that was ever paid on it readable.</p>
+     * <p>The new code goes through the same validation as a new bay's — the municipality's format,
+     * canonicalised, unique inside the municipality — because it is the same kind of fact. The
+     * uniqueness check excludes this bay so that re-sending its current code is a no-op rather than
+     * a conflict; the unique index is still what guarantees it under a race.</p>
+     *
+     * <p>A bay is never deleted. {@code OUT_OF_SERVICE} is the answer for a bay that is dug up, and
+     * it keeps every stay that was ever paid on it readable.</p>
      */
     @Transactional
-    public ParkingSpace updateSpace(TenantId tenantId, UUID spaceId, ParkingSpaceStatus status, UUID zoneId) {
+    public ParkingSpace updateSpace(TenantId tenantId, UUID spaceId, ParkingSpaceStatus status, UUID zoneId,
+                                    String code) {
         ParkingSpace space = spaceRepository.findByTenantIdAndId(tenantId.value(), spaceId)
                 .orElseThrow(() -> NotFoundException.of(ErrorCode.PARKING_SPACE_NOT_FOUND,
                         "error.parking.space.notFound"));
+        if (code != null && !code.isBlank()) {
+            String normalized = spaceFormatService.requireValidCode(tenantId, code);
+            if (!normalized.equals(space.getCode())) {
+                spaceRepository.findByTenantIdAndCode(tenantId.value(), normalized)
+                        .filter((other) -> !other.getId().equals(space.getId()))
+                        .ifPresent((other) -> {
+                            throw ConflictException.of(ErrorCode.PARKING_SPACE_CODE_TAKEN,
+                                    "error.parking.space.code.taken", normalized);
+                        });
+                space.rename(normalized);
+            }
+        }
         if (zoneId != null && !zoneId.equals(space.getZoneId())) {
             requireZone(tenantId, zoneId);
             space.reassign(zoneId);
@@ -240,6 +261,14 @@ public class ParkingCatalogService {
     @Transactional(readOnly = true)
     public long countSpaces(TenantId tenantId, UUID zoneId) {
         return spaceRepository.countByTenantIdAndZoneId(tenantId.value(), zoneId);
+    }
+
+    /** One bay of this municipality, or {@code PARKING_SPACE_NOT_FOUND}. Narrowed by tenant, always. */
+    @Transactional(readOnly = true)
+    public ParkingSpace requireSpace(TenantId tenantId, UUID spaceId) {
+        return spaceRepository.findByTenantIdAndId(tenantId.value(), spaceId)
+                .orElseThrow(() -> NotFoundException.of(ErrorCode.PARKING_SPACE_NOT_FOUND,
+                        "error.parking.space.notFound"));
     }
 
     @Transactional(readOnly = true)

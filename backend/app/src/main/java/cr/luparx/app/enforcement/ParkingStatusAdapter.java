@@ -70,6 +70,9 @@ public class ParkingStatusAdapter implements ParkingStatusPort {
         for (ParkingZone zone : zoneRepository.findByTenantIdOrderByCodeAsc(tenantId.value())) {
             zones.put(zone.getId(), zone);
         }
+        // Deliberately the LIVE code, not the stay's snapshot (V25_0). This answer is what the
+        // officer standing in front of the bay reads, so it has to say what the sign says today; the
+        // snapshot is for the receipt of a stay already paid, which must not move.
         Map<UUID, ParkingSpace> spaces = new HashMap<>();
         for (ParkingSession session : sessions) {
             spaceRepository.findByTenantIdAndId(tenantId.value(), session.getSpaceId())

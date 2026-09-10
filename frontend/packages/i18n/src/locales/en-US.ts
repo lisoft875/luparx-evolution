@@ -209,7 +209,7 @@ export const enUS: Record<TranslationKey, string> = {
 
   'admin.spaces.title': 'Bays',
   'admin.spaces.description':
-    'The bays of a zone. The code is the one painted on the ground and is not editable: renumbering means painting new bays and taking the old ones out of service.',
+    'The bays of a zone. The code is the one painted on the ground; if the municipality repaints it, correct it here and the bay stays the same bay.',
   'admin.spaces.create': 'Add bay',
   'admin.spaces.empty': 'This zone has no bays yet.',
   'admin.spaces.created': 'Bay added.',
@@ -223,6 +223,12 @@ export const enUS: Record<TranslationKey, string> = {
   'admin.spaces.status.OUT_OF_SERVICE': 'Out of service',
   'admin.spaces.action.outOfService': 'Take out of service',
   'admin.spaces.action.backInService': 'Put back in service',
+  'admin.spaces.action.editCode': 'Edit code',
+  'admin.spaces.editCode.title': 'Edit the bay code',
+  'admin.spaces.editCode.current': 'Current code: {{code}}',
+  'admin.spaces.editCode.notice':
+    'This is the same bay: it keeps its history, its zone and its status. Stays already paid and citations already issued keep showing the code they carried at the time.',
+  'admin.spaces.renamed': 'Code updated. Anything already charged keeps the previous code.',
   'admin.spaces.codeHint': "This municipality's format, for example {{example}}.",
   'admin.spaces.error.codeTaken': 'A bay in this municipality already uses that code.',
   'admin.spaces.error.codeInvalid': "That code doesn't match this municipality's format ({{example}}).",

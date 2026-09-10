@@ -924,10 +924,17 @@ export interface CreateParkingSpaceRequest {
   code: string;
 }
 
-/** The code is absent on purpose: it is painted on the ground (CONTRACT.md v0.16). */
+/**
+ * Only the fields sent are applied.
+ *
+ * `code` corrects the number painted on the bay (CONTRACT.md v0.25). It changes the bay from today
+ * onwards and nothing that already happened on it: every stay and every citation keeps the code it
+ * was issued with, so a receipt from last year still names the bay the citizen parked in.
+ */
 export interface UpdateParkingSpaceRequest {
   status?: ParkingSpaceStatus;
   zoneId?: string;
+  code?: string;
 }
 
 /**

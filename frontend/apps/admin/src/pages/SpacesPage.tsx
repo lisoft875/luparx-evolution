@@ -18,10 +18,14 @@ const PAGE_SIZE = 50;
  * zone lives in the URL (`?zone=`) so the screen can be linked to from the zone list and survives a
  * reload.</p>
  *
- * <p>A bay's identity is the code painted on the ground, and it is not editable. A municipality that
- * renumbers paints new bays and takes the old ones out of service — which is what actually happens on
- * the street, and what these two actions express. Nothing is ever deleted: every stay paid on a bay
- * and every citation written at one has to keep resolving.</p>
+ * <p>A bay's identity is the row, not the string written on it: since v0.25 the code can be corrected
+ * when the municipality repaints one, because a repainted bay is the same bay and splitting its record
+ * in two to describe a coat of paint helps nobody. What makes that safe is that nothing already
+ * charged reads the code live — every stay and every citation carries its own copy — so the dialog
+ * says so out loud rather than leaving the operator to guess whether last year's receipt just moved.</p>
+ *
+ * <p>Nothing is ever deleted. A bay that is dug up goes out of service, and every stay paid on it and
+ * every citation written at it keeps resolving.</p>
  */
 export function SpacesPage(): React.JSX.Element {
   const { t, tPlural } = useTranslation();
@@ -33,6 +37,10 @@ export function SpacesPage(): React.JSX.Element {
   const [page, setPage] = useState(0);
   const [creating, setCreating] = useState(false);
   const [code, setCode] = useState('');
+  // The bay being renumbered, and the code being typed for it. Held apart from the create form so
+  // that closing one dialog never half-fills the other.
+  const [renaming, setRenaming] = useState<ParkingSpace | null>(null);
+  const [newCode, setNewCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
 
@@ -80,6 +88,16 @@ export function SpacesPage(): React.JSX.Element {
         status: space.status === 'AVAILABLE' ? 'OUT_OF_SERVICE' : 'AVAILABLE',
       }),
     onSuccess: () => invalidate('admin.spaces.updated'),
+    onError: onFailure,
+  });
+  const renameMutation = useMutation({
+    mutationFn: ({ space, value }: { space: ParkingSpace; value: string }) =>
+      apiClient.adminParking.updateSpace(space.id, { code: value.trim() }),
+    onSuccess: () => {
+      setRenaming(null);
+      setNewCode('');
+      invalidate('admin.spaces.renamed');
+    },
     onError: onFailure,
   });
 
@@ -144,13 +162,29 @@ export function SpacesPage(): React.JSX.Element {
                 header: t('admin.staff.column.actions'),
                 render: (space) => (
                   <RequirePermission permission="TENANT_MANAGE">
-                    <Button type="button" variant="secondary" onClick={() => toggleMutation.mutate(space)}>
-                      {t(
-                        space.status === 'AVAILABLE'
-                          ? 'admin.spaces.action.outOfService'
-                          : 'admin.spaces.action.backInService',
-                      )}
-                    </Button>
+                    <div style={{ display: 'flex', gap: 'var(--lx-space-2)', flexWrap: 'wrap' }}>
+                      <Button type="button" variant="secondary" onClick={() => toggleMutation.mutate(space)}>
+                        {t(
+                          space.status === 'AVAILABLE'
+                            ? 'admin.spaces.action.outOfService'
+                            : 'admin.spaces.action.backInService',
+                        )}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={() => {
+                          setError(null);
+                          setFeedback(null);
+                          setRenaming(space);
+                          // Prefilled with what the bay carries today: a renumbering is usually one
+                          // digit away from the current code, and retyping it invites a typo.
+                          setNewCode(space.code);
+                        }}
+                      >
+                        {t('admin.spaces.action.editCode')}
+                      </Button>
+                    </div>
                   </RequirePermission>
                 ),
               },
@@ -211,6 +245,56 @@ export function SpacesPage(): React.JSX.Element {
               loading={createMutation.isPending}
               disabled={!code.trim()}
               onClick={() => createMutation.mutate()}
+            >
+              {t('common.save')}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={renaming !== null}
+        onClose={() => setRenaming(null)}
+        title={t('admin.spaces.editCode.title')}
+        closeLabel={t('common.close')}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--lx-space-3)' }}>
+          {/* Said before the field, not after: what the operator needs to know to decide is whether
+              this rewrites the past, and by the time they have typed they have already decided. */}
+          <Alert tone="info">{t('admin.spaces.editCode.notice')}</Alert>
+          <FormField
+            label={t('admin.spaces.column.code')}
+            hint={
+              renaming
+                ? t('admin.spaces.editCode.current', { code: renaming.code })
+                : t('common.loading')
+            }
+          >
+            {({ inputId, describedBy }) => (
+              <Input
+                id={inputId}
+                aria-describedby={describedBy}
+                value={newCode}
+                autoCapitalize="characters"
+                maxLength={24}
+                onChange={(e) => setNewCode(e.target.value)}
+              />
+            )}
+          </FormField>
+          <div className="lx-dialog-actions">
+            <Button type="button" variant="secondary" fullWidth onClick={() => setRenaming(null)}>
+              {t('common.cancel')}
+            </Button>
+            <Button
+              type="button"
+              fullWidth
+              loading={renameMutation.isPending}
+              // Nothing to send when the code has not moved: the server would accept it as a no-op,
+              // but a success message about a change that did not happen is a small lie.
+              disabled={!newCode.trim() || newCode.trim() === renaming?.code}
+              onClick={() => {
+                if (renaming) renameMutation.mutate({ space: renaming, value: newCode });
+              }}
             >
               {t('common.save')}
             </Button>

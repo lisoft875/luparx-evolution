@@ -1395,6 +1395,10 @@ municipalidad que renumera pinta bahías nuevas y saca de servicio las viejas �
 que pasa en la calle—. `OUT_OF_SERVICE` es la respuesta para una bahía levantada en obra, y mantiene
 legible todo lo que se pagó sobre ella. Un espacio tampoco se borra.
 
+> **Superado por v0.25.** El código de una bahía sí se edita desde v0.25; lo que sigue vigente de este
+> párrafo es que una bahía no se borra. La razón del cambio y lo que hubo que arreglar antes están en
+> «v0.25 — El código de la bahía se corrige, la historia no».
+
 Mover una bahía de zona sí se permite (`zoneId` en el `PUT`): eso pasa cuando se redibuja un sector,
 y la bahía sigue siendo la misma.
 
@@ -1961,3 +1965,69 @@ cobrar, que es un estado en el que puede quedarse sin daño.
 Una municipalidad con ocho sectores y cinco duraciones tiene una grilla más ancha que la pantalla —el
 caso corriente, no el grande— y una fila cuyo nombre se fue por la izquierda es una fila de números
 que no son de nadie. `Table` gana `stickyFirstColumn`.
+
+---
+
+# v0.25 — El código de la bahía se corrige, la historia no (normativo)
+
+## Por qué se revierte v0.16
+
+v0.16 dijo que el código de una bahía no se edita: está pintado en el suelo, y renumerar es pintar
+bahías nuevas y sacar de servicio las viejas. El argumento es bueno para la calle y malo para el
+registro. Cuando una municipalidad repinta la 0007 como 0012, **es la misma bahía**: el mismo asfalto,
+el mismo sector, el mismo historial de estadías y de boletas. Obligar a retirar una fila y crear otra
+para describir una mano de pintura parte en dos el registro de una sola bahía, y deja a la
+municipalidad con un inventario que ya no corresponde a lo que hay en la calle.
+
+Lo que hacía necesaria la regla vieja no era la pintura: era que **renombrar reescribía el pasado**.
+
+## Lo que hubo que arreglar antes
+
+El código de la bahía de una estadía se resolvía **en vivo** contra `parking_spaces` al armar la
+respuesta. Es decir: el comprobante de una estadía de hace un año decía el código que la bahía tiene
+hoy. Mientras el código fue inmutable eso daba lo mismo y nadie lo notó. Deja de dar lo mismo en el
+instante en que se permite corregirlo.
+
+Las boletas ya estaban bien: `citations.space_code` guarda el código del momento desde V17_0.
+
+`V25_0` le da a las estadías la misma garantía: `parking_sessions.space_code_snapshot`, una copia con
+la misma forma y por la misma razón que `plate_snapshot` (V11_0) — el ciudadano parqueó en la bahía
+que decía el letrero **ese día**, y eso es lo que tiene que decir el comprobante. Es fase de
+expansión (ADR 0010): columna anulable, relleno de lo existente con el código de hoy —que es
+literalmente lo que la pantalla venía mostrando para esas filas, así que la copia es exacta y no una
+aproximación— y el lector cae al código vivo cuando la copia es `NULL`, para que una instancia vieja
+pueda seguir escribiendo durante el despliegue. El `NOT NULL` es fase de contracción, en otra versión.
+
+**Regla que no se negocia: no se quita ninguno de los dos snapshots sin quitar antes esta operación.**
+Sin ellos, editar un código es mentir en la contabilidad.
+
+## Lo que cambia en la API
+
+`PUT /api/v1/admin/parking/spaces/{id}` acepta `code`. Los tres campos —`status`, `zoneId`, `code`—
+son opcionales y se aplica sólo lo que venga, así que un cliente que sólo sabe de `status` sigue
+funcionando sin cambios.
+
+El código nuevo pasa por **la misma validación que uno nuevo**: el formato de la municipalidad,
+canonicalizado, único dentro de la municipalidad. `PARKING_SPACE_CODE_INVALID` y
+`PARKING_SPACE_CODE_TAKEN`, los mismos de siempre. La unicidad excluye a la propia bahía: reenviar el
+código que ya tiene no hace nada, no es un conflicto. El índice único sigue siendo lo que lo garantiza
+bajo carrera; la comprobación es lo que hace legible la negativa.
+
+Un renombre se audita aparte, `PARKING_SPACE_RENAMED`, con el código anterior y el nuevo. Es el único
+cambio que altera cómo se llama la bahía en la calle, y el número viejo tiene que seguir siendo
+buscable: es el que está impreso en los comprobantes y el que un inspector recuerda.
+
+## Lo que el inspector ve
+
+Deliberadamente distinto: la consulta de estadías activas que alimenta al inspector devuelve el código
+**vivo**, no el de la estadía. El inspector está parado frente a la bahía y lee el letrero de hoy; esa
+respuesta tiene que decir lo que dice el letrero. El snapshot es para el comprobante de algo ya
+cobrado, que no se mueve.
+
+## Lo que la pantalla dice
+
+Cada fila de Espacios ofrece «Editar código». El diálogo trae el código actual ya escrito —renumerar
+suele ser un dígito de distancia, y volver a teclearlo invita a la errata— y **antes del campo**, no
+después, dice que es la misma bahía y que las estadías ya pagadas y las boletas ya emitidas siguen
+mostrando el código que tenían. Después de escribir, el operador ya decidió; la advertencia llega
+tarde. Guardar está deshabilitado mientras el código no cambia.

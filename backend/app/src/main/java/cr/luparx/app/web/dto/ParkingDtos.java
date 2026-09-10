@@ -415,10 +415,18 @@ public final class ParkingDtos {
     }
 
     /**
-     * {@code PUT /admin/parking/spaces/{id}} — take a bay out of service, put it back, or move it to
-     * another zone. The code is not here: it is painted on the ground (CONTRACT.md v0.16).
+     * {@code PUT /admin/parking/spaces/{id}} — take a bay out of service, put it back, move it to
+     * another zone, or correct its code.
+     *
+     * <p>Every field is optional and only the ones present are applied, so a client that only knows
+     * about status keeps working unchanged. {@code code} is the bay's number as painted: correcting
+     * it changes the bay from today onwards and never the stays and citations already issued on it,
+     * which carry their own copy (CONTRACT.md v0.25).</p>
      */
-    public record UpdateParkingSpaceRequest(ParkingSpaceStatus status, UUID zoneId) {
+    public record UpdateParkingSpaceRequest(
+            ParkingSpaceStatus status,
+            UUID zoneId,
+            @Size(max = 16) String code) {
     }
 
     public record UpdateParkingZoneRequest(

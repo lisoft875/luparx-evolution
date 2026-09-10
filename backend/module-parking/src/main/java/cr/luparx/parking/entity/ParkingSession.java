@@ -33,6 +33,10 @@ import java.util.UUID;
  * <p>{@link #getPlateSnapshot()} is a copy of the plate as it was when the session started. It is
  * deliberately not a join: the inspector verifies against what was painted on the car at that
  * moment, and a citizen correcting a typo afterwards must not rewrite history.</p>
+ *
+ * <p>{@link #getSpaceCodeSnapshot()} is the same idea for the bay (V25_0): since v0.25 a
+ * municipality can correct the code painted on a bay, and the receipt of a stay already paid has to
+ * keep naming the bay the citizen actually parked in. Null only on rows written before V25_0.</p>
  */
 @Entity
 @Table(name = "parking_sessions")
@@ -64,6 +68,10 @@ public class ParkingSession {
 
     @Column(name = "space_id", nullable = false)
     private UUID spaceId;
+
+    /** Nullable while V25_0 is in its expand phase: rows written by an older instance have none. */
+    @Column(name = "space_code_snapshot", length = 16)
+    private String spaceCodeSnapshot;
 
     @Column(name = "started_at", nullable = false)
     private Instant startedAt;
@@ -104,8 +112,8 @@ public class ParkingSession {
 
     public ParkingSession(UUID id, UUID tenantId, UUID userId, UUID vehicleId, String plateSnapshot,
                           VehicleType vehicleType, UUID zoneId,
-                          UUID spaceId, Instant startedAt, Instant expiresAt, Money amount,
-                          int creditMinutesApplied) {
+                          UUID spaceId, String spaceCodeSnapshot, Instant startedAt, Instant expiresAt,
+                          Money amount, int creditMinutesApplied) {
         this.id = id;
         this.tenantId = tenantId;
         this.userId = userId;
@@ -114,6 +122,7 @@ public class ParkingSession {
         this.vehicleType = vehicleType;
         this.zoneId = zoneId;
         this.spaceId = spaceId;
+        this.spaceCodeSnapshot = spaceCodeSnapshot;
         this.startedAt = startedAt;
         this.expiresAt = expiresAt;
         this.status = ParkingSessionStatus.ACTIVE;
@@ -169,6 +178,16 @@ public class ParkingSession {
 
     public UUID getSpaceId() {
         return spaceId;
+    }
+
+    /**
+     * The bay code as it was when the stay started — a copy, like the plate, never a join.
+     *
+     * <p>Null on rows written before V25_0; the reader falls back to the live code for those, which
+     * is exactly what it used to show for every row.</p>
+     */
+    public String getSpaceCodeSnapshot() {
+        return spaceCodeSnapshot;
     }
 
     public Instant getStartedAt() {

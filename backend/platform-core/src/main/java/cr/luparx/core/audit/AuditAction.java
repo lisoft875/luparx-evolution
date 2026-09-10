@@ -67,6 +67,12 @@ public final class AuditAction {
     public static final String PARKING_SPACE_CREATED = "PARKING_SPACE_CREATED";
     /** A bay taken out of service, put back, or moved to another zone (CONTRACT.md v0.16). */
     public static final String PARKING_SPACE_UPDATED = "PARKING_SPACE_UPDATED";
+    /**
+     * A bay repainted with another number (CONTRACT.md v0.25). Recorded apart from
+     * {@link #PARKING_SPACE_UPDATED} because it is the one change that alters how the bay is named
+     * on the street, and the entry carries both codes so the old number stays findable.
+     */
+    public static final String PARKING_SPACE_RENAMED = "PARKING_SPACE_RENAMED";
 
     // --- account, locales and municipal operation (CONTRACT.md "v0.3") --------------------------
     public static final String USER_EMAIL_CHANGE_REQUESTED = "USER_EMAIL_CHANGE_REQUESTED";

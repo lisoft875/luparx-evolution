@@ -253,7 +253,7 @@ public class ParkingSessionService {
         ParkingQuote quote = quoteService.price(prices, minutes, chargeable, savedMinutes);
 
         ParkingSession session = new ParkingSession(Uuid7.generate(), tenantId.value(), userId.value(),
-                vehicleId, plate, vehicleType, zoneId, space.getId(), now,
+                vehicleId, plate, vehicleType, zoneId, space.getId(), space.getCode(), now,
                 now.plusSeconds((long) minutes * 60L), quote.payable(), quote.creditMinutesApplied());
         // Flushed here so the partial unique indexes decide the race between two replicas now, while
         // the transaction can still be rolled back cleanly, rather than at commit.

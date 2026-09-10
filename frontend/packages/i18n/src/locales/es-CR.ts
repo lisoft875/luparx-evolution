@@ -221,7 +221,7 @@ export const esCR = {
 
   'admin.spaces.title': 'Espacios',
   'admin.spaces.description':
-    'Las bahías de una zona. El código es el que está pintado en el suelo y no se edita: renumerar es pintar bahías nuevas y sacar de servicio las viejas.',
+    'Las bahías de una zona. El código es el que está pintado en el suelo; si la municipalidad lo repinta, corríjalo aquí y la bahía sigue siendo la misma.',
   'admin.spaces.create': 'Agregar espacio',
   'admin.spaces.empty': 'Esta zona todavía no tiene espacios.',
   'admin.spaces.created': 'Espacio agregado.',
@@ -235,6 +235,12 @@ export const esCR = {
   'admin.spaces.status.OUT_OF_SERVICE': 'Fuera de servicio',
   'admin.spaces.action.outOfService': 'Sacar de servicio',
   'admin.spaces.action.backInService': 'Poner en servicio',
+  'admin.spaces.action.editCode': 'Editar código',
+  'admin.spaces.editCode.title': 'Editar el código de la bahía',
+  'admin.spaces.editCode.current': 'Código actual: {{code}}',
+  'admin.spaces.editCode.notice':
+    'Es la misma bahía: conserva su historial, su zona y su estado. Las estadías ya pagadas y las boletas ya emitidas siguen mostrando el código que tenían en ese momento.',
+  'admin.spaces.renamed': 'Código actualizado. Lo ya cobrado conserva el código anterior.',
   'admin.spaces.codeHint': 'Formato de esta municipalidad, por ejemplo {{example}}.',
   'admin.spaces.error.codeTaken': 'Ya hay un espacio con ese código en esta municipalidad.',
   'admin.spaces.error.codeInvalid': 'Ese código no tiene el formato de esta municipalidad ({{example}}).',

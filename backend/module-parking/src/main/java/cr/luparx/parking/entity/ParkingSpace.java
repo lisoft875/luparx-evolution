@@ -107,6 +107,19 @@ public class ParkingSpace {
         this.zoneId = zoneId;
     }
 
+    /**
+     * The municipality repainted this bay with another number (CONTRACT.md v0.25).
+     *
+     * <p>This is the same bay, not a new one: the identifier of a bay is this row, and the code is
+     * what is written on it. Nothing that already happened here moves, because every stay and every
+     * citation keeps the code it was issued with — {@code parking_sessions.space_code_snapshot} since
+     * V25_0 and {@code citations.space_code} since V17_0. Without those two copies this method would
+     * be a lie in the ledger, which is why it did not exist before them.</p>
+     */
+    public void rename(String code) {
+        this.code = code;
+    }
+
     public void changeStatus(ParkingSpaceStatus status) {
         this.status = status;
     }
