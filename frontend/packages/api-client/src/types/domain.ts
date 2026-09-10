@@ -845,6 +845,21 @@ export interface ParkingZone {
    * range exists.
    */
   spaceCodes?: ParkingZoneSpaceCodes;
+  /**
+   * What each duration this municipality sells costs in this zone (CONTRACT.md v0.24).
+   *
+   * Priced by the server, one entry per duration, and rendered verbatim: a client that computed
+   * "30 minutes is twice 15" would be wrong in every municipality with a non-linear ladder — which
+   * is most of them, and is the reason the ladder exists. Absent from servers older than v0.24.
+   */
+  durations?: ParkingDurationPrice[];
+}
+
+/** One entry of the citizen's duration picker: how long, and what it costs here. */
+export interface ParkingDurationPrice {
+  minutes: number;
+  amountMinor: number;
+  currencyCode: string;
 }
 
 /**
@@ -920,14 +935,35 @@ export interface UpdateParkingSpaceRequest {
  * new tariff closes the open one and opens another, so a stay is always priced by what was in force
  * when it started.
  */
+/**
+ * What a zone charges over one validity window (CONTRACT.md v0.24).
+ *
+ * `BLOCK` is the zone's linear base: `amountMinor` covers `minutes` minutes and is charged per
+ * started block. It is mandatory, and it prices every duration the ladder does not name — including
+ * a citizen spending exactly the minutes they had saved, which is an arbitrary number.
+ *
+ * `EXACT` is one rung of the ladder: `amountMinor` **is** the price of a stay of exactly `minutes`
+ * minutes, never multiplied. An exact rung always wins over the base, because a price stated for
+ * that duration is more specific than a formula that can also produce a number for it.
+ */
+export type RateKind = 'BLOCK' | 'EXACT';
+
 export interface ParkingRate {
   id: string;
   zoneId: string;
+  kind: RateKind;
   amountMinor: number;
   currencyCode: string;
   minutes: number;
   validFrom: string;
   validTo: string | null;
+}
+
+/** `PUT /admin/parking/rates/rungs` — prices one exact duration. */
+export interface SetRateRungRequest {
+  zoneId: string;
+  amountMinor: number;
+  minutes: number;
 }
 
 export interface SetParkingRateRequest {

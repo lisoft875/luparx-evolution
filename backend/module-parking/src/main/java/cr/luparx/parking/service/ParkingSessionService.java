@@ -19,6 +19,7 @@ import cr.luparx.parking.entity.Vehicle;
 import cr.luparx.core.money.Money;
 import cr.luparx.parking.model.ExtensionOption;
 import cr.luparx.parking.model.ParkingQuote;
+import cr.luparx.parking.model.ZonePriceBook;
 import cr.luparx.parking.model.ParkingSessionStatus;
 import cr.luparx.parking.model.PlateNormalizer;
 import cr.luparx.parking.model.SessionVehicleRef;
@@ -247,9 +248,9 @@ public class ParkingSessionService {
         }
 
         Instant now = clock.instant();
-        ParkingRate rate = quoteService.requireRate(tenantId, zoneId, now);
+        ZonePriceBook prices = quoteService.requirePriceBook(tenantId, zoneId, now);
         int chargeable = requireChargeableWindow(tenantId, now, minutes);
-        ParkingQuote quote = quoteService.price(rate, minutes, chargeable, savedMinutes);
+        ParkingQuote quote = quoteService.price(prices, minutes, chargeable, savedMinutes);
 
         ParkingSession session = new ParkingSession(Uuid7.generate(), tenantId.value(), userId.value(),
                 vehicleId, plate, vehicleType, zoneId, space.getId(), now,
@@ -347,13 +348,13 @@ public class ParkingSessionService {
         }
 
         Instant now = clock.instant();
-        ParkingRate rate = quoteService.requireRate(tenantId, session.getZoneId(), now);
+        ZonePriceBook prices = quoteService.requirePriceBook(tenantId, session.getZoneId(), now);
         // An extension adds time to the END of the session, so what it costs is decided by the
         // charging hours of the stretch it adds — not by the hours at the moment the button is
         // pressed. Extending a 17:30 session at 17:55 buys 18:00-19:00, which is free.
         int chargeable = requireChargeableWindow(tenantId, session.getExpiresAt(), minutes);
         int available = timeCreditService.availableMinutesForUpdate(tenantId, userId);
-        ParkingQuote quote = quoteService.price(rate, minutes, chargeable, available);
+        ParkingQuote quote = quoteService.price(prices, minutes, chargeable, available);
 
         session.extend(minutes, quote.payable(), quote.creditMinutesApplied(), now);
         sessionRepository.save(session);
@@ -405,7 +406,7 @@ public class ParkingSessionService {
         }
 
         Instant now = clock.instant();
-        ParkingRate rate = quoteService.requireRate(tenantId, session.getZoneId(), now);
+        ZonePriceBook prices = quoteService.requirePriceBook(tenantId, session.getZoneId(), now);
         int credit = timeCreditService.availableMinutes(tenantId, userId);
         Money balance = walletService.balance(tenantId, userId);
         Instant from = session.getExpiresAt();
@@ -415,7 +416,7 @@ public class ParkingSessionService {
         for (Integer minutes : offered) {
             int added = minutes.intValue();
             int chargeable = quoteService.chargeableMinutes(tenantId, from, added);
-            ParkingQuote quote = quoteService.price(rate, added, chargeable, credit);
+            ParkingQuote quote = quoteService.price(prices, added, chargeable, credit);
             Instant newExpiresAt = from.plusSeconds((long) added * 60L);
             if (session.bookedMinutes() + added > policy.getExtensionMaxTotalMinutes()) {
                 options.add(ExtensionOption.unavailable(added, quote, newExpiresAt,

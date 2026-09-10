@@ -227,24 +227,33 @@ export const enUS: Record<TranslationKey, string> = {
   'admin.spaces.error.codeTaken': 'A bay in this municipality already uses that code.',
   'admin.spaces.error.codeInvalid': "That code doesn't match this municipality's format ({{example}}).",
 
+  'admin.tariffs.grid.title': 'Price per duration',
+  'admin.tariffs.grid.description':
+    'What a citizen is charged today for each duration in each sector. Tap a cell to give that duration a price of its own; without one, the zone\u2019s base tariff prices it.',
+  'admin.tariffs.fromBase': 'from the base',
+  'admin.tariffs.base.label': 'Base tariff',
+  'admin.tariffs.base.value': 'Base: {{amount}} per {{minutes}} min',
+  'admin.tariffs.base.missing': 'No base tariff — set one',
+  'admin.tariffs.noDurations': 'This municipality sells no duration yet. They are set on the Parking policy screen.',
+  'admin.tariffs.column.what': 'What',
+  'admin.tariffs.action.clear': 'Remove its own price',
+  'admin.tariffs.set.baseTitle': 'Base tariff for {{zone}}',
+  'admin.tariffs.set.rungTitle': '{{duration}} in {{zone}}',
+  'admin.tariffs.set.baseBody':
+    'The zone\u2019s foundation: it charges per started block and prices every duration without one of its own, including a citizen\u2019s saved minutes.',
+  'admin.tariffs.set.rungBody':
+    'This amount IS the price of that duration, never multiplied. It replaces what the base would charge.',
+  'admin.tariffs.set.inheriting': 'Today the base prices that duration: {{price}}.',
+  'admin.tariffs.saved.base': 'Base tariff updated in {{zone}}.',
+  'admin.tariffs.saved.rung': '{{duration}} in {{zone}} now has its own price.',
+  'admin.tariffs.cleared': '{{duration}} in {{zone}} goes back to the base price.',
   'admin.tariffs.title': 'Tariffs',
   'admin.tariffs.description':
-    'What each zone costs. Charged per started block, so the amount and the minutes are the price together.',
+    'What each duration costs in each zone. Any of them can have its own price; the ones that do not are priced by the zone\u2019s base tariff, per started block.',
   'admin.tariffs.unpriced':
     'These zones have no tariff in force, so nobody can park in them: {{zones}}. A citizen who tries has the stay refused.',
-  'admin.tariffs.zones.title': 'Price of each zone',
-  'admin.tariffs.zones.description': 'What a citizen is charged in each sector today.',
   'admin.tariffs.noZones': 'This municipality has no zones yet.',
-  'admin.tariffs.noRate': 'No tariff',
-  'admin.tariffs.since': 'Since {{date}}',
-  'admin.tariffs.action.set': 'Set tariff',
-  'admin.tariffs.action.change': 'Change tariff',
-  'admin.tariffs.set.title': 'Tariff for {{zone}}',
-  'admin.tariffs.set.description':
-    'Closes the window that is open and opens a new one from now on. The earlier ones stay: they are what priced what was already paid.',
-  'admin.tariffs.set.replacing': 'This zone charges {{price}} today. That stops applying the moment you save.',
   'admin.tariffs.set.submit': 'Set tariff',
-  'admin.tariffs.saved': 'Tariff updated in {{zone}}.',
   'admin.tariffs.history.title': 'Earlier prices',
   'admin.tariffs.history.description':
     'The windows already closed. They are never edited: they are what priced the stays paid while they were in force.',
@@ -254,7 +263,6 @@ export const enUS: Record<TranslationKey, string> = {
   'admin.tariffs.field.minutes': 'Minutes',
   'admin.tariffs.field.minutesHint': 'The block that amount covers.',
   'admin.tariffs.column.zone': 'Zone',
-  'admin.tariffs.column.current': 'Price in force',
   'admin.tariffs.column.price': 'Price',
   'admin.tariffs.column.from': 'From',
   'admin.tariffs.column.to': 'To',

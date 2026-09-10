@@ -4,10 +4,11 @@ import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 /**
- * Tarifas (CONTRACT.md v0.21). The screen is the list of zones, and the thing it has to say out loud
- * is which of them have no price — a zone without an open rate window is one `start` refuses
- * (`PARKING_RATE_NOT_FOUND` on the wire), so a citizen standing there cannot park and nobody finds
- * out until they complain. The fixture leaves La Sabana unpriced for exactly that reason.
+ * Tarifas (CONTRACT.md v0.24): un precio propio por duración, sobre una base lineal.
+ *
+ * Lo que hay que ver es que la escalera no sea lineal —45 minutos cuesta menos que tres bloques de
+ * 15— porque eso es exactamente lo que la tarifa por bloque no podía expresar, y una escalera lineal
+ * en el fixture dejaría pasar sin ruido una regresión en la resolución por duración.
  */
 const here = path.dirname(fileURLToPath(import.meta.url));
 const indexUrl = 'file://' + path.join(here, 'dist-preview', 'index.html');
@@ -27,61 +28,52 @@ await page.fill('input[type="password"]', 'Password123!');
 await page.click('button[type="submit"]');
 await page.waitForTimeout(1200);
 const pick = page.locator('text=Municipalidad de San José').first();
-if (await pick.count()) {
-  await pick.click();
-  await page.waitForTimeout(1000);
-}
+if (await pick.count()) { await pick.click(); await page.waitForTimeout(1000); }
 
 await page.getByRole('link', { name: 'Tarifas' }).first().click();
-await page.waitForTimeout(1000);
-await page.screenshot({ path: `${outDir}/01-zones.png`, fullPage: true });
+await page.waitForTimeout(1100);
+await page.screenshot({ path: `${outDir}/01-grid.png`, fullPage: true });
 const initial = await page.locator('body').innerText();
-const zoneRows = await page.locator('tbody tr').allInnerTexts();
+const gridRows = await page.locator('tbody').first().locator('tr').allInnerTexts();
 
-// Poner tarifa en la zona que no tiene: la acción vive en la fila de esa zona.
-const setButton = page.locator('tbody tr', { hasText: 'SJ-SABANA' }).locator('button:has-text("Poner tarifa")');
-await setButton.click();
-await page.waitForTimeout(600);
-await page.screenshot({ path: `${outDir}/02-dialog-new.png`, fullPage: true });
-const dialogNew = await page.locator('.lx-modal').innerText();
 const submit = () => page.locator('.lx-dialog-actions button').last();
-const blockedEmpty = await submit().isDisabled();
+const centro = page.locator('tbody tr', { hasText: 'SJ-CENTRO' }).first();
 
+// Una celda heredada de la base: 1 hora en SJ-CENTRO no tiene peldaño.
+await centro.locator('.lx-linklike', { hasText: 'de la base' }).first().click();
+await page.waitForTimeout(600);
+await page.screenshot({ path: `${outDir}/02-inherited.png`, fullPage: true });
+const inheritedDialog = await page.locator('.lx-modal').innerText();
 await page.locator('.lx-modal input[type="number"]').first().fill('500');
-await page.waitForTimeout(200);
 await submit().click();
 await page.waitForTimeout(1100);
 await page.screenshot({ path: `${outDir}/03-priced.png`, fullPage: true });
-const afterSet = await page.locator('body').innerText();
+const afterPrice = await page.locator('body').innerText();
 
-// Cambiar una que ya tiene: el diálogo dice qué se va a reemplazar.
-await page.locator('tbody tr', { hasText: 'SJ-CENTRO' }).locator('button:has-text("Cambiar tarifa")').click();
+// Quitarle el precio propio a esa misma duración: vuelve a la base.
+await centro.locator('.lx-linklike', { hasText: '₡500' }).first().click();
 await page.waitForTimeout(600);
-await page.screenshot({ path: `${outDir}/04-dialog-change.png`, fullPage: true });
-const dialogChange = await page.locator('.lx-modal').innerText();
-const prefilledMinutes = await page.locator('.lx-modal input[type="number"]').nth(1).inputValue();
-await page.locator('.lx-modal input[type="number"]').first().fill('700');
-const changeLabel = await submit().innerText();
-await submit().click();
+const ownDialog = await page.locator('.lx-modal').innerText();
+const clearButton = page.locator('.lx-dialog-actions button').first();
+const clearLabel = await clearButton.innerText();
+await clearButton.click();
 await page.waitForTimeout(1100);
-await page.screenshot({ path: `${outDir}/05-changed.png`, fullPage: true });
-const historyRows = await page.locator('tbody').last().locator('tr').allInnerTexts();
+await page.screenshot({ path: `${outDir}/04-cleared.png`, fullPage: true });
+const afterClear = await page.locator('body').innerText();
 
-console.log('\n== tarifas ==');
-console.log('lista las tres zonas de la municipalidad:', /SJ-CENTRO/.test(initial) && /SJ-ESCALANTE/.test(initial) && /SJ-SABANA/.test(initial));
-console.log('nombra las zonas sin tarifa arriba:', /no tienen tarifa vigente/.test(initial));
-console.log('y dice qué pasa si se deja así:', /se le rechaza la estadía/.test(initial));
-console.log('zonas:', zoneRows.map((r) => r.replace(/\n/g, ' | ')));
-console.log('el bloque viaja con el precio (30 min vs 60 min):', /por 30 min/.test(initial) && /por 60 min/.test(initial));
-console.log('el diálogo de una zona nueva no habla de reemplazo:', !/deja de regir/.test(dialogNew));
-console.log('bloqueado sin monto:', blockedEmpty);
-console.log('tras ponerla, la zona deja de estar sin tarifa:', !/SJ-SABANA[\s\S]{0,80}Sin tarifa/.test(afterSet));
-console.log('el aviso desaparece cuando todas tienen precio:', !/no tienen tarifa vigente/.test(afterSet));
-console.log('cambiar una existente dice qué se reemplaza:', /deja de regir/.test(dialogChange));
-console.log('y trae el bloque de esa zona ya puesto:', prefilledMinutes);
-console.log('el botón del diálogo dice lo mismo que el de la fila:', changeLabel);
-console.log('el aviso ya no trae el código de error crudo:', !/PARKING_RATE_NOT_FOUND/.test(initial));
-console.log('la ventana anterior queda en el historial:', historyRows.map((r) => r.replace(/\n/g, ' | ')));
+console.log('\n== tarifas: escalera por duración ==');
+// Los encabezados van en versalitas por CSS y innerText devuelve el texto ya transformado.
+console.log('la grilla trae una columna por duración vendida:', /15 minutos/i.test(initial) && /45 minutos/i.test(initial) && /2 horas/i.test(initial));
+console.log('filas:', gridRows.map((r) => r.replace(/\n/g, ' | ')));
+console.log('la escalera NO es lineal (45 min < 3 × 15 min):', /₡400/.test(initial) && /₡150/.test(initial));
+console.log('marca las celdas que hereda de la base:', /de la base/.test(initial));
+console.log('el diálogo de una heredada dice cuánto cobra hoy la base:', /la cobra la base/.test(inheritedDialog));
+console.log('y explica que el monto ES el precio, sin multiplicar:', /sin multiplicar/.test(inheritedDialog));
+console.log('tras ponerle precio propio deja de decir «de la base» en esa celda:', afterPrice.split('SJ-CENTRO')[1]?.indexOf('de la base') !== 0);
+console.log('el diálogo de una propia ofrece quitarla:', /Quitar precio propio/.test(ownDialog), '·', clearLabel);
+console.log('tras quitarla vuelve a heredar:', /de la base/.test(afterClear));
+console.log('la base se muestra bajo la zona:', /Base: ₡/.test(initial));
+console.log('el historial distingue base de duración:', /Tarifa base/.test(initial));
 if (errors.length) console.log('ERRORS:', errors);
 
 await page.close();

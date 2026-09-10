@@ -239,24 +239,33 @@ export const esCR = {
   'admin.spaces.error.codeTaken': 'Ya hay un espacio con ese código en esta municipalidad.',
   'admin.spaces.error.codeInvalid': 'Ese código no tiene el formato de esta municipalidad ({{example}}).',
 
+  'admin.tariffs.grid.title': 'Precio por duración',
+  'admin.tariffs.grid.description':
+    'Lo que se le cobra hoy a un ciudadano por cada duración en cada sector. Toque una celda para ponerle un precio propio a esa duración; sin precio propio la cobra la tarifa base de la zona.',
+  'admin.tariffs.fromBase': 'de la base',
+  'admin.tariffs.base.label': 'Tarifa base',
+  'admin.tariffs.base.value': 'Base: {{amount}} por {{minutes}} min',
+  'admin.tariffs.base.missing': 'Sin tarifa base — ponerla',
+  'admin.tariffs.noDurations': 'Esta municipalidad todavía no vende ninguna duración. Se definen en Política de parqueo.',
+  'admin.tariffs.column.what': 'Qué',
+  'admin.tariffs.action.clear': 'Quitar precio propio',
+  'admin.tariffs.set.baseTitle': 'Tarifa base de {{zone}}',
+  'admin.tariffs.set.rungTitle': '{{duration}} en {{zone}}',
+  'admin.tariffs.set.baseBody':
+    'Es el cimiento de la zona: cobra por bloque empezado y le pone precio a toda duración que no tenga uno propio, incluidos los minutos guardados de un ciudadano.',
+  'admin.tariffs.set.rungBody':
+    'Este monto ES el precio de esa duración, sin multiplicar por nada. Reemplaza lo que la base cobraría.',
+  'admin.tariffs.set.inheriting': 'Hoy esa duración la cobra la base: {{price}}.',
+  'admin.tariffs.saved.base': 'Tarifa base actualizada en {{zone}}.',
+  'admin.tariffs.saved.rung': '{{duration}} en {{zone}} ya tiene precio propio.',
+  'admin.tariffs.cleared': '{{duration}} en {{zone}} vuelve a cobrarse con la base.',
   'admin.tariffs.title': 'Tarifas',
   'admin.tariffs.description':
-    'Cuánto cuesta cada zona. Se cobra por bloque empezado, así que el monto y los minutos son el precio juntos.',
+    'Cuánto cuesta cada duración en cada zona. Cada una puede tener su propio precio; la que no tenga la cobra la tarifa base de la zona, por bloque empezado.',
   'admin.tariffs.unpriced':
     'Estas zonas no tienen tarifa vigente, así que nadie puede parquear en ellas: {{zones}}. Al ciudadano que lo intente se le rechaza la estadía.',
-  'admin.tariffs.zones.title': 'Precio de cada zona',
-  'admin.tariffs.zones.description': 'Lo que se le cobra hoy a un ciudadano en cada sector.',
   'admin.tariffs.noZones': 'Esta municipalidad todavía no tiene zonas.',
-  'admin.tariffs.noRate': 'Sin tarifa',
-  'admin.tariffs.since': 'Desde el {{date}}',
-  'admin.tariffs.action.set': 'Poner tarifa',
-  'admin.tariffs.action.change': 'Cambiar tarifa',
-  'admin.tariffs.set.title': 'Tarifa de {{zone}}',
-  'admin.tariffs.set.description':
-    'Cierra la ventana abierta y abre una nueva desde ahora. Las anteriores quedan: son las que le pusieron precio a lo que ya se pagó.',
-  'admin.tariffs.set.replacing': 'Hoy esta zona cobra {{price}}. Eso deja de regir en cuanto guarde.',
   'admin.tariffs.set.submit': 'Poner tarifa',
-  'admin.tariffs.saved': 'Tarifa actualizada en {{zone}}.',
   'admin.tariffs.history.title': 'Precios anteriores',
   'admin.tariffs.history.description':
     'Las ventanas ya cerradas. No se editan: son las que le pusieron precio a las estadías que se pagaron mientras regían.',
@@ -266,7 +275,6 @@ export const esCR = {
   'admin.tariffs.field.minutes': 'Minutos',
   'admin.tariffs.field.minutesHint': 'El bloque que cubre ese monto.',
   'admin.tariffs.column.zone': 'Zona',
-  'admin.tariffs.column.current': 'Precio vigente',
   'admin.tariffs.column.price': 'Precio',
   'admin.tariffs.column.from': 'Desde',
   'admin.tariffs.column.to': 'Hasta',

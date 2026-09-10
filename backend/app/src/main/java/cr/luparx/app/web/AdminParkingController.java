@@ -23,6 +23,7 @@ import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -188,6 +189,48 @@ public class AdminParkingController {
                         "amountMinor", String.valueOf(rate.getAmountMinor()),
                         "minutes", String.valueOf(rate.getMinutes())));
         return mapper.toRate(rate);
+    }
+
+    /**
+     * Prices one exact duration of a zone — a rung of its ladder (CONTRACT.md v0.24).
+     *
+     * <p>{@code PUT} and not {@code POST}: setting the price of 45 minutes twice is one statement
+     * made twice, not two rungs. The window closes and a new one opens, so the history is kept
+     * without the caller having to know whether that duration was already priced.</p>
+     */
+    @PutMapping("/rates/rungs")
+    @PreAuthorize("hasAuthority('PERM_TENANT_MANAGE')")
+    @Operation(summary = "Set the price of one exact duration in a zone")
+    public ParkingDtos.ParkingRateResponse setRateRung(
+            @Valid @RequestBody ParkingDtos.SetRateRungRequest request) {
+        TenantId tenantId = TenantContextHolder.requireTenantId();
+        ParkingRate rate = catalogService.setRung(tenantId, request.zoneId(),
+                request.amountMinor().longValue(), request.minutes().intValue());
+        auditRecorder.record(AuditAction.PARKING_RATE_UPDATED, "parking-rate", rate.getId().toString(),
+                Map.of("zoneId", request.zoneId().toString(),
+                        "kind", "EXACT",
+                        "amountMinor", String.valueOf(rate.getAmountMinor()),
+                        "minutes", String.valueOf(rate.getMinutes())));
+        return mapper.toRate(rate);
+    }
+
+    /**
+     * Removes a rung: that duration goes back to being priced by the zone's base.
+     *
+     * <p>The window closes, the row stays. What a municipality charged last month has to remain
+     * readable, and a rung taken off the ladder is exactly as historical as one superseded by a new
+     * price.</p>
+     */
+    @DeleteMapping("/rates/rungs")
+    @PreAuthorize("hasAuthority('PERM_TENANT_MANAGE')")
+    @Operation(summary = "Remove the price of one exact duration; the base prices it again")
+    public ResponseEntity<Void> clearRateRung(@RequestParam UUID zoneId, @RequestParam int minutes) {
+        TenantId tenantId = TenantContextHolder.requireTenantId();
+        catalogService.clearRung(tenantId, zoneId, minutes);
+        auditRecorder.record(AuditAction.PARKING_RATE_UPDATED, "parking-rate", zoneId.toString(),
+                Map.of("zoneId", zoneId.toString(), "kind", "EXACT", "minutes", String.valueOf(minutes),
+                        "cleared", "true"));
+        return ResponseEntity.noContent().build();
     }
 
     // --- bays and their code format (CONTRACT.md v0.3) ---------------------------------------------

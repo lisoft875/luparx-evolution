@@ -4,6 +4,7 @@ import cr.luparx.app.web.dto.ParkingDtos;
 import cr.luparx.core.money.Money;
 import cr.luparx.parking.entity.ParkingPolicy;
 import cr.luparx.parking.entity.ParkingRate;
+import cr.luparx.parking.model.ZonePriceBook;
 import cr.luparx.parking.entity.ParkingSchedule;
 import cr.luparx.parking.entity.ParkingScheduleException;
 import cr.luparx.parking.entity.ParkingScheduleSlot;
@@ -107,17 +108,31 @@ public class ParkingMapper {
      * A zone as a citizen sees it, with the tariff in force. The rate is passed in rather than looked
      * up here so that a list of zones resolves its prices in one query instead of one per row.
      */
-    public ParkingDtos.CitizenParkingZoneResponse toCitizenZone(ParkingZone zone, ParkingRate rate,
-                                                                ParkingSpaceRange range) {
+    /**
+     * @param prices    the zone's prices in force, or null when it has none
+     * @param offered   the durations the municipality sells, priced one by one so the citizen's
+     *                  picker never multiplies anything (CONTRACT.md v0.24)
+     */
+    public ParkingDtos.CitizenParkingZoneResponse toCitizenZone(ParkingZone zone, ZonePriceBook prices,
+                                                                List<Integer> offered, ParkingSpaceRange range) {
         return new ParkingDtos.CitizenParkingZoneResponse(
                 zone.getId(),
                 zone.getCode(),
                 zone.getName(),
                 zone.getDescription(),
-                rate == null ? null : new ParkingDtos.ParkingRateSummary(toMoney(rate.getAmount()),
-                        rate.getMinutes()),
+                prices == null ? null : toRateSummary(prices, offered),
                 range == null ? null : new ParkingDtos.SpaceCodeRange(range.firstCode(), range.lastCode(),
                         range.count()));
+    }
+
+    private ParkingDtos.ParkingRateSummary toRateSummary(ZonePriceBook prices, List<Integer> offered) {
+        List<ParkingDtos.DurationPrice> durations = new ArrayList<>(offered.size());
+        for (Integer minutes : offered) {
+            durations.add(new ParkingDtos.DurationPrice(minutes.intValue(),
+                    toMoney(prices.priceOf(minutes.intValue()))));
+        }
+        return new ParkingDtos.ParkingRateSummary(toMoney(prices.base().getAmount()),
+                prices.base().getMinutes(), durations);
     }
 
     public ParkingDtos.QuoteResponse toQuote(ParkingQuote quote) {
@@ -345,6 +360,7 @@ public class ParkingMapper {
         return new ParkingDtos.ParkingRateResponse(
                 rate.getId(),
                 rate.getZoneId(),
+                rate.getKind().name(),
                 toMoney(rate.getAmount()),
                 rate.getMinutes(),
                 rate.getValidFrom(),

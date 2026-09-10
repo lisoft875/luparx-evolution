@@ -108,12 +108,21 @@ const mockAdminSpaces: { id: string; zoneId: string; code: string; status: 'AVAI
   { id: 'space-lup-0003', zoneId: 'zone-centro', code: 'LUP-0003', status: 'OUT_OF_SERVICE' },
 ];
 
-const mockAdminRates: { id: string; zoneId: string; amountMinor: number; currencyCode: string; minutes: number; validFrom: string; validTo: string | null }[] = [
-  { id: 'rate-1', zoneId: 'zone-centro', amountMinor: 55000, currencyCode: 'CRC', minutes: 60, validFrom: new Date(Date.now() - 90 * 864e5).toISOString(), validTo: null },
-  { id: 'rate-0', zoneId: 'zone-centro', amountMinor: 40000, currencyCode: 'CRC', minutes: 60, validFrom: new Date(Date.now() - 400 * 864e5).toISOString(), validTo: new Date(Date.now() - 90 * 864e5).toISOString() },
+const mockAdminRates: { id: string; zoneId: string; kind: 'BLOCK' | 'EXACT'; amountMinor: number; currencyCode: string; minutes: number; validFrom: string; validTo: string | null }[] = [
+  { id: 'rate-1', zoneId: 'zone-centro', kind: 'BLOCK', amountMinor: 55000, currencyCode: 'CRC', minutes: 60, validFrom: new Date(Date.now() - 90 * 864e5).toISOString(), validTo: null },
+  { id: 'rate-0', zoneId: 'zone-centro', kind: 'BLOCK', amountMinor: 40000, currencyCode: 'CRC', minutes: 60, validFrom: new Date(Date.now() - 400 * 864e5).toISOString(), validTo: new Date(Date.now() - 90 * 864e5).toISOString() },
   // Escalante is priced by the half hour, so the screen shows two zones that are NOT comparable by
   // amount alone — which is the whole reason the block travels with the price.
-  { id: 'rate-2', zoneId: 'zone-escalante', amountMinor: 40000, currencyCode: 'CRC', minutes: 30, validFrom: new Date(Date.now() - 30 * 864e5).toISOString(), validTo: null },
+  { id: 'rate-2', zoneId: 'zone-escalante', kind: 'BLOCK', amountMinor: 40000, currencyCode: 'CRC', minutes: 30, validFrom: new Date(Date.now() - 30 * 864e5).toISOString(), validTo: null },
+  // La escalera de SJ-CENTRO, DELIBERADAMENTE NO LINEAL: 45 minutos cuesta menos que tres bloques
+  // de 15, que es exactamente lo que la tarifa lineal no puede expresar. Una escalera lineal en el
+  // fixture dejaría pasar sin ruido una regresión en la resolución por duración.
+  { id: 'rung-15', zoneId: 'zone-centro', kind: 'EXACT', amountMinor: 15000, currencyCode: 'CRC', minutes: 15, validFrom: new Date(Date.now() - 30 * 864e5).toISOString(), validTo: null },
+  { id: 'rung-30', zoneId: 'zone-centro', kind: 'EXACT', amountMinor: 30000, currencyCode: 'CRC', minutes: 30, validFrom: new Date(Date.now() - 30 * 864e5).toISOString(), validTo: null },
+  { id: 'rung-45', zoneId: 'zone-centro', kind: 'EXACT', amountMinor: 40000, currencyCode: 'CRC', minutes: 45, validFrom: new Date(Date.now() - 30 * 864e5).toISOString(), validTo: null },
+  { id: 'rung-120', zoneId: 'zone-centro', kind: 'EXACT', amountMinor: 90000, currencyCode: 'CRC', minutes: 120, validFrom: new Date(Date.now() - 30 * 864e5).toISOString(), validTo: null },
+  // 60 minutos NO tiene peldaño a propósito: lo cobra la base (₡550), y así la pantalla muestra las
+  // dos formas de precio en la misma zona.
   // `zone-sabana` has none, on purpose: see the note on mockSeededZones.
 ];
 
@@ -122,6 +131,7 @@ function toWireRate(rate: (typeof mockAdminRates)[number]): unknown {
   return {
     id: rate.id,
     zoneId: rate.zoneId,
+    kind: rate.kind,
     amount: { amountMinor: rate.amountMinor, currencyCode: rate.currencyCode },
     minutes: rate.minutes,
     validFrom: rate.validFrom,
@@ -687,17 +697,24 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
         // is friendlier than production does not verify anything.
         return json(mockAdminRates.filter((r) => !zoneFilter || r.zoneId === zoneFilter).map(toWireRate));
       }
+      // PUT /rates sets the base; PUT /rates/rungs prices one exact duration.
+      const rung = segments[5] === 'rungs';
       if (method === 'PUT') {
         const payload = await readBody<{ zoneId: string; amountMinor: number; minutes: number }>(init);
         const now = new Date().toISOString();
         // Closing the open window and opening a new one is the whole behaviour worth mocking: it is
-        // what makes the history on screen real rather than decorative.
+        // what makes the history on screen real rather than decorative. A rung supersedes only the
+        // rung for the same duration; the base supersedes the base.
         for (const rate of mockAdminRates) {
-          if (rate.zoneId === payload.zoneId && rate.validTo === null) rate.validTo = now;
+          if (rate.zoneId !== payload.zoneId || rate.validTo !== null) continue;
+          if (rung ? rate.kind === 'EXACT' && rate.minutes === payload.minutes : rate.kind === 'BLOCK') {
+            rate.validTo = now;
+          }
         }
         const rate = {
           id: `rate-${crypto.randomUUID()}`,
           zoneId: payload.zoneId,
+          kind: (rung ? 'EXACT' : 'BLOCK') as 'BLOCK' | 'EXACT',
           amountMinor: payload.amountMinor,
           currencyCode: 'CRC',
           minutes: payload.minutes,
@@ -706,6 +723,20 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
         };
         mockAdminRates.unshift(rate);
         return json(toWireRate(rate));
+      }
+      if (method === 'DELETE' && rung) {
+        const zoneId = url.searchParams.get('zoneId') ?? '';
+        const minutes = Number(url.searchParams.get('minutes') ?? 0);
+        const now = new Date().toISOString();
+        let closed = false;
+        for (const rate of mockAdminRates) {
+          if (rate.zoneId === zoneId && rate.validTo === null && rate.kind === 'EXACT' && rate.minutes === minutes) {
+            rate.validTo = now;
+            closed = true;
+          }
+        }
+        if (!closed) return problem(404, 'PARKING_RATE_NOT_FOUND', 'That duration has no price of its own');
+        return noContent();
       }
     }
 

@@ -194,8 +194,20 @@ public final class ParkingDtos {
     public record SpaceCodeRange(String first, String last, long count) {
     }
 
-    /** The price of a zone as a citizen reads it: an exact amount per block of minutes. */
-    public record ParkingRateSummary(MoneyDto amount, int minutes) {
+    /**
+     * The price of a zone as a citizen reads it: the base, plus the price of every duration the
+     * municipality sells (CONTRACT.md v0.24).
+     *
+     * <p>{@code durations} is what the picker renders. It is priced here, by the server, for the
+     * same reason the reference platform states in its own DTO: a client that computed "30 minutes
+     * is twice 15" would be wrong in every municipality with a non-linear ladder, and those are most
+     * of them.</p>
+     */
+    public record ParkingRateSummary(MoneyDto amount, int minutes, List<DurationPrice> durations) {
+    }
+
+    /** One entry of the picker: a duration the municipality sells and what it costs. */
+    public record DurationPrice(int minutes, MoneyDto amount) {
     }
 
     // --- sessions --------------------------------------------------------------------------------
@@ -420,10 +432,19 @@ public final class ParkingDtos {
     public record ParkingRateResponse(
             UUID id,
             UUID zoneId,
+            /** {@code BLOCK} = the zone's linear base; {@code EXACT} = one rung of its ladder. */
+            String kind,
             MoneyDto amount,
             int minutes,
             Instant validFrom,
             Instant validTo) {
+    }
+
+    /** {@code PUT /admin/parking/rates/rungs} — prices one exact duration (CONTRACT.md v0.24). */
+    public record SetRateRungRequest(
+            @NotNull UUID zoneId,
+            @NotNull @Min(0) Long amountMinor,
+            @NotNull @Min(1) Integer minutes) {
     }
 
     /**

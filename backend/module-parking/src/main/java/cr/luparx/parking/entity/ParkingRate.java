@@ -1,7 +1,10 @@
 package cr.luparx.parking.entity;
 
 import cr.luparx.core.money.Money;
+import cr.luparx.parking.model.RateKind;
 import jakarta.persistence.Column;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
@@ -37,7 +40,18 @@ public class ParkingRate {
     @Column(name = "currency_code", nullable = false, length = 3)
     private String currencyCode;
 
-    /** Length of the charged block in minutes; strictly positive (CHECK in V5_0). */
+    /**
+     * What this row means (CONTRACT.md v0.24): the zone's linear base, or the price of one exact
+     * duration. Stored as a string so the column reads for itself in a database console.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "kind", nullable = false, length = 8)
+    private RateKind kind;
+
+    /**
+     * For {@link RateKind#BLOCK} the length of the charged block; for {@link RateKind#EXACT} the
+     * exact duration this price buys. Strictly positive either way (CHECK in V5_0).
+     */
     @Column(name = "minutes", nullable = false)
     private int minutes;
 
@@ -59,11 +73,12 @@ public class ParkingRate {
         // for JPA
     }
 
-    public ParkingRate(UUID id, UUID tenantId, UUID zoneId, Money amount, int minutes, Instant validFrom,
-                       Instant validTo, Instant createdAt) {
+    public ParkingRate(UUID id, UUID tenantId, UUID zoneId, RateKind kind, Money amount, int minutes,
+                       Instant validFrom, Instant validTo, Instant createdAt) {
         this.id = id;
         this.tenantId = tenantId;
         this.zoneId = zoneId;
+        this.kind = kind == null ? RateKind.BLOCK : kind;
         this.amountMinor = amount.minorUnits();
         this.currencyCode = amount.currencyCode();
         this.minutes = minutes;
@@ -94,6 +109,15 @@ public class ParkingRate {
 
     public Money getAmount() {
         return Money.ofMinor(amountMinor, currencyCode);
+    }
+
+    public RateKind getKind() {
+        return kind;
+    }
+
+    /** A rung of the ladder: its amount is a price, not a rate to multiply. */
+    public boolean isExact() {
+        return kind == RateKind.EXACT;
     }
 
     public int getMinutes() {

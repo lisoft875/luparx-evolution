@@ -54,6 +54,7 @@ import type {
   ParkingRate,
   ParkingSpace,
   SetParkingRateRequest,
+  SetRateRungRequest,
   UpdateParkingPolicyRequest,
   UpdateParkingSpaceRequest,
   UpdateParkingZoneRequest,
@@ -509,6 +510,14 @@ export class ApiClient {
       toParkingRate(
         await this.http.request<WireParkingRate>('PUT', '/api/v1/admin/parking/rates', { body: payload }),
       ),
+    /** Prices one exact duration. Setting it twice supersedes it; the earlier window is kept. */
+    setRateRung: async (payload: SetRateRungRequest): Promise<ParkingRate> =>
+      toParkingRate(
+        await this.http.request<WireParkingRate>('PUT', '/api/v1/admin/parking/rates/rungs', { body: payload }),
+      ),
+    /** Removes a rung: that duration goes back to being priced by the zone's base. */
+    clearRateRung: (zoneId: string, minutes: number): Promise<void> =>
+      this.http.request('DELETE', '/api/v1/admin/parking/rates/rungs', { query: { zoneId, minutes } }),
   };
 
   // ---- Platform back-office (CONTRACT.md §4 `/api/v1/platform/**`) ---------------------------

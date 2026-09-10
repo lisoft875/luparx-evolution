@@ -3,60 +3,75 @@ import { useMemo, useState } from 'react';
 import type { AdminParkingZone, ParkingRate } from '@luparx/api-client';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { RequirePermission, useAuth } from '@luparx/auth';
+import { formatDurationLabel } from '@luparx/features';
 import { useTranslation, formatCurrencyMinor, formatDateTime, majorToMinor } from '@luparx/i18n';
 import { Alert, Badge, Button, Card, FormField, Input, Modal, SectionHeader, Table } from '@luparx/ui';
 import { AdminShell } from '../components/AdminShell';
+import { useParkingPolicy } from '../lib/queries';
+
+/** What is being priced: a zone's linear base, or one duration of its ladder. */
+type Target = { zone: AdminParkingZone; minutes: number | null };
 
 /**
- * What each sector costs (CONTRACT.md v0.16, rebuilt in v0.21).
+ * What each sector costs (CONTRACT.md v0.16, rebuilt in v0.21, ladder added in v0.24).
  *
- * <h2>The screen is the list of zones, not a form</h2>
+ * <h2>A price per duration, because that is how municipalities charge</h2>
  *
- * <p>It used to be a loose row of fields above a table of rate windows. That put the least useful
- * thing first — an empty form — and made the most useful question unanswerable: <b>which zones have
- * no price?</b> A zone without an open rate window is not a cosmetic gap. {@code start} calls
- * {@code requireRate} and answers {@code PARKING_RATE_NOT_FOUND}, so a citizen standing in that
- * sector simply cannot park, and nobody in the municipality finds out until they complain.</p>
+ * <p>A single amount per block can only express a straight line: half an hour always costs half of
+ * an hour. Real tariffs are not linear — 45 minutes at ₡400 next to an hour at ₡500 is ordinary —
+ * and until v0.24 that was inexpressible.</p>
  *
- * <p>So the zones are the table, each with the price in force beside it, and the ones without a
- * price are named at the top in a warning. Setting a tariff is an action <em>on a zone</em>, which
- * is what it always was — the old form asked you to pick the zone again from a dropdown that had no
- * idea which ones needed one.</p>
+ * <p>So the screen is a grid: a row per zone, a column per duration the municipality sells, and a
+ * cell that either holds a price of its own or shows what the base charges for that length. Setting
+ * a cell prices exactly that duration; clearing it hands the duration back to the base. There are no
+ * priorities and no rules to order, because there is nothing to order: a price stated for 45 minutes
+ * is more specific than a formula that can also produce a number for 45 minutes.</p>
  *
- * <h2>Nothing is edited</h2>
+ * <h2>The columns come from the policy, not from here</h2>
  *
- * <p>A tariff is an amount per block of minutes, charged per <em>started</em> block, so the two
- * numbers are the price together and neither means anything alone. Setting one closes the window
- * that is open and opens a new one from now on; the closed windows stay, in their own table, because
- * they are what priced the stays that were paid while they were in force. An administrator who could
- * edit a past window could change what a citizen was charged last month, and the receipt would stop
- * matching the ledger.</p>
+ * <p>Which durations exist is a decision the municipality already made once, on the parking policy
+ * screen. Letting this screen invent its own would be a second place to answer the same question —
+ * and a price for a duration nobody can buy is money nobody will ever be charged.</p>
  */
 export function TariffsPage(): React.JSX.Element {
-  const { t, locale } = useTranslation();
+  const { t, tPlural, locale } = useTranslation();
   const { apiClient } = useAuth();
   const queryClient = useQueryClient();
 
-  const [editing, setEditing] = useState<AdminParkingZone | null>(null);
+  const [editing, setEditing] = useState<Target | null>(null);
   const [amount, setAmount] = useState('');
-  const [minutes, setMinutes] = useState('60');
+  const [baseMinutes, setBaseMinutes] = useState('60');
   const [error, setError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
 
   const zonesQuery = useQuery({ queryKey: ['admin', 'zones'], queryFn: () => apiClient.adminParking.zones() });
-  // Every rate of the municipality in one read, unfiltered. The old screen filtered this by the zone
-  // selected in the form, so choosing a zone to price silently changed the history underneath — and
-  // there was no way to see the whole picture, which is the one thing this screen is for.
   const ratesQuery = useQuery({ queryKey: ['admin', 'rates'], queryFn: () => apiClient.adminParking.rates() });
+  const policyQuery = useParkingPolicy();
 
   const zones = useMemo(() => zonesQuery.data ?? [], [zonesQuery.data]);
   const rates = useMemo(() => ratesQuery.data ?? [], [ratesQuery.data]);
+  /** The durations on sale — the columns of the grid. */
+  const durations = useMemo(
+    () => [...(policyQuery.data?.sessionIncrementsMinutes ?? [])].sort((a, b) => a - b),
+    [policyQuery.data],
+  );
 
-  /** The window with no closing date: the price a citizen is quoted today. At most one per zone. */
-  const currentByZone = useMemo(() => {
+  const format = (minutes: number): string => formatDurationLabel(minutes, tPlural);
+
+  /** The base of each zone: the window with no closing date. At most one per zone. */
+  const baseByZone = useMemo(() => {
     const map = new Map<string, ParkingRate>();
     for (const rate of rates) {
-      if (rate.validTo === null) map.set(rate.zoneId, rate);
+      if (rate.validTo === null && rate.kind === 'BLOCK') map.set(rate.zoneId, rate);
+    }
+    return map;
+  }, [rates]);
+
+  /** The rungs in force, keyed `zoneId:minutes`. */
+  const rungs = useMemo(() => {
+    const map = new Map<string, ParkingRate>();
+    for (const rate of rates) {
+      if (rate.validTo === null && rate.kind === 'EXACT') map.set(`${rate.zoneId}:${rate.minutes}`, rate);
     }
     return map;
   }, [rates]);
@@ -66,41 +81,46 @@ export function TariffsPage(): React.JSX.Element {
     [rates],
   );
 
-  /**
-   * The municipality's own currency, read from a rate it already has. The server sets it from the
-   * tenant and ignores anything the client sends, so this is only ever used to render and to convert
-   * what was typed — never to declare what a zone is priced in. A municipality with no rate at all
-   * has not told us yet, and the form says "Monto" without inventing one: hardcoding a fallback is
-   * how a platform meant for several countries ends up quoting colones in Panama.
-   */
   const currencyCode = rates[0]?.currencyCode ?? null;
 
   /**
-   * Active zones a citizen cannot park in. Inactive ones are excluded on purpose: a zone that is no
-   * longer operated needs no price, and listing it here would train people to ignore this warning.
+   * What a zone charges for a duration today — the rung if it has one, otherwise the base by started
+   * block. The same rule the server applies, and the reason it is repeated here at all is that the
+   * grid has to show the inherited number in the cells nobody has priced.
    */
+  function priceOf(zone: AdminParkingZone, minutes: number): { amountMinor: number; own: boolean } | null {
+    const rung = rungs.get(`${zone.id}:${minutes}`);
+    if (rung) return { amountMinor: rung.amountMinor, own: true };
+    const base = baseByZone.get(zone.id);
+    if (!base) return null;
+    const blocks = Math.ceil(minutes / base.minutes);
+    return { amountMinor: base.amountMinor * blocks, own: false };
+  }
+
   const unpriced = useMemo(
-    () => zones.filter((zone) => zone.active && !currentByZone.has(zone.id)),
-    [zones, currentByZone],
+    () => zones.filter((zone) => zone.active && !baseByZone.has(zone.id)),
+    [zones, baseByZone],
   );
 
-  const setRateMutation = useMutation({
-    mutationFn: (zone: AdminParkingZone) =>
-      apiClient.adminParking.setRate({
-        zoneId: zone.id,
-        // The field asks for colones and the wire carries minor units. Converting here rather than
-        // sending the number as typed is not a detail: for CRC the two differ by a hundred, so a
-        // tariff of ₡550 sent raw would price the whole municipality at ₡5.50 and nobody would
-        // notice until the month closed. `majorToMinor` reads the currency's own exponent, so this
-        // stays right in a country whose currency has none.
-        amountMinor: majorToMinor(Number(amount), currencyCode ?? 'CRC'),
-        minutes: Number(minutes),
-      }),
-    onSuccess: (_result, zone) => {
+  const saveMutation = useMutation({
+    mutationFn: (target: Target) => {
+      const amountMinor = majorToMinor(Number(amount), currencyCode ?? 'CRC');
+      return target.minutes === null
+        ? apiClient.adminParking.setRate({ zoneId: target.zone.id, amountMinor, minutes: Number(baseMinutes) })
+        : apiClient.adminParking.setRateRung({ zoneId: target.zone.id, amountMinor, minutes: target.minutes });
+    },
+    onSuccess: (_result, target) => {
       setError(null);
       setEditing(null);
       setAmount('');
-      setFeedback(t('admin.tariffs.saved', { zone: `${zone.code} — ${zone.name}` }));
+      setFeedback(
+        target.minutes === null
+          ? t('admin.tariffs.saved.base', { zone: `${target.zone.code} — ${target.zone.name}` })
+          : t('admin.tariffs.saved.rung', {
+              zone: `${target.zone.code} — ${target.zone.name}`,
+              duration: format(target.minutes),
+            }),
+      );
       void queryClient.invalidateQueries({ queryKey: ['admin', 'rates'] });
     },
     onError: () => {
@@ -109,17 +129,42 @@ export function TariffsPage(): React.JSX.Element {
     },
   });
 
-  const canSubmit = Number(amount) > 0 && Number(minutes) > 0;
+  const clearMutation = useMutation({
+    mutationFn: (target: Target & { minutes: number }) =>
+      apiClient.adminParking.clearRateRung(target.zone.id, target.minutes),
+    onSuccess: (_result, target) => {
+      setError(null);
+      setEditing(null);
+      setFeedback(
+        t('admin.tariffs.cleared', {
+          zone: `${target.zone.code} — ${target.zone.name}`,
+          duration: format(target.minutes),
+        }),
+      );
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'rates'] });
+    },
+    onError: () => {
+      setFeedback(null);
+      setError(t('admin.zones.error.generic'));
+    },
+  });
 
-  function openFor(zone: AdminParkingZone): void {
-    const current = currentByZone.get(zone.id);
+  function openFor(zone: AdminParkingZone, minutes: number | null): void {
     setError(null);
-    setAmount('');
-    // Prefilled with the block the zone already sells, so changing only the amount — which is what
-    // an increase actually is — does not make somebody retype the part that is not changing.
-    setMinutes(String(current?.minutes ?? 60));
-    setEditing(zone);
+    const base = baseByZone.get(zone.id);
+    if (minutes === null) {
+      // Editing the base: the amount starts empty (it is being replaced), the block does not.
+      setAmount('');
+      setBaseMinutes(String(base?.minutes ?? 60));
+    } else {
+      setAmount('');
+    }
+    setEditing({ zone, minutes });
   }
+
+  const loading = zonesQuery.isLoading || ratesQuery.isLoading || policyQuery.isLoading;
+  const editingRung = editing !== null && editing.minutes !== null;
+  const editingHasRung = editingRung && rungs.has(`${editing.zone.id}:${editing.minutes}`);
 
   return (
     <AdminShell>
@@ -129,18 +174,16 @@ export function TariffsPage(): React.JSX.Element {
       {feedback ? <Alert tone="success">{feedback}</Alert> : null}
       {error ? <Alert tone="danger">{error}</Alert> : null}
 
-      {/* Named before the table, because a zone with no price is a zone nobody can park in and the
-          municipality has no other way to find out. */}
-      {!ratesQuery.isLoading && !zonesQuery.isLoading && unpriced.length > 0 ? (
+      {!loading && unpriced.length > 0 ? (
         <Alert tone="warning">
           {t('admin.tariffs.unpriced', { zones: unpriced.map((zone) => `${zone.code} — ${zone.name}`).join(', ') })}
         </Alert>
       ) : null}
 
       <Card>
-        <SectionHeader title={t('admin.tariffs.zones.title')} description={t('admin.tariffs.zones.description')} />
+        <SectionHeader title={t('admin.tariffs.grid.title')} description={t('admin.tariffs.grid.description')} />
         <Table
-          loading={zonesQuery.isLoading || ratesQuery.isLoading}
+          loading={loading}
           loadingLabel={t('common.loading')}
           emptyLabel={t('admin.tariffs.noZones')}
           rows={zones}
@@ -149,53 +192,60 @@ export function TariffsPage(): React.JSX.Element {
             {
               key: 'zone',
               header: t('admin.tariffs.column.zone'),
-              render: (zone) => (
-                <>
-                  <div>
-                    <strong>{zone.code}</strong> — {zone.name}
-                  </div>
-                  {!zone.active ? (
-                    <div className="lx-text-meta">{t('admin.zones.status.inactive')}</div>
-                  ) : null}
-                </>
-              ),
-            },
-            {
-              key: 'price',
-              header: t('admin.tariffs.column.current'),
               render: (zone) => {
-                const current = currentByZone.get(zone.id);
-                if (!current) {
-                  return <Badge tone={zone.active ? 'warning' : 'neutral'}>{t('admin.tariffs.noRate')}</Badge>;
-                }
+                const base = baseByZone.get(zone.id);
                 return (
                   <>
                     <div>
-                      {t('admin.tariffs.price', {
-                        amount: formatCurrencyMinor(current.amountMinor, current.currencyCode, locale),
-                        minutes: current.minutes,
-                      })}
+                      <strong>{zone.code}</strong> — {zone.name}
                     </div>
-                    <div className="lx-text-meta">
-                      {t('admin.tariffs.since', { date: formatDateTime(current.validFrom, locale) })}
-                    </div>
+                    {/* The base is shown under the zone, not as a column: it is the fallback the
+                        whole row inherits from, and reading it as one more duration would be
+                        reading it as a product it is not. */}
+                    <button
+                      type="button"
+                      className="lx-linklike"
+                      onClick={() => openFor(zone, null)}
+                      disabled={!zone.active}
+                    >
+                      {base
+                        ? t('admin.tariffs.base.value', {
+                            amount: formatCurrencyMinor(base.amountMinor, base.currencyCode, locale),
+                            minutes: base.minutes,
+                          })
+                        : t('admin.tariffs.base.missing')}
+                    </button>
                   </>
                 );
               },
             },
-            {
-              key: 'actions',
-              header: t('admin.staff.column.actions'),
-              render: (zone) => (
-                <RequirePermission permission="TENANT_MANAGE">
-                  <Button type="button" variant="secondary" onClick={() => openFor(zone)}>
-                    {t(currentByZone.has(zone.id) ? 'admin.tariffs.action.change' : 'admin.tariffs.action.set')}
-                  </Button>
-                </RequirePermission>
-              ),
-            },
+            ...durations.map((minutes) => ({
+              key: `d-${minutes}`,
+              header: format(minutes),
+              render: (zone: AdminParkingZone) => {
+                const price = priceOf(zone, minutes);
+                if (!price) return <span className="lx-text-meta">—</span>;
+                return (
+                  <button
+                    type="button"
+                    className="lx-linklike"
+                    onClick={() => openFor(zone, minutes)}
+                    // A cell is either a price this municipality set, or the number its base
+                    // produces. Both are shown; only the second is dimmed, because "inherited" is
+                    // information and a blank cell is not.
+                    style={price.own ? undefined : { opacity: 0.65 }}
+                  >
+                    {formatCurrencyMinor(price.amountMinor, currencyCode ?? 'CRC', locale)}
+                    {price.own ? null : <span className="lx-text-meta"> · {t('admin.tariffs.fromBase')}</span>}
+                  </button>
+                );
+              },
+            })),
           ]}
         />
+        {durations.length === 0 && !loading ? (
+          <Alert tone="info">{t('admin.tariffs.noDurations')}</Alert>
+        ) : null}
       </Card>
 
       <Card>
@@ -216,21 +266,27 @@ export function TariffsPage(): React.JSX.Element {
               },
             },
             {
+              key: 'what',
+              header: t('admin.tariffs.column.what'),
+              render: (rate) =>
+                rate.kind === 'EXACT' ? (
+                  <Badge tone="info">{format(rate.minutes)}</Badge>
+                ) : (
+                  <Badge tone="neutral">{t('admin.tariffs.base.label')}</Badge>
+                ),
+            },
+            {
               key: 'price',
               header: t('admin.tariffs.column.price'),
               render: (rate) =>
-                t('admin.tariffs.price', {
-                  amount: formatCurrencyMinor(rate.amountMinor, rate.currencyCode, locale),
-                  minutes: rate.minutes,
-                }),
+                rate.kind === 'EXACT'
+                  ? formatCurrencyMinor(rate.amountMinor, rate.currencyCode, locale)
+                  : t('admin.tariffs.price', {
+                      amount: formatCurrencyMinor(rate.amountMinor, rate.currencyCode, locale),
+                      minutes: rate.minutes,
+                    }),
             },
-            // Two labelled dates rather than two bare ones stacked: "11 jun 2026 / 5 ago 2025" in one
-            // cell leaves the reader guessing which end is which.
-            {
-              key: 'from',
-              header: t('admin.tariffs.column.from'),
-              render: (rate) => formatDateTime(rate.validFrom, locale),
-            },
+            { key: 'from', header: t('admin.tariffs.column.from'), render: (rate) => formatDateTime(rate.validFrom, locale) },
             {
               key: 'to',
               header: t('admin.tariffs.column.to'),
@@ -243,84 +299,110 @@ export function TariffsPage(): React.JSX.Element {
       <Modal
         open={editing !== null}
         onClose={() => setEditing(null)}
-        title={t('admin.tariffs.set.title', { zone: editing ? `${editing.code} — ${editing.name}` : '' })}
+        title={
+          editing === null
+            ? ''
+            : editing.minutes === null
+              ? t('admin.tariffs.set.baseTitle', { zone: `${editing.zone.code} — ${editing.zone.name}` })
+              : t('admin.tariffs.set.rungTitle', {
+                  duration: format(editing.minutes),
+                  zone: `${editing.zone.code} — ${editing.zone.name}`,
+                })
+        }
         closeLabel={t('common.close')}
       >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--lx-space-4)' }}>
-          <p className="lx-text-body" style={{ margin: 0 }}>
-            {t('admin.tariffs.set.description')}
-          </p>
-          {editing && currentByZone.has(editing.id) ? (
-            <Alert tone="info">
-              {t('admin.tariffs.set.replacing', {
-                price: t('admin.tariffs.price', {
-                  amount: formatCurrencyMinor(
-                    currentByZone.get(editing.id)!.amountMinor,
-                    currentByZone.get(editing.id)!.currencyCode,
+        <RequirePermission permission="TENANT_MANAGE">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--lx-space-4)' }}>
+            <p className="lx-text-body" style={{ margin: 0 }}>
+              {t(editing?.minutes === null ? 'admin.tariffs.set.baseBody' : 'admin.tariffs.set.rungBody')}
+            </p>
+            {editing !== null && editing.minutes !== null && !editingHasRung ? (
+              <Alert tone="info">
+                {t('admin.tariffs.set.inheriting', {
+                  price: formatCurrencyMinor(
+                    priceOf(editing.zone, editing.minutes)?.amountMinor ?? 0,
+                    currencyCode ?? 'CRC',
                     locale,
                   ),
-                  minutes: currentByZone.get(editing.id)!.minutes,
-                }),
-              })}
-            </Alert>
-          ) : null}
-          {/* One line, both fields: the amount and the block are the price together, and splitting
-              them across the dialog would invite reading either one as the whole thing. */}
-          <div style={{ display: 'flex', gap: 'var(--lx-space-3)' }}>
-            <div style={{ flex: 1 }}>
-              <FormField
-                label={
-                  currencyCode
-                    ? t('admin.tariffs.field.amount', { currency: currencyCode })
-                    : t('admin.tariffs.field.amountNoCurrency')
+                })}
+              </Alert>
+            ) : null}
+            <div style={{ display: 'flex', gap: 'var(--lx-space-3)' }}>
+              <div style={{ flex: 1 }}>
+                <FormField
+                  label={
+                    currencyCode
+                      ? t('admin.tariffs.field.amount', { currency: currencyCode })
+                      : t('admin.tariffs.field.amountNoCurrency')
+                  }
+                >
+                  {({ inputId }) => (
+                    <Input
+                      id={inputId}
+                      type="number"
+                      min={0}
+                      inputMode="numeric"
+                      autoFocus
+                      value={amount}
+                      onChange={(e) => setAmount(e.target.value)}
+                    />
+                  )}
+                </FormField>
+              </div>
+              {editing?.minutes === null ? (
+                <div style={{ flex: 1 }}>
+                  <FormField label={t('admin.tariffs.field.minutes')} hint={t('admin.tariffs.field.minutesHint')}>
+                    {({ inputId, describedBy }) => (
+                      <Input
+                        id={inputId}
+                        aria-describedby={describedBy}
+                        type="number"
+                        min={1}
+                        inputMode="numeric"
+                        value={baseMinutes}
+                        onChange={(e) => setBaseMinutes(e.target.value)}
+                      />
+                    )}
+                  </FormField>
+                </div>
+              ) : null}
+            </div>
+            <div className="lx-dialog-actions">
+              {/* Clearing is offered only where there is something to clear, and it is not a
+                  destructive act: the duration goes back to the base, which still prices it. */}
+              {editingHasRung ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  fullWidth
+                  loading={clearMutation.isPending}
+                  onClick={() =>
+                    editing &&
+                    editing.minutes !== null &&
+                    clearMutation.mutate({ zone: editing.zone, minutes: editing.minutes })
+                  }
+                >
+                  {t('admin.tariffs.action.clear')}
+                </Button>
+              ) : (
+                <Button type="button" variant="secondary" fullWidth onClick={() => setEditing(null)}>
+                  {t('common.cancel')}
+                </Button>
+              )}
+              <Button
+                type="button"
+                fullWidth
+                loading={saveMutation.isPending}
+                disabled={
+                  Number(amount) <= 0 || (editing?.minutes === null && Number(baseMinutes) <= 0)
                 }
+                onClick={() => editing && saveMutation.mutate(editing)}
               >
-                {({ inputId }) => (
-                  <Input
-                    id={inputId}
-                    type="number"
-                    min={0}
-                    inputMode="numeric"
-                    autoFocus
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                  />
-                )}
-              </FormField>
-            </div>
-            <div style={{ flex: 1 }}>
-              <FormField label={t('admin.tariffs.field.minutes')} hint={t('admin.tariffs.field.minutesHint')}>
-                {({ inputId, describedBy }) => (
-                  <Input
-                    id={inputId}
-                    aria-describedby={describedBy}
-                    type="number"
-                    min={1}
-                    inputMode="numeric"
-                    value={minutes}
-                    onChange={(e) => setMinutes(e.target.value)}
-                  />
-                )}
-              </FormField>
+                {t('admin.tariffs.set.submit')}
+              </Button>
             </div>
           </div>
-          <div className="lx-dialog-actions">
-            <Button type="button" variant="secondary" fullWidth onClick={() => setEditing(null)}>
-              {t('common.cancel')}
-            </Button>
-            <Button
-              type="button"
-              fullWidth
-              loading={setRateMutation.isPending}
-              disabled={!canSubmit}
-              onClick={() => editing && setRateMutation.mutate(editing)}
-            >
-              {/* The same words as the button that opened it: "Poner" and "Cambiar" are different
-                  acts to whoever is doing them, and the dialog should not rename what they pressed. */}
-              {t(editing && currentByZone.has(editing.id) ? 'admin.tariffs.action.change' : 'admin.tariffs.action.set')}
-            </Button>
-          </div>
-        </div>
+        </RequirePermission>
       </Modal>
     </AdminShell>
   );

@@ -655,6 +655,33 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.03em;
 }
+/* A control that reads as a value, not a button: a table cell you can click to change what it
+   says. A real <button> — so it is reachable by keyboard and announced as an action — wearing the
+   text's own styling, because a grid of thirty buttons reads as a toolbar and not as prices. */
+.lx-linklike {
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  border-bottom: 1px dashed var(--lx-border-strong);
+}
+.lx-linklike:hover:not(:disabled) {
+  color: var(--lx-primary-strong);
+}
+.lx-linklike:disabled {
+  cursor: not-allowed;
+  border-bottom-color: transparent;
+  opacity: 0.6;
+}
+.lx-linklike:focus-visible {
+  outline: 2px solid var(--lx-focus-ring);
+  outline-offset: 2px;
+}
+
 /* Prose inside a table. Cells are `nowrap` by default — right for dates, codes and amounts,
    which must never break — but a column of sentences on one unbreakable line is wider than any
    layout and pushes the columns after it off the right edge. This clamps to two lines and caps

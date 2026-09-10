@@ -13,6 +13,7 @@ import cr.luparx.geo.entity.AdministrativeDivision;
 import cr.luparx.geo.repository.AdministrativeDivisionRepository;
 import cr.luparx.parking.entity.ParkingPolicy;
 import cr.luparx.parking.entity.ParkingRate;
+import cr.luparx.parking.model.RateKind;
 import cr.luparx.parking.entity.ParkingScheduleSlot;
 import cr.luparx.parking.entity.ParkingSpaceFormat;
 import cr.luparx.parking.entity.ParkingZone;
@@ -352,8 +353,8 @@ public class DevParkingSeeder {
             ZoneSeed seed = municipality.zones().get(index);
             try {
                 Money amount = Money.ofMajor(BigDecimal.valueOf(seed.hourlyMajor()), tenant.getCurrencyCode());
-                rateRepository.save(new ParkingRate(Uuid7.generate(), tenant.getId(), zone.getId(), amount,
-                        RATE_MINUTES, now, null, now));
+                rateRepository.save(new ParkingRate(Uuid7.generate(), tenant.getId(), zone.getId(),
+                        RateKind.BLOCK, amount, RATE_MINUTES, now, null, now));
                 created++;
             } catch (RuntimeException exception) {
                 // A currency the JDK does not know, or one whose fraction digits the amount does not

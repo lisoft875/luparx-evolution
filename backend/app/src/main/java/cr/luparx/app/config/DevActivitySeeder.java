@@ -6,6 +6,7 @@ import cr.luparx.core.id.UserId;
 import cr.luparx.core.id.Uuid7;
 import cr.luparx.core.money.Money;
 import cr.luparx.parking.entity.ParkingRate;
+import cr.luparx.parking.model.ZonePriceBook;
 import cr.luparx.parking.entity.ParkingSpace;
 import cr.luparx.parking.entity.ParkingZone;
 import cr.luparx.parking.entity.Vehicle;
@@ -300,9 +301,9 @@ public class DevActivitySeeder {
         List<SessionPlan> plans = new ArrayList<>();
         for (int index = 0; index < PAST_SESSION_MINUTES.length; index++) {
             ParkingZone zone = zones.get(index % zones.size());
-            ParkingRate rate = rateInForce(tenant, zone, now);
+            ZonePriceBook prices = pricesInForce(tenant, zone, now);
             ParkingSpace space = bayOf(tenant, zone, index);
-            if (rate == null || space == null) {
+            if (prices == null || space == null) {
                 continue;
             }
             Vehicle vehicle = vehicles.get(index % vehicles.size());
@@ -313,19 +314,19 @@ public class DevActivitySeeder {
                     // The first stay was closed by the citizen; the second simply ran out.
                     index == 0 ? ParkingSessionStatus.FINISHED : ParkingSessionStatus.EXPIRED,
                     index == 0 ? expiresAt : null,
-                    priceOf(rate, minutes)));
+                    prices.priceOf(minutes).minorUnits()));
         }
         if (firstMunicipality) {
             ParkingZone zone = zones.get(0);
-            ParkingRate rate = rateInForce(tenant, zone, now);
+            ZonePriceBook prices = pricesInForce(tenant, zone, now);
             ParkingSpace space = bayOf(tenant, zone, PAST_SESSION_MINUTES.length);
             Vehicle vehicle = vehicles.get(0);
-            if (rate != null && space != null && !sessionRepository.existsByVehicleIdAndStatus(vehicle.getId(),
+            if (prices != null && space != null && !sessionRepository.existsByVehicleIdAndStatus(vehicle.getId(),
                     ParkingSessionStatus.ACTIVE)) {
                 Instant startedAt = now.minus(ACTIVE_SESSION_STARTED_MINUTES_AGO, ChronoUnit.MINUTES);
                 plans.add(new SessionPlan(zone, space, vehicle, startedAt,
                         startedAt.plus(ACTIVE_SESSION_MINUTES, ChronoUnit.MINUTES),
-                        ParkingSessionStatus.ACTIVE, null, priceOf(rate, ACTIVE_SESSION_MINUTES)));
+                        ParkingSessionStatus.ACTIVE, null, prices.priceOf(ACTIVE_SESSION_MINUTES).minorUnits()));
             }
         }
         return plans;
@@ -388,28 +389,38 @@ public class DevActivitySeeder {
 
     // --- helpers ---------------------------------------------------------------------------------
 
-    /** The tariff whose window is open right now, or null when the zone has none. */
-    private ParkingRate rateInForce(Tenant tenant, ParkingZone zone, Instant at) {
-        for (ParkingRate rate : rateRepository.findByTenantIdAndZoneIdAndValidFromLessThanEqualOrderByValidFromDesc(
-                tenant.getId(), zone.getId(), at)) {
-            if (rate.getValidTo() == null || rate.getValidTo().isAfter(at)) {
-                return rate;
-            }
-        }
-        return null;
-    }
-
-    /** One bay of the zone, picked by position so two seeded stays never land on the same one. */
+    /** The n-th bay of a zone by code, or null when the zone has fewer than that. */
     private ParkingSpace bayOf(Tenant tenant, ParkingZone zone, int position) {
         return spaceRepository.findByTenantIdAndZoneIdOrderByCodeAsc(tenant.getId(), zone.getId(),
                         PageRequest.of(position, 1))
                 .stream().findFirst().orElse(null);
     }
 
-    /** What the domain would have charged: the tariff, per STARTED block, rounding up. */
-    private static long priceOf(ParkingRate rate, int minutes) {
-        long blocks = ((long) minutes + rate.getMinutes() - 1L) / rate.getMinutes();
-        return rate.getAmountMinor() * blocks;
+    /**
+     * The zone's prices at that instant, resolved exactly as the domain resolves them.
+     *
+     * <p>This used to hand back one {@code ParkingRate} and multiply it by started blocks in a
+     * private helper — a second copy of the pricing rule living in a fixture. Since v0.24 there are
+     * two ways to price a stay, and a copy would not merely drift: the seeded history would show
+     * amounts the application never would have charged, which is the one thing a fixture must not
+     * do.</p>
+     */
+    private ZonePriceBook pricesInForce(Tenant tenant, ParkingZone zone, Instant at) {
+        List<ParkingRate> open = new ArrayList<>();
+        for (ParkingRate rate : rateRepository.findByTenantIdAndZoneIdAndValidFromLessThanEqualOrderByValidFromDesc(
+                tenant.getId(), zone.getId(), at)) {
+            if (rate.getValidTo() == null || rate.getValidTo().isAfter(at)) {
+                open.add(rate);
+            }
+        }
+        if (open.isEmpty()) {
+            return null;
+        }
+        try {
+            return ZonePriceBook.of(open);
+        } catch (IllegalArgumentException noBase) {
+            return null;
+        }
     }
 
     private static OffsetDateTime at(Instant instant) {

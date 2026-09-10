@@ -10,6 +10,8 @@ import cr.luparx.core.page.PageResponse;
 import cr.luparx.core.error.ConflictException;
 import cr.luparx.core.money.Money;
 import cr.luparx.parking.entity.ParkingRate;
+import cr.luparx.parking.model.RateKind;
+import cr.luparx.parking.model.ZonePriceBook;
 import cr.luparx.parking.entity.ParkingSpace;
 import cr.luparx.parking.entity.ParkingZone;
 import cr.luparx.parking.model.ParkingSpaceRange;
@@ -25,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -166,14 +169,24 @@ public class ParkingCatalogService {
      * is why this returns a map with holes instead of defaulting.</p>
      */
     @Transactional(readOnly = true)
-    public Map<UUID, ParkingRate> ratesInForce(TenantId tenantId, Instant at) {
-        Map<UUID, ParkingRate> byZone = new HashMap<>();
+    public Map<UUID, ZonePriceBook> ratesInForce(TenantId tenantId, Instant at) {
+        // Ordered zone, then most recent window first, so each zone's rows arrive together and the
+        // newest of each kind comes first — which is exactly what ZonePriceBook.of expects.
+        Map<UUID, List<ParkingRate>> byZone = new LinkedHashMap<>();
         for (ParkingRate rate : rateRepository.findInForce(tenantId.value(), at)) {
-            // Ordered zone, then most recent window first: the first row of each zone is the one in
-            // force, and a later one can only be an older window that overlaps it.
-            byZone.putIfAbsent(rate.getZoneId(), rate);
+            byZone.computeIfAbsent(rate.getZoneId(), key -> new ArrayList<>()).add(rate);
         }
-        return byZone;
+        Map<UUID, ZonePriceBook> books = new HashMap<>();
+        for (Map.Entry<UUID, List<ParkingRate>> entry : byZone.entrySet()) {
+            try {
+                books.put(entry.getKey(), ZonePriceBook.of(entry.getValue()));
+            } catch (IllegalArgumentException noBase) {
+                // Rungs without a base is the same misconfiguration as no price at all: the zone
+                // stays out of the map and the caller says so, rather than pricing part of it.
+                continue;
+            }
+        }
+        return books;
     }
 
     /**
@@ -264,12 +277,60 @@ public class ParkingCatalogService {
     }
 
     /**
-     * Sets the tariff in force for a zone: closes whatever window is open and opens a new one from
-     * now on. The currency is the municipality's, taken from the tenant rather than accepted from
-     * the request — an administrator cannot price a zone in a currency their citizens do not hold.
+     * Sets the <b>base</b> tariff of a zone: closes whatever base window is open and opens a new one
+     * from now on. The currency is the municipality's, taken from the tenant rather than accepted
+     * from the request — an administrator cannot price a zone in a currency their citizens do not
+     * hold.
+     *
+     * <p>The ladder is untouched. A base and a rung are different statements — "an hour costs ₡550"
+     * and "45 minutes costs ₡400" — and changing one has never meant retracting the other.</p>
      */
     @Transactional
     public ParkingRate setRate(TenantId tenantId, UUID zoneId, long amountMinor, int minutes) {
+        return setRate(tenantId, zoneId, RateKind.BLOCK, amountMinor, minutes);
+    }
+
+    /**
+     * Prices one exact duration of a zone (CONTRACT.md v0.24): from now on, a stay of exactly
+     * {@code minutes} minutes costs {@code amountMinor}, whatever the base would have computed.
+     *
+     * <p>Setting a rung twice supersedes it, the same way the base does — the open window closes and
+     * a new one opens — so a price change keeps its history instead of overwriting it.</p>
+     */
+    @Transactional
+    public ParkingRate setRung(TenantId tenantId, UUID zoneId, long amountMinor, int minutes) {
+        return setRate(tenantId, zoneId, RateKind.EXACT, amountMinor, minutes);
+    }
+
+    /**
+     * Removes one rung: the duration goes back to being priced by the base.
+     *
+     * <p>Closes the window rather than deleting the row. What a municipality charged last month has
+     * to stay readable, and a rung that is gone from the ladder is exactly as historical as one that
+     * was superseded by a new price.</p>
+     *
+     * @throws NotFoundException {@code PARKING_RATE_NOT_FOUND} when that duration has no open rung
+     */
+    @Transactional
+    public void clearRung(TenantId tenantId, UUID zoneId, int minutes) {
+        requireZone(tenantId, zoneId);
+        Instant now = clock.instant();
+        boolean closed = false;
+        for (ParkingRate current : rateRepository.findByTenantIdAndZoneIdOrderByValidFromDesc(tenantId.value(),
+                zoneId)) {
+            if (current.getValidTo() != null || !current.isExact() || current.getMinutes() != minutes) {
+                continue;
+            }
+            current.close(closeAt(current, now));
+            rateRepository.save(current);
+            closed = true;
+        }
+        if (!closed) {
+            throw NotFoundException.of(ErrorCode.PARKING_RATE_NOT_FOUND, "error.parking.rate.notFound");
+        }
+    }
+
+    private ParkingRate setRate(TenantId tenantId, UUID zoneId, RateKind kind, long amountMinor, int minutes) {
         requireZone(tenantId, zoneId);
         ValidationException.Collector errors = new ValidationException.Collector();
         if (amountMinor < 0L) {
@@ -284,17 +345,27 @@ public class ParkingCatalogService {
         Instant now = clock.instant();
         for (ParkingRate current : rateRepository.findByTenantIdAndZoneIdOrderByValidFromDesc(tenantId.value(),
                 zoneId)) {
-            if (current.getValidTo() != null) {
+            if (current.getValidTo() != null || current.getKind() != kind) {
                 continue;
             }
-            // A window must end strictly after it started (CHECK in V5_0). Two tariffs set within the
-            // same millisecond would otherwise produce valid_to = valid_from and be refused.
-            Instant closeAt = current.getValidFrom().isBefore(now) ? now : current.getValidFrom().plusMillis(1L);
-            current.close(closeAt);
+            // A rung supersedes only the rung for the same duration; the base supersedes the base.
+            // Without this every ladder entry would close every time any price in the zone moved.
+            if (kind == RateKind.EXACT && current.getMinutes() != minutes) {
+                continue;
+            }
+            current.close(closeAt(current, now));
             rateRepository.save(current);
         }
         Money amount = Money.ofMinor(amountMinor, tenant.getCurrencyCode());
-        return rateRepository.save(new ParkingRate(Uuid7.generate(), tenantId.value(), zoneId, amount, minutes,
-                now, null, now));
+        return rateRepository.save(new ParkingRate(Uuid7.generate(), tenantId.value(), zoneId, kind, amount,
+                minutes, now, null, now));
+    }
+
+    /**
+     * A window must end strictly after it started (CHECK in V5_0). Two prices set within the same
+     * millisecond would otherwise produce {@code valid_to = valid_from} and be refused.
+     */
+    private static Instant closeAt(ParkingRate current, Instant now) {
+        return current.getValidFrom().isBefore(now) ? now : current.getValidFrom().plusMillis(1L);
     }
 }

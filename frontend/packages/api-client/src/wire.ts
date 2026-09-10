@@ -17,6 +17,7 @@ import type {
   ParkingExtensionOption,
   ParkingQuoteResponse,
   ParkingRate,
+  RateKind,
   ParkingSession,
   ParkingSessionStatus,
   TimeCreditsResponse,
@@ -136,6 +137,8 @@ export function toParkingSession(wire: WireParkingSession): ParkingSession {
 export interface WireParkingRate {
   id: string;
   zoneId: string;
+  /** Absent on servers older than v0.24; those only ever had the linear base. */
+  kind?: RateKind | null;
   amount: WireMoney;
   minutes: number;
   validFrom: string;
@@ -146,6 +149,7 @@ export function toParkingRate(wire: WireParkingRate): ParkingRate {
   return {
     id: wire.id,
     zoneId: wire.zoneId,
+    kind: wire.kind ?? 'BLOCK',
     amountMinor: wire.amount.amountMinor,
     currencyCode: wire.amount.currencyCode,
     minutes: wire.minutes,

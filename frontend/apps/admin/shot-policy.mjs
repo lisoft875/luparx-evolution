@@ -44,7 +44,8 @@ const initial = await page.locator('body').innerText();
 
 // Agregar una duración nueva y ver que entra ordenada en la vista previa.
 const addField = page.locator('.lx-field', { has: page.getByText(/^Minutos$/) }).first().locator('input');
-await addField.fill('45');
+// 90 y no 45: el fixture ya vende 45 desde v0.24, y «Agregar» rechaza un duplicado.
+await addField.fill('90');
 await page.locator('button:has-text("Agregar")').first().click();
 await page.waitForTimeout(500);
 await page.screenshot({ path: `${outDir}/02-added.png`, fullPage: true });
@@ -87,7 +88,7 @@ await page.screenshot({ path: `${outDir}/06-credit-off.png`, fullPage: true });
 console.log('\n== política de parqueo ==');
 console.log('la vista previa muestra la escalera del ciudadano:', /Lo que verá el ciudadano/.test(initial));
 console.log('con las etiquetas del ciudadano (1 hora, no 60 min):', /1 hora/.test(initial));
-console.log('la opción agregada entra ordenada:', /45 min/.test(afterAdd));
+console.log('la opción agregada entra ordenada:', /90 min/.test(afterAdd));
 console.log('dice el rango que sale de la lista:', /se vende desde/.test(rangeBefore));
 console.log('el rango sigue a la lista:', rangeBefore, '->', rangeAfter, '· cambió:', rangeBefore !== rangeAfter);
 console.log('ya no hay campos de mínimo ni máximo:', !/La estadía más corta que se vende/.test(initial));

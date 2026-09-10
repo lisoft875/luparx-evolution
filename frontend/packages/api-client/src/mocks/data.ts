@@ -425,7 +425,10 @@ export function normalizeMockPlate(plate: string): string {
 
 export const MOCK_PARKING_POLICIES: Record<string, ParkingPolicy> = {
   'tenant-sanjose': {
-    sessionIncrementsMinutes: [30, 60, 120],
+    // Cinco duraciones, no tres: es lo que hace visible una escalera NO lineal en la pantalla de
+    // tarifas (45 min más barato que tres bloques de 15). Con tres columnas lineales el fixture no
+    // puede mostrar lo que la tarifa por bloque no sabía expresar.
+    sessionIncrementsMinutes: [15, 30, 45, 60, 120],
     sessionMinMinutes: 15,
     sessionMaxMinutes: 240,
     extensionEnabled: true,

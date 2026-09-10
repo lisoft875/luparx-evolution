@@ -1824,3 +1824,108 @@ parquear»— y en el servidor con `error.parking.policy.sessionIncrements.requi
 
 El techo con extensiones tiene que superar la duración más larga que se vende, y el mensaje ahora la
 nombra en vez de referirse a un campo que ya no está en pantalla.
+
+# v0.24 — Un precio propio por duración: la escalera de tarifas (normativo)
+
+Una zona tenía **una** tarifa: un monto por bloque de minutos, cobrado por bloque empezado. Eso sólo
+sabe expresar una recta —media hora siempre cuesta la mitad que una hora— y las municipalidades no
+cobran así. **45 minutos a ₡400 junto a una hora a ₡500** es lo normal, y era inexpresable.
+
+## Dos clases de fila, y ninguna regla que desempatar
+
+`parking_rates` gana una columna `kind` (`V24_0__parking_rate_ladder.sql`, fase de expansión: sólo
+agrega, y toda fila existente queda `BLOCK`, que es lo que ya era).
+
+- **`BLOCK`** — la **base lineal** de la zona: el monto cubre `minutes` minutos y se cobra por bloque
+  empezado. **Sigue siendo obligatoria**, y es lo que responde por toda duración que la escalera no
+  nombre — incluidos los minutos guardados de un ciudadano, que son un número cualquiera
+  (CONTRACT.md v0.12) y por definición no pueden tener un peldaño propio.
+- **`EXACT`** — un **peldaño**: el monto *es* el precio de una estadía de exactamente `minutes`
+  minutos. No se multiplica por nada.
+
+**Una coincidencia exacta gana sobre la base.** No hay prioridades, ni días, ni franjas, ni nada que
+configurar y por lo tanto nada que pueda empatar: un precio dicho para 45 minutos es más específico
+que una fórmula que también sabe producir un número para 45 minutos, y eso es un hecho sobre las dos
+filas, no una preferencia que alguien puso.
+
+El proyecto de referencia resuelve esto con un motor de reglas con prioridad, días y horas. Esa
+complejidad se gana allá porque sus reglas también deciden **cuándo** se cobra. Acá no: el horario de
+cobro es cosa aparte desde v0.3, y un segundo lugar decidiendo la misma pregunta es como dos
+respuestas empiezan a discrepar. Lo que sí se copió es la idea de fondo — la banda de duración es
+parte de la **aplicabilidad** de la fila, no una validación posterior.
+
+## Los dos invariantes están en la base, no sólo en el servicio
+
+```sql
+CREATE UNIQUE INDEX uq_parking_rates_open_block ON parking_rates (tenant_id, zone_id)
+    WHERE valid_to IS NULL AND kind = 'BLOCK';
+CREATE UNIQUE INDEX uq_parking_rates_open_exact ON parking_rates (tenant_id, zone_id, minutes)
+    WHERE valid_to IS NULL AND kind = 'EXACT';
+```
+
+La referencia deja esto a un recorrido en Java sobre el conjunto de reglas activas, y el resultado es
+que dos altas concurrentes de la misma duración pasan las dos y dejan la zona con un conflicto
+permanente que se manifiesta como un 409 en **cada** cotización. Dos índices parciales cuestan dos
+líneas y hacen ese estado inalcanzable.
+
+## `ZonePriceBook`: el único lugar que convierte minutos en dinero
+
+La aritmética vivía dentro de `ParkingQuoteService` y estaba duplicada, en silencio, en un sembrador
+de desarrollo. Con **dos** formas de poner precio una copia no se limita a desviarse: haría que el
+historial sembrado mostrara montos que la aplicación nunca habría cobrado. Ahora hay un solo
+`priceOf(minutes)`, y el sembrador lo usa.
+
+## Se sigue cobrando sobre los minutos cobrables, no sobre la duración pedida
+
+Precede a la escalera y se mantiene a propósito. Un ciudadano que compra dos horas a las cinco y
+cuarenta y cinco, cuando el cobro para a las seis, tiene quince minutos cobrables: se le cobra lo que
+cuestan quince minutos —el peldaño de cuarto de hora, si la municipalidad lo vende— y no el precio del
+producto de dos horas que nominalmente escogió. Lo contrario se lee como un castigo por parquear
+cerca de la hora de cierre.
+
+## Lo que ve el ciudadano
+
+`CitizenParkingZoneResponse.rate` gana `durations`: **una entrada por duración vendida, con su precio,
+calculada por el servidor**. El selector la dibuja tal cual. Un cliente que calculara «30 minutos es
+el doble de 15» se equivocaría en toda municipalidad con escalera no lineal, que son la mayoría — es
+la misma razón que la referencia escribe en su propio DTO.
+
+## La API de administración
+
+```
+PUT    /api/v1/admin/parking/rates                          {zoneId, amountMinor, minutes}   → la base
+PUT    /api/v1/admin/parking/rates/rungs                    {zoneId, amountMinor, minutes}   → un peldaño
+DELETE /api/v1/admin/parking/rates/rungs?zoneId=&minutes=                                     → quitar un peldaño
+```
+
+`PUT` y no `POST` para el peldaño: poner el precio de 45 minutos dos veces es una afirmación hecha dos
+veces, no dos peldaños. La ventana se cierra y se abre otra, así que el historial queda sin que quien
+llama tenga que saber si esa duración ya tenía precio.
+
+Quitar un peldaño **cierra la ventana, no borra la fila**. Lo que una municipalidad cobró el mes
+pasado tiene que seguir siendo legible, y un peldaño retirado es exactamente tan histórico como uno
+reemplazado por un precio nuevo.
+
+Poner la base **no toca la escalera**, y poner un peldaño sólo supersede al peldaño de esa misma
+duración. Son afirmaciones distintas —«la hora cuesta ₡550» y «45 minutos cuesta ₡400»— y cambiar una
+nunca significó retractar la otra.
+
+## La pantalla es una grilla
+
+Una fila por zona, una columna por duración vendida, y una celda que o tiene precio propio o muestra
+—atenuado— lo que la base cobra por esa duración. «Heredado» es información; una celda en blanco no.
+
+**Las columnas salen de la política**, no de esta pantalla: qué duraciones existen ya se decidió una
+vez, y un precio para una duración que nadie puede comprar es plata que nunca se va a cobrar.
+
+## El fixture llega al estado interesante
+
+El transporte simulado siembra la escalera de SJ-CENTRO **deliberadamente no lineal** —₡150 / ₡300 /
+₡400 / ₡900 para 15/30/45/120— y deja **60 minutos sin peldaño**, para que la misma zona muestre las
+dos formas de precio a la vez. Una escalera lineal en el fixture dejaría pasar sin ruido una regresión
+en la resolución por duración; es la misma razón que la referencia da para la suya.
+
+## Lo que queda pendiente
+
+El selector del ciudadano todavía no dibuja los precios que ahora recibe: la app muestra las
+duraciones sin monto. Es lo siguiente, y es la mitad visible de esta tanda.

@@ -8,6 +8,7 @@ import cr.luparx.core.money.Money;
 import cr.luparx.parking.entity.ParkingRate;
 import cr.luparx.parking.entity.ParkingZone;
 import cr.luparx.parking.model.ParkingQuote;
+import cr.luparx.parking.model.ZonePriceBook;
 import cr.luparx.parking.repository.ParkingRateRepository;
 import cr.luparx.parking.repository.ParkingZoneRepository;
 import org.springframework.stereotype.Service;
@@ -15,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -83,22 +85,28 @@ public class ParkingQuoteService {
     }
 
     /**
-     * The tariff in force for a zone right now.
+     * What a zone costs right now: its base rate and every rung of its ladder (CONTRACT.md v0.24).
      *
-     * @throws NotFoundException {@code PARKING_RATE_NOT_FOUND} when the zone has no open window. A
-     *         zone with no price is not free: it is misconfigured, and charging zero would be a
-     *         silent revenue loss nobody would notice.
+     * @throws NotFoundException {@code PARKING_RATE_NOT_FOUND} when the zone has no open base
+     *         window. A zone with no price is not free: it is misconfigured, and charging zero would
+     *         be a silent revenue loss nobody would notice. A zone with rungs but no base is the
+     *         same refusal — the base is what answers for every duration the ladder does not name.
      */
     @Transactional(readOnly = true)
-    public ParkingRate requireRate(TenantId tenantId, UUID zoneId, Instant at) {
+    public ZonePriceBook requirePriceBook(TenantId tenantId, UUID zoneId, Instant at) {
         List<ParkingRate> candidates = rateRepository
                 .findByTenantIdAndZoneIdAndValidFromLessThanEqualOrderByValidFromDesc(tenantId.value(), zoneId, at);
+        List<ParkingRate> open = new ArrayList<>(candidates.size());
         for (ParkingRate rate : candidates) {
             if (rate.getValidTo() == null || rate.getValidTo().isAfter(at)) {
-                return rate;
+                open.add(rate);
             }
         }
-        throw NotFoundException.of(ErrorCode.PARKING_RATE_NOT_FOUND, "error.parking.rate.notFound");
+        try {
+            return ZonePriceBook.of(open);
+        } catch (IllegalArgumentException missingBase) {
+            throw NotFoundException.of(ErrorCode.PARKING_RATE_NOT_FOUND, "error.parking.rate.notFound");
+        }
     }
 
     /**
@@ -117,11 +125,11 @@ public class ParkingQuoteService {
     public ParkingQuote quote(TenantId tenantId, UserId userId, UUID zoneId, int minutes) {
         requireActiveZone(tenantId, zoneId);
         Instant now = clock.instant();
-        ParkingRate rate = requireRate(tenantId, zoneId, now);
+        ZonePriceBook prices = requirePriceBook(tenantId, zoneId, now);
         int available = timeCreditService.availableMinutes(tenantId, userId);
         policyService.requireSessionIncrement(policyService.require(tenantId), minutes, available);
         int chargeable = chargeableMinutes(tenantId, now, minutes);
-        return price(rate, minutes, chargeable, available);
+        return price(prices, minutes, chargeable, available);
     }
 
     /**
@@ -142,31 +150,31 @@ public class ParkingQuoteService {
     }
 
     /**
-     * The pure pricing rule, given a tariff, the minutes wanted and the minutes available as credit.
-     * Separated from the lookups so that the session flow — which has already loaded the tariff and
-     * locked the credit — reuses exactly the same arithmetic instead of a copy of it.
+     * The pure pricing rule, given a zone's prices, the minutes wanted and the minutes available as
+     * credit. Separated from the lookups so that the session flow — which has already loaded the
+     * prices and locked the credit — reuses exactly the same arithmetic instead of a copy of it.
+     *
+     * <p><b>Both amounts are priced on minute counts, not on the duration that was asked for.</b>
+     * That predates the ladder and is kept deliberately. A citizen who buys two hours at a quarter
+     * to six, when charging stops at six, has fifteen chargeable minutes: they are charged what
+     * fifteen minutes cost — the quarter-hour rung if the municipality sells one — and not the price
+     * of the two-hour product they nominally picked. The alternative reads as a penalty for parking
+     * near closing time.</p>
      */
-    public ParkingQuote price(ParkingRate rate, int minutes, int chargeableMinutes, int availableCreditMinutes) {
+    public ParkingQuote price(ZonePriceBook prices, int minutes, int chargeableMinutes, int availableCreditMinutes) {
         if (minutes <= 0) {
             throw new IllegalArgumentException("a quote covers a positive number of minutes");
         }
         int chargeable = Math.max(0, Math.min(chargeableMinutes, minutes));
         if (chargeable == 0) {
             // Free time: no money, and no credit spent on it either.
-            Money nothing = Money.zero(rate.getCurrencyCode());
+            Money nothing = Money.zero(prices.currencyCode());
             return new ParkingQuote(minutes, 0, 0, 0, nothing, nothing);
         }
         int creditApplied = Math.max(0, Math.min(availableCreditMinutes, chargeable));
         int payableMinutes = chargeable - creditApplied;
-        Money amount = rate.getAmount().multipliedBy(blocks(chargeable, rate.getMinutes()));
-        Money payable = payableMinutes == 0
-                ? Money.zero(rate.getCurrencyCode())
-                : rate.getAmount().multipliedBy(blocks(payableMinutes, rate.getMinutes()));
+        Money amount = prices.priceOf(chargeable);
+        Money payable = prices.priceOf(payableMinutes);
         return new ParkingQuote(minutes, chargeable, creditApplied, payableMinutes, amount, payable);
-    }
-
-    /** Started blocks, rounding up. {@code blockMinutes} is positive by CHECK in V5_0. */
-    private static long blocks(int minutes, int blockMinutes) {
-        return ((long) minutes + blockMinutes - 1L) / blockMinutes;
     }
 }

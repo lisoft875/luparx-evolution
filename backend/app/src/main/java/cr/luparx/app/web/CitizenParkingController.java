@@ -13,6 +13,7 @@ import cr.luparx.core.page.PageResponse;
 import cr.luparx.core.tenant.TenantContextHolder;
 import cr.luparx.parking.entity.ParkingPolicy;
 import cr.luparx.parking.entity.ParkingRate;
+import cr.luparx.parking.model.ZonePriceBook;
 import cr.luparx.parking.entity.ParkingScheduleException;
 import cr.luparx.parking.entity.ParkingSession;
 import cr.luparx.parking.entity.ParkingSessionExtension;
@@ -157,13 +158,15 @@ public class CitizenParkingController {
         TenantId tenantId = TenantContextHolder.requireTenantId();
         Instant now = clock.instant();
         List<ParkingZone> zones = catalogService.listActiveZones(tenantId);
-        Map<UUID, ParkingRate> rates = catalogService.ratesInForce(tenantId, now);
+        Map<UUID, ZonePriceBook> rates = catalogService.ratesInForce(tenantId, now);
+        // The durations this municipality sells, priced per zone below (CONTRACT.md v0.24).
+        List<Integer> offered = policyService.require(tenantId).sessionIncrements().values();
         // Both in one aggregate query each, never one per zone: this list grows with the
         // municipality, and an N+1 here would get slower exactly as one succeeds.
         Map<UUID, ParkingSpaceRange> ranges = catalogService.spaceRangesByZone(tenantId);
         List<ParkingDtos.CitizenParkingZoneResponse> body = new ArrayList<>(zones.size());
         for (ParkingZone zone : zones) {
-            body.add(mapper.toCitizenZone(zone, rates.get(zone.getId()), ranges.get(zone.getId())));
+            body.add(mapper.toCitizenZone(zone, rates.get(zone.getId()), offered, ranges.get(zone.getId())));
         }
         return privatelyCacheable(body, ZONES_CACHE_TTL);
     }
