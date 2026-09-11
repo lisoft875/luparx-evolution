@@ -5,7 +5,15 @@ public enum VerificationPurpose {
 
     EMAIL_VERIFICATION,
     PASSWORD_RESET,
-    /** Confirms linking a federated identity to an existing local account (ADR 0006). */
+    /**
+     * Retired in v0.39 with the rest of identity federation (ADR 0022). Nothing issues or consumes
+     * it any more.
+     *
+     * <p>The constant stays because {@code verification_tokens} has a CHECK constraint that lists
+     * these values by name, and the rows of a database outlive the code that wrote them: removing
+     * the name here before the contraction migration removes it there would turn any old row into an
+     * enum that cannot be read. It goes when the schema does.</p>
+     */
     FEDERATED_LINK_CONFIRMATION,
     /**
      * Confirms, <em>from the new mailbox</em>, that the account may move to a different address

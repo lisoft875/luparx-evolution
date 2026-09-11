@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { LocaleSwitcher, LoginForm } from '@luparx/features';
 import { AuthScreen } from '@luparx/ui';
 import { useTranslation } from '@luparx/i18n';
-import { API_BASE_URL, PORTAL } from '../env';
 
 export function LoginPage(): React.JSX.Element {
   const navigate = useNavigate();
@@ -16,8 +15,6 @@ export function LoginPage(): React.JSX.Element {
       localeSwitcher={<LocaleSwitcher variant="compact" />}
     >
       <LoginForm
-        portal={PORTAL}
-        apiBaseUrl={API_BASE_URL}
         subtitle={t('auth.portal.platform.title')}
         onSuccess={() => navigate('/tenants')}
         forgotPasswordHref="/forgot-password"

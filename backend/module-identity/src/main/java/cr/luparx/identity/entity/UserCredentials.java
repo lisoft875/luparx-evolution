@@ -10,8 +10,8 @@ import java.util.UUID;
 
 /**
  * Local password of a user (CONTRACT.md §5 {@code user_credentials}). Kept in its own table so that
- * reading a user profile never brings the password hash along, and so that a federated-only account
- * simply has no row here.
+ * reading a user profile never brings the password hash along. Every account has a row here since
+ * v0.39: local credentials are the only way in.
  */
 @Entity
 @Table(name = "user_credentials")

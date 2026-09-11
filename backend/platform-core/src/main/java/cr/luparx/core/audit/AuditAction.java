@@ -29,6 +29,14 @@ public final class AuditAction {
     public static final String LOGOUT = "LOGOUT";
     public static final String REFRESH_TOKEN_REUSE_DETECTED = "REFRESH_TOKEN_REUSE_DETECTED";
     public static final String SESSION_TENANT_SWITCHED = "SESSION_TENANT_SWITCHED";
+    /**
+     * Retired in v0.39 with identity federation (ADR 0022). Nothing writes it any more.
+     *
+     * <p>The constant stays because the audit trail is a vocabulary, not a code path: rows written
+     * before the retirement are still readable and still filterable by
+     * {@code GET /admin/audit-events?action=}, and {@code audit_events} is a table this platform
+     * refuses to rewrite — there are database triggers to make sure of it (v0.32).</p>
+     */
     public static final String FEDERATED_IDENTITY_LINKED = "FEDERATED_IDENTITY_LINKED";
 
     public static final String MEMBERSHIP_REQUESTED = "MEMBERSHIP_REQUESTED";

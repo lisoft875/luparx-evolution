@@ -19,9 +19,7 @@ cp infra/.env.example infra/.env
 ```
 
 Editar `infra/.env` según necesidad. Ningún valor del `.env.example` es un secreto real — son
-defaults de desarrollo. Para federación de identidad (Google/Microsoft/Facebook, ADR 0006),
-completar `OAUTH_*_CLIENT_ID`/`OAUTH_*_CLIENT_SECRET` con credenciales de una app de prueba propia
-si se va a probar ese flujo; si se dejan vacías, el login local sigue funcionando normalmente.
+defaults de desarrollo.
 
 ## 2. Generar el par de claves JWT de desarrollo (una sola vez)
 

@@ -17,8 +17,8 @@ README es la puerta de entrada, no la fuente de verdad.
   operativo o financiero existe sin `tenant_id`, aplicado en cada capa (repositorio, servicio,
   API, jobs, caché, exportes, logs).
 - Autenticación local Argon2id + JWT RS256 por portal (audiencias distintas, un token de un
-  portal no sirve en otro) + refresh opaco con rotación, más federación (Google, Microsoft Entra
-  ID, Facebook).
+  portal no sirve en otro) + refresh opaco con rotación. Sin identidades de terceros: la plataforma
+  emite sus propias credenciales (ADR 0022).
 - Internacionalización de fondo: catálogos ISO 3166/4217, BCP 47, IANA y un árbol genérico de
   divisiones administrativas de N niveles — Costa Rica es sólo el país configurado por defecto,
   nunca un supuesto de código.
@@ -39,7 +39,7 @@ luparx-evolution/
   backend/                      Maven multi-módulo, Java 21, Spring Boot 3.5
     platform-core/              kernel compartido: ids, errores RFC 9457, dinero, tenant context, auditoría
     module-geo/                 países, divisiones administrativas, documentos, teléfonos
-    module-identity/             usuarios, credenciales, federación, tokens
+    module-identity/             usuarios, credenciales, tokens
     module-tenancy/             municipalidades, membresías, roles/permisos
     module-parking/             stub del dominio (frontera declarada)
     app/                        arranque Spring Boot, seguridad, controllers, Flyway, OpenAPI

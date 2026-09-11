@@ -21,7 +21,6 @@ erDiagram
   USERS ||--o{ TENANT_MEMBERSHIPS : "solicita/tiene"
 
   USERS ||--o| USER_CREDENTIALS : "contraseña local"
-  USERS ||--o{ USER_FEDERATED_IDENTITIES : "identidades externas"
   USERS ||--o{ REFRESH_TOKENS : "sesiones"
   USERS ||--o{ VERIFICATION_TOKENS : "verificación email / reset password"
 
@@ -127,15 +126,6 @@ erDiagram
     bool must_change
   }
 
-  USER_FEDERATED_IDENTITIES {
-    uuid id PK
-    uuid user_id FK
-    string provider
-    string subject
-    string email
-    timestamptz linked_at
-  }
-
   REFRESH_TOKENS {
     uuid id PK
     uuid user_id FK
@@ -237,8 +227,6 @@ occurred_at)` (ventana de rate limiting).
   solicitudes).
 - **Unicidad de tenant**: `tenants(slug)` único — el slug es el identificador público/URL-safe del
   tenant.
-- **Unicidad de identidad federada**: `user_federated_identities(provider, subject)` único — el
-  mismo `subject` de un proveedor no puede vincularse a dos usuarios distintos.
 - **Unicidad de tokens**: `refresh_tokens(token_hash)` y `verification_tokens(token_hash)` únicos
   — un hash de token nunca se reutiliza entre filas.
 - **Integridad referencial obligatoria (`NOT NULL FK`)**: `tenant_memberships.tenant_id`,
@@ -272,3 +260,13 @@ occurred_at)` (ventana de rate limiting).
 - **PK `uuid` v7 generado en aplicación** (`CONTRACT.md` §5): permite orden temporal aproximado sin
   exponer un contador secuencial entre tenants (evita enumeración de IDs como vector de fuga entre
   tenants — ver `SECURITY.md` §4).
+
+## Tablas retiradas y pendientes de contraer
+
+- `user_federated_identities` — la federación de identidad se retiró en la v0.39
+  ([ADR 0022](adr/0022-retire-identity-federation.md)). La tabla sigue en la base, vacía y sin
+  código que la lea, hasta la migración de contracción de la versión siguiente: expand-and-contract
+  (ADR 0010) impide quitarla en la misma versión que quita el código, porque una instancia anterior
+  puede estar corriendo en paralelo durante el despliegue. Lo mismo aplica al valor
+  `FEDERATED_LINK_CONFIRMATION` de `verification_tokens.purpose` y a la restricción `CHECK` que lo
+  nombra.

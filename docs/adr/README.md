@@ -11,7 +11,7 @@ de rollback, estado y fecha.
 | [0003](0003-global-identity-tenant-memberships.md) | Identidad global única con membresías por municipalidad | Aceptado |
 | [0004](0004-separate-portals-jwt-audiences.md) | Portales separados con audiencias JWT distintas | Aceptado |
 | [0005](0005-auth-argon2-jwt-rs256-refresh-rotation.md) | Autenticación: Argon2id + JWT RS256 con rotación + refresh opaco con detección de reuso | Aceptado |
-| [0006](0006-identity-federation.md) | Federación de identidad (Google, Microsoft Entra ID, Facebook) | Aceptado |
+| [0006](0006-identity-federation.md) | Federación de identidad (Google, Microsoft Entra ID, Facebook) | **Superseded por 0022** |
 | [0007](0007-mfa-totp.md) | MFA TOTP (RFC 6238) con códigos de recuperación | **Reemplazado por [0016](0016-remove-mfa.md)** |
 | [0008](0008-internationalization-catalogs.md) | Internacionalización: ISO 3166/4217, BCP 47, IANA, catálogo de divisiones administrativas | Aceptado |
 | [0009](0009-money-minor-units.md) | Dinero en unidades menores enteras + código de moneda | Aceptado |
@@ -25,8 +25,9 @@ de rollback, estado y fecha.
 | [0017](0017-audit-actor-and-origin.md) | Identidad del actor y origen en la bitácora: nombre resuelto al leer, dirección cotejada sin guardarse | Aceptado |
 | [0018](0018-external-citations.md) | Boletas levantadas en otro sistema: espejo que se lee aquí y se cobra allá | Aceptado |
 | [0019](0019-payments-and-reconciliation.md) | Pagos, liquidaciones y conciliación en un módulo propio | Aceptado |
+| [0022](0022-retire-identity-federation.md) | Retirar la federación de identidad: LupaRX emite sus propias credenciales | Aceptado |
 
 Las decisiones 0001–0013 datan del scaffold inicial (2026-09-07); 0014 y 0015 se tomaron al construir
 el módulo de fiscalización y el flujo de recargas (2026-09-09); 0017 amplía la 0013 al hacer legible la
-bitácora, 0018 abre el modelo de boletas a otros sistemas y 0019 separa la cadena de pagos (2026-09-10). Todas se revisan cuando cambian los supuestos que las
+bitácora, 0018 abre el modelo de boletas a otros sistemas 0019 separa la cadena de pagos y **0022 supersede a la 0006**: la federación de identidad se retira sin haber llegado a funcionar, y la plataforma emite sus propias credenciales (2026-09-10). Todas se revisan cuando cambian los supuestos que las
 motivaron (volumen, número de tenants, regulación por país, etc.).

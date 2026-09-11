@@ -56,4 +56,3 @@ avanza, y es lo que usan las vistas previas publicadas.
 | `InvalidKeySpecException` al firmar tokens | La llave privada quedó en PKCS#1. Convertila: `openssl pkcs8 -topk8 -nocrypt -in vieja.pem -out nueva.pem`. |
 | `cannot find symbol` de clases de otro modulo | Se compiló `-pl app` sin `-am`, contra los jars viejos de `~/.m2`. Usá siempre `-pl app -am`, o `mvn -DskipTests install` desde `backend/` antes. |
 | Flyway falla con "relation already exists" | Base sucia de un intento anterior: `cd infra && docker compose down -v && docker compose up -d`. |
-| El login federado responde `FEDERATION_NOT_CONFIGURED` | Falta el `client id` del proveedor en `infra/.env`. El callback a registrar es `http://localhost:8090/api/v1/auth/{portal}/oauth2/{provider}/callback`. |

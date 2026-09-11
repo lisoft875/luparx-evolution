@@ -1,7 +1,13 @@
 # 0006 — Federación de identidad (Google, Microsoft Entra ID, Facebook) y vinculación segura de cuentas por email verificado
 
-- **Estado**: Aceptado
+- **Estado**: **Superseded** por la [ADR 0022](0022-retire-identity-federation.md) (2026-09-10)
 - **Fecha**: 2026-09-07
+
+> Esta decisión ya no rige. La federación con Google, Microsoft y Facebook se retiró en la v0.39 sin
+> haber llegado a funcionar nunca: el callback contestó `501` desde la v0.1 y ninguna cuenta se
+> vinculó jamás. LupaRX emite sus propias credenciales. Se conserva el documento porque explica por
+> qué la vinculación por correo verificado exigía confirmación explícita, y ese razonamiento vuelve a
+> hacer falta el día que alguien plantee entrar con la cuenta institucional de una municipalidad.
 
 ## Contexto
 

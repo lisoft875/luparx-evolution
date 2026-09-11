@@ -49,7 +49,7 @@ no puede leer ni escribir recursos de otro, incluso conociendo su ID.
 
 ## 5. Gestión de secretos
 
-- Ningún secreto (contraseña de DB, clave privada JWT, client secret OAuth, credenciales SMTP) se
+- Ningún secreto (contraseña de DB, clave privada JWT, credenciales SMTP) se
   commitea al repositorio. `infra/.env.example` sólo
   documenta nombres de variable y valores de desarrollo claramente no productivos.
 - En producción, secretos gestionados por el mecanismo del entorno de despliegue (variables de
@@ -67,8 +67,8 @@ Cabeceras mínimas en toda respuesta HTTP del backend y en el hosting de cada ap
 - `X-Frame-Options: DENY` (o `frame-ancestors 'none'` vía CSP) — ninguno de los tres portales debe
   ser embebible en un iframe de terceros.
 - `Content-Security-Policy` estricta por app, sin `unsafe-inline`/`unsafe-eval` en `script-src`;
-  `connect-src` restringido al propio backend y a los orígenes de federación (Google/Microsoft/
-  Facebook) que cada app realmente use.
+  `connect-src` restringido al propio backend. Desde la v0.39 no hay ningún origen de terceros que
+  permitir: la plataforma emite sus propias credenciales (ADR 0022).
 - `Referrer-Policy: strict-origin-when-cross-origin`.
 - `Permissions-Policy` restrictiva por defecto; la app `inspector` habilita explícitamente
   geolocalización/cámara sólo donde el flujo de fiscalización lo requiera (evidencia con ubicación).
@@ -105,7 +105,7 @@ nombre provisto por el cliente usado como path).
 ## 10. SSRF en integraciones
 
 Toda integración saliente con URL o endpoint parcialmente controlado por un tercero (webhooks de
-proveedores de pago, callbacks OAuth, futuras integraciones de mapas/geocodificación) valida el
+proveedores de pago, futuras integraciones de mapas/geocodificación) valida el
 destino contra una lista explícita de hosts permitidos por integración; nunca se realiza una
 petición saliente a una URL arbitraria construida a partir de input de usuario sin esa validación.
 Timeouts explícitos y sin seguir redirecciones a hosts fuera de la lista permitida.

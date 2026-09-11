@@ -1,5 +1,5 @@
 /**
- * Identity bounded context: global users, local credentials, federation and token issuance.
+ * Identity bounded context: global users, local credentials and token issuance.
  *
  * <p>Users are global — one row per person, whatever number of municipalities they belong to
  * (CONTRACT.md §1). This module therefore owns no {@code tenant_id} and has no compile-time

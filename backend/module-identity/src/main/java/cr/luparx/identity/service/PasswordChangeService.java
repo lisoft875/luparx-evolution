@@ -57,7 +57,7 @@ public class PasswordChangeService {
     /**
      * @throws UnauthorizedException {@code CURRENT_PASSWORD_INVALID} when the current password does
      *         not match, and {@code PASSWORD_LOGIN_UNAVAILABLE} for an account that has no local
-     *         password at all (a federated-only identity has nothing to change here)
+     *         password at all
      * @throws cr.luparx.core.error.ValidationException when the new password fails the configured
      *         strength policy — the same {@link PasswordService#validatePolicy} registration and
      *         reset apply, so there is one definition of "strong enough"

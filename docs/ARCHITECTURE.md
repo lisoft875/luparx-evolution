@@ -8,7 +8,7 @@
 | Contexto | Responsabilidad | Módulo backend | Independencia de datos |
 |---|---|---|---|
 | **Geo** | Países, divisiones administrativas (N niveles), tipos de documento por país, formato de teléfono | `module-geo` | Catálogo global, sin `tenant_id` (compartido entre tenants, sólo lectura para el resto) |
-| **Identity** | Usuarios globales, credenciales, federación OIDC/OAuth2, tokens | `module-identity` | Entidad global (`users`), sin `tenant_id` propio |
+| **Identity** | Usuarios globales, credenciales locales, tokens | `module-identity` | Entidad global (`users`), sin `tenant_id` propio |
 | **Tenancy** | Municipalidades, membresías, roles/permisos, aprobación de acceso | `module-tenancy` | Dueño de `tenant_id`; toda pertenencia a un tenant pasa por aquí |
 | **Parking** (stub) | Zonas, tarifas, sesiones de parqueo, patrullas, citaciones, finanzas | `module-parking` | 100% por tenant; frontera declarada desde v0.1 aunque el contenido llegue después |
 | **Platform-core** | Kernel compartido: ids (UUIDv7), errores RFC 9457, tipo `Money`, `TenantContext`, auditoría, outbox | `platform-core` | No es un contexto de dominio: es infraestructura transversal que los demás módulos consumen |
@@ -50,9 +50,6 @@ C4Container
     Container(mail, "Servidor SMTP dev", "MailHog/Mailpit", "Verificación de email, reseteo de contraseña (solo local)")
   }
 
-  System_Ext(google, "Google OIDC")
-  System_Ext(microsoft, "Microsoft Entra ID OIDC")
-  System_Ext(facebook, "Facebook OAuth2/Graph")
   System_Ext(paymentProviders, "Proveedores de pago", "Múltiples, por país/tenant (v0.3+)")
 
   Rel(citizen, citizenApp, "usa", "HTTPS")
@@ -66,9 +63,6 @@ C4Container
 
   Rel(api, db, "lee/escribe", "JDBC")
   Rel(api, mail, "envía correos", "SMTP")
-  Rel(api, google, "OIDC", "HTTPS")
-  Rel(api, microsoft, "OIDC", "HTTPS")
-  Rel(api, facebook, "OAuth2", "HTTPS")
   Rel(api, paymentProviders, "cobros/webhooks", "HTTPS")
 ```
 
@@ -96,7 +90,6 @@ graph TB
 
   subgraph identity["module-identity"]
     users["Usuarios / credenciales"]
-    federation["Federación OIDC/OAuth2"]
     tokens["Emisión y rotación de tokens"]
   end
 
@@ -195,7 +188,7 @@ Cada módulo Maven está diseñado para convertirse en un servicio independiente
 1. **`module-geo`** es el candidato más simple de extraer primero: es de solo lectura para el
    resto del sistema, sin escritura transaccional cruzada con `identity`/`tenancy`. Se convertiría
    en un servicio de catálogo con caché agresiva.
-2. **`module-identity`** requeriría exponer sus casos de uso (autenticación, federación) por
+2. **`module-identity`** requeriría exponer sus casos de uso (autenticación, emisión de tokens) por
    una API interna en lugar de llamada a método Java; el JWT y el JWKS ya están diseñados como
    contrato público, así que el resource server de otros módulos no cambia.
 3. **`module-tenancy`** dependería del cliente de `identity` (para `user_id`) vía esa misma API

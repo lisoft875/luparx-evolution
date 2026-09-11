@@ -31,6 +31,4 @@ Notas:
    silenciosamente y dejar el CORS del backend apuntando al puerto equivocado.
 3. Los orígenes CORS y las `app.base-url` por portal del backend ya apuntan a estos puertos
    (`CORS_ALLOWED_ORIGIN_*`, `APP_BASE_URL_*` en `infra/.env.example`).
-4. El callback de OAuth2 (Google/Microsoft/Facebook) usa `OAUTH_REDIRECT_BASE_URL=http://localhost:8090`:
-   hay que registrar **ese** puerto en la consola de cada proveedor.
-5. Si algún puerto también está ocupado, cámbialo por variable de entorno; no lo edites en el código.
+4. Si algún puerto también está ocupado, cámbialo por variable de entorno; no lo edites en el código.

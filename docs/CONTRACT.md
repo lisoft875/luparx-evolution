@@ -82,7 +82,7 @@ El rol mapea a permisos en `RolePermissions` (configuración, no `if (role == AD
 7. **Fecha de nacimiento** → `birthDate` (ISO-8601 `YYYY-MM-DD`, edad mínima configurable, default 18).
 
 Campos de cuenta que acompañan el registro (no parte de los datos personales):
-`password` (si no viene de un proveedor federado), `locale` (BCP 47), `timeZone` (IANA),
+`password` (siempre obligatorio desde la v0.39), `locale` (BCP 47), `timeZone` (IANA),
 `acceptedTermsVersion`, `tenantId?` (municipalidad a la que se solicita acceso), `portal`.
 
 ## 3. Autenticación
@@ -93,9 +93,9 @@ Campos de cuenta que acompañan el registro (no parte de los datos personales):
   `portal`, `tid` (tenant activo, nullable), `roles[]`, `perms[]`, `locale`, `ver` (versión de credenciales).
 - **Un token de un portal no sirve en otro**: el resource server valida `aud` + `portal` contra el
   portal declarado por la ruta (`/api/v1/citizen/**`, `/api/v1/admin/**`, `/api/v1/inspector/**`).
-- **Federación**: Google (OIDC), Microsoft Entra ID (OIDC), Facebook (OAuth2 + Graph). Vinculación por
-  email verificado; tabla `user_federated_identities (provider, subject, user_id)`.
-  Si el email existe con contraseña local, se requiere confirmación explícita para vincular.
+- ~~**Federación**: Google (OIDC), Microsoft Entra ID (OIDC), Facebook (OAuth2 + Graph).~~
+  **Retirada en la v0.39** (ADR 0022): la plataforma emite sus propias credenciales y no acepta
+  identidades de terceros. Nunca llegó a funcionar — el callback contestó `501` desde la v0.1.
 - **Sin segundo factor** desde v0.20 (ADR 0016). Nunca estuvo encendido y el cliente no tenía cómo
   contestar un desafío, así que el login tiene una sola salida: o hay sesión o hay error.
 - **Cambio de municipalidad activa**: `POST /api/v1/{portal}/session/tenant` devuelve un nuevo par de
@@ -127,10 +127,9 @@ POST /api/v1/auth/{portal}/logout              {refreshToken}         -> 204
 POST /api/v1/auth/{portal}/password/forgot     {email}                -> 202
 POST /api/v1/auth/{portal}/password/reset      {token, newPassword}   -> 204
 POST /api/v1/auth/{portal}/email/verify        {token}                -> 204
-GET  /api/v1/auth/{portal}/oauth2/{provider}/start?redirectUri=       -> 302
-GET  /api/v1/auth/{portal}/oauth2/{provider}/callback                 -> 302 (code -> tokens)
 ```
-`{portal}` ∈ `citizen|admin|inspector|platform`; `{provider}` ∈ `google|microsoft|facebook`.
+`{portal}` ∈ `citizen|admin|inspector|platform`. Las dos rutas `/oauth2/{provider}/**` que este
+bloque listaba se retiraron en la v0.39 y hoy contestan `404` (ADR 0022).
 `POST /register` **no existe para `platform`** (403 `SELF_REGISTRATION_DISABLED`): esas cuentas se crean
 desde el propio back-office.
 
@@ -223,7 +222,7 @@ users(id PK, email citext UNIQUE, email_verified_at, given_name, family_name, se
       UNIQUE(document_country_code, document_type, document_number_normalized))
 
 user_credentials(user_id PK/FK, password_hash, algorithm, updated_at, must_change)
-user_federated_identities(id PK, user_id FK, provider, subject, email, linked_at, UNIQUE(provider, subject))
+user_federated_identities(...)  -- retirada del código en v0.39; la tabla se contrae en la siguiente (ADR 0022)
 refresh_tokens(id PK, user_id FK, portal, tenant_id, token_hash UNIQUE, family_id, expires_at,
                revoked_at, replaced_by, user_agent, ip_hash)
 auth_attempts(id PK, email_hash, portal, ip_hash, success, occurred_at)         -- rate limiting / lockout
@@ -249,7 +248,7 @@ luparx-evolution/
   backend/                      Maven multi-módulo, Java 21, Spring Boot 3.5
     platform-core/              kernel compartido: ids, errores RFC 9457, dinero, tenant context, auditoría
     module-geo/                 países, divisiones administrativas, documentos, teléfonos
-    module-identity/            usuarios, credenciales, federación, tokens
+    module-identity/            usuarios, credenciales, tokens
     module-tenancy/             municipalidades, membresías, roles/permisos
     module-parking/             stub del dominio (frontera declarada)
     app/                        arranque Spring Boot, seguridad, controllers, Flyway, OpenAPI
@@ -3356,3 +3355,57 @@ con cifras propias se ve idéntico y deja pasar justo el defecto que importa: qu
 corresponda a las filas que uno abre al hacer clic. Verificado así, de punta a punta: el panel dice
 `Sin pago vigente: 1`, el clic aterriza en `?verdict=NOT_COVERED` y la lista trae **1 resultado**; el
 panel dice `Aprobados: 2`, el clic aterriza en `?status=APPROVED` y la lista trae **2 resultados**.
+
+---
+
+# v0.39 — Se retira la federación de identidad (normativo)
+
+Google, Microsoft y Facebook salen del producto. **LupaRX emite sus propias credenciales**: correo y
+contraseña, con lo que ya existía desde la v0.1 — Argon2id, política de contraseñas, limitador de
+intentos en base de datos, verificación del correo y restablecimiento por correo (ADR 0005). El
+porqué está en la [ADR 0022](adr/0022-retire-identity-federation.md), que supersede a la 0006.
+
+Ningún usuario se ve afectado: el callback contestó `501` desde la v0.1, así que **nadie entró jamás
+por esa puerta** y `user_federated_identities` está vacía en todos los entornos.
+
+## Rutas que dejan de existir
+
+| Ruta | Antes | Ahora |
+|---|---|---|
+| `GET /auth/{portal}/oauth2/{provider}/start` | `302` al proveedor | `404` |
+| `GET /auth/{portal}/oauth2/{provider}/callback` | `501 NOT_IMPLEMENTED` | `404` |
+
+## Códigos de error que se retiran
+
+`FEDERATION_PROVIDER_UNKNOWN`, `FEDERATION_NOT_CONFIGURED`, `FEDERATION_EMAIL_NOT_VERIFIED`,
+`FEDERATION_LINK_CONFIRMATION_REQUIRED`, `FEDERATION_REGISTRATION_REQUIRED`. Ninguno era alcanzable
+sin un `client id` configurado.
+
+## Configuración que se retira
+
+Todo el bloque `luparx.federation.*` y `luparx.jwt.oauth-state-ttl`, con sus variables de entorno
+`OAUTH_*`. `APP_BASE_URL_<PORTAL>` se queda: es de donde salen los enlaces de los correos.
+
+## Esquema: se contrae después, no ahora
+
+`user_federated_identities` y el valor `FEDERATED_LINK_CONFIRMATION` de `verification_tokens.purpose`
+**siguen en la base**. Expand-and-contract (ADR 0010): una instancia de la versión anterior corriendo
+en paralelo durante un despliegue no puede tropezarse con una tabla que desapareció. La migración de
+contracción va en la versión siguiente.
+
+Por eso se conservan en el código, cada una con un comentario que dice hasta cuándo:
+
+- `VerificationPurpose.FEDERATED_LINK_CONFIRMATION` — sale cuando salga la restricción `CHECK` que la
+  nombra en la V3_0.
+- `AuditAction.FEDERATED_IDENTITY_LINKED` — **no sale nunca.** La bitácora es un vocabulario, no un
+  camino de código: `audit_events` tiene triggers que prohíben `UPDATE` y `DELETE` desde la v0.32, así
+  que una fila escrita con esa acción tiene que seguir siendo legible y filtrable por
+  `GET /admin/audit-events?action=` para siempre.
+
+## En las pantallas
+
+Las cuatro pantallas de entrada pierden el divisor «o continuá con» y los tres botones, con sus
+iconos de marca (`IconGoogle`, `IconMicrosoft`, `IconFacebook`) y sus claves `auth.login.oauth.*`.
+`LoginForm` deja de recibir `portal` y `apiBaseUrl`: los necesitaba **sólo** para armar la URL del
+proveedor, y el `AuthProvider` que cada app monta ya sabe en qué portal está. Una segunda copia al
+lado es una cosa más que puede desentenderse.

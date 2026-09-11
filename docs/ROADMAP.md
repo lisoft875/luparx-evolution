@@ -7,8 +7,8 @@
 ## v0.1 — Identidad, membresías, portal de administración de usuarios
 
 **Alcance**: `platform-core`, `module-geo`, `module-identity`, `module-tenancy` completos.
-Auto-registro en los tres portales (§2 del contrato), login local + federación (Google/
-Microsoft/Facebook), cambio de municipalidad activa, portal de administración de usuarios
+Auto-registro en los tres portales (§2 del contrato), login local —la federación con Google,
+Microsoft y Facebook se retiró en la v0.39, ADR 0022—, cambio de municipalidad activa, portal de administración de usuarios
 (alta/baja, bloqueo, reseteo de contraseña, roles, aprobación de membresías,
 auditoría, reporte de registrados), catálogos públicos (países, divisiones, tipos de documento,
 tenants publicables). `module-parking` existe sólo como módulo vacío con su frontera declarada
@@ -28,8 +28,6 @@ tenants publicables). `module-parking` existe sólo como módulo vacío con su f
 **Pendiente de definir con el usuario**:
 - Política de retención de `audit_events` y de datos personales por jurisdicción de lanzamiento
   (no hay un plazo legal único aplicable a todos los países de expansión futura).
-- Flujo de recuperación de acceso para un usuario cuya única identidad es federada (sin
-  contraseña local) y pierde acceso a su proveedor externo.
 - Qué constituye "municipalidad publicable" en `GET /catalog/tenants` (¿todo tenant activo, o un
   subconjunto curado?).
 

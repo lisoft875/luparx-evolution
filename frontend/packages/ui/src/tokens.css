@@ -1991,18 +1991,6 @@ button.lx-list-row {
   color: var(--lx-text);
 }
 
-.lx-auth-card__oauth-label {
-  margin: 0 0 var(--lx-space-3) 0;
-  text-align: center;
-  color: var(--lx-text-muted);
-  font-size: var(--lx-text-meta-size);
-}
-
-.lx-auth-card__oauth-buttons {
-  display: flex;
-  flex-direction: column;
-  gap: var(--lx-space-2);
-}
 
 .lx-password-field {
   position: relative;
@@ -2193,15 +2181,6 @@ button.lx-list-row {
   }
 }
 
-/* Provider mark to the left of the label, with the label optically centred as a block. */
-.lx-auth-card__oauth-button-content {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--lx-space-3, 12px);
-}
-.lx-auth-card__oauth-button-content svg {
-  flex: 0 0 auto;
-}
 
 /* Encabezado de pantalla con una accion a la derecha. El titulo manda: no se parte en dos lineas
    por dejarle sitio al boton; si de verdad no caben, el boton baja a la linea siguiente. */

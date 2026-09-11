@@ -12,7 +12,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 /**
- * One-time token for email verification, password reset or federated-link confirmation
+ * One-time token for email verification, password reset or a change of address
  * (CONTRACT.md §5). Only the hash is stored; the plaintext exists solely inside the message sent to
  * the person.
  */

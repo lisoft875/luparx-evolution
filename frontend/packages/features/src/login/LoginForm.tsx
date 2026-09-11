@@ -3,32 +3,19 @@ import { useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import type { OAuthProvider, Portal } from '@luparx/api-client';
-import { ApiError, NetworkError, oauthStartUrl } from '@luparx/api-client';
+import { ApiError, NetworkError } from '@luparx/api-client';
 import { useAuth } from '@luparx/auth';
-import { useTranslation, type TranslationKey } from '@luparx/i18n';
+import { useTranslation } from '@luparx/i18n';
 import {
   Alert,
   Button,
   FormField,
   IconEye,
   IconEyeOff,
-  IconFacebook,
-  IconGoogle,
-  IconMicrosoft,
   Input,
 } from '@luparx/ui';
 
-/** Each provider's own mark, as its sign-in guidelines require. */
-const PROVIDER_ICON: Record<OAuthProvider, (props: { size?: number }) => React.JSX.Element> = {
-  google: IconGoogle,
-  microsoft: IconMicrosoft,
-  facebook: IconFacebook,
-};
-
 export interface LoginFormProps {
-  portal: Portal;
-  apiBaseUrl: string;
   onSuccess: () => void;
   forgotPasswordHref: string;
   /** Omit for portals with no self-registration (CONTRACT.md §0 — `platform` has no `/register` route at all). */
@@ -38,8 +25,6 @@ export interface LoginFormProps {
   /** Optional extra notice under the subtitle. */
   notice?: string;
 }
-
-const OAUTH_PROVIDERS: OAuthProvider[] = ['google', 'microsoft', 'facebook'];
 
 function buildLoginSchema(requiredMessage: string, emailInvalidMessage: string) {
   return z.object({
@@ -64,10 +49,14 @@ function buildLoginSchema(requiredMessage: string, emailInvalidMessage: string) 
 
 type LoginValues = z.infer<ReturnType<typeof buildLoginSchema>>;
 
-/** One per portal, never a shared entry screen (CONTRACT.md §0): each app mounts this with its own `portal`. */
+/**
+ * One per portal, never a shared entry screen (CONTRACT.md §0).
+ *
+ * <p>It takes no `portal` prop: the {@link useAuth} provider each app mounts already carries it, and
+ * a second copy passed in beside it is one more thing that can disagree. It used to be here for the
+ * federated sign-in buttons, which v0.39 retired (ADR 0022).</p>
+ */
 export function LoginForm({
-  portal,
-  apiBaseUrl,
   onSuccess,
   forgotPasswordHref,
   registerHref,
@@ -120,10 +109,6 @@ export function LoginForm({
         setSubmitError(t('auth.login.error.server'));
       }
     }
-  }
-
-  function startOAuth(provider: OAuthProvider): void {
-    window.location.href = oauthStartUrl(apiBaseUrl, portal, provider, window.location.origin);
   }
 
   return (
@@ -203,23 +188,6 @@ export function LoginForm({
       ) : (
         <p className="lx-auth-card__footer-line">{t('auth.login.platformNoRegister')}</p>
       )}
-      <div className="lx-auth-card__oauth">
-        <hr className="lx-auth-card__divider" />
-        <p className="lx-auth-card__oauth-label">{t('auth.login.oauth.divider')}</p>
-        <div className="lx-auth-card__oauth-buttons">
-          {OAUTH_PROVIDERS.map((provider) => {
-            const ProviderIcon = PROVIDER_ICON[provider];
-            return (
-              <Button key={provider} type="button" variant="secondary" fullWidth onClick={() => startOAuth(provider)}>
-                <span className="lx-auth-card__oauth-button-content">
-                  <ProviderIcon />
-                  <span>{t(`auth.login.oauth.${provider}` as TranslationKey)}</span>
-                </span>
-              </Button>
-            );
-          })}
-        </div>
-      </div>
     </div>
   );
 }

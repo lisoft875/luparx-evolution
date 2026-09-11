@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { LocaleSwitcher, LoginForm } from '@luparx/features';
 import { AuthScreen, BRAND_ASSETS } from '@luparx/ui';
 import { useTranslation } from '@luparx/i18n';
-import { API_BASE_URL, PORTAL } from '../env';
 
 export function LoginPage(): React.JSX.Element {
   const navigate = useNavigate();
@@ -17,8 +16,6 @@ export function LoginPage(): React.JSX.Element {
       heroImage={BRAND_ASSETS.heroCitizenBg}
     >
       <LoginForm
-        portal={PORTAL}
-        apiBaseUrl={API_BASE_URL}
         subtitle={t('auth.portal.citizen.title')}
         onSuccess={() => navigate('/')}
         forgotPasswordHref="/forgot-password"
