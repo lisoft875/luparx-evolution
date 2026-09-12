@@ -80,7 +80,9 @@ import java.util.UUID;
  * left alone, so a restart neither duplicates history nor quietly refills a wallet a developer spent.</p>
  */
 @Component
-@Profile("dev")
+// `demo` es el mismo sembrado en una instancia publicada, pero sin las concesiones de `dev`
+// (llaves efímeras, pepper del repositorio, SQL en el log). Ver application-demo.yml.
+@Profile({"dev", "demo"})
 @ConditionalOnProperty(prefix = "luparx.dev", name = "seed-demo-data", havingValue = "true", matchIfMissing = true)
 public class DevActivitySeeder {
 

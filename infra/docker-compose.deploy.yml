@@ -1,0 +1,169 @@
+# =================================================================================================
+# Despliegue de LupaRX en una instancia con Docker (AWS Lightsail y equivalentes).
+#
+# No sustituye a docker-compose.yml: ese es el entorno de desarrollo en la laptop —bases expuestas,
+# contraseñas de juguete, Mailpit—. Este publica la aplicación, y por eso:
+#
+#   * NADA se expone a internet salvo el nginx de `web`, y aun así sólo en 127.0.0.1. El TLS lo pone
+#     el proxy que ya tenga la instancia; si no hay ninguno, `--profile edge` levanta un Caddy que
+#     saca el certificado solo.
+#   * PostgreSQL no publica puerto. Para conectarse desde afuera hay un túnel SSH, que deja rastro
+#     en el servidor y no depende de un firewall bien puesto.
+#   * Todo secreto viene de infra/.env (que no se versiona) o de un archivo montado. No hay ningún
+#     valor por omisión utilizable: la aplicación no arranca sin llaves, y eso es a propósito.
+#
+# Uso:  docker compose -f infra/docker-compose.deploy.yml --env-file infra/.env up -d
+#       (o, mejor, scripts/deploy.sh, que además verifica y espera a que quede sano)
+# =================================================================================================
+
+name: luparx
+
+services:
+  postgres:
+    # PostGIS y no postgres a secas: la geometría de las zonas es un tipo geométrico real (ADR 0024).
+    # Fijá una etiqueta que exista para la arquitectura de la instancia — las imágenes arm64 de
+    # postgis van por detrás de las amd64.
+    image: ${POSTGRES_IMAGE:-postgis/postgis:16-3.4}
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?falta POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER:?falta POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?falta POSTGRES_PASSWORD}
+      # Sin esto, una restauración o un índice sobre texto pueden ordenar distinto que la máquina
+      # donde se probó.
+      LANG: C.UTF-8
+    volumes:
+      - luparx_pgdata:/var/lib/postgresql/data
+      # Respaldos: scripts/deploy.sh escribe acá antes de cada despliegue.
+      - ./backups:/backups
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    networks: [luparx]
+
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    image: luparx/backend:${LUPARX_VERSION:-local}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # `demo` siembra las cinco municipalidades de prueba con la seguridad de un entorno real
+      # (llaves en disco, sin SQL en el log, pepper obligatorio). `dev` NUNCA va en una instancia
+      # que mire a internet: genera llaves efímeras y trae un pepper que está en el repositorio.
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-demo}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+
+      JWT_ISSUER: ${PUBLIC_BASE_URL}
+      JWT_KEY_ID: ${JWT_KEY_ID:?falta JWT_KEY_ID}
+      JWT_PRIVATE_KEY_PATH: /run/secrets/jwt/jwt-private.pem
+      JWT_PUBLIC_KEY_PATH: /run/secrets/jwt/jwt-public.pem
+      IP_HASH_PEPPER: ${IP_HASH_PEPPER:?falta IP_HASH_PEPPER}
+
+      # Un solo origen para los cuatro portales: es el mismo dominio y las peticiones ni siquiera
+      # salen de él. La lista sigue siendo una por portal porque el día que uno se mude a su propio
+      # subdominio, sólo cambia su renglón.
+      CORS_ALLOWED_ORIGIN_CITIZEN: ${PUBLIC_BASE_URL}
+      CORS_ALLOWED_ORIGIN_ADMIN: ${PUBLIC_BASE_URL}
+      CORS_ALLOWED_ORIGIN_INSPECTOR: ${PUBLIC_BASE_URL}
+      CORS_ALLOWED_ORIGIN_PLATFORM: ${PUBLIC_BASE_URL}
+
+      # Lo que va dentro de los correos (verificación, restablecimiento). Con rutas, no subdominios.
+      APP_BASE_URL_CITIZEN: ${PUBLIC_BASE_URL}
+      APP_BASE_URL_ADMIN: ${PUBLIC_BASE_URL}/admin
+      APP_BASE_URL_INSPECTOR: ${PUBLIC_BASE_URL}/inspector
+      APP_BASE_URL_PLATFORM: ${PUBLIC_BASE_URL}/platform
+
+      SMTP_HOST: ${SMTP_HOST:-mailpit}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_AUTH: ${SMTP_AUTH:-false}
+      SMTP_STARTTLS_ENABLED: ${SMTP_STARTTLS_ENABLED:-false}
+      SMTP_FROM_ADDRESS: ${SMTP_FROM_ADDRESS:-no-reply@luparx.local}
+
+      PLATFORM_DEFAULT_COUNTRY_CODE: ${PLATFORM_DEFAULT_COUNTRY_CODE:-CR}
+      PLATFORM_DEFAULT_CURRENCY_CODE: ${PLATFORM_DEFAULT_CURRENCY_CODE:-CRC}
+      PLATFORM_DEFAULT_LOCALE: ${PLATFORM_DEFAULT_LOCALE:-es-CR}
+      PLATFORM_DEFAULT_TIME_ZONE: ${PLATFORM_DEFAULT_TIME_ZONE:-America/Costa_Rica}
+
+      JAVA_OPTS: ${JAVA_OPTS:--XX:MaxRAMPercentage=70 -XX:+ExitOnOutOfMemoryError}
+    volumes:
+      - ./secrets/deploy:/run/secrets/jwt:ro
+      # Las fotografías de las boletas y los documentos de los permisos. Un volumen porque el
+      # almacenamiento de evidencia es de disco (FilesystemEvidenceStorage): si viviera en la capa
+      # del contenedor, cada despliegue las borraría.
+      - luparx_evidence:/var/lib/luparx/evidence
+    networks: [luparx]
+
+  web:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+      args:
+        PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:?falta PUBLIC_BASE_URL}
+    image: luparx/web:${LUPARX_VERSION:-local}
+    restart: unless-stopped
+    depends_on:
+      - backend
+    volumes:
+      - ./nginx/luparx.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      # Sólo loopback: quien termina el TLS es el proxy de la instancia. Cambiar esto a 0.0.0.0
+      # publica los cuatro portales en HTTP plano.
+      - "${WEB_BIND_ADDRESS:-127.0.0.1}:${WEB_HTTP_PORT:-8093}:80"
+    networks: [luparx]
+
+  # --- opcionales ------------------------------------------------------------------------------
+
+  mailpit:
+    # Buzón de mentira para una instancia de demostración: los correos de verificación quedan
+    # visibles en su interfaz en vez de perderse. Con SMTP real, apagalo y poné SMTP_* de verdad.
+    image: axllent/mailpit:latest
+    restart: unless-stopped
+    profiles: [demo-mail]
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: "1"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "1"
+      MP_MAX_MESSAGES: "500"
+    ports:
+      - "${MAILPIT_BIND_ADDRESS:-127.0.0.1}:${MAILPIT_UI_PORT:-8035}:8025"
+    networks: [luparx]
+
+  caddy:
+    # TLS automático para una instancia que no tiene ya un proxy delante. Si la instancia YA sirve
+    # otros sitios en 80/443, no levantes este perfil: usá el proxy que está y apuntalo a
+    # 127.0.0.1:${WEB_HTTP_PORT} (docs/DEPLOYMENT.md trae el bloque de ejemplo).
+    image: caddy:2-alpine
+    restart: unless-stopped
+    profiles: [edge]
+    depends_on:
+      - web
+    environment:
+      PUBLIC_HOST: ${PUBLIC_HOST:?falta PUBLIC_HOST}
+      ACME_EMAIL: ${ACME_EMAIL:?falta ACME_EMAIL}
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - luparx_caddy_data:/data
+      - luparx_caddy_config:/config
+    ports:
+      - "80:80"
+      - "443:443"
+    networks: [luparx]
+
+networks:
+  luparx:
+    name: luparx-deploy-net
+
+volumes:
+  luparx_pgdata:
+  luparx_evidence:
+  luparx_caddy_data:
+  luparx_caddy_config:

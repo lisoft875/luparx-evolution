@@ -16,6 +16,7 @@ import { MorePage } from './pages/MorePage';
 import { ProfilePage } from './pages/ProfilePage';
 import { ParkingPage } from './pages/ParkingPage';
 import { VehiclesPage } from './pages/VehiclesPage';
+import { NotificationsPage } from './pages/NotificationsPage';
 import { FinesPage } from './pages/FinesPage';
 import { FineDetailPage } from './pages/FineDetailPage';
 import { FineAppealPage } from './pages/FineAppealPage';
@@ -33,6 +34,15 @@ const queryClient = new QueryClient({
  */
 const Router = import.meta.env.VITE_ROUTER === 'hash' ? HashRouter : BrowserRouter;
 
+/**
+ * Prefijo de ruta con el que se construyó la app (`/` en desarrollo, `/admin/` y compañía cuando los
+ * cuatro portales se publican en un mismo dominio). Sin esto el enrutador cree que vive en la raíz:
+ * el primer clic saca al usuario del portal y un F5 en una pantalla interna devuelve un 404 del
+ * servidor. No aplica a HashRouter, donde la ruta va después del `#` y el prefijo no le incumbe.
+ */
+const BASENAME = import.meta.env.BASE_URL.replace(/\/+$/, '') || '/';
+const routerProps = import.meta.env.VITE_ROUTER === 'hash' ? {} : { basename: BASENAME };
+
 export function App(): React.JSX.Element {
   return (
     <I18nProvider storageScope={PORTAL}>
@@ -42,7 +52,7 @@ export function App(): React.JSX.Element {
           {/* Everything a citizen screen reads is scoped to one municipality; this drops the
               previous one's answers the instant the active one changes. */}
           <TenantCacheReset />
-          <Router>
+          <Router {...routerProps}>
             <Routes>
               <Route path="/login" element={<LoginPage />} />
               <Route path="/register" element={<RegisterPage />} />
@@ -103,6 +113,16 @@ export function App(): React.JSX.Element {
                   <RequireAuth loginPath="/login">
                     <RequireTenant selectTenantPath="/select-tenant">
                       <VehiclesPage />
+                    </RequireTenant>
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/notifications"
+                element={
+                  <RequireAuth loginPath="/login">
+                    <RequireTenant selectTenantPath="/select-tenant">
+                      <NotificationsPage />
                     </RequireTenant>
                   </RequireAuth>
                 }

@@ -52,6 +52,15 @@ const queryClient = new QueryClient({
  */
 const Router = import.meta.env.VITE_ROUTER === 'hash' ? HashRouter : BrowserRouter;
 
+/**
+ * Prefijo de ruta con el que se construyó la app (`/` en desarrollo, `/admin/` y compañía cuando los
+ * cuatro portales se publican en un mismo dominio). Sin esto el enrutador cree que vive en la raíz:
+ * el primer clic saca al usuario del portal y un F5 en una pantalla interna devuelve un 404 del
+ * servidor. No aplica a HashRouter, donde la ruta va después del `#` y el prefijo no le incumbe.
+ */
+const BASENAME = import.meta.env.BASE_URL.replace(/\/+$/, '') || '/';
+const routerProps = import.meta.env.VITE_ROUTER === 'hash' ? {} : { basename: BASENAME };
+
 export function App(): React.JSX.Element {
   return (
     <I18nProvider storageScope={PORTAL}>
@@ -60,7 +69,7 @@ export function App(): React.JSX.Element {
           <LocalePreferenceSync />
           {/* Municipal data is scoped to one municipality; drop the previous one's answers on a switch. */}
           <TenantCacheReset />
-          <Router>
+          <Router {...routerProps}>
             <Routes>
               <Route path="/login" element={<LoginPage />} />
               <Route path="/forgot-password" element={<ForgotPasswordPage />} />

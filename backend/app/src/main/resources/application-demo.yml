@@ -1,0 +1,44 @@
+# =================================================================================================
+# Perfil `demo` — una instancia PUBLICADA que muestra la aplicación funcionando con las cinco
+# municipalidades de prueba.
+#
+# Por qué existe en vez de usar `dev` en el servidor: `dev` está hecho para una laptop y hace tres
+# cosas que en una máquina con dirección pública son inaceptables —genera un par de llaves efímero
+# si no encuentra el de disco (cada reinicio invalida las sesiones, y la llave privada no la
+# custodia nadie), trae un pepper de hash de IP escrito en el repositorio, y escribe cada consulta
+# SQL en el log—. Lo único de `dev` que sí se quiere afuera es el sembrado de datos.
+#
+# Así que este perfil es exactamente eso: los datos de demostración, con la seguridad de un entorno
+# real. Los seeders declaran @Profile({"dev","demo"}) y son idempotentes; si la base ya tiene las
+# municipalidades, no hacen nada.
+#
+# LO QUE ESTE PERFIL NO ES: no es producción. Una instalación real no siembra datos de prueba, y
+# arranca con `SPRING_PROFILES_ACTIVE` vacío (la configuración base) o con un perfil propio.
+# =================================================================================================
+
+spring:
+  jpa:
+    show-sql: false
+  flyway:
+    # Que nadie pueda vaciar el esquema desde la aplicación, ni por accidente ni por un endpoint mal
+    # expuesto. Borrar una base es una operación de operador, con respaldo delante.
+    clean-disabled: true
+
+logging:
+  level:
+    cr.luparx: INFO
+    org.hibernate.SQL: WARN
+
+luparx:
+  jwt:
+    # Sin llaves en disco no se arranca. Es la diferencia entre "no levantó y lo veo en el log" y
+    # "levantó, firmó tokens con una llave que nadie guardó y al reiniciar todos quedaron afuera".
+    ephemeral-keys-when-missing: false
+  dev:
+    # Cinco municipalidades, sus zonas, tarifas, horarios, espacios numerados y unos ciudadanos con
+    # billetera e historial (DevDataSeeder + DevParkingSeeder + DevActivitySeeder).
+    seed-demo-data: ${LUPARX_DEV_SEED_DEMO_DATA:true}
+    # Menos espacios que en la laptop: 5 000 filas por municipalidad son útiles para probar
+    # paginación y una pérdida de tiempo y de disco en una instancia de demostración.
+    parking-spaces: ${LUPARX_DEV_PARKING_SPACES:800}
+    parking-spaces-total: ${LUPARX_DEV_PARKING_SPACES_TOTAL:1200}

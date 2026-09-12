@@ -45,10 +45,21 @@ frontend/apps/*/ios/App/App/public/
 .env.*
 !.env.example
 !infra/.env.example
+!infra/.env.deploy.example
 # Defaults de desarrollo local sin secretos (puertos y flags): se versionan a proposito.
 !.env.development
 infra/.env
 infra/secrets/
+# Llaves de firma y respaldos del despliegue: se generan EN el servidor y no salen de ahí.
+infra/secrets/deploy/
+infra/backups/
+
+# Evidencia y documentos que el backend escribe al correr en la laptop (EVIDENCE_ROOT por omisión).
+# Son datos de ejecución, no fuente: en el servidor viven en un volumen de Docker.
+backend/app/data/
+
+# Salidas de sesiones de Claude, que no son parte del producto.
+Claude outputs/
 
 # --- IDEs ---------------------------------------------------------------
 .idea/

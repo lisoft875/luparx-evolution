@@ -57,7 +57,8 @@ import java.util.Optional;
  * neither duplicates history nor renumbers a series a developer was reading.</p>
  */
 @Component
-@Profile("dev")
+// También en `demo`: las boletas son parte del fixture que hace demostrable la fiscalización.
+@Profile({"dev", "demo"})
 @ConditionalOnProperty(prefix = "luparx.dev", name = "seed-demo-data", havingValue = "true", matchIfMissing = true)
 public class DevEnforcementSeeder {
 

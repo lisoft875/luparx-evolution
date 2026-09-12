@@ -1,0 +1,16 @@
+# TLS automático para la instancia, sólo si no hay ya un proxy sirviendo 80/443.
+# Se activa con:  docker compose -f infra/docker-compose.deploy.yml --profile edge up -d
+{
+	email {$ACME_EMAIL}
+}
+
+{$PUBLIC_HOST} {
+	encode zstd gzip
+
+	# HSTS: una vez que el dominio sirve HTTPS, el navegador deja de intentar HTTP. Un año, que es
+	# el mínimo que piden las listas de precarga. Quitalo mientras estés probando con un dominio
+	# que quizá vuelva a HTTP.
+	header Strict-Transport-Security "max-age=31536000; includeSubDomains"
+
+	reverse_proxy web:80
+}
