@@ -88,6 +88,11 @@ public class IdempotencyFilter extends OncePerRequestFilter {
             // retry that arrives from a reinstalled app with a brand-new key.
             "/api/v1/inspector/citations",
             "/api/v1/inspector/citations/*/issue",
+            // Paying a citation from the wallet (CONTRACT.md v0.41). A double tap would charge the
+            // balance twice for one act — and the second charge would find the citation already PAID
+            // and fail *after* taking the money, which is the worst of both. The replay answers with
+            // the first response instead.
+            "/api/v1/citizen/fines/*/payments",
             // Money entering a wallet at a counter (CONTRACT.md v0.8). The header protects the
             // request; wallet_transactions.external_reference protects the payment when the retry
             // comes from another till, another shift or a reprinted receipt.

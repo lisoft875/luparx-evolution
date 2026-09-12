@@ -30,6 +30,7 @@ export const enUS: Record<TranslationKey, string> = {
   'common.yes': 'Yes',
   'common.no': 'No',
   'common.close': 'Close',
+  'common.understood': 'Got it',
   'common.select.placeholder': 'Select an option',
   'common.optional': 'optional',
   'common.languageSwitcher.label': 'Change language',
@@ -51,15 +52,11 @@ export const enUS: Record<TranslationKey, string> = {
   'auth.login.noAccount': "Don't have an account?",
   'auth.login.registerLink': 'Create account',
   'auth.login.platformNoRegister': 'Accounts for this portal are created by a platform administrator.',
-  'auth.login.oauth.divider': 'or continue with',
-  'auth.login.oauth.google': 'Continue with Google',
-  'auth.login.oauth.microsoft': 'Continue with Microsoft',
-  'auth.login.oauth.facebook': 'Continue with Facebook',
+
   'auth.login.error.invalidCredentials': 'Incorrect email or password.',
   'auth.login.error.network': 'Could not reach the server. Check your connection or whether the service is running.',
   'auth.login.error.tooManyAttempts': 'Too many attempts. Wait a few minutes before trying again.',
   'auth.login.error.server': 'The server could not process the sign-in.',
-
 
   'auth.forgotPassword.title': 'Recover your password',
   'auth.forgotPassword.description':
@@ -179,7 +176,6 @@ export const enUS: Record<TranslationKey, string> = {
   'tenant.membership.status.REVOKED': 'Revoked',
 
   'admin.users.title': 'Users',
-
 
   'admin.zones.title': 'Zones',
   'admin.zones.description':
@@ -535,7 +531,6 @@ export const enUS: Record<TranslationKey, string> = {
   'home.citizen.parkingStub.description':
     'Soon you will be able to start and pay for parking sessions here.',
 
-
   'nav.home': 'Home',
   'nav.portal.admin': 'Municipality',
   'nav.group.operation': 'Operation',
@@ -596,7 +591,18 @@ export const enUS: Record<TranslationKey, string> = {
   'admin.policy.summary.credit': 'Saved minutes',
   'admin.policy.summary.creditOn': 'From {{min}}, expiring after {{days}} days',
   'admin.policy.summary.grace': 'Grace period',
+  'admin.policy.summary.overlap': 'Shared bay',
+  'admin.policy.summary.overlapOn': 'Allowed',
   'admin.policy.summary.off': 'Off',
+  'admin.policy.overlap.title': 'Bays with more than one stay',
+  'admin.policy.overlap.description': 'What happens when somebody arrives at a bay a previous stay never released.',
+  'admin.policy.overlap.enabled': 'Allow paying for a bay that reads as taken',
+  'admin.policy.overlap.enabledHint':
+    'Somebody who pays for two hours and leaves after fifteen minutes without finishing leaves the bay free on the street and taken in the system.',
+  'admin.policy.overlap.notice':
+    'Each stay covers its own plate on that bay. An inspector looks up plate and bay, so neither vehicle is exposed to a non-payment citation.',
+  'admin.policy.overlap.offNotice':
+    'With this off the second citizen cannot pay for the bay: they park anyway, with nothing to show an inspector.',
   'admin.policy.error.generic': 'The policy could not be saved.',
   'admin.policy.error.extensionCeiling': 'The ceiling including extensions cannot be below {{max}}, the longest stay you sell.',
   'nav.dashboard': 'Dashboard',
@@ -726,6 +732,34 @@ export const enUS: Record<TranslationKey, string> = {
   'citizen.more.fines': 'Fines',
   'citizen.more.fines.meta': 'Review and appeal your fines.',
   'citizen.more.language': 'Choose language',
+  'citizen.more.notifications': 'Notifications',
+  'citizen.more.notifications.meta': 'What happened, and what of it reaches your email.',
+
+  'citizen.notifications.title': 'Notifications',
+  'citizen.notifications.subtitle': 'What happened in this municipality.',
+  'citizen.notifications.markAllRead': 'Mark all as read',
+  'citizen.notifications.unread': 'Unread',
+  'citizen.notifications.empty.title': 'All caught up',
+  'citizen.notifications.empty.description': 'There are no notifications in this municipality.',
+  'citizen.notifications.preferences.open': 'Email alerts',
+  'citizen.notifications.preferences.title': 'Email alerts',
+  'citizen.notifications.preferences.description': 'The bell shows everything. Choose what also reaches your email.',
+  'citizen.notifications.preferences.emailEnabled': 'Also tell me by email',
+  'citizen.notifications.preferences.emailEnabledHint': 'Sent to the address you sign in with. You can turn it off whenever you like.',
+  'citizen.notifications.preferences.categories': 'What should we tell you about?',
+  'citizen.notifications.preferences.error': 'The preference could not be saved.',
+
+  'notification.category.PARKING': 'Parking',
+  'notification.category.FINES': 'Fines',
+  'notification.category.WALLET': 'Wallet and minutes',
+
+  'notification.type.PARKING_SESSION_EXPIRING': 'Your parking for plate {{plate}} runs out at {{when}}.',
+  'notification.type.PARKING_SESSION_EXPIRED': 'The parking for plate {{plate}} ran out at {{when}}.',
+  'notification.type.CITATION_ISSUED': 'Citation {{citationNumber}} was issued against you, for {{amount}}.',
+  'notification.type.APPEAL_RESOLVED': 'The municipality has resolved your defence against citation {{citationNumber}}.',
+  'notification.type.WALLET_TOPUP_CREDITED': '{{amount}} was credited to your wallet.',
+  'notification.type.TIME_CREDITS_EXPIRING': 'Your {{minutes}} saved minutes lapse on {{when}}.',
+
   'nav.fines': 'Fines',
   'nav.catalogs': 'Catalogs',
   'nav.system': 'System',
@@ -827,6 +861,7 @@ export const enUS: Record<TranslationKey, string> = {
     "You have {{minutes}} left. This municipality doesn't credit remaining time: those minutes are lost and won't be refunded to your wallet.",
   'citizen.parking.finish.confirmSubmit': 'Yes, finish',
 
+  'citizen.parking.error.title': "We couldn't start your parking session",
   'citizen.parking.error.SESSION_ALREADY_ACTIVE_FOR_VEHICLE': 'This vehicle already has an active parking session.',
   'citizen.parking.error.SESSION_ALREADY_ACTIVE_FOR_PLATE':
     'This plate already has a running stay in this municipality.',
@@ -932,6 +967,11 @@ export const enUS: Record<TranslationKey, string> = {
 
   'inspector.home.offline': 'Offline — data saved locally',
   'inspector.home.online': 'Online',
+  'home.inspector.title': 'Patrol',
+  'inspector.home.patrol.title': "Today's round",
+  'home.inspector.patrolStub.title': 'No round yet',
+  'home.inspector.patrolStub.description':
+    'Once the municipality enables rounds, the assigned zones and the day\'s citations appear here.',
 
   // ---- Platform back-office (CONTRACT.md §4 `/api/v1/platform/**`) -----------------------------
 
@@ -1037,6 +1077,7 @@ export const enUS: Record<TranslationKey, string> = {
   'platform.catalogs.documentTypes.column.type': 'Type',
   'platform.catalogs.documentTypes.column.pattern': 'Pattern',
   'platform.catalogs.documentTypes.column.example': 'Example',
+  'platform.catalogs.documentTypes.column.default': 'Default',
 
   'platform.system.title': 'System',
   'platform.system.health.title': 'Service health',
@@ -1225,7 +1266,6 @@ export const enUS: Record<TranslationKey, string> = {
   'vehicle.color.gold': 'Gold',
   'vehicle.color.purple': 'Purple',
   'vehicle.color.other': 'Other',
-
 
   // ---- Enforcement (CONTRACT.md v0.7) ---------------------------------------------------------
 
@@ -1672,6 +1712,7 @@ export const enUS: Record<TranslationKey, string> = {
   'admin.appeals.status.SUBMITTED': 'Waiting',
   'admin.appeals.status.ACCEPTED': 'Accepted',
   'admin.appeals.status.REJECTED': 'Rejected',
+  'admin.appeals.status.WITHDRAWN': 'Withdrawn',
   'admin.appeals.column.filed': 'Filed',
   'admin.appeals.column.body': 'What they argue',
   'admin.appeals.column.images': 'Photos',
@@ -1699,8 +1740,6 @@ export const enUS: Record<TranslationKey, string> = {
   'citizen.fines.amountPayable': 'Amount payable today',
   'citizen.fines.discountUntil': 'Discounted until {{date}}',
   'citizen.fines.pay': 'Pay the fine',
-  'citizen.fines.payUnavailable':
-    'Paying online is not available yet: the contract is fixed and the implementation arrives with the payments batch. For now it is paid at the municipality.',
   'citizen.fines.appealable': 'Admits an appeal',
   'citizen.fines.notAppealable': 'Admits no appeal',
   'citizen.fines.empty.history': 'There are no fines in this municipality’s history.',
@@ -1740,6 +1779,25 @@ export const enUS: Record<TranslationKey, string> = {
   'citizen.appeal.error.imageLimit': 'You have reached the maximum number of photos this municipality allows.',
   'citizen.appeal.error.imageTooLarge': 'That photo is too large. It must be 1 MB or less.',
   'citizen.appeal.error.imageFailed': 'The photo could not be added. Your appeal is already filed.',
+
+  'citizen.fines.pay.confirmTitle': 'Pay this fine?',
+  'citizen.fines.pay.amount': '{{amount}} will be taken from your wallet.',
+  'citizen.fines.pay.discountNotice': 'That is the reduced amount; after {{date}} it rises to {{full}}.',
+  'citizen.fines.pay.balanceAfter': 'You would have {{amount}} left.',
+  'citizen.fines.pay.withdrawsAppeal':
+    'Paying withdraws the claim you filed: the municipality will no longer resolve it. This cannot be undone.',
+  'citizen.fines.pay.submit': 'Yes, pay',
+  'citizen.fines.pay.success': 'Fine paid.',
+  'citizen.fines.pay.successWithdrew': 'Fine paid. Your claim was withdrawn.',
+  'citizen.fines.pay.topUp': 'Add balance',
+  'citizen.fines.pay.error.INSUFFICIENT_BALANCE': 'Your balance does not cover this fine.',
+  'citizen.fines.pay.error.CITATION_NOT_PAYABLE': 'This fine can no longer be paid: it may already be paid or void.',
+  'citizen.fines.pay.error.CITATION_NOT_MANAGED_HERE': 'The municipality collects this fine in its other system.',
+  'citizen.fines.pay.error.APPEAL_BY_ANOTHER_CITIZEN':
+    'Somebody else filed the claim waiting on this fine, so paying it here would close their claim. The municipality has to resolve it first.',
+
+  'appeal.status.withdrawn': 'Withdrawn',
+  'citizen.appeal.withdrawn': 'You withdrew this claim when you paid the fine.',
 
   'appeal.status.submitted': 'Waiting',
   'appeal.status.accepted': 'Accepted',

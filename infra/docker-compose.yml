@@ -6,7 +6,14 @@
 
 services:
   postgres:
-    image: postgres:16-alpine
+    # PostGIS y no postgres a secas desde la v0.40 (ADR 0024): la geometría de las zonas es un tipo
+    # geométrico real con índice espacial, no un par de columnas numéricas.
+    #
+    # El cambio es EN SITIO: esta imagen es el mismo PostgreSQL 16 con la extensión añadida, así que
+    # el volumen `luparx_postgres_data` existente se sigue usando tal cual y no hay que recrear la
+    # base. Lo único que hace falta es levantar de nuevo el servicio y correr el backend, que aplica
+    # la V38_0. Fijá la etiqueta que tenga tu registro si 3.4 no está disponible.
+    image: postgis/postgis:16-3.4-alpine
     container_name: luparx-postgres
     restart: unless-stopped
     environment:

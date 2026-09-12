@@ -217,6 +217,36 @@ public class AppealService {
         return appeal;
     }
 
+    /**
+     * Closes the citizen's own waiting appeal because they chose to pay instead (v0.41).
+     *
+     * <p>Withdrawing is not a decision: the appeal ends {@link AppealStatus#WITHDRAWN}, with no
+     * official named and no reason, and the schema enforces exactly that. Collapsing it into
+     * {@code REJECTED} would tell the citizen — for as long as the record lasts — that the
+     * municipality ruled against them, when it never heard the case.</p>
+     *
+     * <p><b>Only the person who filed it may close it.</b> Two citizens can each have registered the
+     * same plate (CONTRACT.md v0.2, rule 2), so both see the citation and either could press pay.
+     * Letting one of them retire the other's defence as a side effect of paying would destroy
+     * somebody's case without ever telling them, so the payment is refused instead.</p>
+     *
+     * @return the appeal that was withdrawn, or empty when there was nothing waiting
+     */
+    @Transactional
+    public Optional<CitationAppeal> withdrawOnPayment(TenantId tenantId, UserId payer, UUID citationId) {
+        Optional<CitationAppeal> found = appealRepository.findByTenantIdAndCitationId(tenantId.value(), citationId);
+        if (found.isEmpty() || found.get().getStatus().isResolved()) {
+            return Optional.empty();
+        }
+        CitationAppeal appeal = found.get();
+        if (!appeal.getUserId().equals(payer.value())) {
+            throw ConflictException.of(ErrorCode.APPEAL_BY_ANOTHER_CITIZEN,
+                    "error.enforcement.appeal.byAnotherCitizen");
+        }
+        appeal.withdraw(clock.instant());
+        return Optional.of(appealRepository.save(appeal));
+    }
+
     // --- settings ----------------------------------------------------------------------------------
 
     /** How many photographs a defence may carry here. The municipality's decision, with a default. */

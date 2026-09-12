@@ -18,5 +18,13 @@ public enum WalletTransactionType {
     EXTENSION_CHARGE,
 
     /** Operator correction, in either direction, and the only type whose sign is unconstrained. */
+    /**
+     * A citation paid with the balance already in the wallet (v0.41).
+     *
+     * <p>Negative, like the parking charges, and for the same reason: money leaves. It is not a
+     * {@code payment} of the billing module — nothing entered the platform here. The money came in
+     * earlier, as a top-up, and that is the row that has a payment behind it.</p>
+     */
+    FINE_CHARGE,
     ADJUSTMENT
 }

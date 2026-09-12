@@ -23,7 +23,8 @@ import java.util.List;
 record ParkingPolicySnapshot(String sessionIncrements, int sessionMin, int sessionMax,
                              boolean extensionEnabled, String extensionIncrements, int extensionMaxTotal,
                              boolean earlyFinishEnabled, boolean creditOnEarlyFinishEnabled,
-                             int creditMinRemaining, int creditExpiryDays, int graceMinutes, int freeMinutes) {
+                             int creditMinRemaining, int creditExpiryDays, int graceMinutes, int freeMinutes,
+                             boolean overlappingStaysEnabled) {
 
     static ParkingPolicySnapshot of(ParkingPolicy policy) {
         return new ParkingPolicySnapshot(
@@ -38,7 +39,8 @@ record ParkingPolicySnapshot(String sessionIncrements, int sessionMin, int sessi
                 policy.getCreditMinRemainingMinutes(),
                 policy.getCreditExpiryDays(),
                 policy.getGraceMinutes(),
-                policy.getFreeMinutes());
+                policy.getFreeMinutes(),
+                policy.isOverlappingStaysEnabled());
     }
 
     /** What changed between this snapshot and the policy as it now stands. Unchanged fields drop out. */
@@ -64,6 +66,11 @@ record ParkingPolicySnapshot(String sessionIncrements, int sessionMin, int sessi
                         Integer.valueOf(now.getCreditExpiryDays()))
                 .compare("graceMinutes", Integer.valueOf(graceMinutes), Integer.valueOf(now.getGraceMinutes()))
                 .compare("freeMinutes", Integer.valueOf(freeMinutes), Integer.valueOf(now.getFreeMinutes()))
+                // Turning this off is how a municipality goes back to selling each bay once. It decides
+                // whether a citizen standing at an unreleased bay can pay at all, so it belongs in the
+                // trail beside the numbers.
+                .compare("overlappingStaysEnabled", Boolean.valueOf(overlappingStaysEnabled),
+                        Boolean.valueOf(now.isOverlappingStaysEnabled()))
                 .build();
     }
 }

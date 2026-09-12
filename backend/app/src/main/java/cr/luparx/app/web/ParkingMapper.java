@@ -103,6 +103,7 @@ public class ParkingMapper {
                 policy.getCreditExpiryDays(),
                 policy.getGraceMinutes(),
                 policy.getFreeMinutes(),
+                policy.isOverlappingStaysEnabled(),
                 policy.getUpdatedAt());
     }
 

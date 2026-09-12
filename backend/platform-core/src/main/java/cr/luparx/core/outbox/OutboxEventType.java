@@ -16,4 +16,13 @@ public final class OutboxEventType {
     public static final String PARKING_SESSION_STARTED = "parking.session.started";
     public static final String PARKING_SESSION_EXTENDED = "parking.session.extended";
     public static final String PARKING_SESSION_FINISHED = "parking.session.finished";
+    /**
+     * A recorded notification whose owner also wants it by email (v0.38).
+     *
+     * <p>The first type this table has ever had a consumer for. Its payload is one field —
+     * {@code notificationId} — because everything the message says is read back from the row at send
+     * time: a queued copy could disagree with what the bell shows, and an address in a queue table is
+     * a personal identifier sitting somewhere it is not needed (SECURITY.md §11).</p>
+     */
+    public static final String NOTIFICATION_EMAIL_REQUESTED = "notification.email.requested";
 }

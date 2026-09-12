@@ -9,16 +9,14 @@ import java.time.Duration;
  * @param accessTokenTtl    lifetime of the signed access token
  * @param refreshTokenTtl   lifetime of the opaque refresh token; {@link Duration#ZERO} (or anything
  *                          non-positive) means the refresh token never expires (CONTRACT.md v0.3 §2)
- * @param oauthStateTtl     lifetime of the signed OAuth {@code state} value
  */
 public record TokenProperties(
         String issuer,
         Duration accessTokenTtl,
-        Duration refreshTokenTtl,
-        Duration oauthStateTtl) {
+        Duration refreshTokenTtl) {
 
     public static TokenProperties defaults(String issuer) {
-        return new TokenProperties(issuer, Duration.ofMinutes(15), Duration.ZERO, Duration.ofMinutes(10));
+        return new TokenProperties(issuer, Duration.ofMinutes(15), Duration.ZERO);
     }
 
     /**

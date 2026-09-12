@@ -509,6 +509,11 @@ public class EnforcementMapper {
         return zones;
     }
 
+    /** The same mapping the DTOs use, for a caller that has an amount and not a citation (v0.41). */
+    public ParkingDtos.MoneyDto toMoney(Money amount) {
+        return money(amount);
+    }
+
     private ParkingDtos.MoneyDto money(Money money) {
         return money == null ? null : new ParkingDtos.MoneyDto(money.minorUnits(), money.currencyCode());
     }

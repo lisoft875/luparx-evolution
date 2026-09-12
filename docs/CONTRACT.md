@@ -114,7 +114,7 @@ Header obligatorio en escrituras sensibles: `Idempotency-Key`.
 GET  /api/v1/catalog/countries                       -> [{code, name, dialCode, flagEmoji, defaultLocale, defaultCurrency, defaultTimeZone}]
 GET  /api/v1/catalog/countries/{code}/admin-levels   -> [{level, labelKey, required}]
 GET  /api/v1/catalog/countries/{code}/divisions?parentId=&level=  -> [{id, code, name, level, parentId}]
-GET  /api/v1/catalog/countries/{code}/document-types -> [{type, labelKey, pattern, example}]
+GET  /api/v1/catalog/countries/{code}/document-types -> [{type, labelKey, pattern, example, default}]   (ya ordenada; ver v0.9)
 GET  /api/v1/catalog/tenants?country=                -> [{id, slug, name, countryCode}]   (municipalidades publicables)
 ```
 
@@ -3358,6 +3358,173 @@ panel dice `Aprobados: 2`, el clic aterriza en `?status=APPROVED` y la lista tra
 
 ---
 
+# v0.37 — La bahía que nadie liberó (normativo)
+
+Alguien paga dos horas, se va a los quince minutos y no finaliza su estadía. La bahía queda libre en
+la calle y ocupada en la plataforma durante una hora y cuarenta y cinco minutos. Hasta aquí, el
+siguiente ciudadano que llegaba recibía `SPACE_OCCUPIED`.
+
+## Por qué eso estaba mal
+
+Negarle el cobro **no libera la bahía**. El carro ya está ahí. Lo que la negativa producía era un
+ciudadano estacionado, dispuesto a pagar, sin poder hacerlo, y por lo tanto **sin nada que mostrarle
+a un fiscalizador**. La plataforma le impedía comprar la única prueba que lo protege y después lo
+dejaba expuesto a la boleta. El incumplimiento del conductor anterior lo terminaba pagando el
+segundo.
+
+## El supuesto que se revisa
+
+«Una bahía, una estadía viva» sonaba a hecho físico y era una restricción de esquema
+(`uq_parking_sessions_active_space`). Una estadía no es la ocupación de un espacio: es **un pago, con
+una placa, sobre una bahía, durante una ventana**. Dos pagos traslapados sobre el mismo metro
+cuadrado no son un dato corrupto; son dos personas que pagaron.
+
+## Fiscalización no cambia, y por eso esto es posible
+
+`PlateVerdict` (v0.28) ya pregunta **«¿tiene esta placa una estadía viva en esta bahía?»**, nunca «¿de
+quién es esta bahía?». Con dos estadías vivas sobre una misma bahía:
+
+* cada placa lee `COVERED` por su propia estadía;
+* la estadía ajena no aparece en `otherStays` de la otra: no es asunto de esa placa;
+* una tercera placa que no pagó sigue leyendo `NOT_COVERED`. **El traslape no absuelve a nadie más
+  que a quien pagó**, que es la equivocación más cara que este módulo puede cometer y la que las
+  pruebas de `PlateStatusService` fijan.
+
+## La regla es del municipio
+
+`parking_policies.overlapping_stays_enabled`, **`true` por defecto**. En `false` el inicio vuelve a
+responder `SPACE_OCCUPIED` y la municipalidad vende cada bahía una sola vez. El valor permisivo es el
+predeterminado porque el restrictivo tiene una víctima concreta —el segundo ciudadano— y el permisivo
+no tiene ninguna; cobrar dos veces la misma ventana es una discusión legítima, pero es del municipio.
+
+El portal de administración lo muestra con la consecuencia dicha en palabras, encendido y apagado: no
+es una casilla neutral, es decidir si el segundo ciudadano se estaciona cubierto o no.
+
+## Lo que sigue siendo imposible
+
+**Una placa no puede tener dos estadías vivas en la misma bahía**, con la bandera encendida o
+apagada: eso es una persona cobrada dos veces por el mismo espacio.
+`uq_parking_sessions_active_space_plate` lo impide en la base, así que dos réplicas que carreen
+pierden la carrera ahí y no en memoria.
+
+## Contrato de API
+
+`ParkingPolicyResponse` gana `overlappingStaysEnabled` (aditivo). `UpdateParkingPolicyRequest` lo gana
+como **opcional**: ausente conserva lo que la municipalidad tenga, porque un portal escrito antes de
+esta versión no debe voltear en silencio una regla que no conoce.
+
+Para el ciudadano no hay pantalla nueva ni campo nuevo: lo único que cambia es que un inicio que antes
+se rechazaba ahora funciona.
+
+## Un defecto que salió de paso
+
+`ParkingSessionRepository.findBySpaceIdAndStatus` devolvía `Optional` **apoyado en ese índice único**,
+y lo decía en su javadoc. Quitar el índice sin cambiar la firma no habría escondido la segunda
+estadía: Spring Data lanza con más de un resultado, así que el caso ordinario —una bahía que alguien
+no liberó— habría sido un 500 la próxima vez que alguien intentara parquear ahí. Ahora es
+`findAllBySpaceIdAndStatus` y devuelve una lista. **Volverla a `Optional` reintroduce el defecto.**
+
+---
+
+# v0.38 — La campana, y lo que de eso llega al correo (normativo)
+
+La campanita del portal ciudadano mostraba un **7 quemado** y no llevaba a ninguna parte
+(`badgeCount: 7`, `onClick: () => undefined`, con su `TODO(domain)`). Detrás no había tabla, ni
+endpoint, ni evento.
+
+## Lo que obliga a construirlo
+
+Todo lo demás que esta plataforma podría avisar tiene una petición detrás. **Una estadía que vence no
+la tiene.** La barra del temporizador ya avisa, pero sólo con la app abierta y en ese teléfono, que es
+justo donde el ciudadano no está cuando se le acaba el tiempo. Sin esto, la manera confiable de
+enterarse de que la estadía venció es la boleta en el parabrisas.
+
+## Una notificación no guarda texto
+
+Guarda un `type` estable y sus `params` crudos: una placa, un instante ISO, un monto en unidades
+menores. La oración la arma el cliente con su propio diccionario, y el correo con
+`messages_*.properties`. Es la misma regla que `NotificationSender` obedece desde la v0.1, y tiene dos
+consecuencias que se piden: quien cambie la app a inglés lee **todo su historial** en inglés, y
+corregir una redacción torpe no obliga a reescribir filas.
+
+Por eso `NotificationResponse` **no tiene un campo `message`**. Un cliente que quiera uno lo arma.
+
+## Qué se avisa
+
+| tipo | categoría | de qué habla | quién lo produce |
+|---|---|---|---|
+| `PARKING_SESSION_EXPIRING` | `PARKING` | la estadía | job, cada minuto |
+| `PARKING_SESSION_EXPIRED` | `PARKING` | la estadía | el mismo job |
+| `CITATION_ISSUED` | `FINES` | la boleta | al emitirla |
+| `APPEAL_RESOLVED` | `FINES` | la boleta | al resolver el descargo |
+| `WALLET_TOPUP_CREDITED` | `WALLET` | el movimiento | al acreditar |
+| `TIME_CREDITS_EXPIRING` | `WALLET` | el lote de minutos | job, cada 12 h |
+
+`CITATION_ISSUED` **sólo llega si exactamente una persona tiene esa placa registrada**. Heredado de
+`findUniqueVehicleByPlate` y deliberado: las placas son únicas por ciudadano y no globalmente (v0.2,
+regla 2), y decirle a la persona equivocada que la multaron es peor que no decirle a nadie.
+
+## La campana en la transacción, el correo por el outbox
+
+La fila de `notifications` es estado de esta misma base, así que se escribe **en la transacción del
+hecho**: no puede existir una estadía vencida sin su aviso. El correo sale de esta base, así que se
+encola en `outbox_events` (ADR 0012) y lo entrega un relay con reintentos y backoff exponencial. Eso
+hace que «la campana siempre tiene razón» y «el SMTP estaba caído a las tres de la mañana» sean dos
+hechos independientes.
+
+**`outbox_events` tiene su primer consumidor.** Existe desde la V1_0 y nunca tuvo uno: se escribían
+filas y nadie las publicaba. El relay reclama **un solo tipo** (`notification.email.requested`), porque
+uno que barriera todo trataría dos años de eventos de parqueo e identidad como una cola por entregar.
+
+El evento encolado lleva **un solo campo: el id de la notificación**. Dirección, idioma, municipalidad
+y cada número se leen al enviar, así que un cambio de dirección entre el hecho y la entrega llega
+donde corresponde, y ninguna dirección queda guardada en una tabla de cola.
+
+## Repetir es gratis
+
+`uq_notifications_subject` sobre `(user_id, type, subject_id)`. Es lo que permite que el job de
+vencimientos corra cada minuto sobre la misma ventana sin mandar quince avisos: el segundo intento
+choca contra un índice, en vez de depender de que el job recuerde algo que la otra réplica no puede
+ver. Los jobs de fondo tienen que ser idempotentes y ésta es la forma barata de serlo.
+
+## El correo se elige, y por categoría
+
+`notification_preferences` es **por persona y no por municipalidad**: es una decisión sobre su bandeja
+de entrada, y quien pertenece a tres municipalidades no quiere tomarla tres veces.
+
+* **Interruptor maestro**, `false` por defecto. La campana no pide permiso —es la propia app—; el
+  correo sí. Mandarlo sin que lo pidan es como se termina en la carpeta de spam, arrastrando los
+  correos que sí importan (verificación, restablecer contraseña).
+* **Categorías** en tabla hija, donde **la fila es el permiso**. Se conservan con el maestro apagado,
+  así que volver a encenderlo devuelve lo que la persona había marcado.
+* `availableCategories` viaja en la respuesta, así que la pantalla nunca fija la lista: una categoría
+  nueva aparece sin publicar un cliente.
+* Una categoría que el servidor no conoce se **rechaza**, no se descarta: ignorarla en silencio le
+  diría al cliente que su elección quedó guardada cuando no.
+
+## API
+
+```
+GET  /api/v1/citizen/notifications?page&size     → página del buzón de la municipalidad activa
+GET  /api/v1/citizen/notifications/unread-count  → { unread }
+POST /api/v1/citizen/notifications/{id}/read     → la notificación, ya leída
+POST /api/v1/citizen/notifications/read-all      → { marked }
+GET  /api/v1/citizen/notifications/preferences   → maestro + categorías + catálogo
+PUT  /api/v1/citizen/notifications/preferences   → reemplazo completo
+```
+
+`unread-count` es su propio endpoint y **no un campo del listado**: el número se lee desde todas las
+pantallas y el listado no, así que contestarlo con una página de filas convertiría la pregunta más
+barata de la app en la más cara.
+
+Marcar leída conserva el **primer** instante. «Cuándo lo viste» tiene una sola respuesta; dejar que
+una segunda llamada lo pise convertiría el campo en «cuándo abriste la lista por última vez».
+
+Un id que no existe y uno que es de otra persona dan **la misma** respuesta: distinguirlos convertiría
+el identificador en un oráculo, que es la forma de todo hallazgo BOLA (SECURITY.md §4).
+
+---
+
 # v0.39 — Se retira la federación de identidad (normativo)
 
 Google, Microsoft y Facebook salen del producto. **LupaRX emite sus propias credenciales**: correo y
@@ -3409,3 +3576,221 @@ iconos de marca (`IconGoogle`, `IconMicrosoft`, `IconFacebook`) y sus claves `au
 `LoginForm` deja de recibir `portal` y `apiBaseUrl`: los necesitaba **sólo** para armar la URL del
 proveedor, y el `AuthProvider` que cada app monta ya sabe en qué portal está. Una segunda copia al
 lado es una cosa más que puede desentenderse.
+
+---
+
+# v0.40 — La zona es un lugar (normativo)
+
+Una zona de cobro era un código y un nombre. Desde esta versión tiene **perímetro**, guardado como
+geometría real en PostGIS y leído y escrito como GeoJSON. El porqué, las alternativas y lo que queda
+fuera están en la [ADR 0024](adr/0024-zone-geometry-postgis.md); esto es el contrato.
+
+No es una integración con ArcGIS: es el modelo diseñado para que conectar un GIS sea después una
+migración aditiva y no un rediseño (punto 13 del plan).
+
+## Esquema
+
+`parking_zones.geom geometry(MultiPolygon, 4326)`, **nullable** (V38_0).
+
+| Decisión | Por qué |
+|---|---|
+| `MultiPolygon`, no `Polygon` | Una zona discontinua —dos cuadras que no se tocan— es lo normal. La API acepta `Polygon` y el servidor lo promueve con `ST_Multi`. |
+| SRID **4326** (WGS84), lon/lat | Lo que emite un GPS, lo que exige RFC 7946 y lo que ArcGIS y QGIS leen sin traducir. Para metros se castea a `geography` en la consulta. |
+| Nullable | Una zona sin dibujar cobra igual. `NOT NULL` obligaría a inventar un polígono por fila existente. |
+| `ck_parking_zones_geom_valid` | `ST_IsValid` y `NOT ST_IsEmpty`. Un polígono autointersectado se acepta sin chistar y después hace que `ST_Contains` conteste cosas sin sentido. |
+| `ck_parking_zones_geom_bounds` | El SRID 4326 **no** acota valores: una longitud de 500 grados es válida para PostGIS. Se comprueba sobre la caja envolvente, que ya está calculada. |
+| `ix_parking_zones_geom` GiST parcial | `WHERE geom IS NOT NULL`: una zona sin dibujar nunca es respuesta de una consulta geométrica. |
+
+La columna se llama `geom` por convención de GIS; en la API el campo es `geometry`, por RFC 7946.
+
+## Autoría: administración municipal
+
+```
+GET    /api/v1/admin/parking/zones/{id}/geometry   -> 200 {geometría} | 204 (sin dibujar)
+PUT    /api/v1/admin/parking/zones/{id}/geometry   -> 200 {geometría}
+DELETE /api/v1/admin/parking/zones/{id}/geometry   -> 204
+```
+
+Requieren `PERM_TENANT_MANAGE`. **El cuerpo es la geometría misma**, un objeto RFC 7946, no un
+`Feature` ni un envoltorio propio: es lo que produce `ST_AsGeoJSON`, lo que acepta
+`ST_GeomFromGeoJSON` y lo que un cliente GIS ya sabe leer.
+
+- `PUT` y no `PATCH`: una geometría no tiene partes que fundir. Lo que llega es el perímetro de ahora
+  en adelante, y mandarlo dos veces deja el mismo estado.
+- Una zona de otra municipalidad contesta **404**, no 204: «esta zona no tiene geometría» ya
+  confirmaría que existe.
+- `DELETE` sobre una zona sin geometría contesta **204 sin escribir nada**. El estado que el llamante
+  pidió ya se cumple, y un `updated_at` nuevo por un no-op sería una mentira en la bitácora.
+- Bloqueo optimista: se compara el `version` de la zona leído justo antes. Si otra persona la editó
+  en el medio, **409 `OPTIMISTIC_LOCK_CONFLICT`**.
+
+## Consumo: mapa del ciudadano
+
+```
+GET /api/v1/citizen/parking/zones/geojson[?bbox=minLon,minLat,maxLon,maxLat]  -> 200 FeatureCollection
+```
+
+Un `FeatureCollection` con las zonas **activas y dibujadas** de la municipalidad activa. Cada
+`Feature` lleva `id` y, en `properties`, sólo `code` y `name` — nada de tarifas ni de configuración
+interna: lo que se sirve a un teléfono es público en cuanto se dibuja.
+
+- `bbox` es longitud primero (RFC 7946 §5) y es el único predicado que el índice espacial puede
+  contestar. Una caja invertida o degenerada se **rechaza**, no se corrige: reinterpretarla en
+  silencio devolvería una respuesta plausible a una pregunta que nadie hizo.
+- Sin `bbox`, todas las zonas dibujadas, acotadas por `luparx.geo.max-zones-per-map`.
+- Las zonas sin dibujar **están ausentes**. Un `Feature` con geometría nula es GeoJSON legal y todo
+  mapa lo dibuja como nada, que parece un defecto del mapa y no una zona sin trazar.
+- `Cache-Control: private, max-age=1800`: la geometría es lo más estático que sirve ese controlador y
+  no lleva precios.
+
+## Validación, en dos lugares y a propósito
+
+La **forma** la valida el servidor en Java y es la única capaz de decir *qué campo* está mal:
+
+| Caso | Respuesta |
+|---|---|
+| No es un objeto, o es un `Feature`/`FeatureCollection`, o el tipo no es `Polygon`/`MultiPolygon` | 422 `INVALID_GEOMETRY` con `errors[].field` |
+| Anillo con menos de cuatro posiciones, o sin cerrar | 422 `INVALID_GEOMETRY` |
+| Posición que no sean exactamente dos números (la altitud de RFC 7946 no se acepta: la columna es 2D) | 422 `INVALID_GEOMETRY` |
+| Longitud fuera de −180..180 o latitud fuera de −90..90 | 422 `INVALID_GEOMETRY` |
+| Más vértices que `luparx.geo.max-zone-vertices` | 422 `GEOMETRY_TOO_COMPLEX` |
+| `bbox` que no sean cuatro números describiendo una caja real | 422 `VALIDATION_FAILED` con `errors[].field = bbox` |
+
+La **validez topológica** la dice PostGIS. Cuando rechaza un polígono se le pregunta por qué
+(`ST_IsValidReason`) y la respuesta viaja en el mensaje: 422 `INVALID_GEOMETRY` con
+«Self-intersection at or near point …», que es la diferencia entre un cliente que puede arreglar su
+dibujo y uno que no.
+
+**Nada se repara.** Un anillo abierto no se cierra solo y un sentido de giro no se invierte: aceptar
+un polígono que el cliente no dibujó es como una zona termina cobrando una calle que nadie aprobó.
+
+## Bitácora
+
+`PARKING_ZONE_GEOMETRY_UPDATED` y `PARKING_ZONE_GEOMETRY_CLEARED`, con `code`, el número de
+posiciones y si reemplazó a una anterior. **Nunca el polígono**: un antes y después de dos mil
+coordenadas en `audit_events` —tabla que no se puede reescribir desde la v0.32— enterraría el rastro
+que existe para ser legible. Son acciones propias y no una variante de `PARKING_ZONE_UPDATED`:
+renombrar una zona es cosmético, mover su perímetro cambia qué calle se cobra.
+
+## Configuración
+
+```
+luparx.geo.max-zone-vertices   GEO_MAX_ZONE_VERTICES     10000
+luparx.geo.max-zones-per-map   GEO_MAX_ZONES_PER_MAP     500
+```
+
+Barandas contra una respuesta que nadie puede usar, no reglas de negocio.
+
+## Operación
+
+La imagen de desarrollo pasa a `postgis/postgis:16-3.4-alpine`. **El cambio es en sitio**: mismo
+PostgreSQL 16, mismo volumen, no hay que recrear ni volver a sembrar. En un Postgres administrado la
+extensión la habilita una vez alguien con privilegio; ver `docs/RUNBOOK.md`.
+
+---
+
+# v0.41 — Pagar la multa con el saldo (normativo)
+
+`POST /citizen/fines/{id}/payments` dejó de contestar `501`. Un ciudadano paga su multa con el saldo
+de su billetera, y si tenía un reclamo esperando, **pagar lo retira**. El porqué y las alternativas
+están en la [ADR 0025](adr/0025-paying-a-fine-from-the-wallet.md); esto es el contrato.
+
+En esta versión también cambia una palabra en toda la app del ciudadano: **«descargo» pasa a ser
+«reclamo»**. Es sólo texto visible. Las claves de traducción (`citizen.appeal.*`, `appeal.status.*`),
+las rutas (`/fines/{id}/appeals`), los códigos de error y el nombre `CitationAppeal` **no cambian**.
+
+## La ruta
+
+```
+POST /api/v1/citizen/fines/{id}/payments     -> 200 FinePaymentResponse
+```
+
+`ROLE_CITIZEN`, **`Idempotency-Key` obligatoria** (lista blanca del filtro).
+
+```jsonc
+// petición
+{ "method": "WALLET" }
+```
+
+- El cuerpo nombra **el medio y nunca un monto**. Cuánto se cobra lo decide el servidor: es el
+  rebajado mientras la ventana de pronto pago siga abierta y el completo después.
+- `method` distinto de `WALLET` (incluido `CARD`) → `400 VALIDATION_FAILED` con `field: "method"`.
+  No se cobra la billetera «por defecto».
+
+```jsonc
+// respuesta 200
+{
+  "fine":    { "fine": {...}, "evidence": [...], "history": [...], "appeal": {...}|null },
+  "charged": { "amountMinor": 15000, "currencyCode": "CRC" },
+  "appealWithdrawn": true,
+  "walletTransactionId": "…"      // null si el monto exigible era cero
+}
+```
+
+La respuesta trae **el detalle completo de la multa ya pagada**, no un acuse: el cliente la guarda en
+su caché y la pantalla no vuelve a mostrar «sin pagar» ni por un cuadro.
+
+## Rechazos, en este orden
+
+| Situación | HTTP | `code` |
+|---|---|---|
+| No es una multa de este ciudadano (o no existe) | 404 | `CITATION_NOT_FOUND` |
+| Boleta espejo (v0.34): la cobra el otro sistema | 409 | `CITATION_NOT_MANAGED_HERE` |
+| El estado no admite `PAID` (ya pagada, anulada, sin efecto) | 409 | `CITATION_NOT_PAYABLE` |
+| El reclamo en trámite lo presentó **otra** persona con la misma placa | 409 | `APPEAL_BY_ANOTHER_CITIZEN` |
+| El saldo no alcanza | 409 | `INSUFFICIENT_BALANCE` |
+
+**El orden es normativo.** El cobro va después de todos los rechazos y dentro de la misma
+transacción: ninguna negativa deja plata movida. No existe cobro parcial, y desde aquí no hay salto
+a la tarjeta: el saldo insuficiente se rechaza y la pantalla ofrece recargar.
+
+Una multa que no existe y una que es de otra persona contestan **lo mismo**, como en toda la API.
+
+## El reclamo se retira
+
+`AppealStatus` pasa a tener cuatro valores. El nuevo es `WITHDRAWN`:
+
+| | `resolved_at` | `resolved_by` | motivo | quién lo cerró |
+|---|---|---|---|---|
+| `ACCEPTED` / `REJECTED` | sí | sí | obligatorio | la municipalidad |
+| `WITHDRAWN` | sí | **no** | **prohibido** | el ciudadano, al pagar |
+
+- `WITHDRAWN` **no** es «rechazado». Nadie falló: colapsarlo en `REJECTED` le pondría a la
+  municipalidad una decisión en la boca y al ciudadano la derrota de un argumento que nadie oyó.
+- La transición `APPEALED → PAID` entra en la tabla de `CitationStatus`.
+- Un reclamo retirado **no se puede volver a presentar**: la boleta quedó `PAID`, que es terminal.
+- `appeal.status.withdrawn` es la clave de la etiqueta; en la cola de la administración el estado es
+  filtrable y se pinta neutro, no como un caso perdido.
+
+## Esquema (V39_0)
+
+```sql
+wallet_transactions.type      += 'FINE_CHARGE'     -- y el CHECK de signo lo exige negativo
+citation_appeals.status       += 'WITHDRAWN'       -- ck_citation_appeals_resolution ampliado
+citations.paid_at                      timestamptz null
+citations.paid_wallet_transaction_id   uuid null   -- sin FK: cruza contexto (ADR 0014)
+  ck_citations_paid_movement  -- si hay movimiento, status='PAID' y paid_at not null
+  ix_citations_paid
+```
+
+Aditiva: ninguna columna obligatoria nueva, ningún valor retirado, ninguna fila reescrita. Una
+versión anterior de la aplicación sigue arrancando contra este esquema.
+
+## En las pantallas
+
+- El botón «Pagar multa» está **vivo** sólo para una boleta que este sistema cobra y en un estado que
+  admite `PAID` (`ISSUED`, `APPEALED`, `UPHELD`, `EXPIRED`). Una boleta espejo conserva el botón
+  apagado y la frase que dice en qué ventanilla se paga. Una ya pagada o sin efecto **no muestra
+  tarjeta de pago**: la insignia de estado ya lo dijo.
+- Antes de cobrar hay un diálogo que dice, en este orden: cuánto sale de la billetera, con cuánto
+  queda, y —si hay reclamo en trámite— **que pagar lo retira y que eso no se deshace**. Enterarse
+  después por una fila del historial no es haber sido consultado.
+- Saldo insuficiente: el diálogo deja de pedir confirmación y ofrece «Recargar saldo».
+- El `mocks/server.ts` hace **los mismos cinco rechazos en el mismo orden**. Un mock más amable que
+  producción deja pasar justo los defectos que este endpoint tiene que evitar.
+
+## Bitácora
+
+`CITATION_PAID`, con número de boleta, monto en unidades menores y si retiró un reclamo. La boleta
+guarda además el id del movimiento que la pagó: «¿con qué se pagó esto?» se contesta sin recorrer la
+billetera entera.

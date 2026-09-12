@@ -22,6 +22,7 @@ package cr.luparx.parking.model;
  * @param graceMinutes               tolerance before a session counts as expired
  * @param freeMinutes                minutes of courtesy at the start of a stay; 0 means none, which
  *                                   is what every municipality had before v0.31
+ * @param overlappingStaysEnabled    whether a bay may hold more than one running stay at a time
  */
 public record ParkingPolicyDefaults(
         MinuteIncrements sessionIncrementsMinutes,
@@ -35,7 +36,8 @@ public record ParkingPolicyDefaults(
         int creditMinRemainingMinutes,
         int creditExpiryDays,
         int graceMinutes,
-        int freeMinutes) {
+        int freeMinutes,
+        boolean overlappingStaysEnabled) {
 
     public ParkingPolicyDefaults {
         if (sessionIncrementsMinutes == null || sessionIncrementsMinutes.isEmpty()) {

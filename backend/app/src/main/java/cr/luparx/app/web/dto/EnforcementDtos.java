@@ -40,6 +40,34 @@ import java.util.UUID;
  */
 public final class EnforcementDtos {
 
+    /**
+     * {@code POST /citizen/fines/{id}/payments} (v0.41). Requires an {@code Idempotency-Key}.
+     *
+     * <p>The body names the means and nothing else — <b>never an amount</b>. What is payable today is
+     * the server's to say (it drops while the early-payment window is open and rises when it closes),
+     * and a request that could carry a figure would be a client naming its own price.</p>
+     *
+     * @param method {@code WALLET} is the only value today. It is here rather than implied so that the
+     *               card checkout that lands next is a new value on an endpoint clients already call,
+     *               not a second endpoint.
+     */
+    public record PayFineRequest(@jakarta.validation.constraints.NotNull String method) {
+    }
+
+    /**
+     * What the payment did.
+     *
+     * @param appealWithdrawn true when paying closed an appeal the citizen had waiting. The screen has
+     *                        to say so: they gave something up, and finding out later from a history
+     *                        row is finding out the wrong way.
+     * @param walletTransactionId the movement that carried the money, null when the amount was zero
+     */
+    public record FinePaymentResponse(FineDetailResponse fine,
+                                      ParkingDtos.MoneyDto charged,
+                                      boolean appealWithdrawn,
+                                      java.util.UUID walletTransactionId) {
+    }
+
     private EnforcementDtos() {
     }
 

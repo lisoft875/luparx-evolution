@@ -75,6 +75,24 @@ public class ParkingPolicy {
     @Column(name = "free_minutes", nullable = false)
     private int freeMinutes;
 
+    /**
+     * Whether a bay may hold more than one running stay at a time (V34_0).
+     *
+     * <p>True by default, and the reason is the citizen who arrives at an empty space that the
+     * platform still believes is taken: somebody paid for two hours, left after fifteen minutes and
+     * never finished their stay. Refusing the newcomer does not free the bay — it only leaves them
+     * parked with nothing to show a fiscalizador, which is the expensive half of the mistake. What
+     * covers them is their own plate on this bay ({@code PlateVerdict}, ADR 0014), and two stays from
+     * two plates each read {@code COVERED} on their own.</p>
+     *
+     * <p>False restores the pre-v0.37 refusal ({@code SPACE_OCCUPIED}). It is the municipality's call
+     * and not the platform's: charging two people for one bay in the same window is defensible (the
+     * previous driver did not finish) and objectionable (the space was sold twice), and that argument
+     * belongs to the municipality.</p>
+     */
+    @Column(name = "overlapping_stays_enabled", nullable = false)
+    private boolean overlappingStaysEnabled;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -93,7 +111,8 @@ public class ParkingPolicy {
                          int sessionMaxMinutes, boolean extensionEnabled, MinuteIncrements extensionIncrements,
                          int extensionMaxTotalMinutes, boolean earlyFinishEnabled,
                          boolean creditOnEarlyFinishEnabled, int creditMinRemainingMinutes, int creditExpiryDays,
-                         int graceMinutes, int freeMinutes, Instant createdAt) {
+                         int graceMinutes, int freeMinutes, boolean overlappingStaysEnabled,
+                         Instant createdAt) {
         this.tenantId = tenantId;
         this.sessionIncrementsMinutes = sessionIncrements.toCsv();
         this.sessionMinMinutes = sessionMinMinutes;
@@ -109,6 +128,7 @@ public class ParkingPolicy {
         this.creditExpiryDays = creditExpiryDays;
         this.graceMinutes = graceMinutes;
         this.freeMinutes = freeMinutes;
+        this.overlappingStaysEnabled = overlappingStaysEnabled;
         this.createdAt = createdAt;
         this.updatedAt = createdAt;
     }
@@ -129,6 +149,7 @@ public class ParkingPolicy {
                 defaults.creditExpiryDays(),
                 defaults.graceMinutes(),
                 defaults.freeMinutes(),
+                defaults.overlappingStaysEnabled(),
                 now);
     }
 
@@ -196,6 +217,10 @@ public class ParkingPolicy {
         return freeMinutes;
     }
 
+    public boolean isOverlappingStaysEnabled() {
+        return overlappingStaysEnabled;
+    }
+
     public Instant getCreatedAt() {
         return createdAt;
     }
@@ -213,7 +238,7 @@ public class ParkingPolicy {
                         boolean extensionEnabled, MinuteIncrements extensionIncrements,
                         int extensionMaxTotalMinutes, boolean earlyFinishEnabled,
                         boolean creditOnEarlyFinishEnabled, int creditMinRemainingMinutes, int creditExpiryDays,
-                        int graceMinutes, int freeMinutes, Instant now) {
+                        int graceMinutes, int freeMinutes, boolean overlappingStaysEnabled, Instant now) {
         this.sessionIncrementsMinutes = sessionIncrements.toCsv();
         this.sessionMinMinutes = sessionMinMinutes;
         this.sessionMaxMinutes = sessionMaxMinutes;
@@ -228,6 +253,7 @@ public class ParkingPolicy {
         this.creditExpiryDays = creditExpiryDays;
         this.graceMinutes = graceMinutes;
         this.freeMinutes = freeMinutes;
+        this.overlappingStaysEnabled = overlappingStaysEnabled;
         this.updatedAt = now;
     }
 }

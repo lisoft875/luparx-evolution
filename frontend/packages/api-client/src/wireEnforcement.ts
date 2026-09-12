@@ -18,6 +18,7 @@ import type {
   Citation,
   CitationAppeal,
   CitationDetail,
+  FinePaymentResponse,
   CitationEvent,
   CitationEvidence,
   Fine,
@@ -182,6 +183,27 @@ export interface WireFineDetail {
   evidence?: WireEvidence[] | null;
   history?: WireCitationEvent[] | null;
   appeal?: WireAppeal | null;
+}
+
+/** `POST /citizen/fines/{id}/payments` (v0.41). `charged` llega envuelto, como todo `MoneyDto`. */
+export interface WireFinePayment {
+  fine: WireFineDetail;
+  charged: { amountMinor: number; currencyCode: string };
+  appealWithdrawn: boolean;
+  walletTransactionId: string | null;
+}
+
+export function toFinePayment(wire: WireFinePayment): FinePaymentResponse {
+  return {
+    fine: toFineDetail(wire.fine),
+    // Desenvuelto aquí y no en la pantalla: un `MoneyDto` que llega crudo a un componente es el
+    // defecto de la v0.22 otra vez — `Intl.NumberFormat` con `currency: undefined` lanza y React
+    // desmonta la pantalla.
+    chargedMinor: wire.charged.amountMinor,
+    currencyCode: wire.charged.currencyCode,
+    appealWithdrawn: wire.appealWithdrawn,
+    walletTransactionId: wire.walletTransactionId ?? null,
+  };
 }
 
 export function toInfractionType(wire: WireInfractionType): InfractionType {

@@ -10,10 +10,14 @@ import { AdminShell } from '../components/AdminShell';
 
 const PAGE_SIZE = 20;
 
-const STATUS_TONE: Record<AppealStatus, 'warning' | 'success' | 'danger'> = {
+// `neutral` for WITHDRAWN on purpose (v0.41): the office neither won nor lost it — the citizen
+// paid and closed it — and colouring it like a rejection would credit this queue with a decision
+// it never took.
+const STATUS_TONE: Record<AppealStatus, 'warning' | 'success' | 'danger' | 'neutral'> = {
   SUBMITTED: 'warning',
   ACCEPTED: 'success',
   REJECTED: 'danger',
+  WITHDRAWN: 'neutral',
 };
 
 /**
@@ -92,6 +96,7 @@ export function AppealsPage(): React.JSX.Element {
             { value: 'SUBMITTED', label: t('admin.appeals.status.SUBMITTED') },
             { value: 'ACCEPTED', label: t('admin.appeals.status.ACCEPTED') },
             { value: 'REJECTED', label: t('admin.appeals.status.REJECTED') },
+            { value: 'WITHDRAWN', label: t('admin.appeals.status.WITHDRAWN') },
             { value: 'ALL', label: t('admin.appeals.filter.all') },
           ]}
         />

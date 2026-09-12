@@ -19,10 +19,11 @@ import java.util.UUID;
  * municipality accumulates sessions forever, so an unbounded list here would be a table scan that
  * grows every day.
  *
- * <p>The two {@code ...AndStatus} lookups by vehicle and by space are Optional-returning on the
- * strength of the partial unique indexes {@code uq_parking_sessions_active_vehicle} and
- * {@code uq_parking_sessions_active_space}: with {@code status = ACTIVE} the database guarantees at
- * most one row. They are not tenant-scoped on purpose — a car is in one place at a time whichever
+ * <p>{@link #findByVehicleIdAndStatus} is Optional-returning on the strength of the partial unique
+ * index {@code uq_parking_sessions_active_vehicle}: with {@code status = ACTIVE} the database
+ * guarantees at most one row. <b>The lookup by bay is not</b>, and since v0.37 that is the whole
+ * point — {@code uq_parking_sessions_active_space} is gone and a bay may hold one running stay per
+ * plate (V34_0). Neither is tenant-scoped on purpose: a car is in one place at a time whichever
  * municipality it is parked in, and a bay belongs to exactly one municipality already.</p>
  */
 public interface ParkingSessionRepository extends JpaRepository<ParkingSession, UUID> {
@@ -31,7 +32,17 @@ public interface ParkingSessionRepository extends JpaRepository<ParkingSession, 
 
     Optional<ParkingSession> findByVehicleIdAndStatus(UUID vehicleId, ParkingSessionStatus status);
 
-    Optional<ParkingSession> findBySpaceIdAndStatus(UUID spaceId, ParkingSessionStatus status);
+    /**
+     * Every stay on this bay in this status — a LIST since v0.37, and changing it back would be a bug.
+     *
+     * <p>Two citizens may each have a running stay on the same bay when the municipality allows it
+     * ({@code parking_policies.overlapping_stays_enabled}, V34_0). An Optional here would not merely
+     * hide the second one: Spring Data throws on more than one result, so the ordinary case of a bay
+     * somebody failed to release would surface as a 500 the next time anyone tried to park on it.</p>
+     */
+    List<ParkingSession> findAllBySpaceIdAndStatus(UUID spaceId, ParkingSessionStatus status);
+
+    boolean existsBySpaceIdAndStatus(UUID spaceId, ParkingSessionStatus status);
 
     boolean existsByVehicleIdAndStatus(UUID vehicleId, ParkingSessionStatus status);
 
@@ -84,6 +95,20 @@ public interface ParkingSessionRepository extends JpaRepository<ParkingSession, 
                                              @Param("plate") String plate,
                                              @Param("since") Instant since);
 
+    /**
+     * Stays whose clock lands inside a window, across every municipality (v0.38).
+     *
+     * <p>Deliberately not tenant-scoped: this answers a scheduled job that has no municipality of its
+     * own, and narrowing it per tenant would mean one query per municipality on every pass. The rows
+     * it returns carry their tenant, and everything written from them is scoped by it.</p>
+     *
+     * <p>{@code FINISHED} is excluded by the caller's status list, and that is the point: somebody
+     * who closed their stay early said they were leaving, and telling them it "ran out" would be
+     * putting words in their mouth — the same reasoning as {@code recentlyExpiredStays}.</p>
+     */
+    List<ParkingSession> findByStatusInAndExpiresAtBetweenOrderByExpiresAtAsc(
+            java.util.Collection<ParkingSessionStatus> statuses, Instant from, Instant to, Pageable pageable);
+
     long countByTenantIdAndStatus(UUID tenantId, ParkingSessionStatus status);
 
     /**
@@ -124,7 +149,7 @@ public interface ParkingSessionRepository extends JpaRepository<ParkingSession, 
     @org.springframework.data.jpa.repository.Query("""
             select s.paymentStatus, count(s), coalesce(sum(s.amountMinor), 0)
             from ParkingSession s
-            where s.tenantId = :tenantId and s.startTime >= :from and s.startTime < :to
+            where s.tenantId = :tenantId and s.startedAt >= :from and s.startedAt < :to
             group by s.paymentStatus
             """)
     java.util.List<Object[]> countByPaymentStatus(

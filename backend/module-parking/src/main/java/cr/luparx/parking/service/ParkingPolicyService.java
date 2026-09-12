@@ -205,7 +205,8 @@ public class ParkingPolicyService {
                                  int creditMinRemainingMinutes,
                                  int creditExpiryDays,
                                  int graceMinutes,
-                                 int freeMinutes) {
+                                 int freeMinutes,
+                                 boolean overlappingStaysEnabled) {
         ValidationException.Collector errors = new ValidationException.Collector();
         MinuteIncrements session = parse(sessionIncrements, "sessionIncrementsMinutes", errors);
         MinuteIncrements extension = parse(extensionIncrements, "extensionIncrementsMinutes", errors);
@@ -259,11 +260,12 @@ public class ParkingPolicyService {
             return repository.save(new ParkingPolicy(tenantId.value(), session, sessionMinMinutes,
                     sessionMaxMinutes, extensionEnabled, extension, extensionMaxTotalMinutes, earlyFinishEnabled,
                     creditOnEarlyFinishEnabled, creditMinRemainingMinutes, creditExpiryDays, graceMinutes,
-                    freeMinutes, now));
+                    freeMinutes, overlappingStaysEnabled, now));
         }
         policy.replace(session, sessionMinMinutes, sessionMaxMinutes, extensionEnabled, extension,
                 extensionMaxTotalMinutes, earlyFinishEnabled, creditOnEarlyFinishEnabled,
-                creditMinRemainingMinutes, creditExpiryDays, graceMinutes, freeMinutes, now);
+                creditMinRemainingMinutes, creditExpiryDays, graceMinutes, freeMinutes,
+                overlappingStaysEnabled, now);
         return repository.save(policy);
     }
 

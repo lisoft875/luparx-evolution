@@ -1,5 +1,6 @@
 package cr.luparx.app.web;
 
+import cr.luparx.app.notification.CitizenNotifier;
 import cr.luparx.app.audit.AuditRecorder;
 import cr.luparx.app.web.dto.EnforcementDtos;
 import cr.luparx.core.audit.AuditAction;
@@ -81,6 +82,7 @@ public class AdminEnforcementController {
     private final AppealNoticeService noticeService;
     private final EnforcementMapper mapper;
     private final AuditRecorder auditRecorder;
+    private final CitizenNotifier citizenNotifier;
 
     public AdminEnforcementController(CitationService citationService,
                                       EnforcementCheckService checkService,
@@ -90,7 +92,8 @@ public class AdminEnforcementController {
                                       AppealService appealService,
                                       AppealNoticeService noticeService,
                                       EnforcementMapper mapper,
-                                      AuditRecorder auditRecorder) {
+                                      AuditRecorder auditRecorder,
+                                       CitizenNotifier citizenNotifier) {
         this.citationService = citationService;
         this.checkService = checkService;
         this.clock = clock;
@@ -100,6 +103,7 @@ public class AdminEnforcementController {
         this.noticeService = noticeService;
         this.mapper = mapper;
         this.auditRecorder = auditRecorder;
+        this.citizenNotifier = citizenNotifier;
     }
 
     /**
@@ -265,11 +269,15 @@ public class AdminEnforcementController {
             @Valid @RequestBody EnforcementDtos.ResolveAppealRequest request) {
         TenantId tenantId = TenantContextHolder.requireTenantId();
         CitationAppeal appeal = appealService.resolve(tenantId, actor(), id, request.accept(), request.reason());
+        Citation resolved = citationService.require(tenantId, id);
+        // The person who filed it hears about it, in their own language and from the same row the
+        // screen reads (v0.38). After the act: a notice must not undo a resolution.
+        citizenNotifier.appealResolved(appeal, resolved);
         auditRecorder.record(AuditAction.CITATION_APPEAL_RESOLVED, "citation-appeal", appeal.getId().toString(),
                 Map.of("citationId", id.toString(),
                         "outcome", appeal.getStatus().name(),
                         "reason", request.reason()));
-        return detail(tenantId, citationService.require(tenantId, id));
+        return detail(tenantId, resolved);
     }
 
     // --- the legal notice, and what a defence may carry -----------------------------------------------

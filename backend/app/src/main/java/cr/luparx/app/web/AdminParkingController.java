@@ -1,5 +1,7 @@
 package cr.luparx.app.web;
 
+import com.fasterxml.jackson.databind.JsonNode;
+
 import cr.luparx.app.audit.AuditRecorder;
 import cr.luparx.app.web.dto.ParkingDtos;
 import cr.luparx.core.audit.AuditAction;
@@ -16,6 +18,7 @@ import cr.luparx.parking.entity.ParkingRate;
 import cr.luparx.parking.entity.ParkingScheduleException;
 import cr.luparx.parking.entity.ParkingSpace;
 import cr.luparx.parking.entity.ParkingSpaceFormat;
+import cr.luparx.app.service.ZoneGeometryService;
 import cr.luparx.parking.entity.ParkingZone;
 import cr.luparx.parking.entity.ParkingZonePolicy;
 import cr.luparx.parking.entity.ParkingZoneSchedule;
@@ -72,6 +75,7 @@ public class AdminParkingController {
 
     private final ParkingPolicyService policyService;
     private final ParkingCatalogService catalogService;
+    private final ZoneGeometryService zoneGeometryService;
     private final ParkingSpaceFormatService spaceFormatService;
     private final ParkingScheduleService scheduleService;
     private final HolidayCatalogService holidayCatalogService;
@@ -82,6 +86,7 @@ public class AdminParkingController {
 
     public AdminParkingController(ParkingPolicyService policyService,
                                   ParkingCatalogService catalogService,
+                                  ZoneGeometryService zoneGeometryService,
                                   ParkingSpaceFormatService spaceFormatService,
                                   ParkingScheduleService scheduleService,
                                   HolidayCatalogService holidayCatalogService,
@@ -91,6 +96,7 @@ public class AdminParkingController {
                                   Clock clock) {
         this.policyService = policyService;
         this.catalogService = catalogService;
+        this.zoneGeometryService = zoneGeometryService;
         this.spaceFormatService = spaceFormatService;
         this.scheduleService = scheduleService;
         this.holidayCatalogService = holidayCatalogService;
@@ -134,7 +140,11 @@ public class AdminParkingController {
                 request.creditExpiryDays().intValue(),
                 request.graceMinutes().intValue(),
                 // Absent keeps what the municipality has, which for one that has never set it is 0.
-                request.freeMinutes() == null ? before.getFreeMinutes() : request.freeMinutes().intValue());
+                request.freeMinutes() == null ? before.getFreeMinutes() : request.freeMinutes().intValue(),
+                // Same rule (v0.37): a client that does not know this field must not decide it.
+                request.overlappingStaysEnabled() == null
+                        ? before.isOverlappingStaysEnabled()
+                        : request.overlappingStaysEnabled().booleanValue());
         auditRecorder.record(AuditAction.PARKING_POLICY_UPDATED, "parking-policy", tenantId.toString(),
                 Map.of("sessionIncrements", policy.getSessionIncrementsMinutes()),
                 previous.diff(policy));
@@ -199,6 +209,69 @@ public class AdminParkingController {
                         .compare("active", Boolean.valueOf(previousActive), Boolean.valueOf(zone.isActive()))
                         .build());
         return mapper.toZone(zone, catalogService.countSpaces(tenantId, zone.getId()));
+    }
+
+    // --- zone geometry (CONTRACT.md v0.40, ADR 0024) ---------------------------------------------
+    //
+    // The body of these three endpoints is a bare RFC 7946 **geometry object**, not a Feature and not
+    // a wrapper of our own. That is what `ST_AsGeoJSON` produces, what `ST_GeomFromGeoJSON` accepts
+    // and what a GIS client already knows how to read; inventing an envelope around it would mean
+    // every consumer writes an adapter for a format that already has a standard.
+
+    @GetMapping("/zones/{id}/geometry")
+    @PreAuthorize("hasAuthority('PERM_TENANT_MANAGE')")
+    @Operation(summary = "The drawn perimeter of a zone as GeoJSON, or 204 when it has none")
+    public ResponseEntity<JsonNode> zoneGeometry(@PathVariable UUID id) {
+        TenantId tenantId = TenantContextHolder.requireTenantId();
+        // Asked first so that an id from another municipality answers 404 and not 204: "this zone
+        // has no geometry" would already confirm the zone exists (SECURITY.md, BOLA).
+        catalogService.requireZone(tenantId, id);
+        return zoneGeometryService.find(tenantId, id)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.noContent().build());
+    }
+
+    /**
+     * Replaces the perimeter of a zone.
+     *
+     * <p>PUT and not PATCH because a geometry has no parts to merge: what arrives is the perimeter
+     * from now on. Sending the same polygon twice leaves the same state, which is what makes this
+     * safe to retry.</p>
+     */
+    @PutMapping("/zones/{id}/geometry")
+    @PreAuthorize("hasAuthority('PERM_TENANT_MANAGE')")
+    @Operation(summary = "Replace the perimeter of a zone with a GeoJSON Polygon or MultiPolygon")
+    public ResponseEntity<JsonNode> replaceZoneGeometry(@PathVariable UUID id,
+                                                        @RequestBody JsonNode geometry) {
+        TenantId tenantId = TenantContextHolder.requireTenantId();
+        ParkingZone zone = catalogService.requireZone(tenantId, id);
+        boolean had = zoneGeometryService.find(tenantId, id).isPresent();
+        int positions = zoneGeometryService.replace(tenantId, id, zone.getVersion(), geometry);
+        // The audit records the FACT, never the polygon. A before-and-after of two thousand
+        // coordinates in `audit_events` — a table that cannot be rewritten (v0.32) — would bury the
+        // trail it is supposed to make readable. Who, when, and how big is what an auditor asks.
+        auditRecorder.record(AuditAction.PARKING_ZONE_GEOMETRY_UPDATED, "parking-zone", id.toString(),
+                Map.of("code", zone.getCode(),
+                        "positions", String.valueOf(positions),
+                        "replaced", String.valueOf(had)));
+        return ResponseEntity.ok(geometry);
+    }
+
+    @DeleteMapping("/zones/{id}/geometry")
+    @PreAuthorize("hasAuthority('PERM_TENANT_MANAGE')")
+    @Operation(summary = "Remove the perimeter of a zone. The zone keeps charging exactly as before.")
+    public ResponseEntity<Void> deleteZoneGeometry(@PathVariable UUID id) {
+        TenantId tenantId = TenantContextHolder.requireTenantId();
+        ParkingZone zone = catalogService.requireZone(tenantId, id);
+        // Nothing to erase is a successful DELETE: the end state the caller asked for already holds,
+        // and writing a new `updated_at` and version for a no-op would be a lie in the audit.
+        if (zoneGeometryService.find(tenantId, id).isEmpty()) {
+            return ResponseEntity.noContent().build();
+        }
+        zoneGeometryService.clear(tenantId, id, zone.getVersion());
+        auditRecorder.record(AuditAction.PARKING_ZONE_GEOMETRY_CLEARED, "parking-zone", id.toString(),
+                Map.of("code", zone.getCode()));
+        return ResponseEntity.noContent().build();
     }
 
     // --- rates -----------------------------------------------------------------------------------

@@ -25,6 +25,7 @@ import java.util.List;
  * @param creditExpiryDays           days a credited minute stays usable; 0 means it never expires
  * @param graceMinutes               tolerance before a session counts as expired
  * @param freeMinutes                minutes of courtesy at the start of a stay; 0 means none
+ * @param overlappingStaysEnabled    whether a bay may hold more than one running stay at a time
  */
 @ConfigurationProperties(prefix = "platform.defaults.parking")
 public record ParkingDefaultsProperties(
@@ -39,7 +40,8 @@ public record ParkingDefaultsProperties(
         Integer creditMinRemainingMinutes,
         Integer creditExpiryDays,
         Integer graceMinutes,
-        Integer freeMinutes) {
+        Integer freeMinutes,
+        Boolean overlappingStaysEnabled) {
 
     /*
      * Wrapper types on purpose, exactly as DevSeedProperties does: an absent property binds to null
@@ -108,5 +110,17 @@ public record ParkingDefaultsProperties(
      */
     public int freeMinutesOrDefault() {
         return freeMinutes == null || freeMinutes.intValue() < 0 ? 0 : freeMinutes.intValue();
+    }
+
+    /**
+     * True unless a deployment says otherwise (v0.37).
+     *
+     * <p>The permissive value is the default because the restrictive one has a victim: the citizen
+     * standing at a bay the previous driver never released cannot pay, and therefore cannot be shown
+     * as covered when a fiscalizador looks their plate up. A municipality that would rather sell each
+     * bay once sets this to false and gets the pre-v0.37 {@code SPACE_OCCUPIED} back.</p>
+     */
+    public boolean overlappingStaysEnabledOrDefault() {
+        return overlappingStaysEnabled == null || overlappingStaysEnabled.booleanValue();
     }
 }

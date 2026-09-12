@@ -2,7 +2,7 @@ import * as React from 'react';
 import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { useAuth } from '@luparx/auth';
-import { useCountries, useDocumentTypes } from '@luparx/features';
+import { preselectedDocumentType, useCountries, useDocumentTypes } from '@luparx/features';
 import { useTranslation, type TranslationKey } from '@luparx/i18n';
 import {
   ApiError,
@@ -86,16 +86,19 @@ export function AddStaffDialog({
     setEmail('');
     setInviteEmail('');
     setDocumentNumber('');
+    setDocumentType('');
     setCountry(activeTenant?.countryCode ?? '');
   }, [open, activeTenant?.countryCode]);
 
-  // A single type in the country's catalogue is not a choice; picking it saves a click without
-  // hiding anything.
+  // Opens on whatever the country declared as its default — the cédula in Costa Rica — exactly as
+  // the registration and profile forms do, because it is the same question and the same catalogue
+  // answers it (see `preselectedDocumentType`). Before, this dialog preselected only when the
+  // country issued a single type, so the administrator who looks up staff all day restated
+  // "cédula" on every search while a citizen registering never had to.
   React.useEffect(() => {
-    const types = documentTypes.data;
-    if (types && types.length === 1 && documentType === '') {
-      setDocumentType(types[0]!.type);
-    }
+    if (documentType !== '') return;
+    const preferred = preselectedDocumentType(documentTypes.data);
+    if (preferred) setDocumentType(preferred);
   }, [documentTypes.data, documentType]);
 
   const canSearch =
@@ -223,9 +226,12 @@ export function AddStaffDialog({
                   value={documentType}
                   onChange={(value) => setDocumentType(value as IdentityDocumentType)}
                   placeholder={t('common.select.placeholder')}
+                  // The catalogue's own `labelKey`, not a key built from the type: the label is
+                  // per country, and a hand-built `document.type.NATIONAL_ID` reads "cédula de
+                  // identidad" for a Spanish council whose document is the DNI.
                   options={(documentTypes.data ?? []).map((entry) => ({
                     value: entry.type,
-                    label: t(`document.type.${entry.type}` as TranslationKey),
+                    label: t(entry.labelKey as TranslationKey),
                   }))}
                 />
               )}

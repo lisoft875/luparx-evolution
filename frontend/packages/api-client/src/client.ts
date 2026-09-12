@@ -31,6 +31,8 @@ import {
   type WireFineDetail,
   type WireInfractionType,
   type WirePlateStatus,
+  toFinePayment,
+  type WireFinePayment,
 } from './wireEnforcement';
 import {
   toBillingTotals,
@@ -147,13 +149,14 @@ import type {
   Fine,
   FineDetail,
   ForgotPasswordRequest,
+  GeoBoundingBox,
+  GeoJsonGeometry,
   InfractionType,
   InfractionTypeDraft,
   LoginRequest,
   LoginResponse,
   MeResponse,
   MembershipSummary,
-  OAuthProvider,
   ParkingExtensionOption,
   ParkingPolicy,
   ParkingQuoteRequest,
@@ -205,18 +208,18 @@ import type {
   UpsertDocumentTypeRequest,
   UserProfile,
   Vehicle,
+  ZoneGeoJsonFeatureCollection,
   VehicleAttributeCatalogEntry,
   VerifyEmailRequest,
   WalletResponse,
+  CitizenNotification,
+  NotificationPreferences,
+  UpdateNotificationPreferencesRequest,
+  PayFineRequest,
+  FinePaymentResponse,
 } from './types/domain';
 
 export type { PagedResponse, PageParams } from './types/http';
-
-/** Builds the browser-redirect URL for a federated login start (CONTRACT.md §4). Never fetched via XHR — assign it to `location.href`. */
-export function oauthStartUrl(baseUrl: string, portal: Portal, provider: OAuthProvider, redirectUri: string): string {
-  const params = new URLSearchParams({ redirectUri });
-  return `${baseUrl.replace(/\/$/, '')}/api/v1/auth/${portal}/oauth2/${provider}/start?${params.toString()}`;
-}
 
 /**
  * Typed client for the LupaRX API v1 contract (CONTRACT.md §4). One instance
@@ -661,6 +664,19 @@ export class ApiClient {
      */
     zones: (): Promise<ParkingZone[]> => this.http.request('GET', '/api/v1/citizen/parking/zones'),
     /**
+     * The drawn zones of the active municipality as GeoJSON (CONTRACT.md v0.40).
+     *
+     * Pass the viewport to get only what could be on screen — that is the one filter the server's
+     * spatial index can answer. Omit it and the answer is every drawn zone of the municipality,
+     * capped server-side.
+     */
+    zonesGeoJson: (bbox?: GeoBoundingBox): Promise<ZoneGeoJsonFeatureCollection> => {
+      const query = bbox
+        ? `?bbox=${[bbox.minLon, bbox.minLat, bbox.maxLon, bbox.maxLat].join(',')}`
+        : '';
+      return this.http.request('GET', `/api/v1/citizen/parking/zones/geojson${query}`);
+    },
+    /**
      * The shape of a bay code in this municipality (CONTRACT.md v0.3 §"Formato del código de
      * espacio"), published to the citizen so their field can show the municipality's own example
      * and refuse an impossible code before it costs a round trip. The admin endpoint of the same
@@ -757,6 +773,21 @@ export class ApiClient {
     updatePolicy: (payload: UpdateParkingPolicyRequest): Promise<ParkingPolicy> =>
       this.http.request('PUT', '/api/v1/admin/parking/policy', { body: payload }),
     zones: (): Promise<AdminParkingZone[]> => this.http.request('GET', '/api/v1/admin/parking/zones'),
+    /**
+     * The perimeter of one zone, or null when nobody has drawn it (the server answers 204).
+     *
+     * Null and not an empty geometry: an empty polygon is a shape that covers nothing, and a map
+     * would draw it as nothing — indistinguishable from a zone that was never traced.
+     */
+    zoneGeometry: async (id: string): Promise<GeoJsonGeometry | null> =>
+      (await this.http.request<GeoJsonGeometry | undefined>(
+        'GET',
+        `/api/v1/admin/parking/zones/${id}/geometry`,
+      )) ?? null,
+    replaceZoneGeometry: (id: string, geometry: GeoJsonGeometry): Promise<GeoJsonGeometry> =>
+      this.http.request('PUT', `/api/v1/admin/parking/zones/${id}/geometry`, { body: geometry }),
+    deleteZoneGeometry: (id: string): Promise<void> =>
+      this.http.request('DELETE', `/api/v1/admin/parking/zones/${id}/geometry`),
     createZone: (payload: CreateParkingZoneRequest): Promise<AdminParkingZone> =>
       this.http.request('POST', '/api/v1/admin/parking/zones', { body: payload, idempotent: true }),
     updateZone: (id: string, payload: UpdateParkingZoneRequest): Promise<AdminParkingZone> =>
@@ -1099,6 +1130,30 @@ export class ApiClient {
       ).map(toInfractionType),
   };
 
+  /**
+   * The bell (CONTRACT.md v0.38).
+   *
+   * `unreadCount` is its own call and not a field on the list, because the badge is read from every
+   * screen and the list is not: answering the cheapest question in the app with a page of rows would
+   * make it the most expensive one.
+   */
+  readonly citizenNotifications = {
+    list: (query: PageParams = {}): Promise<PagedResponse<CitizenNotification>> =>
+      this.http.request<PagedResponse<CitizenNotification>>('GET', '/api/v1/citizen/notifications', {
+        query: { page: query.page, size: query.size },
+      }),
+    unreadCount: (): Promise<{ unread: number }> =>
+      this.http.request('GET', '/api/v1/citizen/notifications/unread-count'),
+    markRead: (id: string): Promise<CitizenNotification> =>
+      this.http.request('POST', `/api/v1/citizen/notifications/${id}/read`),
+    markAllRead: (): Promise<{ marked: number }> =>
+      this.http.request('POST', '/api/v1/citizen/notifications/read-all'),
+    preferences: (): Promise<NotificationPreferences> =>
+      this.http.request('GET', '/api/v1/citizen/notifications/preferences'),
+    updatePreferences: (payload: UpdateNotificationPreferencesRequest): Promise<NotificationPreferences> =>
+      this.http.request('PUT', '/api/v1/citizen/notifications/preferences', { body: payload }),
+  };
+
   readonly citizenFines = {
     /** Citations against my own vehicles, matched by vehicle and never by plate (see the server's own note). */
     list: async (query: { status?: CitationStatus } & PageParams = {}): Promise<PagedResponse<Fine>> => {
@@ -1111,6 +1166,20 @@ export class ApiClient {
       toFineDetail(await this.http.request<WireFineDetail>('GET', `/api/v1/citizen/fines/${id}`)),
     evidenceContent: (fineId: string, evidenceId: string): Promise<Blob> =>
       this.http.blob(`/api/v1/citizen/fines/${fineId}/evidence/${evidenceId}`),
+    /**
+     * Pays the fine with the balance already in the wallet (v0.41).
+     *
+     * `idempotent` and not a caller-minted key: a double tap would charge the balance twice for one
+     * act, and the second charge would find the citation already paid and fail *after* taking the
+     * money. The replay answers with the first response instead.
+     */
+    pay: async (id: string, payload: PayFineRequest): Promise<FinePaymentResponse> =>
+      toFinePayment(
+        await this.http.request<WireFinePayment>('POST', `/api/v1/citizen/fines/${id}/payments`, {
+          body: payload,
+          idempotent: true,
+        }),
+      ),
     /**
      * The legal notice to read before writing a defence, resolved for my own locale.
      *

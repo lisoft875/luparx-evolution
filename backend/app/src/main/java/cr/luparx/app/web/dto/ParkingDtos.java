@@ -124,6 +124,13 @@ public final class ParkingDtos {
              * plate per calendar day, so a client must not present it as "always the first N free".
              */
             int freeMinutes,
+            /**
+             * Whether a bay may hold more than one running stay at a time (v0.37). Additive: a client
+             * written before this field simply ignores it, and the citizen app has no use for it —
+             * nothing on the parking flow changes shape, a start that used to be refused with
+             * {@code SPACE_OCCUPIED} now succeeds.
+             */
+            boolean overlappingStaysEnabled,
             Instant updatedAt) {
     }
 
@@ -141,7 +148,13 @@ public final class ParkingDtos {
             @NotNull @Min(0) Integer creditExpiryDays,
             @NotNull @Min(0) Integer graceMinutes,
             /** Optional: absent keeps whatever the municipality has, which for most of them is 0. */
-            @Min(0) Integer freeMinutes) {
+            @Min(0) Integer freeMinutes,
+            /**
+             * Optional, for the same reason as {@code freeMinutes}: an admin client written before
+             * v0.37 does not send it and must not silently flip a rule it does not know about. Absent
+             * keeps whatever the municipality has.
+             */
+            Boolean overlappingStaysEnabled) {
     }
 
     // --- quote -----------------------------------------------------------------------------------

@@ -84,7 +84,9 @@ import java.util.UUID;
  * never a line of domain logic.</p>
  */
 @Component
-@Profile("dev")
+// `demo` es el mismo sembrado en una instancia publicada, pero sin las concesiones de `dev`
+// (llaves efímeras, pepper del repositorio, SQL en el log). Ver application-demo.yml.
+@Profile({"dev", "demo"})
 @ConditionalOnProperty(prefix = "luparx.dev", name = "seed-demo-data", havingValue = "true", matchIfMissing = true)
 public class DevDataSeeder implements ApplicationRunner {
 
@@ -575,11 +577,22 @@ public class DevDataSeeder implements ApplicationRunner {
                 defaults.timeZone(),
                 defaults.termsVersion(),
                 tenant.getId(),
-                // The registration service reads the portal only to refuse self-registration where the
-                // contract forbids it, which is the platform portal. The platform operator is created
-                // as an ordinary person and receives its platform membership below, exactly as the
-                // back-office would grant it.
-                account.portal() == Portal.PLATFORM ? Portal.CITIZEN : account.portal());
+                // ALWAYS citizen, whatever portal this account is for.
+                //
+                // Registration is self-registration, and since v0.13 only the citizen portal allows it
+                // (`Portal.selfRegistrationAllowed`): admin, inspector and platform accounts are
+                // granted from the back-office. Passing their own portal here makes
+                // UserRegistrationService throw SELF_REGISTRATION_DISABLED, the per-account catch in
+                // seed() logs a warning, and the fixture quietly ends up WITHOUT an administrator,
+                // WITHOUT an inspector and without any municipal staff — which is exactly what
+                // happened on the first database created after that rule landed. It went unnoticed for
+                // as long as it did because existing databases already had those rows.
+                //
+                // This mirrors what the platform actually does (see AuthController#register): a person
+                // who is to become a municipal admin or an inspector registers as themselves, like
+                // anyone else, and what the back-office adds afterwards is the MEMBERSHIP — which
+                // ensureMembership() below creates with the real portal and role, ACTIVE.
+                Portal.CITIZEN);
         return registrationService.register(command).userId();
     }
 
@@ -686,8 +699,9 @@ public class DevDataSeeder implements ApplicationRunner {
             return;
         }
         LOGGER.warn("=================================================================================");
-        LOGGER.warn("DEVELOPMENT SEED DATA — these accounts are public and must NEVER exist outside a");
-        LOGGER.warn("developer laptop. Profile 'dev' only; disable with luparx.dev.seed-demo-data=false.");
+        LOGGER.warn("DEMO SEED DATA — these accounts and their passwords are written in the repository");
+        LOGGER.warn("and must NEVER exist alongside real data. Profiles 'dev' and 'demo' only; disable");
+        LOGGER.warn("with luparx.dev.seed-demo-data=false.");
         for (DemoAccount account : accounts) {
             LOGGER.warn("  portal={} email={} password={}", account.portal().slug(), account.email(), PASSWORD);
         }

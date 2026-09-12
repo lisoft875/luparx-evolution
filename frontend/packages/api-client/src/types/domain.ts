@@ -8,7 +8,6 @@ export type Portal = 'citizen' | 'admin' | 'inspector' | 'platform';
 
 export const PORTALS: readonly Portal[] = ['citizen', 'admin', 'inspector', 'platform'];
 
-export type OAuthProvider = 'google' | 'microsoft' | 'facebook';
 
 /** CONTRACT.md §1 — roles are configuration-mapped to permissions, never `if (role === 'ADMIN')`. */
 export type Role =
@@ -180,6 +179,57 @@ export interface AddressInput {
 export interface PhoneInput {
   countryCode: string;
   nationalNumber: string;
+}
+
+/* ---- GeoJSON (RFC 7946), CONTRACT.md v0.40 ----------------------------------------------------
+ *
+ * Typed to the two geometries the server accepts and no further. A generic GeoJSON type would let a
+ * screen send a Point or a Feature and find out at runtime; here it does not compile.
+ *
+ * Positions are [longitude, latitude] — that order is RFC 7946 and it is the opposite of how people
+ * say it out loud, which is the single most common bug in map code.
+ */
+export type GeoJsonPosition = [number, number];
+
+/** A closed ring: at least four positions, the last repeating the first. */
+export type GeoJsonLinearRing = GeoJsonPosition[];
+
+export interface GeoJsonPolygon {
+  type: 'Polygon';
+  coordinates: GeoJsonLinearRing[];
+}
+
+export interface GeoJsonMultiPolygon {
+  type: 'MultiPolygon';
+  coordinates: GeoJsonLinearRing[][];
+}
+
+/** What the zone-geometry endpoints read and write: the geometry object itself, never a Feature. */
+export type GeoJsonGeometry = GeoJsonPolygon | GeoJsonMultiPolygon;
+
+export interface ZoneGeoJsonProperties {
+  code: string;
+  name: string;
+}
+
+export interface ZoneGeoJsonFeature {
+  type: 'Feature';
+  id: string;
+  geometry: GeoJsonGeometry;
+  properties: ZoneGeoJsonProperties;
+}
+
+export interface ZoneGeoJsonFeatureCollection {
+  type: 'FeatureCollection';
+  features: ZoneGeoJsonFeature[];
+}
+
+/** Viewport of a map request. Serialised as `minLon,minLat,maxLon,maxLat` (RFC 7946 §5 order). */
+export interface GeoBoundingBox {
+  minLon: number;
+  minLat: number;
+  maxLon: number;
+  maxLat: number;
 }
 
 export interface RegisterRequest {
@@ -982,6 +1032,75 @@ export interface ParkingPolicy {
    * citizen is parking.
    */
   freeMinutes?: number;
+  /**
+   * Whether a bay may hold more than one running stay at a time (v0.37).
+   *
+   * A citizen who arrives at an empty space the previous driver never released can pay for it: the
+   * two stays coexist and each covers **its own plate** on that bay, which is how the inspector's
+   * lookup has always worked (plate + bay, ADR 0014). With this off the second start comes back as
+   * `SPACE_OCCUPIED`, which is the pre-v0.37 behaviour.
+   *
+   * Nothing on the citizen flow reads this: there is no screen to change, only a start that used to
+   * be refused and now succeeds.
+   */
+  overlappingStaysEnabled: boolean;
+}
+
+// ---- Citizen: notifications (CONTRACT.md "v0.38") ---------------------------------------------
+
+/** What a notification is about, at the grain the citizen chooses by for email. */
+export type NotificationCategory = 'PARKING' | 'FINES' | 'WALLET';
+
+/** The facts the platform tells a citizen about. Stable keys; the sentence is rendered client-side. */
+export type NotificationType =
+  | 'PARKING_SESSION_EXPIRING'
+  | 'PARKING_SESSION_EXPIRED'
+  | 'CITATION_ISSUED'
+  | 'APPEAL_RESOLVED'
+  | 'WALLET_TOPUP_CREDITED'
+  | 'TIME_CREDITS_EXPIRING';
+
+/** Where a notification navigates to. */
+export type NotificationSubjectType = 'PARKING_SESSION' | 'CITATION' | 'WALLET_TRANSACTION' | 'TIME_CREDIT';
+
+/**
+ * One line of the bell.
+ *
+ * There is **no message field**, on purpose. The server sends `type` and `params`; the sentence is
+ * built here from the app's own bundle. A server-rendered string would be frozen in the language it
+ * was written in, so switching the app to English would leave the history in Spanish forever.
+ *
+ * `params` are raw — a plate, an ISO instant, an amount in minor units — so the screen formats them
+ * with the reader's locale rules, exactly as every other number in this app is formatted.
+ */
+export interface CitizenNotification {
+  id: string;
+  type: NotificationType;
+  category: NotificationCategory;
+  subjectType: NotificationSubjectType;
+  subjectId: string;
+  params: Record<string, unknown>;
+  createdAt: string;
+  readAt?: string | null;
+}
+
+/**
+ * What of this reaches the person's email.
+ *
+ * `emailEnabled` is the master switch and `emailCategories` survives it being off, so turning it
+ * back on restores what they had ticked. `availableCategories` travels with the answer so the screen
+ * never hardcodes the list: a category added next year appears without shipping a client.
+ */
+export interface NotificationPreferences {
+  emailEnabled: boolean;
+  emailCategories: NotificationCategory[];
+  availableCategories: NotificationCategory[];
+  updatedAt: string;
+}
+
+export interface UpdateNotificationPreferencesRequest {
+  emailEnabled: boolean;
+  emailCategories: NotificationCategory[];
 }
 
 export interface ParkingQuoteRequest {
@@ -1182,6 +1301,8 @@ export interface UpdateParkingPolicyRequest {
   graceMinutes: number;
   /** Absent keeps whatever the municipality has, which for most of them is 0. */
   freeMinutes?: number;
+  /** Absent keeps whatever the municipality has: a client written before v0.37 must not flip it. */
+  overlappingStaysEnabled?: boolean;
 }
 
 export interface CreateParkingZoneRequest {
@@ -1925,7 +2046,12 @@ export interface CitationReasonRequest {
  * mandatory in both directions — a citizen whose defence is rejected is entitled to read why, and a
  * municipality that voids its own citation owes its auditor the same sentence.
  */
-export type AppealStatus = 'SUBMITTED' | 'ACCEPTED' | 'REJECTED';
+/**
+ * `WITHDRAWN` is not a decision (v0.41): it is what happens to a waiting claim when the citizen
+ * pays the fine anyway. It carries a `resolvedAt` — the claim stopped waiting — and never a
+ * `resolutionReason`, because nobody at the municipality wrote one.
+ */
+export type AppealStatus = 'SUBMITTED' | 'ACCEPTED' | 'REJECTED' | 'WITHDRAWN';
 
 export interface CitationAppeal {
   id: string;
@@ -2222,6 +2348,34 @@ export interface Fine {
   externalStatus?: string | null;
   /** False for a mirror. True when absent, which is what every pre-v0.34 fine was. */
   managedHere?: boolean;
+}
+
+/**
+ * `POST /citizen/fines/{id}/payments` (v0.41). Requires an `Idempotency-Key`.
+ *
+ * The body names the means and **never an amount**: what is payable today is the server's to say —
+ * it is the reduced figure while the early-payment window is open and the full one after — and a
+ * request that could carry a figure would be a client naming its own price.
+ */
+export interface PayFineRequest {
+  /** `WALLET` is the only value today; the card checkout will be a second one on this same call. */
+  method: 'WALLET';
+}
+
+export interface FinePaymentResponse {
+  fine: FineDetail;
+  /** What was actually taken: the reduced figure if the early-payment window was still open. */
+  chargedMinor: number;
+  currencyCode: string;
+  /**
+   * True when paying closed a claim the citizen had waiting.
+   *
+   * The screen has to say so before and after: they gave something up, and learning it later from a
+   * history row is learning it the wrong way.
+   */
+  appealWithdrawn: boolean;
+  /** The wallet movement that carried the money; null when the amount payable was zero. */
+  walletTransactionId: string | null;
 }
 
 export interface FineDetail {

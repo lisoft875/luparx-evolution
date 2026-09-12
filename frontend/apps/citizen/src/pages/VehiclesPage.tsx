@@ -247,10 +247,28 @@ export function VehiclesPage(): React.JSX.Element {
               <p className="lx-text-meta" style={{ margin: 'var(--lx-space-1) 0 var(--lx-space-3) 0' }}>
                 {vehicleDescriptor(vehicle, { includeName: true, colorLabel: colorOf(vehicle.color) })}
               </p>
-              <div style={{ display: 'flex', gap: 'var(--lx-space-2)' }}>
+              <div style={{ display: 'flex', gap: 'var(--lx-space-2)', flexWrap: 'wrap' }}>
                 <Button type="button" variant="secondary" onClick={() => openEdit(vehicle)}>
                   {t('citizen.vehicles.editCta')}
                 </Button>
+                {/* En la tarjeta y no detrás del menú: marcar el principal es de un toque y tiene
+                    efecto inmediato en la pantalla de estacionar, que preselecciona este vehículo.
+                    Escondido tras «Más opciones» —junto a Eliminar, que es lo único que queda ahí—
+                    la gente no lo encuentra. Ausente cuando ya es el principal: un botón que no
+                    haría nada es peor que ningún botón. */}
+                {!vehicle.isPrimary ? (
+                  /* `secondary` y no `ghost`: al lado de Editar, un `ghost` se lee como un enlace
+                     suelto y no como la otra mitad de un par de acciones. Las dos hacen lo mismo de
+                     importante sobre la misma tarjeta, así que pesan igual. */
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    disabled={setPrimaryVehicle.isPending}
+                    onClick={() => handleSetPrimary(vehicle)}
+                  >
+                    {t('citizen.vehicles.actions.setPrimary')}
+                  </Button>
+                ) : null}
                 <Button
                   type="button"
                   variant="secondary"
@@ -367,11 +385,6 @@ export function VehiclesPage(): React.JSX.Element {
 
       <Modal open={menuVehicle !== null} onClose={() => setMenuVehicle(null)} title={menuVehicle?.plate ?? ''} closeLabel={t('common.close')}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--lx-space-2)' }}>
-          {menuVehicle && !menuVehicle.isPrimary ? (
-            <Button type="button" variant="secondary" fullWidth onClick={() => handleSetPrimary(menuVehicle)}>
-              {t('citizen.vehicles.actions.setPrimary')}
-            </Button>
-          ) : null}
           {menuVehicle ? (
             <Button
               type="button"

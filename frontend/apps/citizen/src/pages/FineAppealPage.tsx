@@ -107,6 +107,10 @@ export function FineAppealPage(): React.JSX.Element {
           // Already filed: this screen is now where it is read, and where the answer arrives.
           if (appeal) {
             const resolved = appeal.status !== 'SUBMITTED';
+            // Withdrawn is neither a win nor a loss: the citizen paid and closed it themselves
+            // (v0.41). It reaches this screen as resolved, so without this split it would render
+            // the municipality's rejection sentence over an empty reason — a decision nobody made.
+            const withdrawn = appeal.status === 'WITHDRAWN';
             return (
               <>
                 <Card>
@@ -114,7 +118,17 @@ export function FineAppealPage(): React.JSX.Element {
                     title={
                       <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--lx-space-2)', flexWrap: 'wrap' }}>
                         <span>{t('citizen.appeal.filed.title')}</span>
-                        <Badge tone={appeal.status === 'ACCEPTED' ? 'success' : resolved ? 'danger' : 'warning'}>
+                        <Badge
+                          tone={
+                            appeal.status === 'ACCEPTED'
+                              ? 'success'
+                              : withdrawn
+                                ? 'neutral'
+                                : resolved
+                                  ? 'danger'
+                                  : 'warning'
+                          }
+                        >
                           {t(`appeal.status.${appeal.status.toLowerCase()}` as TranslationKey)}
                         </Badge>
                       </span>
@@ -128,7 +142,18 @@ export function FineAppealPage(): React.JSX.Element {
                   </p>
                 </Card>
 
-                {resolved ? (
+                {withdrawn ? (
+                  /* No "Resolución de la municipalidad" header here: there was no resolution. The
+                     claim is kept on screen in full — it is still what the citizen wrote — with one
+                     line saying who closed it and why it stopped waiting. */
+                  <Card>
+                    <SectionHeader
+                      title={t('citizen.appeal.filed.title')}
+                      description={appeal.resolvedAt ? formatDateTime(appeal.resolvedAt, locale) : undefined}
+                    />
+                    <Alert tone="info">{t('citizen.appeal.withdrawn')}</Alert>
+                  </Card>
+                ) : resolved ? (
                   <Card>
                     <SectionHeader
                       title={t('citizen.appeal.decision.title')}

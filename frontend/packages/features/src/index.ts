@@ -33,6 +33,7 @@ export {
 } from './profile/personalData';
 export type { PersonalDataValues, PersonalDataSchemaOptions } from './profile/personalData';
 export type { LocaleSwitcherProps, AvailableLocales } from './locale/LocaleSwitcher';
+export { preselectedDocumentType } from './documentTypeSelection';
 export {
   useCountries,
   useAdminLevels,

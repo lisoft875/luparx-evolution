@@ -71,6 +71,15 @@ public final class AuditAction {
     public static final String PARKING_SESSION_FINISHED = "PARKING_SESSION_FINISHED";
     public static final String PARKING_POLICY_UPDATED = "PARKING_POLICY_UPDATED";
     public static final String PARKING_ZONE_UPDATED = "PARKING_ZONE_UPDATED";
+    /**
+     * The perimeter of a zone was drawn or redrawn (CONTRACT.md v0.40).
+     *
+     * <p>Its own action and not a flavour of {@link #PARKING_ZONE_UPDATED} because the question an
+     * auditor asks is different: renaming a zone is cosmetic, moving its perimeter changes which
+     * street is being charged for, and those two must be answerable apart.</p>
+     */
+    public static final String PARKING_ZONE_GEOMETRY_UPDATED = "PARKING_ZONE_GEOMETRY_UPDATED";
+    public static final String PARKING_ZONE_GEOMETRY_CLEARED = "PARKING_ZONE_GEOMETRY_CLEARED";
     public static final String PARKING_RATE_UPDATED = "PARKING_RATE_UPDATED";
     public static final String PARKING_SPACE_CREATED = "PARKING_SPACE_CREATED";
     /** A bay taken out of service, put back, or moved to another zone (CONTRACT.md v0.16). */
@@ -185,6 +194,14 @@ public final class AuditAction {
     public static final String CITATION_EVIDENCE_ATTACHED = "CITATION_EVIDENCE_ATTACHED";
     public static final String CITATION_STATUS_CHANGED = "CITATION_STATUS_CHANGED";
     public static final String CITATION_CANCELLED = "CITATION_CANCELLED";
+    /**
+     * The citizen paid a citation from their wallet (CONTRACT.md v0.41).
+     *
+     * <p>Its own action rather than a {@code CITATION_STATUS_CHANGED}: this is the one transition a
+     * citizen performs on an administrative act, and "who moved this to PAID, and was an appeal
+     * closed by it" is the question somebody asks months later.</p>
+     */
+    public static final String CITATION_PAID = "CITATION_PAID";
     public static final String INFRACTION_TYPES_UPDATED = "INFRACTION_TYPES_UPDATED";
 
     /**

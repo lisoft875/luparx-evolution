@@ -261,6 +261,16 @@ occurred_at)` (ventana de rate limiting).
   exponer un contador secuencial entre tenants (evita enumeración de IDs como vector de fuga entre
   tenants — ver `SECURITY.md` §4).
 
+## Geometría (v0.40, ADR 0024)
+
+`parking_zones.geom geometry(MultiPolygon, 4326)` — el perímetro de la zona de cobro en WGS84,
+nullable, con `ST_IsValid` y el rango de coordenadas exigidos por `CHECK` e índice GiST parcial. Es
+la única geometría del modelo por ahora; `citations`, `citation_evidence` y `enforcement_checks`
+siguen guardando su punto como `latitude`/`longitude` en `numeric(9,6)` (V17_0, V28_0) y no cambiaron.
+
+Requiere la extensión `postgis`. Agregar la geometría de una bahía, del límite municipal o de un
+distrito es ahora una migración aditiva y no un rediseño, que era el objetivo del punto 13 del plan.
+
 ## Tablas retiradas y pendientes de contraer
 
 - `user_federated_identities` — la federación de identidad se retiró en la v0.39

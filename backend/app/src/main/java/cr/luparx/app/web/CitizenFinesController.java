@@ -18,6 +18,10 @@ import cr.luparx.enforcement.model.EnforcementActor;
 import cr.luparx.enforcement.port.EvidenceStorage;
 import cr.luparx.enforcement.service.AppealNoticeService;
 import cr.luparx.enforcement.service.AppealService;
+import cr.luparx.app.billing.FinePaymentService;
+import cr.luparx.core.error.ErrorCode;
+import cr.luparx.core.error.ValidationException;
+import cr.luparx.core.id.UserId;
 import cr.luparx.enforcement.service.CitationService;
 import cr.luparx.enforcement.service.EvidenceService;
 import cr.luparx.enforcement.service.InfractionTypeService;
@@ -37,6 +41,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
@@ -80,6 +85,7 @@ public class CitizenFinesController {
     private final VehicleService vehicleService;
     private final EnforcementMapper mapper;
     private final AuditRecorder auditRecorder;
+    private final FinePaymentService finePaymentService;
 
     public CitizenFinesController(CitationService citationService,
                                   EvidenceService evidenceService,
@@ -89,7 +95,8 @@ public class CitizenFinesController {
                                   EffectiveLocaleService localeService,
                                   VehicleService vehicleService,
                                   EnforcementMapper mapper,
-                                  AuditRecorder auditRecorder) {
+                                  AuditRecorder auditRecorder,
+                                  FinePaymentService finePaymentService) {
         this.citationService = citationService;
         this.evidenceService = evidenceService;
         this.infractionTypeService = infractionTypeService;
@@ -99,6 +106,7 @@ public class CitizenFinesController {
         this.vehicleService = vehicleService;
         this.mapper = mapper;
         this.auditRecorder = auditRecorder;
+        this.finePaymentService = finePaymentService;
     }
 
     /**
@@ -137,6 +145,14 @@ public class CitizenFinesController {
         TenantId tenantId = TenantContextHolder.requireTenantId();
         List<UUID> vehicleIds = ownVehicleIds(TenantContextHolder.requireUserId());
         Citation citation = citationService.requireForVehicles(tenantId, vehicleIds, id);
+        return detailOf(tenantId, citation);
+    }
+
+    /**
+     * The citation as the detail screen reads it. Extracted in v0.41 so that paying can answer with
+     * exactly the same shape the screen already knows how to render, instead of a second one.
+     */
+    private EnforcementDtos.FineDetailResponse detailOf(TenantId tenantId, Citation citation) {
         List<CitationEvidence> evidence = evidenceService.list(tenantId, citation.getId());
         boolean appealable = Boolean.TRUE.equals(appealableByType(tenantId).get(citation.getInfractionTypeId()))
                 && citation.getStatus().isPayable();
@@ -270,24 +286,48 @@ public class CitizenFinesController {
     }
 
     /**
-     * Paying a fine online — declared, not implemented.
+     * Pay a fine with the balance already in the wallet (CONTRACT.md v0.41).
      *
-     * <p>The contract is fixed here so the client can be built against it and so no other module
-     * claims the path: {@code POST /api/v1/citizen/fines/{id}/payments} with an
-     * {@code Idempotency-Key}, a body naming the payment method, and a response carrying the citation
-     * in its new state. What it will do is already modelled — {@code CitationStatus.PAID} is in the
-     * transition table and the amount payable (the reduced one while the early window is open) is
-     * already computed by the server on every read — so the payments batch adds the provider, the
-     * receipt and the reconciliation, not a new concept.</p>
+     * <p>Declared since v0.1 and answering {@code 501} until now; the contract it reserved is the one
+     * implemented here, unchanged: an {@code Idempotency-Key}, a body naming the means, and a response
+     * carrying the citation in its new state.</p>
      *
-     * <p>It answers {@code 501 NOT_IMPLEMENTED} rather than 404, so a client can tell "declared but
-     * not built yet" from "wrong URL".</p>
+     * <p><b>The amount is never in the request.</b> What is payable today is the server's to say — it
+     * is the reduced figure while the early-payment window is open and the full one after — and a body
+     * that could carry a figure would be a client naming its own price.</p>
+     *
+     * <p>Paying <b>withdraws</b> a defence the citizen had waiting, and the response says so, because
+     * they gave something up and finding that out later from a history row is finding out the wrong
+     * way. A defence filed by somebody else who registered the same plate is not the payer's to
+     * withdraw, and the payment is refused rather than quietly destroying it.</p>
      */
     @PostMapping("/{id}/payments")
     @PreAuthorize("hasRole('CITIZEN')")
-    @Operation(summary = "Pay a fine — reserved, arrives with the payments batch")
-    public void pay(@PathVariable UUID id) {
-        throw new NotImplementedException("error.notImplemented.finePayment");
+    @Operation(summary = "Pay one of my fines with my wallet balance")
+    public EnforcementDtos.FinePaymentResponse pay(
+            @PathVariable UUID id,
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+            @Valid @RequestBody EnforcementDtos.PayFineRequest request) {
+        TenantId tenantId = TenantContextHolder.requireTenantId();
+        UserId userId = TenantContextHolder.requireUserId();
+        if (!"WALLET".equalsIgnoreCase(request.method() == null ? "" : request.method().trim())) {
+            // Named rather than ignored: a client that asks for CARD today must hear that it is not
+            // available yet, not be charged to its wallet instead.
+            throw new ValidationException("method", ErrorCode.VALIDATION_FAILED,
+                    "error.enforcement.citation.paymentMethodUnsupported");
+        }
+        FinePaymentService.Result result = finePaymentService.pay(tenantId, userId, actor(),
+                ownVehicleIds(userId), id, idempotencyKey);
+
+        auditRecorder.record(AuditAction.CITATION_PAID, "citation", id.toString(),
+                Map.of("number", result.citation().getNumber() == null ? "-" : result.citation().getNumber(),
+                        "amountMinor", String.valueOf(result.charged().minorUnits()),
+                        "appealWithdrawn", String.valueOf(result.withdrewAppeal())));
+        return new EnforcementDtos.FinePaymentResponse(
+                detailOf(tenantId, result.citation()),
+                mapper.toMoney(result.charged()),
+                result.withdrewAppeal(),
+                result.movement() == null ? null : result.movement().getId());
     }
 
     private EnforcementDtos.AppealResponse toAppeal(TenantId tenantId, CitationAppeal appeal) {

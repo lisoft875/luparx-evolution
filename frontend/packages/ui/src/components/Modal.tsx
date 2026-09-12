@@ -28,6 +28,15 @@ export interface ModalProps {
   description?: React.ReactNode;
   /** Pinned under the scrolling body — an escape hatch that must stay reachable, e.g. "sign out". */
   footer?: React.ReactNode;
+  /**
+   * Id of the element inside the body that *is* the message, wired to `aria-describedby`.
+   *
+   * Focus moves to the first control, so the title and that control are announced and the body is
+   * not. For a dialog whose body is a form that is correct — the fields announce themselves. For
+   * one whose body is a sentence the citizen has to read (see `ErrorDialog`), it is the whole
+   * point, and this is what makes it reach a screen reader.
+   */
+  describedBy?: string;
 }
 
 /** Everything that can hold focus inside the dialog, in DOM order. */
@@ -44,6 +53,7 @@ export function Modal({
   variant = 'dialog',
   description,
   footer,
+  describedBy,
 }: ModalProps): React.JSX.Element | null {
   // `useId` and not a fixed string: two dialogs mounted at once (the parking flow can have the
   // municipality sheet over a card that owns its own dialog) would otherwise both point their
@@ -58,6 +68,29 @@ export function Modal({
     if (dismissible) onClose();
   }, [dismissible, onClose]);
 
+  /** Everything inside the dialog that can hold focus right now, in DOM order. */
+  const focusables = useCallback((): HTMLElement[] => {
+    const dialog = dialogRef.current;
+    if (!dialog) return [];
+    return [...dialog.querySelectorAll<HTMLElement>(FOCUSABLE)].filter(
+      (node) => node.offsetParent !== null || node === document.activeElement,
+    );
+  }, []);
+
+  /*
+   * OPENING AND CLOSING. Depends on `open` and on nothing else, and that is the whole point.
+   *
+   * These four things happen once per opening: remember where focus came from, lock the page
+   * behind, move focus in, and — on the way out — give focus back. Until v0.40 they shared one
+   * effect with the key handler below, whose dependencies include `onClose`. Almost every caller
+   * passes an inline arrow or a function declared in its component body, so `onClose` is a NEW
+   * identity on every render: the effect tore down and re-ran on every keystroke, the cleanup
+   * returned focus to the element outside the dialog and the body then focused the first control
+   * again. Typing in any field inside any modal lost focus after each character.
+   *
+   * So: anything that must happen once per opening goes here, and nothing that changes per render
+   * may enter this dependency list. `focusables` is a stable useCallback, which is why it can.
+   */
   useEffect(() => {
     if (!open) return;
     returnFocusRef.current = document.activeElement;
@@ -67,18 +100,26 @@ export function Modal({
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
 
-    function focusables(): HTMLElement[] {
-      const dialog = dialogRef.current;
-      if (!dialog) return [];
-      return [...dialog.querySelectorAll<HTMLElement>(FOCUSABLE)].filter(
-        (node) => node.offsetParent !== null || node === document.activeElement,
-      );
-    }
-
     // Focus moves into the dialog rather than staying on whatever opened it, so the next Tab is
     // inside the dialog and a screen reader starts reading here.
     const first = focusables()[0];
     (first ?? dialogRef.current)?.focus();
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      // A dialog that drops focus on the body when it closes leaves a keyboard user at the top of
+      // the page, having lost the badge they just pressed.
+      const target = returnFocusRef.current;
+      if (target instanceof HTMLElement && document.contains(target)) target.focus();
+    };
+  }, [open, focusables]);
+
+  /*
+   * THE KEYBOARD. This one may re-run as often as it likes: adding and removing a listener is
+   * cheap and leaves no state behind, which is exactly why it belongs apart from the effect above.
+   */
+  useEffect(() => {
+    if (!open) return;
 
     function handleKeyDown(event: KeyboardEvent): void {
       if (event.key === 'Escape') {
@@ -110,13 +151,8 @@ export function Modal({
     }
 
     document.addEventListener('keydown', handleKeyDown, true);
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown, true);
-      document.body.style.overflow = previousOverflow;
-      const target = returnFocusRef.current;
-      if (target instanceof HTMLElement && document.contains(target)) target.focus();
-    };
-  }, [open, dismissible, onClose]);
+    return () => document.removeEventListener('keydown', handleKeyDown, true);
+  }, [open, dismissible, onClose, focusables]);
 
   if (!open) return null;
 
@@ -138,6 +174,7 @@ export function Modal({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
+        aria-describedby={describedBy}
         tabIndex={-1}
         onClick={(event) => event.stopPropagation()}
       >

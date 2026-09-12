@@ -33,6 +33,7 @@ export const esCR = {
   'common.yes': 'Sí',
   'common.no': 'No',
   'common.close': 'Cerrar',
+  'common.understood': 'Entendido',
   'common.select.placeholder': 'Selecciona una opción',
   'common.optional': 'opcional',
   'common.languageSwitcher.label': 'Cambiar idioma',
@@ -55,15 +56,11 @@ export const esCR = {
   'auth.login.noAccount': '¿No tienes una cuenta?',
   'auth.login.registerLink': 'Crear cuenta',
   'auth.login.platformNoRegister': 'Las cuentas de este portal las crea un administrador de plataforma.',
-  'auth.login.oauth.divider': 'o continuá con',
-  'auth.login.oauth.google': 'Continuar con Google',
-  'auth.login.oauth.microsoft': 'Continuar con Microsoft',
-  'auth.login.oauth.facebook': 'Continuar con Facebook',
+
   'auth.login.error.invalidCredentials': 'Correo electrónico o contraseña incorrectos.',
   'auth.login.error.network': 'No se pudo conectar con el servidor. Revisá tu conexión o que el servicio esté disponible.',
   'auth.login.error.tooManyAttempts': 'Demasiados intentos. Esperá unos minutos antes de volver a probar.',
   'auth.login.error.server': 'El servidor no pudo procesar el inicio de sesión.',
-
 
   'auth.forgotPassword.title': 'Recuperar contraseña',
   'auth.forgotPassword.description':
@@ -191,7 +188,6 @@ export const esCR = {
   'tenant.membership.status.REVOKED': 'Revocado',
 
   'admin.users.title': 'Usuarios',
-
 
   'admin.zones.title': 'Zonas',
   'admin.zones.description':
@@ -547,7 +543,6 @@ export const esCR = {
   'home.citizen.parkingStub.description':
     'Próximamente podrás iniciar y pagar sesiones de estacionamiento desde aquí.',
 
-
   'nav.home': 'Inicio',
   'nav.portal.admin': 'Municipalidad',
   'nav.group.operation': 'Operación',
@@ -608,7 +603,21 @@ export const esCR = {
   'admin.policy.summary.credit': 'Minutos guardados',
   'admin.policy.summary.creditOn': 'Desde {{min}}, vencen a los {{days}} días',
   'admin.policy.summary.grace': 'Tolerancia',
+  'admin.policy.summary.overlap': 'Espacio compartido',
+  'admin.policy.summary.overlapOn': 'Permitido',
   'admin.policy.summary.off': 'Apagado',
+  // v0.37 — el espacio que nadie liberó. Los dos avisos hablan de fiscalización porque es el único
+  // lugar donde la decisión se siente: apagar esto no es neutral, es decidir que el segundo
+  // ciudadano se estaciona sin cobertura.
+  'admin.policy.overlap.title': 'Espacios con más de una estadía',
+  'admin.policy.overlap.description': 'Qué pasa cuando alguien llega a un espacio que otra estadía todavía no liberó.',
+  'admin.policy.overlap.enabled': 'Permitir pagar un espacio que figura ocupado',
+  'admin.policy.overlap.enabledHint':
+    'Quien paga dos horas y se va a los quince minutos sin finalizar deja el espacio libre en la calle y ocupado en el sistema.',
+  'admin.policy.overlap.notice':
+    'Cada estadía cubre su propia placa en ese espacio. El fiscalizador consulta placa y bahía, así que ninguno de los dos vehículos queda expuesto a una boleta por no pagar.',
+  'admin.policy.overlap.offNotice':
+    'Con esto apagado, el segundo ciudadano no puede pagar el espacio: se estaciona igual y queda sin nada que mostrarle al fiscalizador.',
   'admin.policy.error.generic': 'No se pudo guardar la política.',
   'admin.policy.error.extensionCeiling': 'El techo con extensiones no puede ser menor que {{max}}, que es la estadía más larga que vende.',
   'nav.dashboard': 'Panel',
@@ -738,6 +747,38 @@ export const esCR = {
   'citizen.more.fines': 'Multas',
   'citizen.more.fines.meta': 'Consultá y apelá tus multas.',
   'citizen.more.language': 'Seleccionar idioma',
+  'citizen.more.notifications': 'Notificaciones',
+  'citizen.more.notifications.meta': 'Lo que pasó, y qué de eso te llega al correo.',
+
+  // ---- v0.38 — la campana ---------------------------------------------------------------------
+  // El servidor manda un tipo estable y parámetros crudos; la oración se arma acá. Una frase ya
+  // escrita en el servidor quedaría congelada en el idioma en que se escribió, y quien cambie la app
+  // a inglés leería su historial en español para siempre.
+  'citizen.notifications.title': 'Notificaciones',
+  'citizen.notifications.subtitle': 'Lo que pasó en esta municipalidad.',
+  'citizen.notifications.markAllRead': 'Marcar todas como leídas',
+  'citizen.notifications.unread': 'Sin leer',
+  'citizen.notifications.empty.title': '¡Al día!',
+  'citizen.notifications.empty.description': 'No hay notificaciones en esta municipalidad.',
+  'citizen.notifications.preferences.open': 'Avisos por correo',
+  'citizen.notifications.preferences.title': 'Avisos por correo',
+  'citizen.notifications.preferences.description': 'La campana muestra todo. Elegí qué además te llega al correo.',
+  'citizen.notifications.preferences.emailEnabled': 'Avisarme también por correo',
+  'citizen.notifications.preferences.emailEnabledHint': 'Se envía a la dirección con la que ingresás. Podés apagarlo cuando querás.',
+  'citizen.notifications.preferences.categories': '¿De qué querés que te avisemos?',
+  'citizen.notifications.preferences.error': 'No se pudo guardar la preferencia.',
+
+  'notification.category.PARKING': 'Estacionamiento',
+  'notification.category.FINES': 'Multas',
+  'notification.category.WALLET': 'Billetera y minutos',
+
+  'notification.type.PARKING_SESSION_EXPIRING': 'Tu estacionamiento de la placa {{plate}} vence a las {{when}}.',
+  'notification.type.PARKING_SESSION_EXPIRED': 'El estacionamiento de la placa {{plate}} venció a las {{when}}.',
+  'notification.type.CITATION_ISSUED': 'Te levantaron la boleta {{citationNumber}} por {{amount}}.',
+  'notification.type.APPEAL_RESOLVED': 'La municipalidad resolvió tu reclamo de la boleta {{citationNumber}}.',
+  'notification.type.WALLET_TOPUP_CREDITED': 'Se acreditaron {{amount}} a tu billetera.',
+  'notification.type.TIME_CREDITS_EXPIRING': 'Tus {{minutes}} minutos a favor vencen el {{when}}.',
+
   'nav.fines': 'Multas',
   'nav.catalogs': 'Catálogos',
   'nav.system': 'Sistema',
@@ -839,6 +880,9 @@ export const esCR = {
     'Te quedan {{minutes}}. Esta municipalidad no acredita el tiempo restante: esos minutos se pierden y no se devuelven a tu billetera.',
   'citizen.parking.finish.confirmSubmit': 'Sí, finalizar',
 
+  // Título del diálogo que interrumpe cuando falla el envío (ErrorDialog): nombra la acción que
+  // no se pudo completar, para que el motivo de abajo se lea como respuesta al botón que se apretó.
+  'citizen.parking.error.title': 'No se pudo iniciar el estacionamiento',
   'citizen.parking.error.SESSION_ALREADY_ACTIVE_FOR_VEHICLE': 'Este vehículo ya tiene una sesión de estacionamiento activa.',
   'citizen.parking.error.SESSION_ALREADY_ACTIVE_FOR_PLATE':
     'Esta placa ya tiene un estacionamiento activo en esta municipalidad.',
@@ -944,6 +988,15 @@ export const esCR = {
 
   'inspector.home.offline': 'Sin conexión — datos guardados localmente',
   'inspector.home.online': 'En línea',
+  // Cuatro claves que la pantalla de inicio del inspector ya usaba sin que existieran: el tipo
+  // `TranslationKey` se genera desde este archivo, así que su ausencia rompía `typecheck` en toda
+  // la app. Se agregan tal cual las pide la pantalla en vez de renombrarlas ahí, porque la deuda
+  // era la traducción faltante, no el nombre.
+  'home.inspector.title': 'Patrullaje',
+  'inspector.home.patrol.title': 'Recorrido de hoy',
+  'home.inspector.patrolStub.title': 'Todavía no hay recorrido',
+  'home.inspector.patrolStub.description':
+    'Cuando la municipalidad habilite los recorridos, aquí aparecen las zonas asignadas y las boletas del día.',
 
   // ---- Platform back-office (CONTRACT.md §4 `/api/v1/platform/**`) -----------------------------
 
@@ -1049,6 +1102,7 @@ export const esCR = {
   'platform.catalogs.documentTypes.column.type': 'Tipo',
   'platform.catalogs.documentTypes.column.pattern': 'Patrón',
   'platform.catalogs.documentTypes.column.example': 'Ejemplo',
+  'platform.catalogs.documentTypes.column.default': 'Predeterminado',
 
   'platform.system.title': 'Sistema',
   'platform.system.health.title': 'Estado de los servicios',
@@ -1242,7 +1296,6 @@ export const esCR = {
   'vehicle.color.purple': 'Morado',
   'vehicle.color.other': 'Otro',
 
-
   // ---- Fiscalización (CONTRACT.md v0.7) -------------------------------------------------------
   // El servidor manda `statusLabelKey` / `actionLabelKey` / `verdictLabelKey`; el cliente guarda su
   // propia copia de la tabla porque una clave que el servidor conoce y el diccionario no debe
@@ -1251,9 +1304,9 @@ export const esCR = {
   'citation.status.draft': 'Borrador',
   'citation.status.issued': 'Emitida',
   'citation.status.paid': 'Pagada',
-  'citation.status.appealed': 'Con descargo',
-  'citation.status.upheld': 'Descargo rechazado',
-  'citation.status.dismissed': 'Descargo aceptado',
+  'citation.status.appealed': 'Con reclamo',
+  'citation.status.upheld': 'Reclamo rechazado',
+  'citation.status.dismissed': 'Reclamo aceptado',
   'citation.status.cancelled': 'Anulada',
   'citation.status.expired': 'Vencida',
 
@@ -1261,9 +1314,9 @@ export const esCR = {
   'citation.action.issued': 'Emitida',
   'citation.action.evidence_attached': 'Prueba adjuntada',
   'citation.action.paid': 'Pagada',
-  'citation.action.appealed': 'Descargo presentado',
-  'citation.action.appeal_upheld': 'Descargo rechazado',
-  'citation.action.appeal_dismissed': 'Descargo aceptado',
+  'citation.action.appealed': 'Reclamo presentado',
+  'citation.action.appeal_upheld': 'Reclamo rechazado',
+  'citation.action.appeal_dismissed': 'Reclamo aceptado',
   'citation.action.cancelled': 'Anulada',
   'citation.action.expired': 'Vencida',
 
@@ -1296,9 +1349,9 @@ export const esCR = {
   'admin.enforcement.citation.notManagedHere':
     'Esta boleta se levantó en otro sistema. Se anula allá, no aquí.',
   'citizen.fines.managedElsewhere':
-    'Esta multa la gestiona la municipalidad en otro sistema. Consúltela aquí, pero páguela o presente su descargo donde la municipalidad le indique.',
+    'Esta multa la gestiona la municipalidad en otro sistema. Consúltela aquí, pero páguela o presente su reclamo donde la municipalidad le indique.',
   'citizen.fines.managedElsewhere.named':
-    'Esta multa la gestiona la municipalidad en {{system}}. Consúltela aquí, pero páguela o presente su descargo donde la municipalidad le indique.',
+    'Esta multa la gestiona la municipalidad en {{system}}. Consúltela aquí, pero páguela o presente su reclamo donde la municipalidad le indique.',
   'citizen.fines.payElsewhere': 'Esta multa no se paga en LupaRX: la cobra la municipalidad en su otro sistema.',
   'citation.field.plate': 'Placa',
   'citation.field.infraction': 'Infracción',
@@ -1401,13 +1454,13 @@ export const esCR = {
   'inspector.cite.typePlaceholder': 'Elegí el tipo',
   'inspector.cite.typeDetail': '{{amount}} · vence en {{days}} días',
   'inspector.cite.typeRequiresPhoto': 'Este tipo exige fotografía: no se puede emitir sin al menos una.',
-  'inspector.cite.typeAllowsAppeal': 'Admite descargo',
-  'inspector.cite.typeNoAppeal': 'No admite descargo',
+  'inspector.cite.typeAllowsAppeal': 'Admite reclamo',
+  'inspector.cite.typeNoAppeal': 'No admite reclamo',
   'inspector.cite.typeDiscount': 'Descuento del {{percent}}% durante {{days}} días',
   'inspector.cite.addressLabel': 'Dirección escrita',
   'inspector.cite.addressPlaceholder': 'Costado sur del mercado',
   'inspector.cite.notesLabel': 'Notas',
-  'inspector.cite.notesPlaceholder': 'Lo que un descargo tendría que poder leer.',
+  'inspector.cite.notesPlaceholder': 'Lo que un reclamo tendría que poder leer.',
   'inspector.cite.photos': 'Fotografías',
   'inspector.cite.photosCount': '{{count}} de {{max}}',
   'inspector.cite.addPhoto': 'Tomar fotografía',
@@ -1529,7 +1582,7 @@ export const esCR = {
   'admin.enforcement.types.column.name': 'Nombre',
   'admin.enforcement.types.column.amount': 'Monto',
   'admin.enforcement.types.column.photo': 'Exige foto',
-  'admin.enforcement.types.column.appeal': 'Admite descargo',
+  'admin.enforcement.types.column.appeal': 'Admite reclamo',
   'admin.enforcement.types.add': 'Agregar tipo',
   'admin.enforcement.types.remove': 'Desactivar',
   'admin.enforcement.types.restore': 'Reactivar',
@@ -1677,23 +1730,24 @@ export const esCR = {
   'admin.exemptions.error.typeInactive': 'Esa categoría fue retirada y ya no admite permisos nuevos.',
   'admin.exemptions.error.documentTooLarge': 'El documento es demasiado grande.',
   'admin.exemptions.error.documentType': 'Sólo se aceptan documentos PDF o fotografías.',
-  'nav.appeals': 'Descargos',
+  'nav.appeals': 'Reclamos',
 
-  // ---- Municipalidad: descargos ----------------------------------------------------------------
+  // ---- Municipalidad: reclamos ----------------------------------------------------------------
 
-  'admin.appeals.title': 'Descargos',
+  'admin.appeals.title': 'Reclamos',
   'admin.appeals.description':
-    'Los descargos que presentaron los ciudadanos, del más viejo al más reciente. Aceptar deja la boleta sin efecto; rechazar la mantiene. En los dos casos hay que escribir el motivo.',
-  'admin.appeals.emptyQueue': 'No hay descargos esperando resolución.',
-  'admin.appeals.empty': 'No hay descargos con ese estado.',
-  'admin.appeals.error': 'No se pudo resolver el descargo.',
-  'admin.appeals.accepted': 'Descargo aceptado: la boleta quedó sin efecto.',
-  'admin.appeals.rejected': 'Descargo rechazado: la boleta se mantiene.',
+    'Los reclamos que presentaron los ciudadanos, del más viejo al más reciente. Aceptar deja la boleta sin efecto; rechazar la mantiene. En los dos casos hay que escribir el motivo.',
+  'admin.appeals.emptyQueue': 'No hay reclamos esperando resolución.',
+  'admin.appeals.empty': 'No hay reclamos con ese estado.',
+  'admin.appeals.error': 'No se pudo resolver el reclamo.',
+  'admin.appeals.accepted': 'Reclamo aceptado: la boleta quedó sin efecto.',
+  'admin.appeals.rejected': 'Reclamo rechazado: la boleta se mantiene.',
   'admin.appeals.filter.status': 'Estado',
   'admin.appeals.filter.all': 'Todos los estados',
   'admin.appeals.status.SUBMITTED': 'En trámite',
   'admin.appeals.status.ACCEPTED': 'Aceptado',
   'admin.appeals.status.REJECTED': 'Rechazado',
+  'admin.appeals.status.WITHDRAWN': 'Retirado',
   'admin.appeals.column.filed': 'Presentado',
   'admin.appeals.column.body': 'Lo que alega',
   'admin.appeals.column.images': 'Fotos',
@@ -1702,13 +1756,13 @@ export const esCR = {
   'admin.appeals.action.citation': 'Ver boleta',
   'admin.appeals.action.accept': 'Aceptar',
   'admin.appeals.action.reject': 'Rechazar',
-  'admin.appeals.read.title': 'Descargo del ciudadano',
+  'admin.appeals.read.title': 'Reclamo del ciudadano',
   'admin.appeals.image': 'Ver foto',
   'admin.appeals.noImages': 'El ciudadano no adjuntó fotos.',
-  'admin.appeals.alreadyResolved': 'Este descargo ya se resolvió: {{outcome}}, el {{date}}.',
-  'admin.appeals.accept.title': '¿Aceptar el descargo?',
+  'admin.appeals.alreadyResolved': 'Este reclamo ya se resolvió: {{outcome}}, el {{date}}.',
+  'admin.appeals.accept.title': '¿Aceptar el reclamo?',
   'admin.appeals.accept.body': 'La boleta queda sin efecto y el ciudadano deja de deberla.',
-  'admin.appeals.reject.title': '¿Rechazar el descargo?',
+  'admin.appeals.reject.title': '¿Rechazar el reclamo?',
   'admin.appeals.reject.body': 'La boleta se mantiene y vuelve a ser exigible desde hoy.',
   'admin.appeals.reasonNotice':
     'El motivo lo lee el ciudadano y queda en el historial de la boleta. Escríbalo como para que lo entienda quien no estuvo ahí.',
@@ -1721,47 +1775,67 @@ export const esCR = {
   'citizen.fines.amountPayable': 'Monto exigible hoy',
   'citizen.fines.discountUntil': 'Con descuento hasta el {{date}}',
   'citizen.fines.pay': 'Pagar multa',
-  'citizen.fines.payUnavailable':
-    'El pago en línea todavía no está disponible: el contrato está fijado y la implementación llega con la tanda de pagos. Mientras tanto se paga en la municipalidad.',
-  'citizen.fines.appealable': 'Admite descargo',
-  'citizen.fines.notAppealable': 'No admite descargo',
+  'citizen.fines.appealable': 'Admite reclamo',
+  'citizen.fines.notAppealable': 'No admite reclamo',
   'citizen.fines.empty.history': 'No hay multas en el historial de esta municipalidad.',
   'citizen.fines.open': 'Ver detalle',
-  'citizen.fines.appeal': 'Presentar descargo',
-  'citizen.fines.viewAppeal': 'Ver mi descargo',
+  'citizen.fines.appeal': 'Presentar un reclamo',
+  'citizen.fines.viewAppeal': 'Ver mi reclamo',
 
-  // ---- Ciudadano: descargo ---------------------------------------------------------------------
+  // ---- Ciudadano: reclamo ---------------------------------------------------------------------
 
-  'citizen.appeal.title': 'Descargo',
+  'citizen.appeal.title': 'Reclamo',
   'citizen.appeal.notice.title': 'Antes de escribir',
   'citizen.appeal.notice.version': 'Versión {{version}}, vigente desde el {{date}}',
-  'citizen.appeal.write.title': 'Su descargo',
+  'citizen.appeal.write.title': 'Su reclamo',
   'citizen.appeal.write.description':
     'Cuente qué pasó y por qué considera que la boleta no corresponde. Las fotos se agregan después de guardar el texto.',
-  'citizen.appeal.write.label': 'Texto del descargo',
+  'citizen.appeal.write.label': 'Texto del reclamo',
   'citizen.appeal.write.placeholder': 'Ese día había pagado desde la app y me quedaba tiempo…',
   'citizen.appeal.write.count': '{{used}} de {{max}} caracteres',
   'citizen.appeal.acceptNotice': 'Al presentarlo usted acepta el texto legal que aparece arriba.',
-  'citizen.appeal.submit': 'Presentar descargo',
-  'citizen.appeal.notAppealable': 'Esta multa no admite descargo.',
-  'citizen.appeal.waiting': 'La municipalidad todavía no resuelve su descargo. Mientras tanto la multa no se cobra.',
-  'citizen.appeal.filed.title': 'Descargo presentado',
+  'citizen.appeal.submit': 'Presentar el reclamo',
+  'citizen.appeal.notAppealable': 'Esta multa no admite reclamo.',
+  'citizen.appeal.waiting': 'La municipalidad todavía no resuelve su reclamo. Mientras tanto la multa no se cobra.',
+  'citizen.appeal.filed.title': 'Reclamo presentado',
   'citizen.appeal.filed.submittedAt': 'Presentado el {{date}}',
   'citizen.appeal.decision.title': 'Resolución de la municipalidad',
-  'citizen.appeal.decision.accepted': 'Se aceptó su descargo: la multa quedó sin efecto.',
-  'citizen.appeal.decision.rejected': 'Se rechazó su descargo: la multa se mantiene y vuelve a ser exigible.',
-  'citizen.appeal.images.title': 'Fotos del descargo',
+  'citizen.appeal.decision.accepted': 'Se aceptó su reclamo: la multa quedó sin efecto.',
+  'citizen.appeal.decision.rejected': 'Se rechazó su reclamo: la multa se mantiene y vuelve a ser exigible.',
+  'citizen.appeal.images.title': 'Fotos del reclamo',
   'citizen.appeal.images.count': '{{used}} de {{max}} permitidas por esta municipalidad',
   'citizen.appeal.images.item': 'Foto {{number}} · {{date}}',
   'citizen.appeal.images.add': 'Agregar foto',
-  'citizen.appeal.error.generic': 'No se pudo presentar el descargo.',
-  'citizen.appeal.error.alreadyFiled': 'Ya hay un descargo presentado para esta multa.',
+  'citizen.appeal.error.generic': 'No se pudo presentar el reclamo.',
+  'citizen.appeal.error.alreadyFiled': 'Ya hay un reclamo presentado para esta multa.',
   'citizen.appeal.error.noticeOutdated':
     'La municipalidad cambió el texto legal mientras usted escribía. Vuelva a leerlo arriba y presente de nuevo; su texto no se perdió.',
-  'citizen.appeal.error.noticeUnavailable': 'No se pudo cargar el texto legal, así que no se puede presentar el descargo.',
+  'citizen.appeal.error.noticeUnavailable': 'No se pudo cargar el texto legal, así que no se puede presentar el reclamo.',
   'citizen.appeal.error.imageLimit': 'Ya alcanzó el máximo de fotos que permite esta municipalidad.',
   'citizen.appeal.error.imageTooLarge': 'Esa foto pesa demasiado. Debe ser de 1 MB o menos.',
-  'citizen.appeal.error.imageFailed': 'No se pudo agregar la foto. Su descargo ya quedó presentado.',
+  'citizen.appeal.error.imageFailed': 'No se pudo agregar la foto. Su reclamo ya quedó presentado.',
+
+  // ---- v0.41 — pagar la multa con el saldo -----------------------------------------------------
+  'citizen.fines.pay.confirmTitle': '¿Pagar esta multa?',
+  'citizen.fines.pay.amount': 'Se cobran {{amount}} de su billetera.',
+  'citizen.fines.pay.discountNotice': 'Es el monto con descuento; después del {{date}} sube a {{full}}.',
+  'citizen.fines.pay.balanceAfter': 'Le quedarían {{amount}}.',
+  // El aviso es el punto entero del diálogo cuando hay reclamo: el ciudadano está renunciando a que
+  // se lo resuelvan, y enterarse después por una fila del historial es enterarse mal.
+  'citizen.fines.pay.withdrawsAppeal':
+    'Pagar retira el reclamo que usted presentó: la municipalidad ya no lo va a resolver. Esto no se puede deshacer.',
+  'citizen.fines.pay.submit': 'Sí, pagar',
+  'citizen.fines.pay.success': 'Multa pagada.',
+  'citizen.fines.pay.successWithdrew': 'Multa pagada. Su reclamo quedó retirado.',
+  'citizen.fines.pay.topUp': 'Recargar saldo',
+  'citizen.fines.pay.error.INSUFFICIENT_BALANCE': 'No le alcanza el saldo para esta multa.',
+  'citizen.fines.pay.error.CITATION_NOT_PAYABLE': 'Esta multa ya no se puede pagar: puede estar pagada o sin efecto.',
+  'citizen.fines.pay.error.CITATION_NOT_MANAGED_HERE': 'Esta multa la cobra la municipalidad en su otro sistema.',
+  'citizen.fines.pay.error.APPEAL_BY_ANOTHER_CITIZEN':
+    'El reclamo que espera sobre esta multa lo presentó otra persona, así que pagarla aquí cerraría el reclamo de ella. La municipalidad tiene que resolverlo primero.',
+
+  'appeal.status.withdrawn': 'Retirado',
+  'citizen.appeal.withdrawn': 'Usted retiró este reclamo al pagar la multa.',
 
   'appeal.status.submitted': 'En trámite',
   'appeal.status.accepted': 'Aceptado',

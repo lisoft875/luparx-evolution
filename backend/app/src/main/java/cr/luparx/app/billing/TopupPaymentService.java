@@ -1,5 +1,6 @@
 package cr.luparx.app.billing;
 
+import cr.luparx.app.notification.CitizenNotifier;
 import cr.luparx.billing.entity.Payment;
 import cr.luparx.billing.model.PaymentMethod;
 import cr.luparx.billing.model.PaymentPurpose;
@@ -46,12 +47,15 @@ public class TopupPaymentService {
     private final PaymentService paymentService;
     private final WalletService walletService;
     private final WalletTransactionRepository transactionRepository;
+    private final CitizenNotifier citizenNotifier;
 
     public TopupPaymentService(PaymentService paymentService, WalletService walletService,
-                               WalletTransactionRepository transactionRepository) {
+                               WalletTransactionRepository transactionRepository,
+                               CitizenNotifier citizenNotifier) {
         this.paymentService = paymentService;
         this.walletService = walletService;
         this.transactionRepository = transactionRepository;
+        this.citizenNotifier = citizenNotifier;
     }
 
     /**
@@ -81,6 +85,13 @@ public class TopupPaymentService {
             transactionRepository.save(transaction);
             payment = paymentService.capture(tenantId, payment.getId(), TARGET_WALLET_TRANSACTION,
                     transaction.getId(), fee, null);
+            // In THIS transaction, unlike the citation notices: this service already owns the one
+            // transaction where payments and wallets meet, so the credit and the notice about it are
+            // a single fact — neither can exist without the other (v0.38). Skipped on a resend,
+            // because nothing was credited: the notification is keyed by the movement anyway, so it
+            // would be a no-op, and not calling it says why rather than relying on that.
+            citizenNotifier.topUpCredited(tenantId, beneficiary, transaction.getId(),
+                    amount.minorUnits(), amount.currencyCode());
         }
         return new Result(payment, transaction, alreadyApplied);
     }

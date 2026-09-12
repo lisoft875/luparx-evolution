@@ -172,6 +172,61 @@ COMMENT ON COLUMN wallet_transactions.payment_id IS
     'El pago que produjo este movimiento, cuando entró plata de afuera. Nulo en un cargo por '
     'estacionar: eso gasta saldo que ya estaba, no recibe nada.';
 
+-- ---------------------------------------------------------------------------------------------
+-- 2.b El único UPDATE que `wallet_transactions` va a admitir jamás.
+--
+-- La v0.32 declaró esta tabla de solo anexado con `trg_wallet_transactions_immutable`, y tenía toda
+-- la razón: es el libro de la billetera, y una fila cambiada ahí cambia cuánta plata dice la
+-- plataforma que alguien tuvo. Pero la columna de arriba nace vacía y hay que llenarla — en el
+-- relleno de abajo para lo que ya existe, y en cada recarga nueva, donde el pago se abre antes de
+-- que el movimiento exista. Con el disparador general, las dos cosas fallan con 42501: el relleno
+-- rompe esta migración y la recarga rompe el flujo del ciudadano la primera vez que alguien recargue.
+--
+-- Se podría apagar el disparador durante el relleno y volverlo a encender. No alcanza: eso arregla
+-- la migración y deja rota la recarga, así que la aplicación quedaría dependiendo de que nadie
+-- toque la tabla — una promesa, en vez de una garantía.
+--
+-- Así que la regla se estrecha en vez de apagarse. Se permite exactamente una mutación: **llenar
+-- `payment_id` cuando estaba nulo, sin tocar ninguna otra columna**. Eso no es cambiar lo que pasó,
+-- es terminar de escribirlo. Sigue prohibido volverlo a nulo, cambiar uno ya puesto, y mover el
+-- monto, el saldo o la fecha — que es lo que el disparador existía para impedir. La comparación es
+-- de la fila entera y no de una lista de columnas, así que una columna que se agregue el año que
+-- viene queda protegida sin que nadie se acuerde de venir a agregarla aquí.
+-- ---------------------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION luparx_refuse_wallet_mutation() RETURNS trigger AS $$
+DECLARE
+    candidate wallet_transactions%ROWTYPE;
+BEGIN
+    IF TG_OP = 'UPDATE' THEN
+        IF OLD.payment_id IS NULL AND NEW.payment_id IS NOT NULL THEN
+            -- La fila nueva con el puntero devuelto a nulo tiene que ser idéntica a la vieja. Si
+            -- cambió cualquier otra cosa, esto no es «llenar el espacio en blanco».
+            candidate := NEW;
+            candidate.payment_id := NULL;
+            IF candidate IS NOT DISTINCT FROM OLD THEN
+                RETURN NEW;
+            END IF;
+        END IF;
+    END IF;
+    RAISE EXCEPTION
+        'La tabla % es de solo anexado: no admite % (CONTRACT.md v0.32). Lo único que se puede '
+        'completar despues es payment_id cuando estaba nulo, sin tocar nada mas. Un error se '
+        'corrige agregando una fila que lo diga, nunca cambiando la que ya esta.',
+        TG_TABLE_NAME, TG_OP
+        USING ERRCODE = '42501';
+END;
+$$ LANGUAGE plpgsql;
+
+COMMENT ON FUNCTION luparx_refuse_wallet_mutation() IS
+    'Como luparx_refuse_mutation, pero deja completar payment_id una sola vez y nada mas. El resto '
+    'de las tablas de solo anexado siguen con la funcion general, que no admite ninguna excepcion.';
+
+DROP TRIGGER trg_wallet_transactions_immutable ON wallet_transactions;
+CREATE TRIGGER trg_wallet_transactions_immutable
+    BEFORE UPDATE OR DELETE ON wallet_transactions
+    FOR EACH ROW EXECUTE FUNCTION luparx_refuse_wallet_mutation();
+-- El de TRUNCATE se queda con la función general: vaciar la tabla entera no tiene excepción posible.
+
 
 -- ---------------------------------------------------------------------------------------------
 -- 3. Settlement: lo que el proveedor dice que liquidó.
@@ -292,6 +347,9 @@ SELECT gen_random_uuid(), t.tenant_id, t.user_id,
 FROM wallet_transactions t
 WHERE t.type = 'TOP_UP' AND t.amount_minor > 0;
 
+-- Este UPDATE es el que obligó a estrechar el disparador de arriba: sólo llena `payment_id`, así
+-- que pasa; si alguna vez alguien le agrega otra columna al SET, dejará de pasar, y eso es lo que
+-- se quiere.
 UPDATE wallet_transactions t
 SET payment_id = p.id
 FROM payments p

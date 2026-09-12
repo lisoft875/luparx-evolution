@@ -64,8 +64,7 @@ public class DomainBeansConfiguration {
         return new TokenProperties(
                 jwtProperties.issuer(),
                 jwtProperties.accessTokenTtl(),
-                jwtProperties.refreshTokenTtl(),
-                jwtProperties.oauthStateTtl());
+                jwtProperties.refreshTokenTtl());
     }
 
     @Bean
@@ -110,7 +109,8 @@ public class DomainBeansConfiguration {
                 properties.creditMinRemainingOrDefault(),
                 properties.creditExpiryDaysOrDefault(),
                 properties.graceMinutesOrDefault(),
-                properties.freeMinutesOrDefault());
+                properties.freeMinutesOrDefault(),
+                properties.overlappingStaysEnabledOrDefault());
     }
 
     /**

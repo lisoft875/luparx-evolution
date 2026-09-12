@@ -134,6 +134,28 @@ public class Citation {
     @Column(name = "due_at")
     private Instant dueAt;
 
+    /**
+     * When it was paid, if it was (V39_0).
+     *
+     * <p>Null on a citation nobody has paid, and <b>also</b> on one mirrored from another system that
+     * arrived already paid without a date (v0.34). That is why no constraint demands it whenever the
+     * status is {@code PAID}: such a rule would refuse a citation that another municipality's system
+     * legitimately says is settled.</p>
+     */
+    @Column(name = "paid_at")
+    private Instant paidAt;
+
+    /**
+     * The wallet movement that paid it, when it was paid from the app (V39_0).
+     *
+     * <p>A plain identifier with <b>no foreign key</b>, for the same reason as
+     * {@code payments.target_id}: {@code wallet_transactions} belongs to the parking context and this
+     * module does not depend on it (ADR 0014). Null for a citation paid at the counter, or in the
+     * municipality's other system.</p>
+     */
+    @Column(name = "paid_wallet_transaction_id")
+    private UUID paidWalletTransactionId;
+
     @Column(name = "occurred_at", nullable = false)
     private Instant occurredAt;
 
@@ -422,6 +444,28 @@ public class Citation {
         this.status = target;
         this.statusReason = reason;
         this.updatedAt = now;
+    }
+
+    /**
+     * Records that this citation was settled from the citizen's wallet (v0.41).
+     *
+     * <p>Called <b>after</b> the transition to {@code PAID} and never instead of it: the status is
+     * what the municipality's reports read, and this is the receipt that says which movement carried
+     * the money. The schema refuses a movement on anything that is not paid
+     * ({@code ck_citations_paid_movement}), so the two cannot drift apart.</p>
+     */
+    public void markPaidFromWallet(UUID walletTransactionId, Instant now) {
+        this.paidAt = now;
+        this.paidWalletTransactionId = walletTransactionId;
+        this.updatedAt = now;
+    }
+
+    public Instant getPaidAt() {
+        return paidAt;
+    }
+
+    public UUID getPaidWalletTransactionId() {
+        return paidWalletTransactionId;
     }
 
     public UUID getId() {

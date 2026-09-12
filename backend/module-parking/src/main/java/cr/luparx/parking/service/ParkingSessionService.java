@@ -241,7 +241,7 @@ public class ParkingSessionService {
                 spaceFormatService.requireValidCode(tenantId, spaceCode));
 
         // Free whatever the clock already ended, then refuse what is genuinely taken.
-        releaseIfExpired(sessionRepository.findBySpaceIdAndStatus(space.getId(), ParkingSessionStatus.ACTIVE),
+        releaseExpired(sessionRepository.findAllBySpaceIdAndStatus(space.getId(), ParkingSessionStatus.ACTIVE),
                 policy);
         if (vehicleId != null) {
             releaseIfExpired(sessionRepository.findByVehicleIdAndStatus(vehicleId, ParkingSessionStatus.ACTIVE),
@@ -252,7 +252,16 @@ public class ParkingSessionService {
             }
         }
         requirePlateFree(tenantId, policy, plate, vehicleRef.isGuest());
-        if (sessionRepository.findBySpaceIdAndStatus(space.getId(), ParkingSessionStatus.ACTIVE).isPresent()) {
+        // A bay that still holds somebody else's running stay (v0.37). Whether that refuses this one
+        // is the municipality's decision and not the platform's: the previous driver may simply have
+        // left without finishing, in which case refusing does not free the bay — it leaves this
+        // citizen parked, unable to pay, and with nothing to show a fiscalizador. What covers them is
+        // their own plate on this bay, not ownership of it, and PlateVerdict already reads it that
+        // way, so two stays from two plates each answer COVERED on their own (ADR 0014, ADR 0020).
+        // A second stay for the SAME plate is refused by uq_parking_sessions_active_space_plate
+        // whatever this flag says: that one is one person charged twice for one space.
+        if (!policy.isOverlappingStaysEnabled()
+                && sessionRepository.existsBySpaceIdAndStatus(space.getId(), ParkingSessionStatus.ACTIVE)) {
             throw ConflictException.of(ErrorCode.SPACE_OCCUPIED, "error.parking.space.occupied");
         }
 
@@ -573,6 +582,17 @@ public class ParkingSessionService {
 
     private void releaseIfExpired(Optional<ParkingSession> session, ParkingPolicy policy) {
         session.ifPresent(found -> expireIfDue(found, policy));
+    }
+
+    /**
+     * The same, for a bay — which may hold more than one running stay since v0.37.
+     *
+     * <p>Every one of them is judged, not just the first: a bay with two stays where only the older
+     * has run out has to end up with exactly one running stay, and stopping at the first match would
+     * leave a lapsed one alive to be counted as occupancy.</p>
+     */
+    private void releaseExpired(List<ParkingSession> sessions, ParkingPolicy policy) {
+        sessions.forEach(session -> expireIfDue(session, policy));
     }
 
     /**

@@ -42,6 +42,10 @@
       <groupId>cr.luparx</groupId>
       <artifactId>luparx-module-billing</artifactId>
     </dependency>
+    <dependency>
+      <groupId>cr.luparx</groupId>
+      <artifactId>luparx-module-notifications</artifactId>
+    </dependency>
 
     <dependency>
       <groupId>org.springframework.boot</groupId>

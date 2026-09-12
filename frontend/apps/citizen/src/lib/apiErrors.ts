@@ -92,6 +92,30 @@ export function vehicleDeleteErrorMessage(error: unknown, t: Translate): string 
   return apiErrorMessage(error, t, VEHICLE_DELETE_ERROR_KEYS);
 }
 
+/**
+ * The refusals of paying a fine from the wallet (v0.41).
+ *
+ * <p>Every one of them is actionable by the person reading it — top up, or wait for the
+ * municipality — which is the whole reason they are mapped instead of collapsing into "something
+ * went wrong" with a trace id.</p>
+ */
+const FINE_PAYMENT_ERROR_KEYS: Record<string, TranslationKey> = {
+  INSUFFICIENT_BALANCE: 'citizen.fines.pay.error.INSUFFICIENT_BALANCE',
+  CITATION_NOT_PAYABLE: 'citizen.fines.pay.error.CITATION_NOT_PAYABLE',
+  CITATION_NOT_MANAGED_HERE: 'citizen.fines.pay.error.CITATION_NOT_MANAGED_HERE',
+  APPEAL_BY_ANOTHER_CITIZEN: 'citizen.fines.pay.error.APPEAL_BY_ANOTHER_CITIZEN',
+};
+
+/** Message for a fine that could not be paid. */
+export function finePaymentErrorMessage(error: unknown, t: Translate): string {
+  return apiErrorMessage(error, t, FINE_PAYMENT_ERROR_KEYS);
+}
+
+/** True when the only thing standing between the citizen and paying is a top-up. */
+export function isInsufficientBalance(error: unknown): boolean {
+  return error instanceof ApiError && error.code === 'INSUFFICIENT_BALANCE';
+}
+
 /** Global message for a parking (start/extend/finish) failure, keeping the mapped copy where one exists. */
 export function parkingErrorMessage(error: unknown, t: Translate): string {
   return apiErrorMessage(error, t, PARKING_ERROR_KEYS);

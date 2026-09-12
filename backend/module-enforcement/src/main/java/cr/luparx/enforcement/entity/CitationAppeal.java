@@ -109,6 +109,20 @@ public class CitationAppeal {
         this.updatedAt = now;
     }
 
+    /**
+     * The citizen closed it themselves, by paying the citation (v0.41).
+     *
+     * <p>{@code resolvedBy} and the reason stay <b>null</b>, and the database insists on it
+     * ({@code ck_citation_appeals_resolution}): no official decided this, and filling those fields
+     * with the citizen's own id would record a resolution that never happened. Who withdrew it is
+     * not lost — it is {@link #getUserId()}, the only person who could.</p>
+     */
+    public void withdraw(Instant now) {
+        this.status = AppealStatus.WITHDRAWN;
+        this.resolvedAt = now;
+        this.updatedAt = now;
+    }
+
     public UUID getId() {
         return id;
     }

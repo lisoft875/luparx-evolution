@@ -1,5 +1,6 @@
 package cr.luparx.app.web;
 
+import cr.luparx.app.notification.CitizenNotifier;
 import cr.luparx.app.audit.AuditRecorder;
 import cr.luparx.app.idempotency.IdempotencyFilter;
 import cr.luparx.app.web.dto.EnforcementDtos;
@@ -103,6 +104,7 @@ public class InspectorEnforcementController {
     private final MembershipZoneService membershipZoneService;
     private final EnforcementMapper mapper;
     private final AuditRecorder auditRecorder;
+    private final CitizenNotifier citizenNotifier;
 
     public InspectorEnforcementController(PlateStatusService plateStatusService,
                                           CitationService citationService,
@@ -113,7 +115,8 @@ public class InspectorEnforcementController {
                                           UserDirectoryService userDirectoryService,
                                           MembershipZoneService membershipZoneService,
                                           EnforcementMapper mapper,
-                                          AuditRecorder auditRecorder) {
+                                          AuditRecorder auditRecorder,
+                                          CitizenNotifier citizenNotifier) {
         this.plateStatusService = plateStatusService;
         this.citationService = citationService;
         this.checkService = checkService;
@@ -124,6 +127,7 @@ public class InspectorEnforcementController {
         this.membershipZoneService = membershipZoneService;
         this.mapper = mapper;
         this.auditRecorder = auditRecorder;
+        this.citizenNotifier = citizenNotifier;
     }
 
     /**
@@ -350,6 +354,12 @@ public class InspectorEnforcementController {
                             "amountMinor", String.valueOf(citation.getFineAmountMinor()),
                             "deviceCitationId", citation.getDeviceCitationId() == null
                                     ? "-" : citation.getDeviceCitationId()));
+            if (!citation.getStatus().isDraft()) {
+                // A capture can land already issued when the municipality does not use drafts, and
+                // that path has to tell the citizen too. Recording it twice is free: the notice is
+                // keyed by (person, type, citation).
+                citizenNotifier.citationIssued(citation);
+            }
         }
         return ResponseEntity.status(captured.created() ? HttpStatus.CREATED : HttpStatus.OK)
                 .body(detail(tenantId, citation));
@@ -363,6 +373,8 @@ public class InspectorEnforcementController {
         TenantId tenantId = TenantContextHolder.requireTenantId();
         Citation citation = citationService.issue(tenantId, actor(), id);
         audit(AuditAction.CITATION_ISSUED, citation, Map.of("number", citation.getNumber()));
+        // After the act and never instead of it: the notice cannot undo a citation (v0.38).
+        citizenNotifier.citationIssued(citation);
         return detail(tenantId, citation);
     }
 

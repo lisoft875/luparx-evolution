@@ -264,6 +264,29 @@ public class CitationService {
         return citation;
     }
 
+    /**
+     * Settles the citation with a movement from the citizen's wallet (v0.41).
+     *
+     * <p>Lives here and not in the caller because the citation is this module's row: the transition,
+     * the receipt and the event have to be written together, and a caller that could move the status
+     * without recording which movement paid it would be able to leave the two disagreeing.</p>
+     *
+     * <p>It does not touch the wallet and knows nothing about balances — it is handed the identifier
+     * of a movement that already happened. Charging is the parking module's business, and joining the
+     * two is {@code FinePaymentService}'s, in the application layer.</p>
+     *
+     * @param walletTransactionId the movement that carried the money, or null when the amount payable
+     *                            was zero and there was nothing to move
+     */
+    @Transactional
+    public Citation payFromWallet(TenantId tenantId, EnforcementActor actor, UUID citationId,
+                                  UUID walletTransactionId) {
+        Citation citation = transition(tenantId, actor, citationId, CitationStatus.PAID,
+                CitationAction.PAID, null, false);
+        citation.markPaidFromWallet(walletTransactionId, clock.instant());
+        return citationRepository.save(citation);
+    }
+
     /** Annulment: the only way an issued citation stops standing, and it always carries a reason. */
     @Transactional
     public Citation cancel(TenantId tenantId, EnforcementActor actor, UUID citationId, String reason) {

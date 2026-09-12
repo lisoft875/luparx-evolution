@@ -25,4 +25,21 @@ public interface ParkingTimeCreditEntryRepository extends JpaRepository<ParkingT
     List<ParkingTimeCreditEntry> findLiveLots(@Param("creditId") UUID creditId);
 
     Page<ParkingTimeCreditEntry> findByCreditIdOrderByCreatedAtDesc(UUID creditId, Pageable pageable);
+
+    /**
+     * Lots that still hold minutes and are about to lapse (v0.38).
+     *
+     * <p>{@code remainingMinutes > 0} is not an optimisation: minutes already spent do not lapse, and
+     * telling somebody they are about to lose something they no longer have is worse than saying
+     * nothing. Lots that never expire have a null {@code expiresAt} and fall outside the range on
+     * their own.</p>
+     */
+    @Query("""
+            select e from ParkingTimeCreditEntry e
+            where e.remainingMinutes > 0 and e.expiresAt between :from and :to
+            order by e.expiresAt asc
+            """)
+    List<ParkingTimeCreditEntry> findExpiringLots(@Param("from") java.time.Instant from,
+                                                  @Param("to") java.time.Instant to,
+                                                  Pageable pageable);
 }

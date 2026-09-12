@@ -144,10 +144,19 @@ function CountryScopedTab({ tab }: { tab: 'adminLevels' | 'divisions' | 'documen
           emptyLabel={t('common.empty')}
           rows={documentTypesQuery.data ?? []}
           rowKey={(row) => row.type}
+          // El orden de las filas ES el orden de presentación del país: la lista llega ordenada por
+          // `sortOrder` (CONTRACT.md v0.9), así que la primera fila es la primera opción que ve un
+          // ciudadano. La columna «predeterminado» hace visible el otro hecho —cuál viene marcado
+          // al abrir el formulario—, que antes sólo se podía averiguar consultando la base.
           columns={[
             { key: 'type', header: t('platform.catalogs.documentTypes.column.type'), render: (row) => row.type },
             { key: 'pattern', header: t('platform.catalogs.documentTypes.column.pattern'), render: (row) => row.pattern },
             { key: 'example', header: t('platform.catalogs.documentTypes.column.example'), render: (row) => row.example },
+            {
+              key: 'default',
+              header: t('platform.catalogs.documentTypes.column.default'),
+              render: (row) => (row.default ? t('common.yes') : t('common.no')),
+            },
           ]}
         />
       ) : null}

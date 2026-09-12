@@ -52,7 +52,10 @@ public enum CitationStatus {
         table.put(DRAFT, EnumSet.of(ISSUED, CANCELLED));
         table.put(ISSUED, EnumSet.of(PAID, APPEALED, CANCELLED, EXPIRED));
         // An appeal that fails leaves the citation payable again; one that succeeds voids it.
-        table.put(APPEALED, EnumSet.of(UPHELD, DISMISSED, CANCELLED));
+        // PAID is here since v0.41: the citizen may pay while their appeal is still waiting, and
+        // paying withdraws it. Without this transition the only way out of APPEALED was to wait for
+        // the municipality — while the early-payment discount ran out underneath them.
+        table.put(APPEALED, EnumSet.of(UPHELD, DISMISSED, CANCELLED, PAID));
         table.put(UPHELD, EnumSet.of(PAID, CANCELLED, EXPIRED));
         // Terminal states. Reopening a paid or annulled citation is a new act, not an edit.
         table.put(PAID, EnumSet.noneOf(CitationStatus.class));

@@ -6,6 +6,7 @@ import { ActiveTenantBadge, TenantSheet } from '@luparx/features';
 import { AppBar, Brand, BottomTabBar, IconBell, IconCar, IconHome, IconList, IconPark, IconWallet } from '@luparx/ui';
 import type { BottomTab } from '@luparx/ui';
 import { ActiveSessionsBar } from './ActiveSessionsBar';
+import { useUnreadNotificationCount } from '../lib/queries';
 
 export interface CitizenShellProps {
   children: React.ReactNode;
@@ -48,6 +49,10 @@ export function CitizenShell({
 }: CitizenShellProps): React.JSX.Element {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  // Only for the root screens that show the bell: a detail screen renders a back arrow instead, and
+  // polling a count nobody can see would be a request per minute per open screen for nothing.
+  const unreadQuery = useUnreadNotificationCount();
+  const unreadCount = unreadQuery.data?.unread;
   const location = useLocation();
 
   // The footer (the tab bar) is `position: fixed`, so it never reserves space in normal flow on
@@ -149,8 +154,17 @@ export function CitizenShell({
           subtitle={onBack ? subtitle : undefined}
           actions={
             !onBack
-              ? // TODO(domain): notification count stands in for `/api/v1/citizen/notifications` (unread count).
-                [{ icon: <IconBell />, label: t('common.notifications'), onClick: () => undefined, badgeCount: 7 }]
+              ? [
+                  {
+                    icon: <IconBell />,
+                    label: t('common.notifications'),
+                    onClick: () => navigate('/notifications'),
+                    // Undefined and not 0 while the count is still loading, so the badge is absent
+                    // rather than briefly claiming "0" — AppBar hides a falsy count either way, but
+                    // saying "no news" before asking would be the screen guessing.
+                    badgeCount: unreadCount,
+                  },
+                ]
               : []
           }
         />

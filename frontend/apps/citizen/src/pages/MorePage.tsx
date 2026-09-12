@@ -12,6 +12,7 @@ import {
   IconFine,
   IconLogout,
   IconUser,
+  IconBell,
   ListRow,
 } from '@luparx/ui';
 import { CitizenShell } from '../components/CitizenShell';
@@ -56,6 +57,15 @@ export function MorePage(): React.JSX.Element {
             meta={t('citizen.more.fines.meta')}
             value={<IconChevronRight size={16} />}
             onClick={() => navigate('/fines')}
+          />
+          {/* The bell is the fast way in; this is the discoverable one, and the only place the email
+              preference can be found by somebody who is not looking at a notification. */}
+          <ListRow
+            icon={<IconBell size={18} />}
+            title={t('citizen.more.notifications')}
+            meta={t('citizen.more.notifications.meta')}
+            value={<IconChevronRight size={16} />}
+            onClick={() => navigate('/notifications')}
           />
         </Card>
 

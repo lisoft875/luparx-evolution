@@ -10,6 +10,9 @@ import cr.luparx.core.id.UserId;
 import cr.luparx.core.outbox.OutboxEventType;
 import cr.luparx.core.page.PageRequest;
 import cr.luparx.core.page.PageResponse;
+import cr.luparx.app.geo.BoundingBox;
+import cr.luparx.app.geo.GeoJson;
+import cr.luparx.app.service.ZoneGeometryService;
 import cr.luparx.core.tenant.TenantContextHolder;
 import cr.luparx.parking.entity.ParkingPolicy;
 import cr.luparx.parking.entity.ParkingRate;
@@ -88,12 +91,20 @@ public class CitizenParkingController {
     /** The code format changes when a municipality renumbers its bays, which is to say almost never. */
     private static final Duration SPACE_FORMAT_CACHE_TTL = Duration.ofMinutes(15);
 
+    /**
+     * Geometry is the most static thing this controller serves: a zone's perimeter changes when the
+     * municipality repaints a street, not when a price changes. It carries no prices, which is
+     * exactly why it can be cached for far longer than the zone list next to it.
+     */
+    private static final Duration ZONE_GEOMETRY_CACHE_TTL = Duration.ofMinutes(30);
+
     private final ParkingPolicyService policyService;
     private final ParkingQuoteService quoteService;
     private final ParkingSessionService sessionService;
     private final ParkingScheduleService scheduleService;
     private final ParkingCatalogService catalogService;
     private final ParkingSpaceFormatService spaceFormatService;
+    private final ZoneGeometryService zoneGeometryService;
     private final VehicleService vehicleService;
     private final ParkingMapper mapper;
     private final AuditRecorder auditRecorder;
@@ -106,6 +117,7 @@ public class CitizenParkingController {
                                     ParkingScheduleService scheduleService,
                                     ParkingCatalogService catalogService,
                                     ParkingSpaceFormatService spaceFormatService,
+                                    ZoneGeometryService zoneGeometryService,
                                     VehicleService vehicleService,
                                     ParkingMapper mapper,
                                     AuditRecorder auditRecorder,
@@ -117,6 +129,7 @@ public class CitizenParkingController {
         this.scheduleService = scheduleService;
         this.catalogService = catalogService;
         this.spaceFormatService = spaceFormatService;
+        this.zoneGeometryService = zoneGeometryService;
         this.vehicleService = vehicleService;
         this.mapper = mapper;
         this.auditRecorder = auditRecorder;
@@ -192,6 +205,34 @@ public class CitizenParkingController {
      * of assuming four digits — an assumption that is right for San José today and wrong for the first
      * municipality that paints {@code A-12}.</p>
      */
+    /**
+     * The drawn zones of the active municipality, as a GeoJSON FeatureCollection
+     * (CONTRACT.md v0.40, ADR 0024).
+     *
+     * <p>This is the consumption half of the geometry: a URL a map library — or QGIS, or ArcGIS —
+     * can point at without anybody writing a connector, which is the whole objective of point 13 of
+     * the plan. It answers only for the municipality the session is scoped to.</p>
+     *
+     * <p>{@code bbox} is what a map actually asks ("what could be on screen"), and it is the one
+     * predicate the GiST index of V38_0 can answer. Without it the answer is every drawn zone of the
+     * municipality, capped by {@code luparx.geo.max-zones-per-map} — bounded, because an endpoint
+     * that can return an unbounded collection is forbidden (docs/ARCHITECTURE.md §7).</p>
+     *
+     * <p>Zones that have not been drawn are simply absent. A feature with a null geometry is legal
+     * GeoJSON and every map library renders it as nothing, which looks like a bug in the map rather
+     * than a zone nobody has traced yet.</p>
+     */
+    @GetMapping("/zones/geojson")
+    @PreAuthorize("hasRole('CITIZEN')")
+    @Operation(summary = "Drawn zones of the active municipality as GeoJSON, optionally inside a bbox")
+    public ResponseEntity<GeoJson.FeatureCollection> zonesGeoJson(
+            @RequestParam(required = false) String bbox) {
+        TenantId tenantId = TenantContextHolder.requireTenantId();
+        GeoJson.FeatureCollection collection =
+                zoneGeometryService.featureCollection(tenantId, BoundingBox.parseOrNull(bbox));
+        return privatelyCacheable(collection, ZONE_GEOMETRY_CACHE_TTL);
+    }
+
     @GetMapping("/space-format")
     @PreAuthorize("hasRole('CITIZEN')")
     @Operation(summary = "The bay code format of the active municipality: pattern and example")

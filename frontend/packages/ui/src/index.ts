@@ -1,4 +1,3 @@
-export { IconGoogle, IconMicrosoft, IconFacebook } from './icons';
 export { Button } from './components/Button';
 export type { ButtonProps, ButtonVariant } from './components/Button';
 export { Input } from './components/Input';
@@ -29,6 +28,8 @@ export { Pagination } from './components/Pagination';
 export type { PaginationProps } from './components/Pagination';
 export { Modal } from './components/Modal';
 export type { ModalProps, ModalVariant } from './components/Modal';
+export { ErrorDialog } from './components/ErrorDialog';
+export type { ErrorDialogProps } from './components/ErrorDialog';
 export { PageLayout, CenteredLayout } from './components/PageLayout';
 export type { PageLayoutProps, CenteredLayoutProps } from './components/PageLayout';
 export { AuthScreen } from './components/AuthScreen';

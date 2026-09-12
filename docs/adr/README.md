@@ -25,9 +25,17 @@ de rollback, estado y fecha.
 | [0017](0017-audit-actor-and-origin.md) | Identidad del actor y origen en la bitácora: nombre resuelto al leer, dirección cotejada sin guardarse | Aceptado |
 | [0018](0018-external-citations.md) | Boletas levantadas en otro sistema: espejo que se lee aquí y se cobra allá | Aceptado |
 | [0019](0019-payments-and-reconciliation.md) | Pagos, liquidaciones y conciliación en un módulo propio | Aceptado |
+| [0020](0020-overlapping-stays-on-a-bay.md) | Una bahía puede sostener más de una estadía viva, configurable por municipalidad | Aceptado |
+| [0021](0021-citizen-notifications.md) | Notificaciones al ciudadano: contexto propio, campana en la transacción y correo por el outbox | Aceptado |
 | [0022](0022-retire-identity-federation.md) | Retirar la federación de identidad: LupaRX emite sus propias credenciales | Aceptado |
+| [0024](0024-zone-geometry-postgis.md) | La zona es un lugar: geometría en PostGIS (MultiPolygon 4326) y GeoJSON en la API | Aceptado |
+| [0025](0025-paying-a-fine-from-the-wallet.md) | Pagar la multa con el saldo: el pago retira el reclamo, y el saldo insuficiente se rechaza | Aceptado |
+| [0026](0026-deployment-topology.md) | Despliegue en una instancia: un dominio con rutas, imágenes construidas en el servidor, perfil `demo` | Aceptado |
 
 Las decisiones 0001–0013 datan del scaffold inicial (2026-09-07); 0014 y 0015 se tomaron al construir
 el módulo de fiscalización y el flujo de recargas (2026-09-09); 0017 amplía la 0013 al hacer legible la
-bitácora, 0018 abre el modelo de boletas a otros sistemas 0019 separa la cadena de pagos y **0022 supersede a la 0006**: la federación de identidad se retira sin haber llegado a funcionar, y la plataforma emite sus propias credenciales (2026-09-10). Todas se revisan cuando cambian los supuestos que las
-motivaron (volumen, número de tenants, regulación por país, etc.).
+bitácora, 0018 abre el modelo de boletas a otros sistemas, 0019 separa la cadena de pagos y 0020 revisa el supuesto de «una bahía, una estadía» y 0021 le da un buzón al ciudadano y el primer consumidor al outbox, y **0022 supersede a la 0006**: la federación de identidad se retira sin haber llegado a funcionar, y la plataforma emite sus propias credenciales (2026-09-10). La **0024** pone geometría en el modelo antes de que ninguna municipalidad la pida, que es el punto 13 del plan (2026-09-11). La **0025** habilita el pago de la multa con el saldo y, al hacerlo, tiene que decidir qué pasa con un reclamo en trámite: se retira, con estado propio, porque ni dejarlo vivo ni llamarlo «rechazado» eran ciertos (2026-09-11). Todas se revisan cuando cambian los supuestos que las
+motivaron (volumen, número de tenants, regulación por país, etc.). La **0026** saca la aplicación de
+la laptop por primera vez y elige, para una instancia de demostración, lo barato con el costo escrito:
+un dominio con rutas en vez de un subdominio por portal, y compilar en el servidor en vez de publicar
+imágenes desde CI (2026-09-12).

@@ -40,12 +40,16 @@ public final class ErrorCode {
     public static final String SELF_REGISTRATION_DISABLED = "SELF_REGISTRATION_DISABLED";
 
 
-    // --- federation (ADR 0006) -----------------------------------------------------------------
-    public static final String FEDERATION_PROVIDER_UNKNOWN = "FEDERATION_PROVIDER_UNKNOWN";
-    public static final String FEDERATION_NOT_CONFIGURED = "FEDERATION_NOT_CONFIGURED";
-    public static final String FEDERATION_EMAIL_NOT_VERIFIED = "FEDERATION_EMAIL_NOT_VERIFIED";
-    public static final String FEDERATION_LINK_CONFIRMATION_REQUIRED = "FEDERATION_LINK_CONFIRMATION_REQUIRED";
-    public static final String FEDERATION_REGISTRATION_REQUIRED = "FEDERATION_REGISTRATION_REQUIRED";
+    // --- geometry (CONTRACT.md v0.40, ADR 0024) -------------------------------------------------
+    /**
+     * The geometry is not a usable Polygon or MultiPolygon: a Feature instead of a geometry, an
+     * unclosed ring, a coordinate out of range, or a polygon PostGIS refuses as invalid. One code
+     * for all of it, with the offending field or PostGIS's own reason in the body — the client's
+     * next action is the same in every case, which is to fix the drawing.
+     */
+    public static final String INVALID_GEOMETRY = "INVALID_GEOMETRY";
+    /** Well formed and valid, but larger than this deployment serves (`luparx.geo.max-zone-vertices`). */
+    public static final String GEOMETRY_TOO_COMPLEX = "GEOMETRY_TOO_COMPLEX";
 
     // --- users ---------------------------------------------------------------------------------
     public static final String USER_NOT_FOUND = "USER_NOT_FOUND";
@@ -222,6 +226,21 @@ public final class ErrorCode {
      * wrong window.</p>
      */
     public static final String CITATION_NOT_MANAGED_HERE = "CITATION_NOT_MANAGED_HERE";
+    /**
+     * The citation is not in a state that can be paid (v0.41).
+     *
+     * <p>Already paid, annulled, or voided by an accepted appeal. Told apart from a validation error
+     * because nothing about the request is wrong: the world moved, usually while the screen was open.
+     */
+    public static final String CITATION_NOT_PAYABLE = "CITATION_NOT_PAYABLE";
+    /**
+     * Somebody else filed the appeal that is still waiting on this citation (v0.41).
+     *
+     * <p>Two citizens may each have registered the same plate (CONTRACT.md v0.2, rule 2), so both see
+     * the citation. Paying withdraws the appeal, and withdrawing <b>somebody else's</b> defence is not
+     * something a payment may do quietly. The payment is refused instead.</p>
+     */
+    public static final String APPEAL_BY_ANOTHER_CITIZEN = "APPEAL_BY_ANOTHER_CITIZEN";
 
     /** An ingest tried to rewrite the act itself — plate, causal, place or moment (v0.34). */
     public static final String CITATION_EXTERNAL_IMMUTABLE = "CITATION_EXTERNAL_IMMUTABLE";
@@ -246,6 +265,16 @@ public final class ErrorCode {
     /** The file is not one of the image types the platform accepts, judged by its own header. */
     public static final String EVIDENCE_TYPE_NOT_ALLOWED = "EVIDENCE_TYPE_NOT_ALLOWED";
     public static final String EVIDENCE_LIMIT_REACHED = "EVIDENCE_LIMIT_REACHED";
+
+    // --- notifications (CONTRACT.md "v0.38") ----------------------------------------------------
+    /**
+     * No such notice for this person in this municipality.
+     *
+     * <p>The same answer whether the row does not exist or belongs to somebody else. Telling those
+     * two apart would turn the id into an oracle for "does this notification exist", which is the
+     * shape of every BOLA finding (SECURITY.md §4).</p>
+     */
+    public static final String NOTIFICATION_NOT_FOUND = "NOTIFICATION_NOT_FOUND";
 
     // --- appeals and wallet top-ups (CONTRACT.md "v0.8") ----------------------------------------
     /** The municipality has published no legal notice, so it cannot accept defences yet. */

@@ -1,13 +1,25 @@
 import * as React from 'react';
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { CitationHistory, EvidenceGallery, citationStatusKey, citationStatusTone } from '@luparx/features';
 import { useAuth } from '@luparx/auth';
 import { formatCurrencyMinor, formatDateTime, useTranslation } from '@luparx/i18n';
 import { Alert, Badge, Button, Card, SectionHeader, SummaryList, SummaryRow } from '@luparx/ui';
+import type { CitationStatus } from '@luparx/api-client';
 import { CitizenShell } from '../components/CitizenShell';
+import { PayFineDialog } from '../components/PayFineDialog';
 import { QueryBoundary } from '../components/QueryBoundary';
 import { useFine } from '../lib/queries';
+
+/**
+ * The statuses the server will move to `PAID` — `CitationStatus`' own transition table, read from
+ * the outside. Duplicated here knowingly and kept to one line: the alternative is a screen that
+ * offers a live button for a fine the server will refuse, and the citizen reads that refusal as the
+ * app being broken. The server remains the authority; this only decides whether to ask.
+ *
+ * `APPEALED` is on the list since v0.41 — paying is how a citizen ends their own claim.
+ */
+const PAYABLE_STATUSES: readonly CitationStatus[] = ['ISSUED', 'APPEALED', 'UPHELD', 'EXPIRED'];
 
 /**
  * One fine, as the person who was fined is entitled to read it.
@@ -20,10 +32,15 @@ import { useFine } from '../lib/queries';
  *
  * <h2>The payment button</h2>
  *
- * `POST /citizen/fines/{id}/payments` is declared and answers `501 NOT_IMPLEMENTED`: the contract
- * is fixed, the implementation arrives with the payments batch. So the button is here and disabled,
- * with the reason written next to it. A button that looked live and failed — or worse, a "pay"
- * flow that ended in a screen saying the payment was recorded — would be a lie about money.
+ * Live since v0.41: `POST /citizen/fines/{id}/payments` charges the wallet, and the confirmation
+ * the citizen reads before it does lives in {@link PayFineDialog}. The button is shown only for a
+ * status the server would actually accept and for a fine this platform collects — a mirrored fine
+ * (v0.34) keeps the disabled button and the sentence saying which window takes the money, because
+ * "no se puede pagar" with no reason reads as a broken app rather than another counter's business.
+ *
+ * A fine that is already paid, void or dismissed gets no card at all: the status badge at the top
+ * has said so, and a second box repeating it in the negative only invites the question of whether
+ * something went wrong.
  */
 export function FineDetailPage(): React.JSX.Element {
   const { t, locale } = useTranslation();
@@ -31,6 +48,10 @@ export function FineDetailPage(): React.JSX.Element {
   const { id } = useParams<{ id: string }>();
   const { apiClient } = useAuth();
   const query = useFine(id);
+  const [payOpen, setPayOpen] = useState(false);
+  // Held on the page and not inside the dialog: the dialog closes the moment the money moves, and a
+  // confirmation that leaves with it is one the citizen never got to read.
+  const [paid, setPaid] = useState<{ withdrewAppeal: boolean } | null>(null);
 
   const loadEvidence = useCallback(
     (evidenceId: string) => apiClient.citizenFines.evidenceContent(id as string, evidenceId),
@@ -139,21 +160,44 @@ export function FineDetailPage(): React.JSX.Element {
                 </Card>
               ) : null}
 
-              <Card>
-                {/* Prepared, disabled, and honest about why. Deliberately not the primary style:
-                    the glow marks the one live action on a screen, and a glowing button that does
-                    nothing is the visual version of the lie this whole block avoids. */}
-                <Button type="button" variant="secondary" fullWidth disabled>
-                  {t('citizen.fines.pay')}
-                </Button>
-                <div style={{ marginTop: 'var(--lx-space-3)' }}>
-                  <Alert tone="info">
-                    {fine.managedHere === false
-                      ? t('citizen.fines.payElsewhere')
-                      : t('citizen.fines.payUnavailable')}
+              {fine.managedHere === false ? (
+                <Card>
+                  {/* Disabled and honest about why. Deliberately not the primary style: the glow
+                      marks the one live action on a screen, and a glowing button that does nothing
+                      is the visual version of the lie this block avoids. */}
+                  <Button type="button" variant="secondary" fullWidth disabled>
+                    {t('citizen.fines.pay')}
+                  </Button>
+                  <div style={{ marginTop: 'var(--lx-space-3)' }}>
+                    <Alert tone="info">{t('citizen.fines.payElsewhere')}</Alert>
+                  </div>
+                </Card>
+              ) : paid ? (
+                <Card>
+                  <Alert tone="success">
+                    {t(paid.withdrewAppeal ? 'citizen.fines.pay.successWithdrew' : 'citizen.fines.pay.success')}
                   </Alert>
-                </div>
-              </Card>
+                </Card>
+              ) : PAYABLE_STATUSES.includes(fine.status) ? (
+                <Card>
+                  <Button type="button" variant="primary" fullWidth onClick={() => setPayOpen(true)}>
+                    {t('citizen.fines.pay')}
+                  </Button>
+                </Card>
+              ) : null}
+
+              {payOpen ? (
+                <PayFineDialog
+                  open
+                  onClose={() => setPayOpen(false)}
+                  fine={fine}
+                  appealWaiting={detail.appeal?.status === 'SUBMITTED'}
+                  onPaid={(result) => {
+                    setPayOpen(false);
+                    setPaid({ withdrewAppeal: result.appealWithdrawn });
+                  }}
+                />
+              ) : null}
 
               <EvidenceGallery evidence={detail.evidence} loadContent={loadEvidence} />
               <CitationHistory events={detail.history} />

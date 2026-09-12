@@ -105,6 +105,8 @@ en varias municipalidades y cambiar de municipalidad activa desde la sesión ya 
 - [`docs/DATA_MODEL.md`](docs/DATA_MODEL.md) — diagrama entidad-relación e invariantes de base de
   datos.
 - [`docs/ROADMAP.md`](docs/ROADMAP.md) — fases v0.1–v0.5, riesgos y decisiones pendientes.
+- [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) — publicar la aplicación en una instancia con Docker:
+  un dominio con rutas, perfil `demo`, respaldos y rollback.
 
 ## Estado actual
 

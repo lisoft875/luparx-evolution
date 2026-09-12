@@ -10,7 +10,10 @@ import type {
   ExtendParkingSessionRequest,
   Fine,
   FineDetail,
+  CitizenNotification,
+  NotificationPreferences,
   PagedResponse,
+  UpdateNotificationPreferencesRequest,
   ParkingExtensionOption,
   ParkingPolicy,
   ParkingQuoteResponse,
@@ -45,6 +48,9 @@ const KEYS = {
   schedule: ['citizen', 'parking', 'schedule'] as const,
   zones: ['citizen', 'parking', 'zones'] as const,
   spaceFormat: ['citizen', 'parking', 'space-format'] as const,
+  notifications: (page: number, size: number) => ['citizen', 'notifications', page, size] as const,
+  notificationsUnread: ['citizen', 'notifications', 'unread-count'] as const,
+  notificationPreferences: ['citizen', 'notifications', 'preferences'] as const,
 };
 
 export function useVehicles(): UseQueryResult<Vehicle[]> {
@@ -406,11 +412,112 @@ export function useFines(page: number, size: number): UseQueryResult<PagedRespon
   });
 }
 
+/**
+ * Pays a fine with the wallet balance (v0.41).
+ *
+ * <p>Invalidates the wallet as well as the fine, and that is not housekeeping: the balance is on
+ * screen in the tab bar while this runs, and a number that still shows the old total after the money
+ * left is the app telling the citizen they have more than they do.</p>
+ */
+export function usePayFine(id: string | undefined) {
+  const { apiClient } = useAuth();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiClient.citizenFines.pay(id as string, { method: 'WALLET' }),
+    onSuccess: (paid) => {
+      // The server answered with the fine in its new state, so it goes straight into the cache: a
+      // refetch would show the old status for one frame, and "still unpaid" is the worst frame to
+      // flash after somebody just paid.
+      queryClient.setQueryData(FINE_KEYS.detail(id ?? ''), paid.fine);
+      void queryClient.invalidateQueries({ queryKey: FINE_KEYS.all });
+      void queryClient.invalidateQueries({ queryKey: KEYS.wallet });
+    },
+  });
+}
+
 export function useFine(id: string | undefined): UseQueryResult<FineDetail> {
   const { apiClient } = useAuth();
   return useQuery({
     queryKey: FINE_KEYS.detail(id ?? ''),
     queryFn: () => apiClient.citizenFines.get(id as string),
     enabled: Boolean(id),
+  });
+}
+
+
+// ---- Notifications (CONTRACT.md v0.38) --------------------------------------------------------
+
+/**
+ * The bell's number.
+ *
+ * Polled rather than pushed: the alternative is a socket held open by every phone in every
+ * municipality to deliver a number that changes a handful of times a day. Sixty seconds is under the
+ * time it takes somebody to notice they were not told, and it is one indexed count on the server.
+ *
+ * Tenant-scoped like everything else here — the key does not name the municipality because
+ * `TenantCacheReset` clears the whole citizen cache when it changes, which is what stops one
+ * municipality's count being shown under another's name.
+ */
+export function useUnreadNotificationCount(): UseQueryResult<{ unread: number }> {
+  const { apiClient } = useAuth();
+  return useQuery({
+    queryKey: KEYS.notificationsUnread,
+    queryFn: () => apiClient.citizenNotifications.unreadCount(),
+    refetchInterval: 60_000,
+  });
+}
+
+export function useNotifications(page: number, size: number): UseQueryResult<PagedResponse<CitizenNotification>> {
+  const { apiClient } = useAuth();
+  return useQuery({
+    queryKey: KEYS.notifications(page, size),
+    queryFn: () => apiClient.citizenNotifications.list({ page, size }),
+  });
+}
+
+export function useMarkNotificationRead() {
+  const { apiClient } = useAuth();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiClient.citizenNotifications.markRead(id),
+    // Both: the row changed and so did the badge. Refreshing only the list would leave the number on
+    // the bell counting something the person is looking at.
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['citizen', 'notifications'] });
+    },
+  });
+}
+
+export function useMarkAllNotificationsRead() {
+  const { apiClient } = useAuth();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiClient.citizenNotifications.markAllRead(),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['citizen', 'notifications'] });
+    },
+  });
+}
+
+export function useNotificationPreferences(): UseQueryResult<NotificationPreferences> {
+  const { apiClient } = useAuth();
+  return useQuery({
+    queryKey: KEYS.notificationPreferences,
+    queryFn: () => apiClient.citizenNotifications.preferences(),
+  });
+}
+
+export function useUpdateNotificationPreferences() {
+  const { apiClient } = useAuth();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: UpdateNotificationPreferencesRequest) =>
+      apiClient.citizenNotifications.updatePreferences(payload),
+    onSuccess: (updated) => {
+      // Written straight into the cache rather than refetched: the server just answered with the row
+      // it stored, and a refetch would show the switch flicking back to its old position for one
+      // frame while the round trip lands.
+      queryClient.setQueryData(KEYS.notificationPreferences, updated);
+    },
   });
 }

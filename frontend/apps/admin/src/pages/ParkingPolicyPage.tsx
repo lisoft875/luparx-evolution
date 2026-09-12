@@ -231,6 +231,7 @@ export function ParkingPolicyPage(): React.JSX.Element {
         creditMinRemainingMinutes: form.creditMinRemainingMinutes,
         creditExpiryDays: form.creditExpiryDays,
         graceMinutes: form.graceMinutes,
+        overlappingStaysEnabled: form.overlappingStaysEnabled,
       });
       setSaved(true);
     } catch {
@@ -418,6 +419,33 @@ export function ParkingPolicyPage(): React.JSX.Element {
           </div>
         </Card>
 
+        {/* The bay that nobody released (v0.37, ADR 0020). Its own card and not a line under the
+            tolerance: the tolerance is about time running out, this is about a space that is free on
+            the street and taken in the database, and the two are answered differently. */}
+        <Card>
+          <SectionHeader
+            title={t('admin.policy.overlap.title')}
+            description={t('admin.policy.overlap.description')}
+          />
+          <Checkbox
+            label={t('admin.policy.overlap.enabled')}
+            hint={t('admin.policy.overlap.enabledHint')}
+            checked={form.overlappingStaysEnabled}
+            onChange={(event) => patch({ overlappingStaysEnabled: event.target.checked })}
+          />
+          <div style={{ marginTop: 'var(--lx-space-3)' }}>
+            {/* Both notices state a consequence for enforcement, because that is the only place the
+                choice is felt. Turning it off is not neutral — it is a decision that the second
+                citizen parks uncovered — and the screen says so rather than leaving it to be found
+                out from a citation. */}
+            <Alert tone={form.overlappingStaysEnabled ? 'info' : 'warning'}>
+              {form.overlappingStaysEnabled
+                ? t('admin.policy.overlap.notice')
+                : t('admin.policy.overlap.offNotice')}
+            </Alert>
+          </div>
+        </Card>
+
         <Card>
           <SectionHeader title={t('admin.policy.summary.title')} />
           <SummaryList>
@@ -445,6 +473,14 @@ export function ParkingPolicyPage(): React.JSX.Element {
               }
             />
             <SummaryRow label={t('admin.policy.summary.grace')} value={format(form.graceMinutes)} />
+            <SummaryRow
+              label={t('admin.policy.summary.overlap')}
+              value={
+                form.overlappingStaysEnabled
+                  ? t('admin.policy.summary.overlapOn')
+                  : t('admin.policy.summary.off')
+              }
+            />
           </SummaryList>
           <div style={{ marginTop: 'var(--lx-space-4)' }}>
             <Button type="button" loading={updateMutation.isPending} onClick={() => void handleSave()}>

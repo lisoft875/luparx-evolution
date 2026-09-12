@@ -12,6 +12,7 @@ import type { ApiClient } from '@luparx/api-client';
 import { useTranslation, type TranslationKey } from '@luparx/i18n';
 import { AddressFields, CountrySelect, DateField, FormField, Input, PhoneField, Select } from '@luparx/ui';
 import { useAdminLevels, useCountries, useDocumentTypes } from '../catalogHooks';
+import { preselectedDocumentType } from '../documentTypeSelection';
 import type { PersonalDataValues } from './personalData';
 
 export interface PersonalDataFieldsProps<TValues extends PersonalDataValues> {
@@ -66,14 +67,17 @@ export function PersonalDataFields<TValues extends PersonalDataValues>({
 
   // The country decides which document its residents carry, and the catalogue says so; asking
   // someone to pick "cédula" out of five options every single time is asking them to restate what
-  // the country already declared. Only ever fills an empty field: a saved profile, or a choice
-  // already made in this session, is never overwritten by the default.
+  // the country already declared. The choice itself lives in `preselectedDocumentType`, shared with
+  // every other screen that asks for a document, so the five of them cannot drift apart.
+  //
+  // Only ever fills an empty field: a saved profile, or a choice already made in this session, is
+  // never overwritten by the default.
   const documentTypes = documentTypesQuery.data;
   const selectedDocumentType = String(watch(path('identityDocumentType')) ?? '');
   useEffect(() => {
-    if (selectedDocumentType || !documentTypes?.length) return;
-    const preferred = documentTypes.find((entry) => entry.default);
-    if (preferred) setValue(path('identityDocumentType'), preferred.type as never, { shouldDirty: false });
+    if (selectedDocumentType) return;
+    const preferred = preselectedDocumentType(documentTypes);
+    if (preferred) setValue(path('identityDocumentType'), preferred as never, { shouldDirty: false });
   }, [documentTypes, selectedDocumentType, setValue]);
   const adminLevelsQuery = useAdminLevels(apiClient, addressCountryCode || undefined);
 

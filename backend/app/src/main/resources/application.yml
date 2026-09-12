@@ -173,7 +173,6 @@ luparx:
     # Rotation and reuse detection are untouched — every refresh consumes its token, and a replayed
     # one still revokes the whole family. Set a duration (e.g. 30d) to bring expiry back.
     refresh-token-ttl: ${JWT_REFRESH_TOKEN_TTL:0}
-    oauth-state-ttl: ${JWT_OAUTH_STATE_TTL:10m}
     # Sólo el perfil dev lo enciende: sin llaves, no se arranca.
     ephemeral-keys-when-missing: ${JWT_EPHEMERAL_KEYS:false}
   security:
@@ -200,6 +199,13 @@ luparx:
       admin: ${CORS_ALLOWED_ORIGIN_ADMIN:http://localhost:5184}
       inspector: ${CORS_ALLOWED_ORIGIN_INSPECTOR:http://localhost:5185}
       platform: ${CORS_ALLOWED_ORIGIN_PLATFORM:http://localhost:5186}
+  geo:
+    # Topes de la geometría que esta instalación acepta y sirve (ADR 0024). Son barandas contra una
+    # respuesta que nadie puede usar, no reglas de negocio: 10 000 vértices son de sobra para el
+    # perímetro de una zona de cobro, y una zona con cincuenta mil es casi siempre la importación
+    # accidental de un catastro completo.
+    max-zone-vertices: ${GEO_MAX_ZONE_VERTICES:10000}
+    max-zones-per-map: ${GEO_MAX_ZONES_PER_MAP:500}
   retention:
     # Cuánto se conserva lo que es grande, personal, o las dos cosas (CONTRACT.md v0.29, ADR 0013).
     # Configuración y no constante porque la respuesta legal cambia por país: el plazo en que una
@@ -213,30 +219,6 @@ luparx:
     batch-size: ${RETENTION_BATCH_SIZE:1000}
     # Techo por corrida: un atraso enorme nunca se convierte en una transacción enorme.
     max-per-run: ${RETENTION_MAX_PER_RUN:100000}
-  federation:
-    redirect-base-url: ${OAUTH_REDIRECT_BASE_URL:http://localhost:8090}
-    providers:
-      google:
-        client-id: ${OAUTH_GOOGLE_CLIENT_ID:}
-        client-secret: ${OAUTH_GOOGLE_CLIENT_SECRET:}
-        authorization-uri: https://accounts.google.com/o/oauth2/v2/auth
-        token-uri: https://oauth2.googleapis.com/token
-        user-info-uri: https://openidconnect.googleapis.com/v1/userinfo
-        scopes: openid email profile
-      microsoft:
-        client-id: ${OAUTH_MICROSOFT_CLIENT_ID:}
-        client-secret: ${OAUTH_MICROSOFT_CLIENT_SECRET:}
-        authorization-uri: https://login.microsoftonline.com/${OAUTH_MICROSOFT_TENANT_ID:common}/oauth2/v2.0/authorize
-        token-uri: https://login.microsoftonline.com/${OAUTH_MICROSOFT_TENANT_ID:common}/oauth2/v2.0/token
-        user-info-uri: https://graph.microsoft.com/oidc/userinfo
-        scopes: openid email profile
-      facebook:
-        client-id: ${OAUTH_FACEBOOK_CLIENT_ID:}
-        client-secret: ${OAUTH_FACEBOOK_CLIENT_SECRET:}
-        authorization-uri: https://www.facebook.com/v19.0/dialog/oauth
-        token-uri: https://graph.facebook.com/v19.0/oauth/access_token
-        user-info-uri: https://graph.facebook.com/me?fields=id,name,email
-        scopes: email public_profile
   mail:
     from-address: ${SMTP_FROM_ADDRESS:no-reply@luparx.local}
     base-urls:
@@ -244,6 +226,18 @@ luparx:
       admin: ${APP_BASE_URL_ADMIN:http://localhost:5184}
       inspector: ${APP_BASE_URL_INSPECTOR:http://localhost:5185}
       platform: ${APP_BASE_URL_PLATFORM:http://localhost:5186}
+  notifications:
+    # Cuánto antes del vencimiento se le avisa al ciudadano. Es una decisión sobre la atención de
+    # otra persona, así que es configuración y no una constante: quince minutos le sirven a un
+    # municipio que vende medias horas y le sobran a uno que vende jornadas de ocho.
+    session-expiring-before-minutes: ${NOTIFY_SESSION_EXPIRING_BEFORE_MINUTES:15}
+    # Hasta cuándo una estadía vencida sigue siendo noticia. Acotado para que un backend caído todo
+    # el fin de semana no levante el lunes contándole a todo el mundo lo del viernes.
+    session-expired-within-minutes: ${NOTIFY_SESSION_EXPIRED_WITHIN_MINUTES:120}
+    time-credits-expiring-before-days: ${NOTIFY_CREDITS_EXPIRING_BEFORE_DAYS:3}
+    relay-batch-size: ${NOTIFY_RELAY_BATCH_SIZE:50}
+    relay-max-attempts: ${NOTIFY_RELAY_MAX_ATTEMPTS:8}
+    relay-backoff-ceiling-minutes: ${NOTIFY_RELAY_BACKOFF_CEILING_MINUTES:60}
   enforcement:
     # Where the development evidence store writes. A directory works for one instance; a deployment
     # that runs more than one must swap the EvidenceStorage bean for an object store, because two

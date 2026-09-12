@@ -118,7 +118,9 @@ export const MOCK_DOCUMENT_TYPES: Record<string, DocumentTypeCatalogEntry[]> = {
     { type: 'OTHER', labelKey: 'document.type.OTHER', pattern: '^.{4,20}$', example: 'DL-1234567' },
   ],
   PA: [
-    { type: 'NATIONAL_ID', labelKey: 'document.type.NATIONAL_ID', pattern: '^\\d{1,2}-\\d{3,4}-\\d{1,6}$', example: '8-123-4567' },
+    // Igual que CR: la migración V20_0 marca NATIONAL_ID como predeterminado para CR, ES, MX, PA y
+    // US, así que el simulado no puede decir «ninguno» donde el servidor dice «la cédula».
+    { type: 'NATIONAL_ID', labelKey: 'document.type.NATIONAL_ID', pattern: '^\\d{1,2}-\\d{3,4}-\\d{1,6}$', example: '8-123-4567', default: true },
     { type: 'PASSPORT', labelKey: 'document.type.PASSPORT', pattern: '^[A-Za-z0-9]{6,12}$', example: 'PA123456' },
   ],
 };
@@ -428,7 +430,6 @@ export const mockTenantSettings = new Map<string, Record<string, string | number
 export const MOCK_FEATURE_FLAGS: FeatureFlag[] = [
   { key: 'parking.moduleEnabled', enabled: false, description: 'Enables the parking-meter domain end to end.' },
   { key: 'exports.async', enabled: false, description: 'Async export job status polling (currently synchronous CSV).' },
-  { key: 'auth.federatedLogin', enabled: true, description: 'Google/Microsoft/Facebook OIDC sign-in.' },
 ];
 
 export const MOCK_SYSTEM_JOBS: SystemJob[] = [
@@ -572,6 +573,8 @@ export const MOCK_PARKING_POLICIES: Record<string, ParkingPolicy> = {
     graceMinutes: 5,
     // Diez minutos de cortesía (v0.31): el que se baja a dejar algo no paga. Una vez por placa y día.
     freeMinutes: 10,
+    // San José deja pagar un espacio que otra estadía todavía no liberó (v0.37).
+    overlappingStaysEnabled: true,
   },
   'tenant-escazu': {
     sessionIncrementsMinutes: [30, 60, 90],
@@ -587,6 +590,9 @@ export const MOCK_PARKING_POLICIES: Record<string, ParkingPolicy> = {
     graceMinutes: 10,
     // Escazú no da cortesía: cero es una respuesta legítima y es la que tienen casi todas.
     freeMinutes: 0,
+    // Y vende cada bahía una sola vez: es el fixture que deja probar el SPACE_OCCUPIED que sigue
+    // existiendo para las municipalidades que eligen esa regla.
+    overlappingStaysEnabled: false,
   },
 };
 

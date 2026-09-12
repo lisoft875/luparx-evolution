@@ -44,6 +44,16 @@ public class SmtpNotificationSender implements NotificationSender {
 
     @Override
     public void send(String recipientEmail, Locale locale, String templateKey, Map<String, Object> model) {
+        try {
+            sendOrThrow(recipientEmail, locale, templateKey, model);
+        } catch (MailException exception) {
+            LOGGER.warn("Unable to deliver notification template={} to recipient (address not logged)",
+                    templateKey, exception);
+        }
+    }
+
+    @Override
+    public void sendOrThrow(String recipientEmail, Locale locale, String templateKey, Map<String, Object> model) {
         Object[] arguments = orderedArguments(model);
         String subject = messageSource.getMessage(templateKey + ".subject", arguments, locale);
         String body = messageSource.getMessage(templateKey + ".body", arguments, locale);
@@ -53,12 +63,7 @@ public class SmtpNotificationSender implements NotificationSender {
         message.setTo(recipientEmail);
         message.setSubject(subject);
         message.setText(body);
-        try {
-            mailSender.send(message);
-        } catch (MailException exception) {
-            LOGGER.warn("Unable to deliver notification template={} to recipient (address not logged)",
-                    templateKey, exception);
-        }
+        mailSender.send(message);
     }
 
     /**
@@ -70,6 +75,12 @@ public class SmtpNotificationSender implements NotificationSender {
         arguments.add(model.getOrDefault("name", ""));
         arguments.add(model.getOrDefault("link", ""));
         arguments.add(model.getOrDefault("tenant", ""));
+        // Three more since v0.38, appended and never reordered: a notification message needs to name
+        // the thing ({3} — a plate, a citation number), when ({4}) and how much ({5}). Existing
+        // templates address {0}..{2} and are untouched by slots they do not mention.
+        arguments.add(model.getOrDefault("detail", ""));
+        arguments.add(model.getOrDefault("when", ""));
+        arguments.add(model.getOrDefault("amount", ""));
         return arguments.toArray();
     }
 

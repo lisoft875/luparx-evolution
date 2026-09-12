@@ -92,7 +92,9 @@ import java.util.UUID;
  * database is recreated.</p>
  */
 @Component
-@Profile("dev")
+// `demo` es el mismo sembrado en una instancia publicada, pero sin las concesiones de `dev`
+// (llaves efímeras, pepper del repositorio, SQL en el log). Ver application-demo.yml.
+@Profile({"dev", "demo"})
 @ConditionalOnProperty(prefix = "luparx.dev", name = "seed-demo-data", havingValue = "true", matchIfMissing = true)
 public class DevParkingSeeder {
 
@@ -195,7 +197,8 @@ public class DevParkingSeeder {
                     variant.creditMinRemainingMinutes(),
                     variant.creditExpiryDays(),
                     variant.graceMinutes(),
-                    variant.freeMinutes());
+                    variant.freeMinutes(),
+                    variant.overlappingStaysEnabled());
         }
         LOGGER.info("Development seed: {} parking policy — start {} min, extension {} ({}), early finish {},"
                         + " credit {}.",
@@ -215,6 +218,7 @@ public class DevParkingSeeder {
     private boolean policyNeedsVariant(ParkingPolicy policy, PolicyVariant variant) {
         return policy.isExtensionEnabled() != variant.extensionEnabled()
                 || policy.isCreditOnEarlyFinishEnabled() != variant.creditOnEarlyFinishEnabled()
+                || policy.isOverlappingStaysEnabled() != variant.overlappingStaysEnabled()
                 || policy.getSessionMaxMinutes() != variant.sessionMaxMinutes();
     }
 

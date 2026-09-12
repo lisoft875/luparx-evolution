@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>cr.luparx</groupId>
+    <artifactId>luparx-backend</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+  </parent>
+
+  <artifactId>luparx-module-notifications</artifactId>
+  <name>luparx-module-notifications</name>
+  <description>The citizen's inbox: what happened, in which municipality, and whether it also went out by email.</description>
+
+  <dependencies>
+    <dependency>
+      <groupId>cr.luparx</groupId>
+      <artifactId>luparx-platform-core</artifactId>
+    </dependency>
+    <!--
+      Tenancy, because a notification belongs to a municipality — the stay, the citation and the
+      top-up all do, and the bell is read inside the active one.
+
+      Deliberately NOT identity, parking, enforcement or billing. This module never learns what a
+      parking session is: it is handed a type, a subject identifier and a bag of parameters. What it
+      needs from identity — where to write and in which language — is declared as `RecipientDirectory`
+      and wired in `app`, the same seam `ParkingStatusPort` uses (ADR 0014). Depending on the four
+      modules that produce notifications would make this the most entangled module in the system, and
+      it is the one that should be easiest to move.
+    -->
+    <dependency>
+      <groupId>cr.luparx</groupId>
+      <artifactId>luparx-module-tenancy</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-data-jpa</artifactId>
+    </dependency>
+  </dependencies>
+</project>

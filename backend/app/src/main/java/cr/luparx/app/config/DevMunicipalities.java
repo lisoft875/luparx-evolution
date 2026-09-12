@@ -189,7 +189,8 @@ final class DevMunicipalities {
                     null,
                     // Extensions off and no credit for finishing early: the two flows the citizen app
                     // has to degrade gracefully without.
-                    new PolicyVariant(List.of(30, 60, 120), 30, 240, false, List.of(), 240, true, false, 0, 0, 5, 0),
+                    new PolicyVariant(List.of(30, 60, 120), 30, 240, false, List.of(), 240, true, false, 0, 0, 5, 0,
+                            false),
                     null, 28,
                     "Extensions disabled and no credit for finishing early; sessions capped at 4 hours."));
 
@@ -293,7 +294,13 @@ final class DevMunicipalities {
             int creditExpiryDays,
             int graceMinutes,
             /** Minutes of courtesy (v0.31); 0 is the honest default for a municipality that offers none. */
-            int freeMinutes) {
+            int freeMinutes,
+            /**
+             * Whether a bay may hold more than one running stay (v0.35). The strict fixture below sets
+             * it to false on purpose, so both paths — the newcomer who can pay and the newcomer who
+             * gets {@code SPACE_OCCUPIED} — are reachable in a development database.
+             */
+            boolean overlappingStaysEnabled) {
     }
 
     /** A bay code format to write for a municipality. */

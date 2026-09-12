@@ -1,5 +1,7 @@
 import type { PagedResponse } from '../types/http';
 import type {
+  GeoJsonGeometry,
+  GeoJsonLinearRing,
   AccessTokenClaims,
   AuditEvent,
   AdminUserDetail,
@@ -291,6 +293,115 @@ function toWireRate(rate: (typeof mockAdminRates)[number]): unknown {
     validFrom: rate.validFrom,
     validTo: rate.validTo,
   };
+}
+
+/*
+ * Geometría de zonas en el mock (CONTRACT.md v0.40).
+ *
+ * Se valida con las MISMAS reglas que el servidor —tipo, anillo cerrado, dos números por posición,
+ * rangos y tope de vértices— porque un mock más amable que producción deja pasar defectos: una
+ * pantalla que dibuja anillos abiertos funcionaría acá y fallaría contra la API de verdad. Lo único
+ * que este mock no puede replicar es la validez topológica (autointersección), que es trabajo de
+ * PostGIS; eso está dicho y es la diferencia conocida.
+ */
+const MOCK_MAX_ZONE_VERTICES = 10_000;
+
+const mockZoneGeometries = new Map<string, GeoJsonGeometry>([
+  // Dos zonas de San José con perímetro, rectángulos sobre el centro y La Sabana. `zone-escalante`
+  // se queda A PROPÓSITO sin dibujar: una municipalidad donde todas las zonas tienen geometría no
+  // deja ver qué hace la pantalla con una que no la tiene, que es el estado normal el día uno.
+  ['zone-centro', {
+    type: 'Polygon',
+    coordinates: [[
+      [-84.085, 9.929],
+      [-84.073, 9.929],
+      [-84.073, 9.937],
+      [-84.085, 9.937],
+      [-84.085, 9.929],
+    ]],
+  }],
+  ['zone-sabana', {
+    type: 'Polygon',
+    coordinates: [[
+      [-84.110, 9.931],
+      [-84.098, 9.931],
+      [-84.098, 9.940],
+      [-84.110, 9.940],
+      [-84.110, 9.931],
+    ]],
+  }],
+]);
+
+function fieldProblem(field: string, messageKey: string): Response {
+  return problem(422, 'INVALID_GEOMETRY', messageKey, undefined, [
+    { field, code: 'INVALID_GEOMETRY', message: messageKey },
+  ]);
+}
+
+/** @returns una Response de error, o el número de posiciones cuando la geometría sirve. */
+function validateMockGeometry(body: unknown): Response | number {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return fieldProblem('geometry', 'Send a GeoJSON geometry object.');
+  }
+  const geometry = body as { type?: unknown; coordinates?: unknown };
+  if (geometry.type !== 'Polygon' && geometry.type !== 'MultiPolygon') {
+    return fieldProblem('geometry.type', 'Only a Polygon or a MultiPolygon is accepted here.');
+  }
+  if (!Array.isArray(geometry.coordinates) || geometry.coordinates.length === 0) {
+    return fieldProblem('geometry.coordinates', 'The coordinates of the geometry are missing or malformed.');
+  }
+  const polygons = geometry.type === 'Polygon' ? [geometry.coordinates] : geometry.coordinates;
+  let positions = 0;
+  for (const polygon of polygons as unknown[]) {
+    if (!Array.isArray(polygon) || polygon.length === 0) {
+      return fieldProblem('geometry.coordinates', 'The coordinates of the geometry are missing or malformed.');
+    }
+    for (const ring of polygon as unknown[]) {
+      if (!Array.isArray(ring) || ring.length < 4) {
+        return fieldProblem('geometry.coordinates', 'Each ring needs at least four positions.');
+      }
+      for (const position of ring as unknown[]) {
+        if (!Array.isArray(position) || position.length !== 2
+          || typeof position[0] !== 'number' || typeof position[1] !== 'number'
+          || !Number.isFinite(position[0]) || !Number.isFinite(position[1])) {
+          return fieldProblem('geometry.coordinates', 'Each position must be exactly two numbers, longitude first.');
+        }
+        if (position[0] < -180 || position[0] > 180 || position[1] < -90 || position[1] > 90) {
+          return fieldProblem('geometry.coordinates', 'Longitude must be between -180 and 180, and latitude between -90 and 90.');
+        }
+      }
+      const first = ring[0] as [number, number];
+      const last = ring[ring.length - 1] as [number, number];
+      if (first[0] !== last[0] || first[1] !== last[1]) {
+        return fieldProblem('geometry.coordinates', 'Each ring must close: its last position has to repeat the first.');
+      }
+      positions += ring.length;
+    }
+  }
+  if (positions > MOCK_MAX_ZONE_VERTICES) {
+    return problem(422, 'GEOMETRY_TOO_COMPLEX', `The geometry has ${positions} positions and this installation accepts up to ${MOCK_MAX_ZONE_VERTICES}.`);
+  }
+  return positions;
+}
+
+/** Caja envolvente de una geometría, para replicar el filtro por bbox del servidor. */
+function mockGeometryBounds(geometry: GeoJsonGeometry): [number, number, number, number] {
+  let minLon = 180;
+  let minLat = 90;
+  let maxLon = -180;
+  let maxLat = -90;
+  const polygons = geometry.type === 'Polygon' ? [geometry.coordinates] : geometry.coordinates;
+  for (const polygon of polygons) {
+    for (const ring of polygon as GeoJsonLinearRing[]) {
+      for (const [lon, lat] of ring) {
+        minLon = Math.min(minLon, lon);
+        minLat = Math.min(minLat, lat);
+        maxLon = Math.max(maxLon, lon);
+        maxLat = Math.max(maxLat, lat);
+      }
+    }
+  }
+  return [minLon, minLat, maxLon, maxLat];
 }
 
 function json(data: unknown, status = 200): Response {
@@ -953,6 +1064,35 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
         mockExtraZones.push(zone);
         return json({ ...zone, spaceCount: 0 }, 201);
       }
+      // .../zones/{id}/geometry — el perímetro dibujado (CONTRACT.md v0.40).
+      if (segments.length === 7 && segments[6] === 'geometry') {
+        const zoneId = segments[5]!;
+        // Primero la existencia y el acotado por municipalidad: un id de otra municipalidad tiene
+        // que contestar 404 y no 204, porque «esta zona no tiene geometría» ya confirmaría que la
+        // zona existe.
+        if (!mockAdminZones(tenantId).some((z) => z.id === zoneId)) {
+          return problem(404, 'PARKING_ZONE_NOT_FOUND', 'Zone not found');
+        }
+        if (method === 'GET') {
+          const stored = mockZoneGeometries.get(zoneId);
+          return stored ? json(stored) : noContent();
+        }
+        if (method === 'PUT') {
+          const body = await readBody<unknown>(init);
+          const outcome = validateMockGeometry(body);
+          if (outcome instanceof Response) {
+            return outcome;
+          }
+          mockZoneGeometries.set(zoneId, body as GeoJsonGeometry);
+          return json(body);
+        }
+        if (method === 'DELETE') {
+          // Borrar lo que no existe es un DELETE exitoso, igual que en el servidor.
+          mockZoneGeometries.delete(zoneId);
+          return noContent();
+        }
+      }
+
       // .../zones/{id}/rules — en qué se aparta una zona (CONTRACT.md v0.31).
       if (segments.length === 7 && segments[6] === 'rules') {
         const zoneId = segments[5]!;
@@ -2030,6 +2170,40 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
         return json(mockChargingSchedule());
       }
 
+      if (sub === 'zones' && segments[5] === 'geojson' && method === 'GET') {
+        const raw = url.searchParams.get('bbox');
+        let box: [number, number, number, number] | null = null;
+        if (raw) {
+          const parts = raw.split(',').map((value) => Number.parseFloat(value.trim()));
+          if (parts.length !== 4 || parts.some((value) => !Number.isFinite(value))
+            || parts[0]! >= parts[2]! || parts[1]! >= parts[3]!
+            || parts[0]! < -180 || parts[2]! > 180 || parts[1]! < -90 || parts[3]! > 90) {
+            return problem(422, 'VALIDATION_FAILED',
+              'bbox must be four numbers, minLon,minLat,maxLon,maxLat, describing a real box.', undefined, [
+                { field: 'bbox', code: 'VALIDATION_FAILED', message: 'bbox must be four numbers, minLon,minLat,maxLon,maxLat, describing a real box.' },
+              ]);
+          }
+          box = [parts[0]!, parts[1]!, parts[2]!, parts[3]!];
+        }
+        const features = mockAdminZones(tenantId)
+          .filter((zone) => zone.active && mockZoneGeometries.has(zone.id))
+          .filter((zone) => {
+            if (!box) return true;
+            // Solapamiento de cajas envolventes, que es exactamente lo que hace el operador && del
+            // servidor: un mapa pregunta «qué podría estar en pantalla», no «qué intersecta».
+            const [minLon, minLat, maxLon, maxLat] = mockGeometryBounds(mockZoneGeometries.get(zone.id)!);
+            return minLon <= box[2] && maxLon >= box[0] && minLat <= box[3] && maxLat >= box[1];
+          })
+          .sort((a, b) => a.code.localeCompare(b.code))
+          .map((zone) => ({
+            type: 'Feature' as const,
+            id: zone.id,
+            geometry: mockZoneGeometries.get(zone.id)!,
+            properties: { code: zone.code, name: zone.name },
+          }));
+        return json({ type: 'FeatureCollection', features });
+      }
+
       if (sub === 'zones' && method === 'GET') {
         return json(mockCitizenZones(tenantId));
       }
@@ -2097,11 +2271,17 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
         ) {
           return problem(409, 'SESSION_ALREADY_ACTIVE_FOR_PLATE', 'This plate already has an active session here');
         }
-        if (
-          mockParkingSessions.some(
-            (s) => s.tenantId === tenantId && s.zoneId === payload.zoneId && s.spaceCode === payload.spaceCode && s.status === 'ACTIVE',
-          )
-        ) {
+        // Una bahía puede sostener más de una estadía viva si la municipalidad lo permite (v0.37).
+        // La misma PLACA no, nunca: eso es una persona cobrada dos veces por el mismo espacio, y en
+        // el servidor lo refusa uq_parking_sessions_active_space_plate pase lo que pase con la
+        // bandera.
+        const onThisBay = mockParkingSessions.filter(
+          (s) => s.tenantId === tenantId && s.zoneId === payload.zoneId && s.spaceCode === payload.spaceCode && s.status === 'ACTIVE',
+        );
+        if (onThisBay.some((s) => normalizeMockPlate(s.plateSnapshot) === plateSnapshot)) {
+          return problem(409, 'SPACE_OCCUPIED', 'This plate already has a running stay on this bay');
+        }
+        if (!policy.overlappingStaysEnabled && onThisBay.length > 0) {
           return problem(409, 'SPACE_OCCUPIED', 'This space is already occupied');
         }
         const quote = computeMockQuote(payload.zoneId, payload.minutes, userId, tenantId);
@@ -3429,6 +3609,91 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
   }
 
   // ---- Citizen fines (CONTRACT.md v0.7) --------------------------------------------------------
+  // ---- Notificaciones del ciudadano (CONTRACT.md v0.38) ----------------------------------------
+  // Las mismas reglas que el servidor, no un mock más amable: el buzón va acotado por persona Y por
+  // municipalidad, el conteo cuenta sólo las de esta municipalidad, y marcar una leída conserva el
+  // primer instante. Un mock que devolviera todo sin filtrar dejaría pasar justo el defecto que este
+  // endpoint tiene que evitar.
+  if (segments[2] === 'citizen' && segments[3] === 'notifications') {
+    const authHeader = new Headers(init?.headers).get('Authorization');
+    const claims = authHeader ? decodeMockClaims(authHeader) : null;
+    if (!claims) return problem(401, 'UNAUTHORIZED', 'Missing or invalid session');
+    const userId = claims.sub;
+    const tenantId = claims.tid ?? '';
+    seedMockNotifications(userId, tenantId);
+
+    const tail = segments[4];
+
+    if (method === 'GET' && tail === 'preferences') {
+      return json(mockNotificationPreferences(userId));
+    }
+    if (method === 'PUT' && tail === 'preferences') {
+      const payload = await readBody<{ emailEnabled?: boolean; emailCategories?: string[] }>(init);
+      const known = ['PARKING', 'FINES', 'WALLET'];
+      const chosen = (payload.emailCategories ?? []).map((value) => String(value).toUpperCase());
+      const unknown = chosen.find((value) => !known.includes(value));
+      if (unknown) {
+        // Refused, not dropped: silently ignoring it would tell the client its choice was saved.
+        return problem(400, 'VALIDATION_FAILED', 'Validation failed', undefined, [
+          { field: 'emailCategories', code: 'VALIDATION_FAILED', message: 'Unknown category' },
+        ]);
+      }
+      const stored = {
+        emailEnabled: payload.emailEnabled === true,
+        emailCategories: chosen,
+        availableCategories: known,
+        updatedAt: new Date().toISOString(),
+      };
+      mockNotificationPreferenceStore.set(userId, stored);
+      return json(stored);
+    }
+    if (method === 'GET' && tail === 'unread-count') {
+      const unread = mockNotifications.filter(
+        (n) => n.userId === userId && n.tenantId === tenantId && !n.readAt,
+      ).length;
+      return json({ unread });
+    }
+    if (method === 'POST' && tail === 'read-all') {
+      let marked = 0;
+      for (const notification of mockNotifications) {
+        if (notification.userId === userId && notification.tenantId === tenantId && !notification.readAt) {
+          notification.readAt = new Date().toISOString();
+          marked++;
+        }
+      }
+      return json({ marked });
+    }
+    if (method === 'POST' && tail && segments[5] === 'read') {
+      const found = mockNotifications.find(
+        (n) => n.id === tail && n.userId === userId && n.tenantId === tenantId,
+      );
+      // The same answer whether it does not exist or belongs to somebody else: telling those apart
+      // would turn the id into an oracle.
+      if (!found) return problem(404, 'NOTIFICATION_NOT_FOUND', 'No such notification');
+      // Keeps the FIRST instant, like the entity: "when did you see this" has one answer.
+      found.readAt = found.readAt ?? new Date().toISOString();
+      const { userId: _u, tenantId: _t, ...rest } = found;
+      return json(rest);
+    }
+    if (method === 'GET' && !tail) {
+      const page = Number(url.searchParams.get('page') ?? 0);
+      const size = Number(url.searchParams.get('size') ?? 20);
+      const rows = mockNotifications
+        .filter((n) => n.userId === userId && n.tenantId === tenantId)
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+        .map(({ userId: _u, tenantId: _t, ...rest }) => rest);
+      const start = page * size;
+      const items = rows.slice(start, start + size);
+      return json({
+        items,
+        page,
+        size,
+        totalElements: rows.length,
+        totalPages: Math.max(1, Math.ceil(rows.length / size)),
+      });
+    }
+  }
+
   if (segments[2] === 'citizen' && segments[3] === 'fines') {
     const authHeader = new Headers(init?.headers).get('Authorization');
     const claims = authHeader ? decodeMockClaims(authHeader) : null;
@@ -3512,10 +3777,68 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
       return json({ ...image, contentUrl: null }, 201);
     }
 
+    // POST /citizen/fines/{id}/payments (CONTRACT.md v0.41) — the wallet pays the fine.
+    //
+    // Every refusal the real server makes is made here, in the same order, because a mock that is
+    // kinder than production lets exactly those defects through: the amount is the server's
+    // (discounted while the window is open), a mirrored fine is not collected here, a status the
+    // transition table does not allow to reach PAID is refused, somebody else's claim is never
+    // withdrawn, and an insufficient balance is a refusal and not a partial charge.
     if (method === 'POST' && segments[5] === 'payments') {
-      // Declared, not implemented — the same 501 the real server answers, so the client's honest
-      // disabled button is exercised against the same fact in both transports.
-      return problem(501, 'NOT_IMPLEMENTED', 'Paying a fine online arrives with the payments batch');
+      const payload = await readBody<{ method?: string }>(init);
+      if ((payload.method ?? '').trim().toUpperCase() !== 'WALLET') {
+        return problem(400, 'VALIDATION_FAILED', 'Validation failed', undefined, [
+          { field: 'method', code: 'VALIDATION_FAILED', message: 'Only WALLET is available today' },
+        ]);
+      }
+      if ((record.source ?? 'LUPARX') !== 'LUPARX') {
+        return problem(409, 'CITATION_NOT_MANAGED_HERE', 'This fine is collected at the other window');
+      }
+      if (!['ISSUED', 'APPEALED', 'UPHELD', 'EXPIRED'].includes(record.status)) {
+        return problem(409, 'CITATION_NOT_PAYABLE', 'This citation can no longer be paid');
+      }
+      const waiting = record.appeal && record.appeal.status === 'SUBMITTED' ? record.appeal : null;
+      if (waiting && waiting.authorUserId !== claims.sub) {
+        // Somebody else registered the same plate and filed the claim. Paying would destroy their
+        // case, so it is refused rather than done quietly.
+        return problem(409, 'APPEAL_BY_ANOTHER_CITIZEN', 'The waiting claim belongs to another citizen');
+      }
+      const amountMinor = mockAmountPayable(record);
+      const key = walletKey(claims.sub, tenantId);
+      const idempotencyKey = new Headers(init?.headers).get('Idempotency-Key');
+      const wallet = mockWallets.get(key) ?? { balanceMinor: 0, currencyCode: record.currencyCode };
+      if (amountMinor > 0 && wallet.balanceMinor < amountMinor) {
+        return problem(409, 'INSUFFICIENT_BALANCE', 'Insufficient wallet balance');
+      }
+      return idempotentResult(idempotencyKey, `fine-pay:${record.id}`, () => {
+        const now = new Date().toISOString();
+        if (amountMinor > 0) {
+          wallet.balanceMinor -= amountMinor;
+          mockWallets.set(key, wallet);
+        }
+        if (waiting) {
+          // Withdrawn, never "rejected": nobody ruled, so there is a `resolvedAt` and no reason.
+          waiting.status = 'WITHDRAWN';
+          waiting.resolvedAt = now;
+          waiting.resolutionReason = null;
+        }
+        record.events.push(mockEvent(record, 'PAID', record.status, 'PAID', null));
+        record.status = 'PAID';
+        return {
+          data: {
+            fine: {
+              fine: toWireFine(record),
+              evidence: record.evidence.map((e) => ({ ...e, contentUrl: null })),
+              history: record.events,
+              appeal: record.appeal ? toWireAppeal(record.appeal, maxImages) : null,
+            },
+            charged: { amountMinor, currencyCode: record.currencyCode },
+            appealWithdrawn: waiting !== null,
+            walletTransactionId: amountMinor > 0 ? `wallet-tx-fine-${record.id}` : null,
+          },
+          status: 200,
+        };
+      });
     }
   }
 
@@ -4112,7 +4435,7 @@ interface MockAppeal {
   id: string;
   citationId: string;
   authorUserId: string;
-  status: 'SUBMITTED' | 'ACCEPTED' | 'REJECTED';
+  status: 'SUBMITTED' | 'ACCEPTED' | 'REJECTED' | 'WITHDRAWN';
   body: string;
   submittedAt: string;
   resolvedAt: string | null;
@@ -4759,8 +5082,8 @@ const mockAppealNotices = new Map<string, MockAppealNotice[]>();
 let mockAppealSequence = 0;
 
 const MOCK_COUNTRY_NOTICE =
-  'Al presentar su descargo usted declara que lo expuesto es cierto. La municipalidad resolverá y ' +
-  'le comunicará la decisión con su motivo. Mientras el descargo esté en trámite la multa no se ' +
+  'Al presentar su reclamo usted declara que lo expuesto es cierto. La municipalidad resolverá y ' +
+  'le comunicará la decisión con su motivo. Mientras el reclamo esté en trámite la multa no se ' +
   'cobra; si se rechaza, vuelve a ser exigible desde la fecha de la resolución.';
 
 function mockNoticesFor(tenantId: string): MockAppealNotice[] {
@@ -4819,6 +5142,103 @@ function toWireAppeal(appeal: MockAppeal, maxImages: number): unknown {
  * the two rows exercise different halves of the screen: the decision buttons, and the reason the
  * citizen is owed.</p>
  */
+// ---- Notificaciones (CONTRACT.md v0.38) --------------------------------------------------------
+
+interface MockNotificationRecord {
+  id: string;
+  userId: string;
+  tenantId: string;
+  type: string;
+  category: string;
+  subjectType: string;
+  subjectId: string;
+  params: Record<string, unknown>;
+  createdAt: string;
+  readAt: string | null;
+}
+
+const mockNotifications: MockNotificationRecord[] = [];
+
+const mockNotificationPreferenceStore = new Map<string, {
+  emailEnabled: boolean;
+  emailCategories: string[];
+  availableCategories: string[];
+  updatedAt: string;
+}>();
+
+/**
+ * The default row, materialised on first read exactly as the server does it.
+ *
+ * Master switch OFF with every category ticked underneath: turning it on then does something useful
+ * immediately, and the person unticks what they do not want instead of hunting for what they do.
+ */
+function mockNotificationPreferences(userId: string): {
+  emailEnabled: boolean;
+  emailCategories: string[];
+  availableCategories: string[];
+  updatedAt: string;
+} {
+  const existing = mockNotificationPreferenceStore.get(userId);
+  if (existing) return existing;
+  const created = {
+    emailEnabled: false,
+    emailCategories: ['PARKING', 'FINES', 'WALLET'],
+    availableCategories: ['PARKING', 'FINES', 'WALLET'],
+    updatedAt: new Date().toISOString(),
+  };
+  mockNotificationPreferenceStore.set(userId, created);
+  return created;
+}
+
+/**
+ * A believable inbox: one of each shape, and not all read.
+ *
+ * <p>The point of the fixture is that every branch of the screen is reachable in a demo build — an
+ * unread row and a read one, a row that navigates to a fine and one that navigates to the wallet.
+ * A fixture where everything is unread proves half the screen.</p>
+ */
+function seedMockNotifications(userId: string, tenantId: string): void {
+  if (!tenantId) return;
+  if (mockNotifications.some((n) => n.userId === userId && n.tenantId === tenantId)) return;
+  const minute = 60_000;
+  const now = Date.now();
+  const rows: Omit<MockNotificationRecord, 'userId' | 'tenantId'>[] = [
+    {
+      id: `ntf-${tenantId}-1`,
+      type: 'PARKING_SESSION_EXPIRING',
+      category: 'PARKING',
+      subjectType: 'PARKING_SESSION',
+      subjectId: 'session-mock-1',
+      params: { plate: 'BHL019', spaceCode: 'LUP-0007', expiresAt: new Date(now + 12 * minute).toISOString() },
+      createdAt: new Date(now - 3 * minute).toISOString(),
+      readAt: null,
+    },
+    {
+      id: `ntf-${tenantId}-2`,
+      type: 'WALLET_TOPUP_CREDITED',
+      category: 'WALLET',
+      subjectType: 'WALLET_TRANSACTION',
+      subjectId: 'wtx-mock-1',
+      params: { amountMinor: 500000, currencyCode: 'CRC' },
+      createdAt: new Date(now - 90 * minute).toISOString(),
+      readAt: null,
+    },
+    {
+      id: `ntf-${tenantId}-3`,
+      type: 'TIME_CREDITS_EXPIRING',
+      category: 'WALLET',
+      subjectType: 'TIME_CREDIT',
+      subjectId: 'credit-mock-1',
+      params: { minutes: 45, expiresAt: new Date(now + 2 * 86_400_000).toISOString() },
+      createdAt: new Date(now - 26 * 60 * minute).toISOString(),
+      readAt: new Date(now - 25 * 60 * minute).toISOString(),
+    },
+  ];
+  for (const row of rows) {
+    mockNotifications.push({ ...row, userId, tenantId });
+  }
+}
+
 function seedMockAppeals(): void {
   if (mockCitations.length > 0) return;
   const tenantId = 'tenant-sanjose';

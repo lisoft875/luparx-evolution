@@ -7,6 +7,7 @@ import {
   Alert,
   Button,
   Card,
+  ErrorDialog,
   FormField,
   IconCar,
   IconClock,
@@ -615,7 +616,6 @@ export function ParkingPage(): React.JSX.Element {
 
   return (
     <CitizenShell title={t('citizen.parking.title')} subtitle={t('citizen.parking.subtitle')} onBack={() => navigate('/')}>
-      {error ? <Alert tone="danger">{error}</Alert> : null}
       {notChargingNotice ? <Alert tone="info">{notChargingNotice}</Alert> : null}
       <StepList steps={steps} />
       <Button
@@ -628,6 +628,16 @@ export function ParkingPage(): React.JSX.Element {
       >
         {t('citizen.parking.submit')}
       </Button>
+      {/* The submit button sits under four steps of form: a refusal rendered at the top of the page
+          is off screen at the moment it arrives. It interrupts instead. */}
+      <ErrorDialog
+        open={error !== null}
+        onClose={() => setError(null)}
+        title={t('citizen.parking.error.title')}
+        message={error ?? ''}
+        closeLabel={t('common.close')}
+        dismissLabel={t('common.understood')}
+      />
     </CitizenShell>
   );
 }
