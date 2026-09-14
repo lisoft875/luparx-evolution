@@ -67,7 +67,12 @@ set -a; source "$ENV_FILE"; set +a
 : "${PUBLIC_BASE_URL:?falta PUBLIC_BASE_URL en $ENV_FILE}"
 : "${POSTGRES_PASSWORD:?falta POSTGRES_PASSWORD en $ENV_FILE}"
 : "${IP_HASH_PEPPER:?falta IP_HASH_PEPPER en $ENV_FILE}"
-[[ "${SPRING_PROFILES_ACTIVE:-}" == *dev* ]] && fail "SPRING_PROFILES_ACTIVE contiene 'dev': ese perfil genera llaves efímeras y trae un pepper público. Usá 'demo' o dejalo vacío."
+# `if` y no `[[ ... ]] && fail`: con `set -e`, esa forma devuelve 1 cuando la condición es falsa, y
+# basta con que quede como última línea de un bloque para que el script muera sin explicar nada.
+if [[ "${SPRING_PROFILES_ACTIVE:-}" == *dev* ]]; then
+  fail "SPRING_PROFILES_ACTIVE contiene 'dev': ese perfil genera llaves efímeras y trae un pepper
+       público, escrito en el repositorio. Usá 'demo' para datos de prueba, o dejalo vacío."
+fi
 
 # Los perfiles opcionales se declaran en el .env y no en la línea de comandos: si dependieran de que
 # quien despliega se acuerde de escribir `--profile edge`, el primer despliegue que alguien haga sin
@@ -80,8 +85,12 @@ COMPOSE=(docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE")
 
 if [[ -n "${COMPOSE_PROFILES:-}" ]]; then
   echo "Perfiles activos: $COMPOSE_PROFILES"
-  [[ "$COMPOSE_PROFILES" == *edge* ]] && echo "  edge  → Caddy toma los puertos 80 y 443 y gestiona el certificado."
-  [[ "$COMPOSE_PROFILES" == *demo-mail* ]] && echo "  demo-mail → Mailpit recibe los correos en ${MAILPIT_BIND_ADDRESS:-127.0.0.1}:${MAILPIT_UI_PORT:-8035}."
+  if [[ "$COMPOSE_PROFILES" == *edge* ]]; then
+    echo "  edge      → Caddy toma los puertos 80 y 443 y gestiona el certificado."
+  fi
+  if [[ "$COMPOSE_PROFILES" == *demo-mail* ]]; then
+    echo "  demo-mail → Mailpit recibe los correos en ${MAILPIT_BIND_ADDRESS:-127.0.0.1}:${MAILPIT_UI_PORT:-8035}."
+  fi
 else
   echo "Sin perfiles opcionales: nada escucha en 80/443. Si esta instancia no tiene otro proxy"
   echo "delante, poné COMPOSE_PROFILES=edge en $ENV_FILE (ver docs/DEPLOYMENT.md §3)."

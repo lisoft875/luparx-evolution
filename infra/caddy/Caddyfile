@@ -2,7 +2,6 @@
 # Se activa poniendo COMPOSE_PROFILES=edge en infra/.env (ver docs/DEPLOYMENT.md §3).
 {
 	email {$ACME_EMAIL}
-
 }
 
 {$PUBLIC_HOST} {
