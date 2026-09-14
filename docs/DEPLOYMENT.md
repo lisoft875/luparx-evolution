@@ -55,6 +55,18 @@ docker run --rm --entrypoint nginx \
 control a nginx, intenta reescribir `default.conf` para escuchar en IPv6 — y el archivo está montado
 en sólo lectura. Sin saltárselo, lo que se ve es un aviso confuso sobre un *read-only file system*.
 
+Y el Caddyfile, si vas a usar el perfil `edge`:
+
+```bash
+docker run --rm -v "$PWD/infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro" \
+  -e PUBLIC_HOST=localhost -e ACME_EMAIL=nadie@localhost -e CADDY_TLS="tls internal" \
+  caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile
+```
+
+Vale la pena: un Caddyfile inválido no impide que el despliegue termine — el backend y el web
+levantan igual—, sólo deja a Caddy reiniciándose en bucle y **nada escuchando en 80/443**. Desde
+afuera se ve como un sitio que no responde, sin ningún error que lo explique salvo en su log.
+
 Y recién entonces, construir y levantar:
 
 ```bash

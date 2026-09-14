@@ -158,6 +158,9 @@ services:
     environment:
       PUBLIC_HOST: ${PUBLIC_HOST:?falta PUBLIC_HOST}
       ACME_EMAIL: ${ACME_EMAIL:?falta ACME_EMAIL}
+      # Vacío = Let's Encrypt (el servidor). `tls internal` = certificado firmado por el propio
+      # Caddy, para probar esta misma configuración en una máquina de desarrollo sin dominio real.
+      CADDY_TLS: ${CADDY_TLS:-}
     volumes:
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - luparx_caddy_data:/data

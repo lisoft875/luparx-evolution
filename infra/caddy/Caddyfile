@@ -2,9 +2,24 @@
 # Se activa poniendo COMPOSE_PROFILES=edge en infra/.env (ver docs/DEPLOYMENT.md §3).
 {
 	email {$ACME_EMAIL}
+
 }
 
 {$PUBLIC_HOST} {
+	# De dónde sale el certificado.
+	#
+	# En el SERVIDOR la variable va VACÍA: Caddy usa Let's Encrypt, que es lo que se quiere, y esta
+	# línea se evapora. En la MÁQUINA DE DESARROLLO se pone CADDY_TLS=internal (ver infra/.env.local)
+	# y Caddy firma un certificado propio — así se ejercita EXACTAMENTE esta configuración, los
+	# mismos encabezados y el mismo reverse_proxy, sin pedir uno para "localhost", que Let's Encrypt
+	# no puede emitir y cuyos intentos fallidos gastan cuota del dominio.
+	#
+	# Va como directiva del SITIO y no como opción global: `tls internal` sólo existe acá dentro
+	# (`ca` y `acme_ca` a nivel global son otra cosa — `acme_ca` sólo acepta URLs ACME, y el emisor
+	# interno no lo es). Y como `tls` a secas es un error de sintaxis, la variable trae la palabra
+	# `tls` incluida: vacía, no queda ninguna línea.
+	{$CADDY_TLS}
+
 	encode zstd gzip
 
 	# HSTS: una vez que el dominio sirve HTTPS, el navegador deja de intentar HTTP.
