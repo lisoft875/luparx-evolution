@@ -26,7 +26,15 @@ cd "$(dirname "$0")/.."
 REPO_ROOT="$PWD"
 
 COMPOSE_FILE="infra/docker-compose.deploy.yml"
-ENV_FILE="infra/.env"
+
+# Qué archivo de configuración usar. Por omisión el del despliegue; se puede apuntar a otro con
+# LUPARX_ENV_FILE, que es como se prueba el despliegue en una máquina de desarrollo sin tocar el
+# infra/.env del entorno local —que es OTRO archivo, el del docker-compose.yml de desarrollo, y
+# pisarlo cuesta las credenciales que alguien cargó a mano hace semanas.
+#
+#   ./scripts/deploy.sh --no-pull                            (servidor: usa infra/.env)
+#   LUPARX_ENV_FILE=infra/.env.local ./scripts/deploy.sh --no-pull   (probarlo en la laptop)
+ENV_FILE="${LUPARX_ENV_FILE:-infra/.env}"
 BACKUP_DIR="infra/backups"
 KEEP_BACKUPS=10
 
@@ -36,7 +44,7 @@ for arg in "$@"; do
   case "$arg" in
     --no-pull)  PULL=0 ;;
     --rollback) ROLLBACK=1; PULL=0 ;;
-    -h|--help)  sed -n '2,25p' "$0"; exit 0 ;;
+    -h|--help)  sed -n '2,33p' "$0"; exit 0 ;;
     *) echo "Opción desconocida: $arg" >&2; exit 2 ;;
   esac
 done
@@ -50,6 +58,16 @@ say "Verificando el entorno"
 command -v docker >/dev/null || fail "docker no está instalado."
 docker compose version >/dev/null 2>&1 || fail "hace falta Docker Compose v2 (docker compose, sin guion)."
 [[ -f "$ENV_FILE" ]] || fail "falta $ENV_FILE. Copialo de infra/.env.deploy.example y llenalo."
+
+# infra/.env es el archivo del DESPLIEGUE. En una máquina de desarrollo suele existir otro con el
+# mismo nombre —el del entorno local, con su propia base y sus propias credenciales— y confundirlos
+# termina o en un despliegue con la configuración equivocada, o en ese archivo sobrescrito.
+if ! grep -q '^PUBLIC_BASE_URL=' "$ENV_FILE"; then
+  fail "$ENV_FILE no tiene PUBLIC_BASE_URL: no parece la configuración del despliegue.
+       Si es el .env del entorno de desarrollo local, NO lo sobrescribas.
+       Creá el del despliegue a partir de infra/.env.deploy.example, o apuntá a otro archivo:
+         LUPARX_ENV_FILE=infra/.env.local ./scripts/deploy.sh $*"
+fi
 [[ -f "infra/secrets/deploy/jwt-private.pem" ]] || fail "faltan las llaves de firma. Corré scripts/gen-jwt-keys.sh."
 
 # La llave privada firma los tokens de TODOS los portales, incluido el de plataforma. Si cualquier

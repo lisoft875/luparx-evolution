@@ -77,6 +77,20 @@ Abrí `http://localhost:8093` (ciudadano), `/admin/`, `/inspector/` y `/platform
 portales cargan y el login contra `/api/` responde, las imágenes están bien y el despliegue en la
 instancia es el mismo comando con otro `.env`.
 
+Y para ejercitar el despliegue tal como corre en el servidor —con respaldo previo, recambio y espera
+de salud— en vez de un `up` a mano:
+
+```bash
+LUPARX_ENV_FILE=infra/.env.local ./scripts/deploy.sh --no-pull
+LUPARX_ENV_FILE=infra/.env.local ./scripts/deploy.sh --rollback
+```
+
+> **`infra/.env` es un nombre ocupado.** En una máquina de desarrollo ese archivo suele ser el del
+> entorno local (el que usa `infra/docker-compose.yml`, con su propia base y credenciales cargadas a
+> mano). El despliegue lee ese mismo nombre, así que en la laptop se usa `LUPARX_ENV_FILE` para
+> apuntar a otro y **nunca** se copia encima del que ya está. En el servidor no hay ambigüedad: sólo
+> existe el del despliegue.
+
 Para bajarlo sin perder nada: `docker compose -f infra/docker-compose.deploy.yml --env-file
 infra/.env.local down` (sin `-v`, que borraría la base).
 
