@@ -73,7 +73,18 @@ server:
       charset: UTF-8
       force: true
 
+# Qué ambiente es este. Lo contesta /actuator/info, que es la pregunta que nadie quiere resolver
+# adivinando cuando hay dos instalaciones parecidas y algo se rompió en una de ellas.
+info:
+  app:
+    name: LupaRX
+    environment: ${LUPARX_ENVIRONMENT:local}
+
 management:
+  info:
+    env:
+      # Necesario para que el bloque `info` de arriba llegue a /actuator/info; por omisión se ignora.
+      enabled: true
   endpoints:
     web:
       exposure:

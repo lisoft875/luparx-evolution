@@ -1,3 +1,5 @@
+# syntax=docker/dockerfile:1.7
+# ^ obligatoria y en la PRIMERA línea: habilita --mount=type=cache más abajo.
 # =================================================================================================
 # Los cuatro portales de LupaRX en una sola imagen: se construyen con Node y se sirven con nginx,
 # que además hace de proxy hacia el backend para que todo viva en un mismo origen.
@@ -33,7 +35,10 @@ COPY packages packages
 
 # `npm ci` y no `install`: instala exactamente el lock, y falla si el lock y los package.json no
 # concuerdan en vez de resolver algo distinto de lo que se probó.
-RUN npm ci
+#
+# La caché de BuildKit guarda lo descargado entre despliegues sin meterlo en la imagen. `npm ci`
+# igual borra node_modules y reinstala —eso es lo que lo hace reproducible—, pero no vuelve a bajar.
+RUN --mount=type=cache,target=/root/.npm,sharing=locked npm ci
 
 # Se compila con `vite build` directo y no con `npm run build`, que además corre `tsc --noEmit`:
 # el chequeo de tipos es responsabilidad de CI —donde falla el pipeline y no el despliegue— y acá

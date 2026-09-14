@@ -19,6 +19,37 @@ Docker.
 
 ---
 
+## 0. Probar las imágenes en tu máquina, antes de tocar el servidor
+
+El servidor compila lo que le mandes, así que el primer despliegue no es el lugar para descubrir que
+una imagen no construye. Con Docker Desktop corriendo, desde la raíz del repositorio:
+
+```bash
+cp infra/.env.deploy.example infra/.env.local
+# en infra/.env.local:
+#   PUBLIC_BASE_URL=http://localhost:8093
+#   COMPOSE_PROJECT_NAME=luparx-local
+#   POSTGRES_PASSWORD / IP_HASH_PEPPER  → cualquier valor, es tu máquina
+./scripts/gen-jwt-keys.sh
+docker compose -f infra/docker-compose.deploy.yml --env-file infra/.env.local up -d --build
+```
+
+Antes incluso de construir, la configuración de nginx se valida sola en dos segundos:
+
+```bash
+docker run --rm \
+  -v "$PWD/infra/nginx/luparx.conf:/etc/nginx/conf.d/default.conf:ro" \
+  -v "$PWD/infra/nginx/security-headers.inc:/etc/nginx/conf.d/security-headers.inc:ro" \
+  nginx:1.27-alpine nginx -t
+```
+
+Abrí `http://localhost:8093` (ciudadano), `/admin/`, `/inspector/` y `/platform/`. Si los cuatro
+portales cargan y el login contra `/api/` responde, las imágenes están bien y el despliegue en la
+instancia es el mismo comando con otro `.env`.
+
+Para bajarlo sin perder nada: `docker compose -f infra/docker-compose.deploy.yml --env-file
+infra/.env.local down` (sin `-v`, que borraría la base).
+
 ## 1. Requisitos de la instancia
 
 - Docker Engine 24+ con Compose v2 (`docker compose`, sin guion).
@@ -41,7 +72,7 @@ Docker.
   printf 'Host github.com\n  IdentityFile ~/.ssh/luparx_deploy\n  IdentitiesOnly yes\n' >> ~/.ssh/config
   ```
 
-## 2. Primera instalación
+## 2. Primera instalación (staging)
 
 ```bash
 git clone git@github.com:lisoft875/luparx-evolution.git
@@ -50,7 +81,8 @@ cd luparx-evolution
 # Configuración de la instancia
 cp infra/.env.deploy.example infra/.env
 chmod 600 infra/.env
-${EDITOR:-nano} infra/.env         # PUBLIC_BASE_URL, contraseñas, JWT_KEY_ID, IP_HASH_PEPPER
+${EDITOR:-nano} infra/.env         # COMPOSE_PROJECT_NAME, PUBLIC_BASE_URL, contraseñas,
+                                   # JWT_KEY_ID, IP_HASH_PEPPER
 
 # Secretos que se generan acá y no salen de acá
 openssl rand -base64 32            # → POSTGRES_PASSWORD
@@ -204,7 +236,27 @@ mv infra/secrets/deploy/jwt-private.pem infra/secrets/deploy/jwt-private-$(date 
 La pública vieja se queda publicada mientras expiren los tokens ya emitidos; recién después se borra
 (docs/SECURITY.md §5).
 
-## 8. Cuando esto deje de ser una demostración
+## 8. Staging y producción en la misma instancia
+
+Todo lo que distingue un ambiente de otro está en `infra/.env`, no en el compose ni en las imágenes:
+
+| Variable | staging | producción |
+| --- | --- | --- |
+| `COMPOSE_PROJECT_NAME` | `luparx-staging` | `luparx-production` |
+| `LUPARX_ENVIRONMENT` | `staging` | `production` |
+| `SPRING_PROFILES_ACTIVE` | `demo` | *(vacío)* |
+| `WEB_HTTP_PORT` | `8093` | `8094` |
+| `PUBLIC_BASE_URL` | `https://staging.…` | `https://…` |
+
+El nombre del proyecto prefija contenedores, redes y volúmenes, así que los dos ambientes conviven
+sin verse: cada uno tiene su base, su volumen de evidencia y su red. Lo que **no** se comparte nunca
+es el par de llaves de firma — se genera uno por ambiente, o un token de staging valdría en producción.
+
+Dos cosas que hay que acordarse de cambiar al montar producción: quitar de `infra/nginx/luparx.conf`
+la cabecera `X-Robots-Tag: noindex` (está puesta para que staging no aparezca en buscadores), y dejar
+`SPRING_PROFILES_ACTIVE` vacío para que no se siembren las municipalidades de prueba.
+
+## 9. Cuando esto deje de ser una demostración
 
 Antes de que una municipalidad real cargue datos, en este orden:
 

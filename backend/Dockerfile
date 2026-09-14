@@ -1,3 +1,5 @@
+# syntax=docker/dockerfile:1.7
+# ^ obligatoria y en la PRIMERA línea: habilita --mount=type=cache más abajo.
 # =================================================================================================
 # Imagen del backend de LupaRX. Dos etapas: se compila con Maven y el JDK, se ejecuta con el JRE.
 #
@@ -5,41 +7,28 @@
 # runtime. Es la diferencia entre ~700 MB y ~250 MB, y sobre todo la diferencia entre una superficie
 # de ataque con compilador y una sin él.
 #
-# Los pom.xml se copian antes que el código a propósito: mientras no cambien las dependencias, la
-# capa de descarga se reutiliza y un despliegue que sólo toca código no vuelve a bajar Maven Central.
-# En una instancia pequeña eso son varios minutos por despliegue.
+# El repositorio de Maven va en una CACHÉ DE BUILDKIT (--mount=type=cache) y no en una capa: así un
+# despliegue que sólo toca código reutiliza lo ya descargado sin que las dependencias terminen dentro
+# de la imagen. En una instancia pequeña eso son varios minutos por despliegue.
+#
+# La alternativa habitual —copiar los pom.xml primero y correr `dependency:go-offline`— NO sirve en
+# este repositorio: es un reactor multi-módulo y `app` depende de `platform-core`, `module-geo` y los
+# demás, que en ese momento todavía no están construidos. Maven los busca entonces en Maven Central,
+# no los encuentra y el build falla antes de compilar una sola clase.
 # =================================================================================================
 
 FROM maven:3.9-eclipse-temurin-21 AS build
 WORKDIR /src
 
-COPY pom.xml ./
-COPY platform-core/pom.xml       platform-core/
-COPY module-geo/pom.xml          module-geo/
-COPY module-identity/pom.xml     module-identity/
-COPY module-tenancy/pom.xml      module-tenancy/
-COPY module-parking/pom.xml      module-parking/
-COPY module-enforcement/pom.xml  module-enforcement/
-COPY module-billing/pom.xml      module-billing/
-COPY module-notifications/pom.xml module-notifications/
-COPY app/pom.xml                 app/
-
-# Falla sin red y con dependencias faltantes, que es lo que queremos saber antes de copiar el código.
-RUN mvn -B -ntp dependency:go-offline
-
-COPY platform-core       platform-core
-COPY module-geo          module-geo
-COPY module-identity     module-identity
-COPY module-tenancy      module-tenancy
-COPY module-parking      module-parking
-COPY module-enforcement  module-enforcement
-COPY module-billing      module-billing
-COPY module-notifications module-notifications
-COPY app                 app
+COPY . .
 
 # Las pruebas corren en CI (.github/workflows/ci.yml), con su propio PostgreSQL. Repetirlas acá
 # obligaría a levantar una base dentro del build y duplicaría el tiempo de cada despliegue.
-RUN mvn -B -ntp -DskipTests package \
+#
+# El jar se renombra a uno fijo: la etapa de runtime no tiene por qué saber el número de versión, y
+# un comodín en el ENTRYPOINT es lo que hace que un target/ sucio arranque el jar equivocado.
+RUN --mount=type=cache,target=/root/.m2,sharing=locked \
+    mvn -B -ntp -DskipTests package \
  && cp app/target/luparx-app-*.jar /src/luparx-app.jar
 
 # -------------------------------------------------------------------------------------------------

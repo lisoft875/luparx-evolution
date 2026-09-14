@@ -16,7 +16,10 @@
 #       (o, mejor, scripts/deploy.sh, que además verifica y espera a que quede sano)
 # =================================================================================================
 
-name: luparx
+# El nombre del proyecto prefija contenedores, redes y volúmenes. Es lo que permite que staging y,
+# el día de mañana, producción convivan en la misma instancia sin pisarse — y que ninguno de los dos
+# choque con los contenedores de otro sitio que ya viva en la máquina.
+name: ${COMPOSE_PROJECT_NAME:-luparx-staging}
 
 services:
   postgres:
@@ -57,6 +60,9 @@ services:
       # (llaves en disco, sin SQL en el log, pepper obligatorio). `dev` NUNCA va en una instancia
       # que mire a internet: genera llaves efímeras y trae un pepper que está en el repositorio.
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-demo}
+      # Aparece en /actuator/info y en el log de arranque. Sirve para contestar sin dudar la única
+      # pregunta que importa cuando algo se rompe: "¿esto es staging o producción?".
+      LUPARX_ENVIRONMENT: ${LUPARX_ENVIRONMENT:-staging}
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
@@ -115,6 +121,9 @@ services:
       - backend
     volumes:
       - ./nginx/luparx.conf:/etc/nginx/conf.d/default.conf:ro
+      # Las cabeceras comunes, que luparx.conf incluye en el server y en cada location que añade una
+      # propia (ver el comentario del archivo: add_header no se hereda, se reemplaza).
+      - ./nginx/security-headers.inc:/etc/nginx/conf.d/security-headers.inc:ro
     ports:
       # Sólo loopback: quien termina el TLS es el proxy de la instancia. Cambiar esto a 0.0.0.0
       # publica los cuatro portales en HTTP plano.
@@ -159,8 +168,10 @@ services:
     networks: [luparx]
 
 networks:
+  # Sin `name:` fijo: Docker la prefija con el nombre del proyecto, así que cada ambiente tiene la
+  # suya. Una red compartida entre ambientes significaría que el backend de staging puede alcanzar la
+  # base del otro.
   luparx:
-    name: luparx-deploy-net
 
 volumes:
   luparx_pgdata:
