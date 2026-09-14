@@ -70,6 +70,31 @@ infra/.env.local down` (sin `-v`, que borraría la base).
 
 ## 1. Requisitos de la instancia
 
+### Crear la instancia en Lightsail
+
+- **Plan de 2 GB ($12/mes) como mínimo**, y **dedicada a LupaRX**. Compartir máquina con otro sitio
+  en ese plan no funciona: sólo LupaRX en reposo usa 700 MB–1 GB entre la JVM y PostgreSQL, y el pico
+  no es ese sino el build —Maven más cuatro compilaciones de Vite—, que en una máquina ajustada hace
+  que el OOM killer elija una víctima por tamaño y no por importancia. El vecino puede ser el muerto.
+- **Blueprint: Ubuntu 24.04 LTS**, "OS Only" (no las imágenes con aplicaciones preinstaladas).
+- **Arquitectura x86_64**, no ARM: la imagen `postgis/postgis:16-3.4` publica amd64 y sus etiquetas
+  arm64 van por detrás. En ARM hay que fijar otra etiqueta en `POSTGRES_IMAGE` **antes** del primer
+  arranque, nunca cuando la base ya tiene datos.
+- **IP estática** asignada desde la consola (en Lightsail es gratis mientras esté adjunta a una
+  instancia). Sin ella, un reinicio cambia la IP y el DNS deja de resolver.
+- **Puertos 80 y 443 abiertos** en Networking. Es un cortafuegos distinto del `ufw` del sistema; que
+  el sistema los tenga abiertos no basta.
+- **Snapshot automático** activado. Es la única copia que sobrevive a perder la instancia entera.
+
+Docker no viene en el blueprint:
+
+```bash
+curl -fsSL https://get.docker.com | sudo sh
+sudo usermod -aG docker "$USER" && exec su -l "$USER"   # para no usar sudo en cada comando
+```
+
+### Lo que el despliegue necesita
+
 - Docker Engine 24+ con Compose v2 (`docker compose`, sin guion).
 - **2 GB de RAM como mínimo**, y aun así conviene swap: el servidor compila el backend con Maven y
   los cuatro portales con Vite. Con 1 GB y sin swap, el build muere por falta de memoria a mitad de
@@ -119,18 +144,44 @@ Todavía no es accesible desde afuera: falta el paso 3.
 
 ## 3. Ponerla en internet
 
-### Si la instancia YA tiene un proxy sirviendo otros sitios
+Quién termina el TLS se decide con `COMPOSE_PROFILES` en `infra/.env`, no con banderas en la línea de
+comandos — si dependiera de acordarse de escribir `--profile edge`, el primer despliegue que alguien
+hiciera sin esa bandera dejaría la instancia sin nada escuchando en 80/443, y el script reportaría
+éxito porque el backend sí levantó.
 
-Es el caso normal cuando la máquina comparte con otro proyecto. Agregá un `server` al nginx que ya
-está, y **no** levantes el perfil `edge`:
+### Instancia dedicada (no hay otro proxy): Caddy
+
+```bash
+# en infra/.env
+COMPOSE_PROFILES=edge,demo-mail
+PUBLIC_HOST=staging.luparx.com
+ACME_EMAIL=vos@luparx.com
+```
+
+Caddy toma los puertos 80 y 443, saca el certificado y lo renueva solo.
+
+**El DNS tiene que estar listo ANTES del primer arranque.** Let's Encrypt verifica conectándose al
+dominio: si el registro A todavía no apunta a esta instancia, el intento falla, y varios fallos
+seguidos consumen la cuota del dominio por una hora. El orden correcto es: registro A → esperar a que
+resuelva (`dig +short staging.luparx.com` debe devolver la IP de la instancia) → recién entonces
+desplegar.
+
+En Lightsail hay **dos** cortafuegos: el del sistema operativo y el de la consola de AWS. Abrir 80 y
+443 en el panel de Networking de la instancia es un paso aparte que se olvida seguido; el síntoma es
+que el certificado nunca se emite y Caddy reintenta en el log.
+
+### Instancia compartida con otro sitio: el proxy que ya está
+
+Dejá `COMPOSE_PROFILES` vacío — este despliegue no debe pelear por los puertos — y agregá un `server`
+al nginx existente:
 
 ```nginx
 server {
     listen 443 ssl http2;
-    server_name demo.tu-dominio.com;
+    server_name staging.luparx.com;
 
-    ssl_certificate     /etc/letsencrypt/live/demo.tu-dominio.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/demo.tu-dominio.com/privkey.pem;
+    ssl_certificate     /etc/letsencrypt/live/staging.luparx.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/staging.luparx.com/privkey.pem;
 
     # Los documentos de un permiso llegan hasta 20 MB; con menos, el 413 lo da el proxy y el
     # ciudadano ve un error crudo en vez del mensaje del contrato.
@@ -149,16 +200,8 @@ server {
 }
 ```
 
-Con Traefik o Caddy, el equivalente: reenviar el host a `127.0.0.1:8093` pasando `X-Forwarded-Proto`.
-
-### Si la instancia no tiene proxy
-
-```bash
-docker compose -f infra/docker-compose.deploy.yml --env-file infra/.env --profile edge up -d
-```
-
-Caddy toma los puertos 80 y 443 y saca el certificado solo, con `PUBLIC_HOST` y `ACME_EMAIL` del
-`.env`. En Lightsail hay que abrir esos puertos en el firewall de la consola, además del del sistema.
+Con Traefik o Caddy propios, el equivalente: reenviar el host a `127.0.0.1:8093` pasando
+`X-Forwarded-Proto`.
 
 ## 4. Despliegues siguientes
 

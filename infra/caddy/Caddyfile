@@ -1,5 +1,5 @@
 # TLS automático para la instancia, sólo si no hay ya un proxy sirviendo 80/443.
-# Se activa con:  docker compose -f infra/docker-compose.deploy.yml --profile edge up -d
+# Se activa poniendo COMPOSE_PROFILES=edge en infra/.env (ver docs/DEPLOYMENT.md §3).
 {
 	email {$ACME_EMAIL}
 }
@@ -7,10 +7,24 @@
 {$PUBLIC_HOST} {
 	encode zstd gzip
 
-	# HSTS: una vez que el dominio sirve HTTPS, el navegador deja de intentar HTTP. Un año, que es
-	# el mínimo que piden las listas de precarga. Quitalo mientras estés probando con un dominio
-	# que quizá vuelva a HTTP.
-	header Strict-Transport-Security "max-age=31536000; includeSubDomains"
+	# HSTS: una vez que el dominio sirve HTTPS, el navegador deja de intentar HTTP.
+	#
+	# SIN `includeSubDomains`, y es deliberado. Esto suele servir un subdominio (staging.luparx.com);
+	# con esa directiva, el navegador de cualquiera que entre acá pasaría a exigir HTTPS en TODO
+	# luparx.com —incluidos subdominios que quizá todavía no tengan certificado—, y el efecto dura
+	# un año en el equipo de cada visitante aunque se corrija el servidor. Una instalación que sirva
+	# el dominio raíz y controle todos sus subdominios puede añadirla.
+	#
+	# Un mes y no un año: mientras esto sea una demo, un error de certificado tiene que poder
+	# corregirse sin dejar a nadie fuera durante doce meses.
+	header Strict-Transport-Security "max-age=2592000"
+
+	# Los documentos de respaldo de un permiso llegan hasta 20 MB (luparx.enforcement
+	# .max-document-bytes). Sin esto, Caddy corta la subida antes de que el backend pueda contestar
+	# el error del contrato, y el ciudadano ve un fallo crudo en vez de un mensaje.
+	request_body {
+		max_size 24MB
+	}
 
 	reverse_proxy web:80
 }
