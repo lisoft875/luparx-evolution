@@ -52,6 +52,16 @@ docker compose version >/dev/null 2>&1 || fail "hace falta Docker Compose v2 (do
 [[ -f "$ENV_FILE" ]] || fail "falta $ENV_FILE. Copialo de infra/.env.deploy.example y llenalo."
 [[ -f "infra/secrets/deploy/jwt-private.pem" ]] || fail "faltan las llaves de firma. Corré scripts/gen-jwt-keys.sh."
 
+# La llave privada firma los tokens de TODOS los portales, incluido el de plataforma. Si cualquier
+# cuenta de la instancia puede leerla, cualquier cuenta puede fabricarse un administrador.
+KEY_PERMS="$(stat -c '%a' infra/secrets/deploy/jwt-private.pem 2>/dev/null || stat -f '%Lp' infra/secrets/deploy/jwt-private.pem)"
+case "$KEY_PERMS" in
+  600|640|660) ;;
+  *) fail "jwt-private.pem tiene permisos $KEY_PERMS: la puede leer cualquiera en esta máquina.
+       sudo chown 10001:10001 infra/secrets/deploy/jwt-private.pem
+       sudo chmod 640 infra/secrets/deploy/jwt-private.pem" ;;
+esac
+
 # shellcheck disable=SC1090
 set -a; source "$ENV_FILE"; set +a
 : "${PUBLIC_BASE_URL:?falta PUBLIC_BASE_URL en $ENV_FILE}"

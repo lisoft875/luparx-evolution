@@ -26,21 +26,39 @@ una imagen no construye. Con Docker Desktop corriendo, desde la raíz del reposi
 
 ```bash
 cp infra/.env.deploy.example infra/.env.local
-# en infra/.env.local:
-#   PUBLIC_BASE_URL=http://localhost:8093
-#   COMPOSE_PROJECT_NAME=luparx-local
-#   POSTGRES_PASSWORD / IP_HASH_PEPPER  → cualquier valor, es tu máquina
 ./scripts/gen-jwt-keys.sh
-docker compose -f infra/docker-compose.deploy.yml --env-file infra/.env.local up -d --build
+```
+
+El archivo de ejemplo trae **vacíos** los valores que no pueden tener uno por omisión — es
+deliberado: una contraseña de ejemplo que funciona es una contraseña que sobrevive hasta producción.
+Para la prueba local hay que llenar cinco, y compose se niega a arrancar (no arranca a medias) si
+falta alguno:
+
+```bash
+COMPOSE_PROJECT_NAME=luparx-local
+LUPARX_ENVIRONMENT=local
+PUBLIC_BASE_URL=http://localhost:8093
+POSTGRES_PASSWORD=$(openssl rand -base64 24)
+IP_HASH_PEPPER=$(openssl rand -hex 32)
 ```
 
 Antes incluso de construir, la configuración de nginx se valida sola en dos segundos:
 
 ```bash
-docker run --rm \
+docker run --rm --entrypoint nginx \
   -v "$PWD/infra/nginx/luparx.conf:/etc/nginx/conf.d/default.conf:ro" \
   -v "$PWD/infra/nginx/security-headers.inc:/etc/nginx/conf.d/security-headers.inc:ro" \
-  nginx:1.27-alpine nginx -t
+  nginx:1.27-alpine -t
+```
+
+`--entrypoint nginx` es necesario: la imagen oficial trae un entrypoint que, antes de pasarle el
+control a nginx, intenta reescribir `default.conf` para escuchar en IPv6 — y el archivo está montado
+en sólo lectura. Sin saltárselo, lo que se ve es un aviso confuso sobre un *read-only file system*.
+
+Y recién entonces, construir y levantar:
+
+```bash
+docker compose -f infra/docker-compose.deploy.yml --env-file infra/.env.local up -d --build
 ```
 
 Abrí `http://localhost:8093` (ciudadano), `/admin/`, `/inspector/` y `/platform/`. Si los cuatro

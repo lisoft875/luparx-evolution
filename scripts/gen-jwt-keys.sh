@@ -30,13 +30,32 @@ openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$PRIVATE"
 openssl rsa -in "$PRIVATE" -pubout -out "$PUBLIC"
 
 # El contenedor del backend corre como uid 10001 y monta este directorio en sólo lectura.
-chmod 640 "$PRIVATE"
+#
+# Lo ideal es que la llave privada sea legible SÓLO por ese uid (chown 10001 + 0640). Si no se puede
+# —falta sudo, o es un macOS donde el uid del contenedor no significa nada porque Docker Desktop
+# traduce los permisos— se cae a 0644: legible por cualquier usuario de la máquina, que en una
+# laptop de desarrollo es aceptable y en el servidor NO lo es.
 chmod 644 "$PUBLIC"
-chown -R 10001:10001 "$DEST" 2>/dev/null || \
-  echo "Aviso: no se pudo cambiar el dueño a 10001 (corré con sudo si el backend no puede leer la llave)." >&2
+if chown 10001:10001 "$PRIVATE" "$PUBLIC" 2>/dev/null; then
+  chmod 640 "$PRIVATE"
+  OWNERSHIP="uid 10001 (el del contenedor), permisos 0640"
+else
+  chmod 644 "$PRIVATE"
+  OWNERSHIP="$(id -un), permisos 0644 — NO se pudo asignar el uid del contenedor"
+  cat >&2 <<'WARN'
+
+AVISO: la llave privada quedó legible por cualquier usuario de esta máquina.
+  * En tu laptop: está bien, seguí.
+  * En el SERVIDOR: volvé a correr esto con sudo, o arreglalo a mano:
+      sudo chown 10001:10001 infra/secrets/deploy/jwt-private.pem
+      sudo chmod 640 infra/secrets/deploy/jwt-private.pem
+    Si no, cualquier cuenta de la instancia puede firmar tokens de administrador de plataforma.
+
+WARN
+fi
 
 echo "Listo:"
-echo "  privada: $PRIVATE  (no la copies a ningún lado)"
+echo "  privada: $PRIVATE  ($OWNERSHIP) — no la copies a ningún lado"
 echo "  pública: $PUBLIC"
 echo
 echo "Acordate de poner un JWT_KEY_ID en infra/.env, por ejemplo: deploy-$(date +%Y-%m)"
