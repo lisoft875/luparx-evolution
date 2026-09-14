@@ -29,15 +29,23 @@ ARG BASE_PATH_ADMIN=/admin/
 ARG BASE_PATH_INSPECTOR=/inspector/
 ARG BASE_PATH_PLATFORM=/platform/
 
-COPY package.json package-lock.json ./
-COPY apps apps
-COPY packages packages
+# Se copia el repositorio entero del frontend y no una lista de directorios.
+#
+# La lista era `package.json`, `apps/` y `packages/`, y dejaba afuera `tsconfig.base.json`, que está
+# en esta raíz y del que heredan los tsconfig de los paquetes: el build moría al transformar el
+# primer módulo. Enumerar archivos convierte cualquier configuración nueva en la raíz —un
+# .npmrc, un .browserslistrc— en el mismo fallo, descubierto siempre dentro de un contenedor. Lo que
+# NO entra lo decide `.dockerignore`, que es donde se puede razonar sobre ello: node_modules, dist,
+# los proyectos nativos de Capacitor y cualquier .env.
+COPY . .
 
 # `npm ci` y no `install`: instala exactamente el lock, y falla si el lock y los package.json no
-# concuerdan en vez de resolver algo distinto de lo que se probó.
+# concuerdan en vez de resolver algo distinto de lo que se probó. Necesita los package.json de cada
+# workspace ya presentes, que es otra razón para copiar todo antes.
 #
-# La caché de BuildKit guarda lo descargado entre despliegues sin meterlo en la imagen. `npm ci`
-# igual borra node_modules y reinstala —eso es lo que lo hace reproducible—, pero no vuelve a bajar.
+# La caché de BuildKit guarda lo descargado entre builds sin meterlo en la imagen: `npm ci` vuelve a
+# correr cuando cambia el código —borra node_modules y reinstala, que es lo que lo hace
+# reproducible— pero no vuelve a bajar nada de la red.
 RUN --mount=type=cache,target=/root/.npm,sharing=locked npm ci
 
 # Se compila con `vite build` directo y no con `npm run build`, que además corre `tsc --noEmit`:
