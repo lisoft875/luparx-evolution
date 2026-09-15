@@ -131,6 +131,21 @@ public final class ParkingDtos {
              * {@code SPACE_OCCUPIED} now succeeds.
              */
             boolean overlappingStaysEnabled,
+            /**
+             * How long before a stay runs out the citizen is warned, in minutes; {@code 0} means the
+             * deployment does not warn at all.
+             *
+             * <p>It travels with the policy because the phone app schedules that warning <b>on the
+             * device</b>, at the instant it starts a stay: the end time is known from the start, so a
+             * local alarm fires even with no signal, and the citizen is not left uninformed in a
+             * basement car park. Writing the number in the client instead would bury a decision about
+             * someone else's attention in a released binary — fifteen minutes suits a municipality
+             * selling half-hours and is useless to one selling eight-hour days, and correcting it
+             * would mean a store review rather than a configuration change.</p>
+             *
+             * <p>Additive: a client written before this field ignores it and loses nothing.</p>
+             */
+            int expiryWarningBeforeMinutes,
             Instant updatedAt) {
     }
 

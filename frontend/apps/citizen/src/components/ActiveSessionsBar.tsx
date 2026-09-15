@@ -3,7 +3,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from '@luparx/i18n';
 import { IconCar, Modal, Timer } from '@luparx/ui';
 import type { ParkingSession } from '@luparx/api-client';
-import { useActiveParkingSessions } from '../lib/queries';
+import { useParkingReminders } from '@luparx/features';
+import { useActiveParkingSessions, useParkingPolicy } from '../lib/queries';
 
 const WARNING_THRESHOLD_SECONDS = 600;
 
@@ -69,6 +70,7 @@ function SessionCountdown({
 export function ActiveSessionsBar(): React.JSX.Element | null {
   const { t } = useTranslation();
   const { data: sessions } = useActiveParkingSessions();
+  const { data: policy } = useParkingPolicy();
   const [listOpen, setListOpen] = useState(false);
   const [isPrimaryWarning, setIsPrimaryWarning] = useState(false);
   const [announcement, setAnnouncement] = useState('');
@@ -79,6 +81,18 @@ export function ActiveSessionsBar(): React.JSX.Element | null {
   );
   const primary = sorted[0];
   const extraCount = sorted.length - 1;
+
+  // Keeps the phone's own alarms in step with the stays that are running: scheduled on the device,
+  // so the warning arrives in an underground car park with no signal. It lives here because this
+  // component is mounted on every screen for as long as there is a stay, which makes it the one
+  // place that sees every change — including those made from another device.
+  //
+  // Above the early return on purpose: hooks cannot be conditional, and this one must also run when
+  // the list empties out, which is precisely when the stale reminders have to be cancelled.
+  useParkingReminders({
+    activeSessions: sessions,
+    warningBeforeMinutes: policy?.expiryWarningBeforeMinutes,
+  });
 
   if (!primary) return null;
 

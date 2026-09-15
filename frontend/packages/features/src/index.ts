@@ -34,6 +34,12 @@ export {
 export type { PersonalDataValues, PersonalDataSchemaOptions } from './profile/personalData';
 export type { LocaleSwitcherProps, AvailableLocales } from './locale/LocaleSwitcher';
 export { preselectedDocumentType } from './documentTypeSelection';
+export { useParkingReminders } from './reminders/useParkingReminders';
+export type { ParkingRemindersState, UseParkingRemindersOptions } from './reminders/useParkingReminders';
+export { planParkingReminders, reminderId } from './reminders/parkingReminders';
+export type { ParkingReminder, ReminderPlan, PendingReminder } from './reminders/parkingReminders';
+export { createCapacitorScheduler, unavailableScheduler } from './reminders/reminderScheduler';
+export type { ReminderScheduler, ScheduledReminder } from './reminders/reminderScheduler';
 export {
   useCountries,
   useAdminLevels,

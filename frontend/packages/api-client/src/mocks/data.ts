@@ -575,6 +575,8 @@ export const MOCK_PARKING_POLICIES: Record<string, ParkingPolicy> = {
     freeMinutes: 10,
     // San José deja pagar un espacio que otra estadía todavía no liberó (v0.37).
     overlappingStaysEnabled: true,
+    // Quince minutos antes del vencimiento (v0.41). El teléfono agenda ese aviso por su cuenta.
+    expiryWarningBeforeMinutes: 15,
   },
   'tenant-escazu': {
     sessionIncrementsMinutes: [30, 60, 90],
@@ -593,6 +595,9 @@ export const MOCK_PARKING_POLICIES: Record<string, ParkingPolicy> = {
     // Y vende cada bahía una sola vez: es el fixture que deja probar el SPACE_OCCUPIED que sigue
     // existiendo para las municipalidades que eligen esa regla.
     overlappingStaysEnabled: false,
+    // Cinco minutos: sus estadías son cortas. Dos valores distintos entre municipalidades es lo que
+    // deja ver que el cliente lo lee y no lo supone.
+    expiryWarningBeforeMinutes: 5,
   },
 };
 

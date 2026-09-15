@@ -1022,6 +1022,31 @@ opcionales: ausentes significan «dejalo como está»). Marcar un predeterminado
 la misma transacción**, y un tipo inactivo no puede ser el predeterminado: preseleccionar una opción
 que el formulario no ofrece dejaría todo registro abriendo en algo que nadie puede elegir.
 
+# v0.41 — El aviso de vencimiento lo agenda el teléfono (normativo)
+
+`GET /citizen/parking/policy` suma `expiryWarningBeforeMinutes`: cuántos minutos antes del
+vencimiento se le avisa al ciudadano. **Aditivo** — un cliente anterior lo ignora y no pierde nada.
+
+```
+GET /api/v1/citizen/parking/policy
+-> { …, overlappingStaysEnabled: true, expiryWarningBeforeMinutes: 15, updatedAt }
+```
+
+El número **no se escribe en el cliente**. Quince minutos le sirven a una municipalidad que vende
+medias horas y le sobran a una que vende jornadas de ocho; escrito en una app publicada, corregirlo
+sería una revisión de tienda en vez de un cambio de configuración. `0` significa «esta instalación no
+avisa antes», y es una respuesta legítima.
+
+La app del teléfono agenda ese aviso **en el dispositivo**, no lo espera del servidor: el instante de
+fin se conoce al empezar la estadía, así que la alarma suena aunque no haya señal —que es la
+situación normal en un sótano, justo cuando el aviso más importa—. Las notificaciones del servidor
+(v0.38) siguen como están y cubren lo que el dispositivo no puede saber por su cuenta.
+
+Lo agendado se **reconcilia** contra las estadías activas, no se maneja por eventos: extender desde
+otro teléfono, tener la app cerrada o reinstalar dejarían las alarmas desfasadas, y un aviso de una
+estadía terminada es peor que ninguno — enseña a ignorarlos. El detalle y las alternativas
+descartadas, en [ADR 0027](adr/0027-on-device-parking-reminders.md).
+
 # v0.10 — Cronómetro arriba y redondeo hacia abajo (normativo)
 
 ## Dónde vive el cronómetro

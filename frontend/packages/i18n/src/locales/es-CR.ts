@@ -754,6 +754,14 @@ export const esCR = {
   // El servidor manda un tipo estable y parámetros crudos; la oración se arma acá. Una frase ya
   // escrita en el servidor quedaría congelada en el idioma en que se escribió, y quien cambie la app
   // a inglés leería su historial en español para siempre.
+  'citizen.reminder.expiring.title': 'Le quedan {{minutes}} min de parqueo',
+  'citizen.reminder.expiring.body': '{{plate}} en el espacio {{space}}. Extienda desde la app si lo necesita.',
+  'citizen.reminder.expired.title': 'Se venció su parqueo',
+  'citizen.reminder.expired.body': '{{plate}} en el espacio {{space}}.',
+  'citizen.reminder.permission.title': '¿Le avisamos antes de que se venza?',
+  'citizen.reminder.permission.body': 'El teléfono le avisa aunque se quede sin señal. Puede desactivarlo cuando quiera.',
+  'citizen.reminder.permission.allow': 'Avisarme',
+  'citizen.reminder.permission.dismiss': 'Ahora no',
   'citizen.notifications.title': 'Notificaciones',
   'citizen.notifications.subtitle': 'Lo que pasó en esta municipalidad.',
   'citizen.notifications.markAllRead': 'Marcar todas como leídas',

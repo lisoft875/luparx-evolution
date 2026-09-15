@@ -1044,6 +1044,20 @@ export interface ParkingPolicy {
    * be refused and now succeeds.
    */
   overlappingStaysEnabled: boolean;
+  /**
+   * How long before a stay runs out the citizen is warned, in minutes; `0` means this deployment
+   * does not warn at all.
+   *
+   * The phone app schedules that warning **on the device** when the stay starts: the end instant is
+   * known from the beginning, so a local alarm fires even with no signal — which is the normal
+   * situation in an underground car park. The number is read from here and never written down in the
+   * client: fifteen minutes suits a municipality selling half-hours and is useless to one selling
+   * eight-hour days, and a number baked into a released app can only be corrected through a store
+   * review.
+   *
+   * Optional because a client may be talking to a server older than this field.
+   */
+  expiryWarningBeforeMinutes?: number;
 }
 
 // ---- Citizen: notifications (CONTRACT.md "v0.38") ---------------------------------------------

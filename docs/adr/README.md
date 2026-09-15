@@ -31,6 +31,7 @@ de rollback, estado y fecha.
 | [0024](0024-zone-geometry-postgis.md) | La zona es un lugar: geometría en PostGIS (MultiPolygon 4326) y GeoJSON en la API | Aceptado |
 | [0025](0025-paying-a-fine-from-the-wallet.md) | Pagar la multa con el saldo: el pago retira el reclamo, y el saldo insuficiente se rechaza | Aceptado |
 | [0026](0026-deployment-topology.md) | Despliegue en una instancia: un dominio con rutas, imágenes construidas en el servidor, perfil `demo` | Aceptado |
+| [0027](0027-on-device-parking-reminders.md) | El aviso de vencimiento lo agenda el teléfono, reconciliado contra las estadías activas | Aceptado |
 
 Las decisiones 0001–0013 datan del scaffold inicial (2026-09-07); 0014 y 0015 se tomaron al construir
 el módulo de fiscalización y el flujo de recargas (2026-09-09); 0017 amplía la 0013 al hacer legible la

@@ -1,5 +1,6 @@
 package cr.luparx.app.web;
 
+import cr.luparx.app.config.NotificationProperties;
 import cr.luparx.app.web.dto.ParkingDtos;
 import cr.luparx.core.money.Money;
 import cr.luparx.parking.entity.ParkingPolicy;
@@ -55,12 +56,23 @@ public class ParkingMapper {
     private final ParkingZoneRepository zoneRepository;
     private final ParkingSpaceRepository spaceRepository;
     private final Clock clock;
+    /**
+     * Read for one field of the policy response: how long before the end the citizen is warned.
+     *
+     * <p>It lives in the deployment's notification settings and not in the per-municipality policy
+     * because today it is one number for the whole installation. The day a municipality needs its
+     * own, it becomes a column in {@code parking_policies} and this dependency disappears — the
+     * clients keep reading the same field of the same response, which is why it is published as part
+     * of the policy and not as a separate endpoint.</p>
+     */
+    private final NotificationProperties notificationProperties;
 
     public ParkingMapper(ParkingZoneRepository zoneRepository, ParkingSpaceRepository spaceRepository,
-                         Clock clock) {
+                         Clock clock, NotificationProperties notificationProperties) {
         this.zoneRepository = zoneRepository;
         this.spaceRepository = spaceRepository;
         this.clock = clock;
+        this.notificationProperties = notificationProperties;
     }
 
     public ParkingDtos.MoneyDto toMoney(Money money) {
@@ -104,6 +116,7 @@ public class ParkingMapper {
                 policy.getGraceMinutes(),
                 policy.getFreeMinutes(),
                 policy.isOverlappingStaysEnabled(),
+                notificationProperties.sessionExpiringBeforeOrDefault(),
                 policy.getUpdatedAt());
     }
 
