@@ -36,6 +36,9 @@ frontend/apps/*/android/build/
 frontend/apps/*/android/local.properties
 frontend/apps/*/android/captures/
 frontend/apps/*/ios/App/App/public/
+# El equivalente en Android: `cap sync` copia acá el build web (dist/) en cada compilación. Es
+# artefacto derivado, no fuente — versionarlo duplicaría el bundle entero en cada commit.
+frontend/apps/*/android/app/src/main/assets/public/
 *.ipa
 *.apk
 *.aab

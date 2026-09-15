@@ -55,12 +55,18 @@ export const unavailableScheduler: ReminderScheduler = {
 export async function createCapacitorScheduler(): Promise<ReminderScheduler> {
   let plugin: LocalNotificationsLike | undefined;
   try {
-    // The specifier is built at runtime so TypeScript does not try to resolve it: the plugin is not
-    // a dependency of this package and will not be one until `npx cap add ios|android` has been run
-    // and `@capacitor/local-notifications` installed. Naming it literally would break `tsc` today —
-    // for every app, including the four that never schedule anything — over a module whose absence
-    // is an expected, handled outcome. `@vite-ignore` keeps the bundler from trying to resolve it
-    // statically for the same reason.
+    // The specifier is built at runtime so TypeScript does not try to resolve it.
+    //
+    // The plugin is a dependency of the CITIZEN APP, not of this package — and that asymmetry is the
+    // point. `@luparx/features` is shared by the four portals, and three of them (admin, inspector,
+    // platform) are desktop back-offices that will never schedule a parking alarm. Declaring the
+    // plugin here would put Capacitor in their dependency tree and in their bundles to satisfy a
+    // screen they do not have.
+    //
+    // So the package depends on the CONTRACT (the interface below) and the citizen app supplies the
+    // implementation by having the plugin installed. A portal without it gets `unavailableScheduler`,
+    // which is the same path as a citizen who denied the permission — a path the app already
+    // supports. `@vite-ignore` keeps the bundler from trying to resolve it statically.
     const specifier = ['@capacitor', 'local-notifications'].join('/');
     const mod = (await import(/* @vite-ignore */ specifier)) as {
       LocalNotifications?: LocalNotificationsLike;
