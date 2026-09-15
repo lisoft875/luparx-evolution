@@ -34,6 +34,7 @@ export {
 export type { PersonalDataValues, PersonalDataSchemaOptions } from './profile/personalData';
 export type { LocaleSwitcherProps, AvailableLocales } from './locale/LocaleSwitcher';
 export { preselectedDocumentType } from './documentTypeSelection';
+export { MIN_PASSWORD_LENGTH } from './passwordPolicy';
 export { useParkingReminders } from './reminders/useParkingReminders';
 export type { ParkingRemindersState, UseParkingRemindersOptions } from './reminders/useParkingReminders';
 export { planParkingReminders, reminderId } from './reminders/parkingReminders';

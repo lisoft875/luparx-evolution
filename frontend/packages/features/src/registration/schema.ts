@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { MIN_PASSWORD_LENGTH } from '../passwordPolicy';
 import {
   PERSONAL_DATA_DEFAULT_VALUES,
   personalDataShape,
@@ -31,8 +32,6 @@ export interface RegistrationSchemaOptions extends PersonalDataSchemaOptions {
   tenantRequired: boolean;
   tenantRequiredTranslation: string;
 }
-
-const MIN_PASSWORD_LENGTH = 10;
 
 export function buildRegistrationSchema(options: RegistrationSchemaOptions): z.ZodType<RegistrationFormValues> {
   return z

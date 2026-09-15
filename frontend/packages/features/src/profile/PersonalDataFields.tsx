@@ -24,6 +24,20 @@ export interface PersonalDataFieldsProps<TValues extends PersonalDataValues> {
   errors: FieldErrors<PersonalDataValues>;
   /** Rendered between the address block and the phone block — registration slots its municipality picker here. */
   afterAddress?: React.ReactNode;
+  /**
+   * Whether to ask for the postal address. **Off by default since v0.42.**
+   *
+   * The address took part in no business rule —charging needs the plate, the bay and the means of
+   * payment; notifying needs the e-mail— and on the form it was where people gave up: choosing a
+   * province moved the focus to "address 2 (optional)", and a field labelled optional teaches the
+   * reader that everything after it is optional too. A registration abandoned halfway is not an
+   * incomplete record, it is one citizen fewer.
+   *
+   * Not deleted, hidden. The fields, the cascade of administrative divisions and the validation are
+   * all still here, and the columns still exist (nullable since migration V40_0). The day a
+   * municipality needs to post a paper citation, this becomes `true` and nothing has to be rebuilt.
+   */
+  askForAddress?: boolean;
 }
 
 /**
@@ -47,6 +61,7 @@ export function PersonalDataFields<TValues extends PersonalDataValues>({
   watch,
   errors,
   afterAddress,
+  askForAddress = false,
 }: PersonalDataFieldsProps<TValues>): React.JSX.Element {
   const { t } = useTranslation();
   /** Catalog `labelKey` values are data (server-driven, per CONTRACT.md §2/§5), not statically known TranslationKeys. */
@@ -182,6 +197,8 @@ export function PersonalDataFields<TValues extends PersonalDataValues>({
         )}
       </FormField>
 
+      {askForAddress ? (
+      <>
       <h2>{t('auth.register.section.address')}</h2>
       <FormField label={t('user.field.address.country')} error={errors.addressCountryCode?.message}>
         {({ inputId }) => (
@@ -232,6 +249,8 @@ export function PersonalDataFields<TValues extends PersonalDataValues>({
         retryLabel={t('common.retry')}
         errors={{ level1Id: errors.addressLevel1Id?.message, line1: errors.addressLine1?.message }}
       />
+      </>
+      ) : null}
 
       {afterAddress}
 

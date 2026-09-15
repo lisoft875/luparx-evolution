@@ -124,13 +124,16 @@ public class AuthController {
                 request.identityDocument().countryCode(),
                 request.identityDocument().type(),
                 request.identityDocument().number(),
-                request.address().countryCode(),
-                request.address().level1Id(),
-                request.address().level2Id(),
-                request.address().level3Id(),
-                request.address().line1(),
-                request.address().line2(),
-                request.address().postalCode(),
+                // La dirección es opcional desde la v0.42 (V40_0): el formulario dejó de pedirla
+                // y estos endpoints comparten esos campos. Sin la guarda, un registro sin
+                // dirección terminaría en NullPointerException en vez de en una cuenta creada.
+                request.address() == null ? null : request.address().countryCode(),
+                request.address() == null ? null : request.address().level1Id(),
+                request.address() == null ? null : request.address().level2Id(),
+                request.address() == null ? null : request.address().level3Id(),
+                request.address() == null ? null : request.address().line1(),
+                request.address() == null ? null : request.address().line2(),
+                request.address() == null ? null : request.address().postalCode(),
                 request.phone().countryCode(),
                 request.phone().nationalNumber(),
                 request.nationalityCode(),

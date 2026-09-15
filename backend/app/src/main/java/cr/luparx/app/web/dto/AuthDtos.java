@@ -53,7 +53,17 @@ public final class AuthDtos {
             @NotBlank @Size(max = 100) String familyName,
             @Size(max = 100) String secondFamilyName,
             @NotNull @Valid IdentityDocumentDto identityDocument,
-            @NotNull @Valid AddressDto address,
+            /**
+             * Optional since v0.42. The registration form stopped asking for it: the address takes
+             * part in no business rule —charging needs the plate, the bay and the means of payment—
+             * and on the form it was where people gave up. Selecting a province moved the focus to
+             * "address 2 (optional)", and a field labelled optional teaches the reader that what
+             * follows is optional too.
+             *
+             * <p>Still {@code @Valid}: a client that DOES send an address must send a complete one.
+             * Half an address is worse than none — it looks like data and cannot be used.</p>
+             */
+            @Valid AddressDto address,
             @NotNull @Valid PhoneDto phone,
             @NotBlank @Size(min = 2, max = 2) String nationalityCode,
             @NotBlank @Email @Size(max = 320) String email,

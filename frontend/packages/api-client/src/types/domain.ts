@@ -237,7 +237,13 @@ export interface RegisterRequest {
   familyName: string;
   secondFamilyName?: string;
   identityDocument: IdentityDocumentInput;
-  address: AddressInput;
+  /**
+   * Optional since v0.42: the forms stopped asking for a postal address (it took part in no
+   * business rule, and on the form it was where people gave up). The server accepts it absent
+   * and still validates it in full when it does arrive — half an address looks like data and
+   * cannot be used.
+   */
+  address?: AddressInput;
   phone: PhoneInput;
   nationalityCode: string;
   email: string;
@@ -260,7 +266,13 @@ export interface UpdateProfileRequest {
   familyName: string;
   secondFamilyName?: string;
   identityDocument: IdentityDocumentInput;
-  address: AddressInput;
+  /**
+   * Optional since v0.42: the forms stopped asking for a postal address (it took part in no
+   * business rule, and on the form it was where people gave up). The server accepts it absent
+   * and still validates it in full when it does arrive — half an address looks like data and
+   * cannot be used.
+   */
+  address?: AddressInput;
   phone: PhoneInput;
   nationalityCode: string;
   birthDate: string; // ISO-8601 YYYY-MM-DD
@@ -326,7 +338,12 @@ export interface UserProfile {
   nationalityCode: string;
   phone: PhoneInput;
   identityDocument: IdentityDocumentInput;
-  address: AddressInput;
+  /**
+   * Absent for anyone who registered from v0.42 on: the form stopped asking. Present, and
+   * editable from "my account", for whoever gave one before — hiding the field from them would
+   * have meant deleting their address the next time they saved anything else.
+   */
+  address?: AddressInput;
   locale: string;
   timeZone: string;
   status: UserStatus;
@@ -405,7 +422,8 @@ export interface AdminUserDetail extends AdminUserListItem {
   nationalityCode: string;
   phone: PhoneInput;
   identityDocument: IdentityDocumentInput;
-  address: AddressInput;
+  /** Absent for accounts created from v0.42 on, when the forms stopped asking for it. */
+  address?: AddressInput;
   blockedReason?: string;
 }
 
@@ -435,7 +453,13 @@ export interface CreateAdminUserRequest {
   familyName: string;
   secondFamilyName?: string;
   identityDocument: IdentityDocumentInput;
-  address: AddressInput;
+  /**
+   * Optional since v0.42: the forms stopped asking for a postal address (it took part in no
+   * business rule, and on the form it was where people gave up). The server accepts it absent
+   * and still validates it in full when it does arrive — half an address looks like data and
+   * cannot be used.
+   */
+  address?: AddressInput;
   phone: PhoneInput;
   nationalityCode: string;
   birthDate: string;
@@ -574,7 +598,13 @@ export interface AcceptInvitationRequest {
   familyName: string;
   secondFamilyName?: string;
   identityDocument: IdentityDocumentInput;
-  address: AddressInput;
+  /**
+   * Optional since v0.42: the forms stopped asking for a postal address (it took part in no
+   * business rule, and on the form it was where people gave up). The server accepts it absent
+   * and still validates it in full when it does arrive — half an address looks like data and
+   * cannot be used.
+   */
+  address?: AddressInput;
   phone: PhoneInput;
   nationalityCode: string;
   birthDate: string;

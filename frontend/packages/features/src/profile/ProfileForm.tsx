@@ -33,6 +33,20 @@ export interface ProfileFormProps {
  * the password through another (`ChangePasswordForm`).
  */
 export function ProfileForm({ profile, minAgeYears = 18, onSaved }: ProfileFormProps): React.JSX.Element {
+  /**
+   * The registration form stopped asking for a postal address in v0.42, but "my account" still shows
+   * it to WHOEVER ALREADY HAS ONE — and that is not a courtesy, it is the difference between hiding
+   * a field and deleting somebody's data.
+   *
+   * Hiding it unconditionally would mean this: a citizen who registered when the address was
+   * mandatory opens this screen to change their phone number, saves, and the request goes up with no
+   * address — which the server stores as null. Their address is gone, silently, in an action that
+   * had nothing to do with it. Nobody asked for that and nobody would notice until it mattered.
+   *
+   * So the rule is: the field appears if there is something there to edit or remove. New accounts
+   * never see it; old ones keep control over what they already gave.
+   */
+  const hasStoredAddress = Boolean(profile.address?.countryCode);
   const { t } = useTranslation();
   const { apiClient, refreshProfile } = useAuth();
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -52,6 +66,10 @@ export function ProfileForm({ profile, minAgeYears = 18, onSaved }: ProfileFormP
         isValidPhone: (countryCode: string, nationalNumber: string) =>
           isValidPhoneInput({ countryCode, nationalNumber }),
         documentPattern: selectedType ? new RegExp(selectedType.pattern) : undefined,
+        // Visible y por lo tanto exigida: quien ya tiene dirección no puede dejarla a medias.
+        // Para quitarla del todo hay que vaciar el país, y entonces no se envía (ver
+        // toUpdateProfileRequest).
+        askForAddress: Boolean(profile.address?.countryCode),
       };
       const schema = z
         .object(personalDataShape(schemaOptions))
@@ -95,6 +113,7 @@ export function ProfileForm({ profile, minAgeYears = 18, onSaved }: ProfileFormP
       {submitError ? <Alert tone="danger">{submitError}</Alert> : null}
       {saved ? <Alert tone="success">{t('account.profile.saved')}</Alert> : null}
       <PersonalDataFields
+        askForAddress={hasStoredAddress}
         apiClient={apiClient}
         control={control}
         register={register}

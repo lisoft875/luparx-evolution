@@ -1047,6 +1047,41 @@ otro teléfono, tener la app cerrada o reinstalar dejarían las alarmas desfasad
 estadía terminada es peor que ninguno — enseña a ignorarlos. El detalle y las alternativas
 descartadas, en [ADR 0027](adr/0027-on-device-parking-reminders.md).
 
+# v0.42 — El registro deja de pedir dirección, y la contraseña baja a ocho (normativo)
+
+## La dirección es opcional
+
+`address` pasa a **opcional** en `POST /auth/{portal}/register`, `POST /admin/users` y
+`POST /invitations/{token}/accept`. Las columnas `users.address_country_code` y `users.address_line1`
+dejan de ser `NOT NULL` (V40_0). **Ninguna dirección ya guardada se borra**: es la fase de expansión
+del patrón expand-and-contract (ADR 0010).
+
+Lo que **no** se relaja: una dirección que llega se sigue validando completa —país activo, divisiones
+administrativas coherentes, línea 1 presente—. Media dirección es peor que ninguna: parece un dato y
+no se puede usar.
+
+El motivo es de producto y está medido en el propio formulario: al elegir la provincia, el foco salta
+al campo «dirección 2 (opcional)», y un campo rotulado *opcional* le enseña al lector que lo que
+sigue también lo es; la gente abandonaba el registro ahí. Un registro abandonado a la mitad no es un
+dato incompleto, es un ciudadano menos. Y el dato no participaba de ninguna regla: para cobrar hacen
+falta la placa, el espacio y el medio de pago; para notificar, el correo. Pedir menos es además una
+decisión de privacidad — lo que no se guarda no se puede filtrar.
+
+En «mi cuenta» el campo **sigue visible para quien ya tiene una dirección guardada**. No es cortesía:
+ocultárselo habría significado que al cambiar su teléfono y guardar, la petición subiera sin dirección
+y le borrara la que dio. `PUT /{portal}/me` ya trata la dirección ausente como «dejala como está», no
+como «borrala».
+
+## Contraseña: ocho caracteres
+
+`luparx.security.password-min-length` baja de 10 a **8** por omisión. Diez era una barrera propia sin
+respaldo: las guías vigentes (NIST SP 800-63B) piden ocho como mínimo y ponen el énfasis en admitir
+contraseñas largas y en no forzar composiciones raras, no en subir el piso. Un mínimo alto empuja a
+patrones predecibles y a reutilizar contraseñas de otros sitios, que es peor que dos caracteres menos.
+
+Sigue siendo configuración por instalación (`PASSWORD_MIN_LENGTH`), y el cliente lo refleja sólo para
+avisar antes de ir al servidor: la autoridad es el servidor.
+
 # v0.10 — Cronómetro arriba y redondeo hacia abajo (normativo)
 
 ## Dónde vive el cronómetro

@@ -64,7 +64,10 @@ public class User {
     private String documentNumberNormalized;
 
     // --- §2.3 address ----------------------------------------------------------------------------
-    @Column(name = "address_country_code", nullable = false, length = 2)
+    // Nullable desde la V40_0: el registro dejó de pedir dirección. No participa de ninguna regla de
+    // negocio —para cobrar hace falta la placa, el espacio y el medio de pago— y en el formulario
+    // hacía que la gente lo abandonara a la mitad. Las direcciones ya guardadas se conservan.
+    @Column(name = "address_country_code", length = 2)
     private String addressCountryCode;
 
     @Column(name = "address_level1_id")
@@ -76,7 +79,7 @@ public class User {
     @Column(name = "address_level3_id")
     private UUID addressLevel3Id;
 
-    @Column(name = "address_line1", nullable = false, length = 200)
+    @Column(name = "address_line1", length = 200)
     private String addressLine1;
 
     @Column(name = "address_line2", length = 200)

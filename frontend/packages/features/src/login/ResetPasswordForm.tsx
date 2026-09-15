@@ -6,12 +6,11 @@ import { z } from 'zod';
 import { useAuth } from '@luparx/auth';
 import { useTranslation } from '@luparx/i18n';
 import { Alert, Button, FormField, Input } from '@luparx/ui';
+import { MIN_PASSWORD_LENGTH } from '../passwordPolicy';
 
 export interface ResetPasswordFormProps {
   token: string;
 }
-
-const MIN_PASSWORD_LENGTH = 10;
 
 export function ResetPasswordForm({ token }: ResetPasswordFormProps): React.JSX.Element {
   const { t } = useTranslation();

@@ -68,7 +68,9 @@ public final class AdminDtos {
             @NotBlank @Size(max = 100) String familyName,
             @Size(max = 100) String secondFamilyName,
             @NotNull @Valid IdentityDocumentDto identityDocument,
-            @NotNull @Valid AddressDto address,
+            // Opcional desde la v0.42, igual que en el registro: estas pantallas comparten los
+            // campos de datos personales, y exigirla acá dejaría el formulario sin poder enviarse.
+            @Valid AddressDto address,
             @NotNull @Valid PhoneDto phone,
             @NotBlank @Size(min = 2, max = 2) String nationalityCode,
             @NotNull LocalDate birthDate,
@@ -288,7 +290,9 @@ public final class AdminDtos {
             @NotBlank @Size(max = 100) String familyName,
             @Size(max = 100) String secondFamilyName,
             @NotNull @Valid IdentityDocumentDto identityDocument,
-            @NotNull @Valid AddressDto address,
+            // Opcional desde la v0.42, igual que en el registro: estas pantallas comparten los
+            // campos de datos personales, y exigirla acá dejaría el formulario sin poder enviarse.
+            @Valid AddressDto address,
             @NotNull @Valid PhoneDto phone,
             @NotBlank @Size(min = 2, max = 2) String nationalityCode,
             @NotNull LocalDate birthDate,

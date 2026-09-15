@@ -7,8 +7,7 @@ import { ApiError, NetworkError } from '@luparx/api-client';
 import { useAuth } from '@luparx/auth';
 import { useTranslation } from '@luparx/i18n';
 import { Alert, Button, FormField, Input } from '@luparx/ui';
-
-const MIN_PASSWORD_LENGTH = 10;
+import { MIN_PASSWORD_LENGTH } from '../passwordPolicy';
 
 interface ChangePasswordValues {
   currentPassword: string;

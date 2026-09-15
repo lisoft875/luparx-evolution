@@ -193,7 +193,11 @@ luparx:
     # y una contraseña. Lo que lo compensa hoy es la política de contraseñas, el limitador de
     # intentos respaldado en base de datos y —antes de exponer esto a internet abierto— restringirlo
     # por IP.
-    password-min-length: ${PASSWORD_MIN_LENGTH:10}
+    # Ocho desde la v0.42. Diez era una barrera propia sin respaldo: las guías actuales (NIST
+    # SP 800-63B) piden ocho como mínimo y ponen el énfasis en la longitud máxima permitida y en
+    # no forzar composiciones raras, no en subir el piso. Un mínimo alto empuja a la gente a
+    # patrones predecibles y a reutilizar contraseñas, que es peor que dos caracteres menos.
+    password-min-length: ${PASSWORD_MIN_LENGTH:8}
     login-window: ${LOGIN_ATTEMPT_WINDOW:15m}
     login-max-per-email: ${LOGIN_MAX_FAILURES_PER_EMAIL:5}
     login-max-per-ip: ${LOGIN_MAX_FAILURES_PER_IP:50}

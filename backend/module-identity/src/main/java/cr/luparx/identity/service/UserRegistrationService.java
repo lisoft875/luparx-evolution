@@ -167,17 +167,28 @@ public class UserRegistrationService {
                 command.documentCountryCode(), command.documentType(), command.documentNumber(),
                 "identityDocument.number");
 
-        // 3. address
-        AddressInput address = new AddressInput(
-                CountryCodes.normalize(command.addressCountryCode()),
-                command.addressLevel1Id(),
-                command.addressLevel2Id(),
-                command.addressLevel3Id(),
-                trimmed(command.addressLine1()),
-                trimmed(command.addressLine2()),
-                trimmed(command.addressPostalCode()));
-        countryCatalogService.requireActiveCountry(address.countryCode());
-        addressValidator.validate(address);
+        // 3. address — OPTIONAL since v0.42 (migration V40_0).
+        //
+        // The registration form stopped asking for it: the address takes part in no business rule,
+        // and on the form it was where people gave up. What is NOT relaxed is the address that does
+        // arrive: it goes through the same country check and the same validator as before, because
+        // half an address is worse than none — it looks like data and cannot be used.
+        //
+        // The "no address" case is the absence of a country code. Everything else hanging off it
+        // (the administrative divisions, the lines) is meaningless without one.
+        AddressInput address = null;
+        if (command.addressCountryCode() != null && !command.addressCountryCode().isBlank()) {
+            address = new AddressInput(
+                    CountryCodes.normalize(command.addressCountryCode()),
+                    command.addressLevel1Id(),
+                    command.addressLevel2Id(),
+                    command.addressLevel3Id(),
+                    trimmed(command.addressLine1()),
+                    trimmed(command.addressLine2()),
+                    trimmed(command.addressPostalCode()));
+            countryCatalogService.requireActiveCountry(address.countryCode());
+            addressValidator.validate(address);
+        }
 
         // 4. phone
         NormalizedPhone phone = phoneNumberService.validateAndNormalize(
@@ -216,13 +227,14 @@ public class UserRegistrationService {
                 document.type(),
                 document.raw(),
                 document.normalized(),
-                address.countryCode(),
-                address.level1Id(),
-                address.level2Id(),
-                address.level3Id(),
-                address.line1(),
-                address.line2(),
-                address.postalCode(),
+                // `address` es null cuando no se envió ninguna (ver el paso 3).
+                address == null ? null : address.countryCode(),
+                address == null ? null : address.level1Id(),
+                address == null ? null : address.level2Id(),
+                address == null ? null : address.level3Id(),
+                address == null ? null : address.line1(),
+                address == null ? null : address.line2(),
+                address == null ? null : address.postalCode(),
                 phone.e164(),
                 phone.countryCode(),
                 nationality,

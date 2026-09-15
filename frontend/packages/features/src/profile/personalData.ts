@@ -64,6 +64,14 @@ export interface PersonalDataSchemaOptions {
   isValidPhone: (countryCode: string, nationalNumber: string) => boolean;
   /** Regex sourced from the identity-document-types catalog (CONTRACT.md §5) for the currently selected country+type; undefined until loaded. */
   documentPattern: RegExp | undefined;
+  /**
+   * Whether the postal address is being asked for. **False by default since v0.42** — see
+   * `PersonalDataFields.askForAddress` for why the form stopped asking.
+   *
+   * It has to be a schema option and not only a rendering one: a required field that is not on
+   * screen makes the form impossible to submit, and the error appears on nothing the user can see.
+   */
+  askForAddress?: boolean;
 }
 
 /** The zod shape for the fields above — spread into a larger object schema by the caller. */
@@ -80,11 +88,19 @@ export function personalDataShape(options: PersonalDataSchemaOptions) {
       IdentityDocumentType | ''
     >,
     identityDocumentNumber: z.string().min(1, options.requiredTranslation),
-    addressCountryCode: z.string().min(1, options.requiredTranslation),
-    addressLevel1Id: z.string().min(1, options.requiredTranslation),
+    // Exigidos sólo cuando la dirección se pide. Un campo obligatorio fuera de pantalla deja el
+    // formulario sin poder enviarse y con el error colgado de un campo que nadie ve.
+    addressCountryCode: options.askForAddress
+      ? z.string().min(1, options.requiredTranslation)
+      : z.string(),
+    addressLevel1Id: options.askForAddress
+      ? z.string().min(1, options.requiredTranslation)
+      : z.string(),
     addressLevel2Id: z.string(),
     addressLevel3Id: z.string(),
-    addressLine1: z.string().min(1, options.requiredTranslation),
+    addressLine1: options.askForAddress
+      ? z.string().min(1, options.requiredTranslation)
+      : z.string(),
     addressLine2: z.string(),
     addressPostalCode: z.string(),
     phoneCountryCode: z.string().min(1, options.requiredTranslation),
@@ -174,15 +190,20 @@ export function toUpdateProfileRequest(
       type: values.identityDocumentType as IdentityDocumentType,
       number: values.identityDocumentNumber.trim(),
     },
-    address: {
-      countryCode: values.addressCountryCode,
-      level1Id: values.addressLevel1Id,
-      level2Id: values.addressLevel2Id || undefined,
-      level3Id: values.addressLevel3Id || undefined,
-      line1: values.addressLine1.trim(),
-      line2: values.addressLine2.trim() || undefined,
-      postalCode: values.addressPostalCode.trim() || undefined,
-    },
+    // Sin dirección no se manda el objeto: el servidor la acepta ausente (opcional desde la v0.42)
+    // pero si llega, la valida completa. Mandarla con cadenas vacías sería enviar media dirección,
+    // que es peor que ninguna — parece un dato y no se puede usar.
+    address: values.addressCountryCode
+      ? {
+          countryCode: values.addressCountryCode,
+          level1Id: values.addressLevel1Id,
+          level2Id: values.addressLevel2Id || undefined,
+          level3Id: values.addressLevel3Id || undefined,
+          line1: values.addressLine1.trim(),
+          line2: values.addressLine2.trim() || undefined,
+          postalCode: values.addressPostalCode.trim() || undefined,
+        }
+      : undefined,
     phone: {
       countryCode: values.phoneCountryCode,
       nationalNumber: values.phoneNationalNumber.trim(),
