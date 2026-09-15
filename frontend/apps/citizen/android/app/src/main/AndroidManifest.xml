@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/AppTheme">
+
+        <activity
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode"
+            android:name=".MainActivity"
+            android:label="@string/title_activity_main"
+            android:theme="@style/AppTheme.NoActionBarLaunch"
+            android:launchMode="singleTask"
+            android:exported="true">
+
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+        </activity>
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths"></meta-data>
+        </provider>
+    </application>
+
+    <!-- Permissions -->
+
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!--
+        Parking expiry reminders (ADR 0027). The stay's end is known when it starts, so the phone
+        schedules its own alarms and the warning arrives with no signal — an underground car park is
+        where it matters most and where a push would not reach.
+
+        POST_NOTIFICATIONS is required from Android 13 (API 33). Without it the notification is
+        dropped silently: no error, no entry in the log, the alarm simply never shows.
+
+        SCHEDULE_EXACT_ALARM / USE_EXACT_ALARM are what make the warning land ON TIME. Under Doze,
+        an inexact alarm on a phone that has been in a pocket for two hours can be deferred by many
+        minutes, and "your parking ran out" delivered late is the same as not delivered — the fine
+        was already issued. USE_EXACT_ALARM is granted on install for the alarm-clock class of app,
+        which is exactly what a countdown to a paid deadline is.
+
+        RECEIVE_BOOT_COMPLETED lets the plugin restore pending alarms after a reboot: Android drops
+        every scheduled alarm when the device restarts, and a citizen who reboots mid-stay would
+        otherwise lose the warning they are counting on.
+    -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+</manifest>
