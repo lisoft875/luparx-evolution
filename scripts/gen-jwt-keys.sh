@@ -12,6 +12,13 @@
 # =================================================================================================
 set -euo pipefail
 
+# A la raíz del repositorio, como hace deploy.sh. Sin esto el destino por omisión es relativo a DONDE
+# SE INVOQUE el script: corrido desde infra/ o desde scripts/, escribe las llaves en un
+# `infra/secrets/deploy` anidado, informa "Listo" con una ruta que parece correcta, y deploy.sh
+# después no las encuentra — un fallo que se lee como "faltan las llaves" justo después de haberlas
+# generado.
+cd "$(dirname "$0")/.."
+
 DEST="${1:-infra/secrets/deploy}"
 PRIVATE="$DEST/jwt-private.pem"
 PUBLIC="$DEST/jwt-public.pem"
@@ -55,7 +62,8 @@ WARN
 fi
 
 echo "Listo:"
-echo "  privada: $PRIVATE  ($OWNERSHIP) — no la copies a ningún lado"
+echo "  privada: $(cd "$(dirname "$PRIVATE")" && pwd)/$(basename "$PRIVATE")  ($OWNERSHIP)"
+echo "           no la copies a ningún lado"
 echo "  pública: $PUBLIC"
 echo
 echo "Acordate de poner un JWT_KEY_ID en infra/.env, por ejemplo: deploy-$(date +%Y-%m)"
