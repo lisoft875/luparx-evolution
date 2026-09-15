@@ -4,7 +4,13 @@ dist
 .env
 .env.*.local
 !.env.example
-android
-ios
+# Los proyectos nativos SÍ se versionan: ahí viven la configuración del plugin, los permisos, los
+# iconos y la firma — es decir, decisiones, no artefactos. Lo derivado de ellos se excluye en el
+# .gitignore de la raíz del repositorio, que distingue build/, Pods/, .gradle/ y la copia del bundle
+# web que `cap sync` regenera.
+#
+# Antes esto ignoraba `android` e `ios` enteros, que es lo que traen por omisión las plantillas de
+# Vite y de Capacitor por separado. Habría dejado los proyectos nativos fuera del repositorio sin
+# decir nada: el primero que clonara se encontraría sin app que compilar.
 *.tsbuildinfo
 .DS_Store
