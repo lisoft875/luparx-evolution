@@ -80,8 +80,30 @@ case "$KEY_PERMS" in
        sudo chmod 640 infra/secrets/deploy/jwt-private.pem" ;;
 esac
 
-# shellcheck disable=SC1090
-set -a; source "$ENV_FILE"; set +a
+# El .env se LEE, no se ejecuta.
+#
+# `source` sobre un archivo de entorno es el atajo de siempre y está mal: docker compose lo parsea
+# como pares clave=valor, mientras que bash lo interpreta como código. Un valor con un espacio
+# (CADDY_TLS="tls internal") le parece un comando; uno con `$(...)` o backticks se EJECUTA, que es
+# peor. Compose funcionaba y el script moría: dos lecturas distintas del mismo archivo.
+#
+# Esto toma exactamente lo que compose tomaría: líneas KEY=VALUE, sin comentarios, quitando unas
+# comillas envolventes si las hay, y sin interpretar nada del valor.
+while IFS= read -r linea; do
+  [[ "$linea" =~ ^[[:space:]]*# ]] && continue
+  [[ "$linea" =~ ^[[:space:]]*$ ]] && continue
+  [[ "$linea" != *=* ]] && continue
+  clave="${linea%%=*}"
+  valor="${linea#*=}"
+  clave="${clave#"${clave%%[![:space:]]*}"}"   # sin espacios a la izquierda
+  clave="${clave%"${clave##*[![:space:]]}"}"   # ni a la derecha
+  [[ "$clave" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
+  # Comillas envolventes, como las quita compose.
+  if [[ "$valor" == \"*\" && ${#valor} -ge 2 ]]; then valor="${valor:1:${#valor}-2}"
+  elif [[ "$valor" == \'*\' && ${#valor} -ge 2 ]]; then valor="${valor:1:${#valor}-2}"
+  fi
+  export "$clave=$valor"
+done < "$ENV_FILE"
 : "${PUBLIC_BASE_URL:?falta PUBLIC_BASE_URL en $ENV_FILE}"
 : "${POSTGRES_PASSWORD:?falta POSTGRES_PASSWORD en $ENV_FILE}"
 : "${IP_HASH_PEPPER:?falta IP_HASH_PEPPER en $ENV_FILE}"
