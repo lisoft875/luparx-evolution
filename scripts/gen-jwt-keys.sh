@@ -30,7 +30,14 @@ if [[ -f "$PRIVATE" ]]; then
 fi
 
 mkdir -p "$DEST"
-chmod 700 "$DEST"
+# 755 y no 700. Este script se corre con sudo —lo necesita para el chown al uid del contenedor— así
+# que con 700 el directorio queda de root y el usuario que despliega no puede ni LISTARLO: deploy.sh
+# corre como ese usuario, comprueba que la llave exista y falla con "faltan las llaves de firma"
+# mientras están ahí mismo.
+#
+# No afloja nada: lo que protege el secreto son los permisos del ARCHIVO (0640, dueño 10001), no los
+# del directorio. Poder listar una carpeta no permite leer lo que hay dentro.
+chmod 755 "$DEST"
 
 # RSA 2048 en PKCS#8, que es lo que lee RsaJwtKeySource.
 openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$PRIVATE"
