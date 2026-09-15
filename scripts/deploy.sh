@@ -149,10 +149,40 @@ fi
 if (( ROLLBACK )); then
   say "Volviendo a las imágenes anteriores"
   docker image inspect luparx/backend:previous >/dev/null 2>&1 || fail "no hay imagen luparx/backend:previous guardada."
-  docker tag luparx/backend:previous "luparx/backend:${LUPARX_VERSION:-local}"
-  docker tag luparx/web:previous     "luparx/web:${LUPARX_VERSION:-local}"
-  "${COMPOSE[@]}" up -d --no-build backend web
-  echo "Rollback aplicado. Ojo: si el despliegue anterior corrió migraciones, el esquema NO vuelve solo."
+
+  # La etiqueta con la que compose levanta es ${LUPARX_VERSION}, y un despliegue la pone al hash del
+  # commit. Acá NO se puede usar el LUPARX_VERSION del .env —que suele decir "local"—: etiquetaría
+  # :local, compose levantaría esa, y el rollback diría "aplicado" dejando corriendo exactamente la
+  # misma versión que se quería revertir. Hay que preguntarle a los contenedores qué etiqueta están
+  # usando AHORA, que es la que compose va a volver a buscar.
+  etiqueta_en_uso() {
+    local svc="$1" cid
+    cid="$("${COMPOSE[@]}" ps -q "$svc" 2>/dev/null | head -1)"
+    [[ -n "$cid" ]] || return 1
+    docker inspect -f '{{.Config.Image}}' "$cid" 2>/dev/null | sed 's/.*://'
+  }
+
+  VERSION_ACTUAL="$(etiqueta_en_uso backend || true)"
+  [[ -n "$VERSION_ACTUAL" ]] || fail "no hay un backend corriendo del que averiguar la versión.
+       Para volver atrás sin nada levantado, desplegá el commit anterior:
+         git checkout <commit-anterior> && ./scripts/deploy.sh --no-pull"
+
+  DIGEST_ANTERIOR="$(docker image inspect -f '{{.Id}}' luparx/backend:previous)"
+  DIGEST_ACTUAL="$(docker image inspect -f '{{.Id}}' "luparx/backend:$VERSION_ACTUAL" 2>/dev/null || echo none)"
+  if [[ "$DIGEST_ANTERIOR" == "$DIGEST_ACTUAL" ]]; then
+    echo "Aviso: :previous y la versión en uso ($VERSION_ACTUAL) son la MISMA imagen."
+    echo "       El rollback no va a cambiar nada — no hay una versión anterior distinta guardada."
+  fi
+
+  export LUPARX_VERSION="$VERSION_ACTUAL"
+  docker tag luparx/backend:previous "luparx/backend:$VERSION_ACTUAL"
+  docker tag luparx/web:previous     "luparx/web:$VERSION_ACTUAL"
+  "${COMPOSE[@]}" up -d --no-build --force-recreate backend web
+
+  echo
+  echo "Rollback aplicado sobre la etiqueta $VERSION_ACTUAL."
+  echo "Ojo: si el despliegue anterior corrió migraciones, el esquema NO vuelve solo — para eso está"
+  echo "el respaldo de infra/backups/ (docs/DEPLOYMENT.md §6)."
   exit 0
 fi
 
@@ -190,9 +220,15 @@ fi
 # --- 5. construcción -------------------------------------------------------------------------------
 say "Construyendo imágenes"
 # Se guarda lo que está corriendo AHORA como :previous, para que --rollback tenga a dónde volver.
+# En el primer despliegue no hay nada corriendo y eso es normal: se avisa, porque significa que hasta
+# el siguiente despliegue no existe un punto de retorno.
 for svc in backend web; do
-  current="$("${COMPOSE[@]}" images -q "$svc" 2>/dev/null | head -1)"
-  [[ -n "$current" ]] && docker tag "$current" "luparx/$svc:previous" || true
+  actual="$("${COMPOSE[@]}" images -q "$svc" 2>/dev/null | head -1)"
+  if [[ -n "$actual" ]]; then
+    docker tag "$actual" "luparx/$svc:previous"
+  else
+    echo "  $svc: no hay imagen en uso que guardar como :previous (primer despliegue)."
+  fi
 done
 
 "${COMPOSE[@]}" build backend
