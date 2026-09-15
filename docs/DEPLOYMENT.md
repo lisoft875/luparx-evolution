@@ -229,6 +229,38 @@ server {
 Con Traefik o Caddy propios, el equivalente: reenviar el host a `127.0.0.1:8093` pasando
 `X-Forwarded-Proto`.
 
+### El sitio informativo en la raíz del dominio
+
+`luparx.com` sirve el sitio comercial (repositorio `luparx-municipal-site`) y
+`staging.luparx.com` la plataforma, los dos desde el mismo Caddy. El sitio son archivos estáticos:
+no necesita contenedor, ni base, ni build.
+
+```bash
+# en el servidor, junto al otro repositorio
+git clone git@github.com:lisoft875/luparx-municipal-site.git
+
+# en infra/.env
+SITE_HOST=luparx.com
+SITE_HOST_WWW=www.luparx.com
+SITE_ROOT=/home/ubuntu/luparx-municipal-site
+```
+
+Se monta en sólo lectura, y se publica con recargar Caddy — no hace falta reconstruir nada:
+
+```bash
+cd luparx-municipal-site && git pull
+cd ../luparx-evolution && docker compose -f infra/docker-compose.deploy.yml \
+  --env-file infra/.env exec caddy caddy reload --config /etc/caddy/Caddyfile
+```
+
+Queda como repositorio aparte a propósito: se publica con otro ritmo que la plataforma —una
+corrección de texto no debería pasar por un build de Maven— y mezclar las dos historias en un mismo
+repositorio ataría ese cambio de una hora a un despliegue de veinte minutos.
+
+A diferencia de los portales, este sitio **sí** debe aparecer en los buscadores, así que no lleva la
+cabecera `noindex` que sí llevan `staging` y compañía. Y `www` redirige a la raíz con 301: dos
+direcciones que sirven lo mismo dividen el posicionamiento.
+
 ## 4. Despliegues siguientes
 
 ```bash

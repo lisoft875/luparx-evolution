@@ -42,3 +42,45 @@
 
 	reverse_proxy web:80
 }
+
+# =================================================================================================
+# El sitio informativo (repositorio luparx-municipal-site), en la RAÍZ del dominio.
+#
+# Va en este mismo Caddy y no en un contenedor propio porque son cuatro archivos estáticos: montar
+# un nginx para servirlos sería más partes móviles que contenido. Caddy ya está acá, ya gestiona los
+# certificados y sabe servir un directorio.
+#
+# SITE_HOST sin valor apunta a `localhost`: Caddy NO puede pedirle un certificado público a un
+# nombre que no existe —lo intentaría, fallaría y reintentaría en bucle—, y `localhost` se resuelve
+# con su emisor interno sin salir a la red. Una instalación que sólo quiera la plataforma deja las
+# dos variables vacías y estos bloques quedan inertes.
+# =================================================================================================
+{$SITE_HOST:localhost} {
+	{$CADDY_TLS}
+
+	root * /srv/site
+	file_server
+	encode zstd gzip
+
+	header {
+		# Mismas cabeceras que los portales. Sin X-Robots-Tag: este sitio SÍ tiene que aparecer en
+		# los buscadores — es su razón de existir.
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Strict-Transport-Security "max-age=2592000"
+	}
+
+	# El HTML no se cachea y los assets sí: una imagen de marca no cambia, la página puede cambiar
+	# hoy y tiene que verse hoy.
+	@assets path /assets/*
+	header @assets Cache-Control "public, max-age=604800"
+	@html path *.html /
+	header @html Cache-Control "no-cache"
+}
+
+# `www` al dominio sin www, con 301 permanente: dos direcciones que sirven lo mismo dividen el
+# posicionamiento y hacen que un enlace compartido no coincida con el otro.
+{$SITE_HOST_WWW:localhost:8443} {
+	{$CADDY_TLS}
+	redir https://{$SITE_HOST}{uri} permanent
+}

@@ -158,11 +158,19 @@ services:
     environment:
       PUBLIC_HOST: ${PUBLIC_HOST:?falta PUBLIC_HOST}
       ACME_EMAIL: ${ACME_EMAIL:?falta ACME_EMAIL}
+      # El sitio informativo, si esta instalación lo publica. Vacíos = no se sirve (ver el Caddyfile).
+      SITE_HOST: ${SITE_HOST:-}
+      SITE_HOST_WWW: ${SITE_HOST_WWW:-}
       # Vacío = Let's Encrypt (el servidor). `tls internal` = certificado firmado por el propio
       # Caddy, para probar esta misma configuración en una máquina de desarrollo sin dominio real.
       CADDY_TLS: ${CADDY_TLS:-}
     volumes:
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      # El sitio informativo, montado en SÓLO LECTURA desde donde esté clonado. Se pasa por
+      # SITE_ROOT y no por una ruta fija porque es OTRO repositorio: clonarlo dentro de este sería
+      # mezclar dos historias que se publican por separado. Cuando no se sirve, monta este mismo
+      # directorio de Caddy, que es inocuo — un `bind` de una ruta inexistente impide arrancar.
+      - ${SITE_ROOT:-./caddy}:/srv/site:ro
       - luparx_caddy_data:/data
       - luparx_caddy_config:/config
     ports:
