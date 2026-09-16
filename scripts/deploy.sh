@@ -203,7 +203,19 @@ echo "Desplegando $COMMIT"
 # --- 4. respaldo ---------------------------------------------------------------------------------
 if "${COMPOSE[@]}" ps --status running --services 2>/dev/null | grep -qx postgres; then
   say "Respaldando la base antes de migrar"
+  # `mkdir -p` no basta: compose monta ./backups en el contenedor de postgres, y si el directorio
+  # no existía cuando el servicio arrancó, Docker lo crea como ROOT. `mkdir -p` sobre algo que ya
+  # existe no toca permisos, así que no falla — y el fallo aparece una línea más abajo, al escribir,
+  # con un "Permission denied" que no explica de dónde viene.
+  #
+  # Se comprueba que se pueda escribir de verdad, y si no, se dice qué hacer en vez de morir con el
+  # error crudo del redirector.
   mkdir -p "$BACKUP_DIR"
+  if [[ ! -w "$BACKUP_DIR" ]]; then
+    fail "no se puede escribir en $BACKUP_DIR (es de $(stat -c '%U' "$BACKUP_DIR")).
+       Docker lo creó al montarlo. Corregilo con:
+         sudo chown $(id -un):$(id -gn) $REPO_ROOT/$BACKUP_DIR"
+  fi
   STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
   # Dentro del contenedor, porque la instancia no tiene por qué tener pg_dump instalado y la versión
   # del cliente debe coincidir con la del servidor.

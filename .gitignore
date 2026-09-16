@@ -55,7 +55,8 @@ infra/.env
 infra/secrets/
 # Llaves de firma y respaldos del despliegue: se generan EN el servidor y no salen de ahí.
 infra/secrets/deploy/
-infra/backups/
+infra/backups/*
+!infra/backups/.gitkeep
 
 # Evidencia y documentos que el backend escribe al correr en la laptop (EVIDENCE_ROOT por omisión).
 # Son datos de ejecución, no fuente: en el servidor viven en un volumen de Docker.

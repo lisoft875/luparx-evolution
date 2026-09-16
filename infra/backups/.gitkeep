@@ -1,0 +1,7 @@
+Este directorio existe en el repositorio a propósito.
+
+infra/docker-compose.deploy.yml lo monta en el contenedor de PostgreSQL (./backups:/backups). Si no
+existe cuando el servicio arranca, Docker lo crea como root — y entonces deploy.sh no puede escribir
+el respaldo previo a la migración, que es exactamente el momento en que menos conviene descubrirlo.
+
+Los respaldos en sí no se versionan (ver .gitignore); este archivo sólo reserva el directorio.

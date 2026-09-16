@@ -128,11 +128,24 @@ public class DevActivitySeeder {
     private static final int ACTIVE_SESSION_MINUTES = 120;
     private static final int ACTIVE_SESSION_STARTED_MINUTES_AGO = 25;
 
+    /**
+     * {@code payment_status} and {@code no_charge_reason} are here because V31_0 made the first one
+     * NOT NULL, and this seeder was not updated with it: every history insert failed on the
+     * constraint and was swallowed by the per-municipality try/catch, so the demo data silently came
+     * up with citizens who had no movements at all. The symptom on screen — a wallet with balance and
+     * an empty "recent activity" — looked like a UI bug for as long as nobody read the log.
+     *
+     * <p>They are two columns and not one because the database says so: {@code PAID} requires a
+     * positive amount, and only {@code NO_CHARGE} may carry a reason (see the CHECKs in V31_0). A
+     * seeder that wrote {@code PAID} on everything would have produced rows the domain can never
+     * produce, which is worse than failing — it is a fixture that teaches the wrong shape.</p>
+     */
     private static final String INSERT_SESSION_SQL = """
             INSERT INTO parking_sessions (id, tenant_id, user_id, vehicle_id, plate_snapshot, zone_id, space_id,
                                           started_at, expires_at, ended_at, status, amount_minor, currency_code,
+                                          payment_status, no_charge_reason,
                                           credit_minutes_applied, created_at, updated_at, version)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, 0)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, 0)
             """;
 
     private static final String INSERT_TRANSACTION_SQL = """
@@ -187,6 +200,7 @@ public class DevActivitySeeder {
      * @param profiles the citizens as declared, in order, with their opening balances
      */
     public void seed(Map<String, Tenant> tenants, Map<String, UserId> citizens, List<DemoCitizen> profiles) {
+        int failures = 0;
         for (DemoCitizen profile : profiles) {
             UserId userId = citizens.get(profile.email());
             if (userId == null) {
@@ -207,11 +221,27 @@ public class DevActivitySeeder {
                     seedForMunicipality(tenant, userId, profile, vehicles, entry.getValue().longValue(),
                             firstMunicipality);
                 } catch (RuntimeException exception) {
-                    LOGGER.warn("Development seed: history for {} in {} skipped ({}).", profile.email(),
-                            entry.getKey(), exception.toString());
+                    // Un WARN por municipalidad no alcanzó. Cuando la V31_0 añadió una columna
+                    // obligatoria que este sembrador no conocía, esto falló CINCO veces seguidas y el
+                    // resultado fue un fixture sin una sola estadía: en pantalla, billeteras con saldo
+                    // y «actividad reciente» vacía, que se lee como un error de interfaz. El log lo
+                    // decía, pero entre cien líneas de arranque y con nivel WARN nadie lo leyó.
+                    //
+                    // Se registra con ERROR y la traza completa —la causa real venía anidada en el
+                    // toString()— y se cuenta, para poder decir al final que el sembrado quedó
+                    // incompleto en vez de terminar anunciando cuentas listas que no lo están.
+                    failures++;
+                    LOGGER.error("Development seed: history for {} in {} FAILED. The fixture is "
+                            + "incomplete: this citizen will have a balance and no movements.",
+                            profile.email(), entry.getKey(), exception);
                 }
                 firstMunicipality = false;
             }
+        }
+        if (failures > 0) {
+            LOGGER.error("Development seed: {} history block(s) failed. The demo data is INCOMPLETE — "
+                    + "citizens may show a balance with no movements. Read the errors above before "
+                    + "showing this instance to anybody.", Integer.valueOf(failures));
         }
     }
 
@@ -370,19 +400,32 @@ public class DevActivitySeeder {
                 continue;
             }
             UUID sessionId = Uuid7.generate();
+            // Una estadía de cortesía —los minutos gratis del inicio— se cobra en cero, y para la
+            // base eso NO es "pagada": es NO_CHARGE con su motivo. Es la distinción que le permite a
+            // un funcionario en la calle contestarle al ciudadano que reclama por qué no se le cobró.
+            boolean charged = charge > 0L;
             jdbcTemplate.update(INSERT_SESSION_SQL,
                     sessionId, tenant.getId(), userId.value(), plan.vehicle().getId(),
                     plan.vehicle().getPlateNormalized(), plan.zone().getId(), plan.space().getId(),
                     at(plan.startedAt()), at(plan.expiresAt()),
                     plan.endedAt() == null ? null : at(plan.endedAt()),
                     plan.status().name(), Long.valueOf(charge), currency,
+                    charged ? "PAID" : "NO_CHARGE",
+                    charged ? null : "COURTESY",
                     at(plan.startedAt()), at(plan.startedAt()));
-            if (charge > 0L) {
+            if (charged) {
                 balance -= charge;
+                UUID transactionId = Uuid7.generate();
                 jdbcTemplate.update(INSERT_TRANSACTION_SQL,
-                        Uuid7.generate(), tenant.getId(), accountId, userId.value(),
+                        transactionId, tenant.getId(), accountId, userId.value(),
                         "SESSION_CHARGE", Long.valueOf(-charge), currency, Long.valueOf(balance),
                         sessionId, "dev-seed-" + sessionId, at(plan.startedAt()));
+                // La estadía apunta al movimiento que la pagó. Sin esto el fixture tiene el cobro y
+                // la estadía por separado y nada que los una: la pantalla de conciliación no puede
+                // ver la mitad de sus propios datos, que es justo lo que la V31_0 vino a arreglar.
+                jdbcTemplate.update(
+                        "UPDATE parking_sessions SET payment_transaction_id = ? WHERE id = ?",
+                        transactionId, sessionId);
             }
         }
         jdbcTemplate.update(UPDATE_BALANCE_SQL, Long.valueOf(balance), at(now), accountId);
