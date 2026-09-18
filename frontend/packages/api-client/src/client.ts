@@ -628,6 +628,18 @@ export class ApiClient {
       this.http.request('POST', '/api/v1/admin/exports', { body: payload, idempotent: true }),
   };
 
+  /**
+   * ⚠️ NO EXISTE EN EL SERVIDOR. Verificado contra staging (2026-09-18):
+   * `GET /api/v1/admin/tenants` contesta **404 NOT_FOUND**, y no hay controlador que sirva esa
+   * ruta. Ningún componente lo llama hoy y el mock tampoco lo sirve, así que no rompe nada — pero
+   * el tipo promete un array y quien lo invoque va a recibir un 404 sin que `tsc` diga una palabra,
+   * que es exactamente la forma del defecto que tumbó el portal platform.
+   *
+   * Crear una municipalidad es una operación de PLATAFORMA, no de una municipalidad sobre sí misma:
+   * lo real es `platformTenants.create` (`POST /api/v1/platform/tenants`). Esto se deja declarado y
+   * marcado en lugar de borrarlo porque el camino correcto ya existe y el borrado es una decisión
+   * aparte; si nadie lo reclama, retirar este bloque y `MOCK_TENANTS` es limpieza segura.
+   */
   readonly adminTenants = {
     list: (): Promise<TenantAdmin[]> => this.http.request('GET', '/api/v1/admin/tenants'),
     create: (payload: CreateTenantRequest): Promise<TenantAdmin> =>

@@ -305,17 +305,7 @@ export function PlateLookupPage(): React.JSX.Element {
             )}
           </FormField>
 
-          {/* `minmax(0, 1fr)` y no `1fr`: el mínimo implícito de `1fr` es el contenido, y el
-              placeholder del Select de zona ("Selecciona una opción") no quiebra, así que esa
-              columna se inflaba a 221px y empujaba la de bahía 19px fuera de la pantalla a 320px
-              de ancho. Con minmax el mínimo es 0 y las dos columnas ceden parejo. */}
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',
-              gap: 'var(--lx-space-3)',
-            }}
-          >
+          <div className="lx-grid-2">
             <FormField label={t('inspector.lookup.zoneLabel')} optionalLabel={t('common.optional')}>
               {({ inputId }) => (
                 <Select

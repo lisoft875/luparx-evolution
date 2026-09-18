@@ -40,7 +40,7 @@ export function PlatformShell({ children }: PlatformShellProps): React.JSX.Eleme
       <PlatformBanner>{t('platform.banner.default')}</PlatformBanner>
       <PageLayout
         header={
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div className="lx-shell-header-row">
             <Brand name={t('app.name')} tagline={t('auth.portal.platform.title')} />
             <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
               <Link to="/profile" className="lx-text-meta">

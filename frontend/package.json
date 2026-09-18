@@ -21,6 +21,7 @@
     "demo:platform": "npm run preview:demo --workspace=@luparx/platform"
   },
   "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
     "@typescript-eslint/eslint-plugin": "^8.18.0",
     "@typescript-eslint/parser": "^8.18.0",
     "eslint": "^8.57.1",
@@ -30,6 +31,7 @@
     "prettier": "^3.4.2",
     "react": "18.3.1",
     "react-dom": "18.3.1",
+    "tailwindcss": "^4.3.3",
     "typescript": "^5.6.3",
     "vite-plugin-singlefile": "^2.3.3"
   },

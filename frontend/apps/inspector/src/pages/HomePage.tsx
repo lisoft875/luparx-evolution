@@ -67,7 +67,7 @@ export function HomePage(): React.JSX.Element {
           margin: '0 auto',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--lx-space-2)' }}>
+        <div className="flex items-center gap-2">
           <Badge tone={online ? 'success' : 'warning'} icon={<IconOffline size={14} />}>
             {online ? t('inspector.home.online') : t('inspector.home.offline')}
           </Badge>

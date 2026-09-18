@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { createRoot } from 'react-dom/client';
-import '@luparx/ui/tokens.css';
+import '@luparx/ui/tailwind.css';
 import { App } from './App';
 import { assertEnvConfigured } from './env';
 

@@ -56,16 +56,8 @@ export function QueuePage(): React.JSX.Element {
             const pendingPhotos = row.photos.filter((photo) => !photo.uploaded).length;
             return (
               <Card key={row.id} tone={row.state === 'SENT' ? 'success' : 'default'}>
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 'var(--lx-space-2)',
-                    flexWrap: 'wrap',
-                    marginBottom: 'var(--lx-space-3)',
-                  }}
-                >
-                  <strong className="lx-text-card-title" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                <div className="flex flex-wrap items-center gap-2 mb-3">
+                  <strong className="lx-text-card-title tabular-nums">
                     {row.payload.plate}
                   </strong>
                   <Badge tone={STATE_TONES[row.state]}>{t(STATE_KEYS[row.state])}</Badge>
@@ -88,7 +80,7 @@ export function QueuePage(): React.JSX.Element {
                 {row.state === 'FAILED' && row.lastErrorCode ? (
                   <Alert tone="danger">{codeMessage(row.lastErrorCode, t)}</Alert>
                 ) : null}
-                <div style={{ display: 'flex', gap: 'var(--lx-space-3)', marginTop: 'var(--lx-space-3)' }}>
+                <div className="flex gap-3 mt-3">
                   {row.citationId ? (
                     <Button type="button" variant="secondary" onClick={() => navigate(`/citations/${row.citationId}`)}>
                       {t('inspector.cite.viewCitation')}
@@ -123,7 +115,7 @@ export function QueuePage(): React.JSX.Element {
         closeLabel={t('common.close')}
         description={t('inspector.queue.discardConfirm')}
       >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--lx-space-3)' }}>
+        <div className="flex flex-col gap-3">
           <Button
             type="button"
             fullWidth

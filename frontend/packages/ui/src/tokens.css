@@ -14,94 +14,124 @@
  */
 
 :root {
-  /* ------------------------------------------------------------------------
-     LuParx Neon — ported verbatim from the production site's real, shipped
-     design system (`luparx-frontend/src/shared/styles/tokens.css` +
-     `skins/luparx-neon.css`, Prompt #25 "glass layer"). These are not an
-     approximation of the client's palette: they are its actual hex/rgba
-     values, re-homed under our own `--lx-*` names so no component here had
-     to change. See that repo's CLAUDE.md for why these particular values
-     were chosen (near-black ground matching the opaque brand artwork, status
-     colors kept off-blue so they're never confused with the brand accent).
-     ------------------------------------------------------------------------ */
-  --lx-bg: #020612;
-  --lx-bg-elevated: #0b1730;
-  /* Level 1 glass — translucent; paired with --lx-blur-1 on cards/tables/nav. */
-  --lx-surface: rgba(7, 16, 38, 0.72);
-  --lx-surface-2: rgba(15, 39, 82, 0.72);
-  /* Level 2 glass — floating surfaces only (modal, popover, drawer, pill). */
-  --lx-surface-raised: rgba(10, 23, 52, 0.82);
-  /* Hover and selected grounds, and the one surface that sits BELOW its container.
-     An input lighter than the card it lives on reads as a raised block, which is the
-     opposite of "type here" — the source site's own note, and the thing we had backwards. */
-  --lx-surface-hover: rgba(15, 39, 82, 0.72);
-  --lx-surface-active: rgba(19, 51, 106, 0.82);
-  --lx-surface-input: rgba(3, 9, 24, 0.66);
-  /* What actually reads as glass: two stops across the panel, not a flat wash. A single
-     rgba fill with a border is a flat panel with a border. */
-  --lx-glass-gradient: linear-gradient(145deg, rgba(12, 29, 64, 0.76), rgba(3, 9, 25, 0.7));
-  --lx-glass-gradient-raised: linear-gradient(145deg, rgba(17, 38, 80, 0.9), rgba(4, 11, 30, 0.88));
-  --lx-border: rgba(40, 130, 255, 0.24);
-  --lx-border-strong: rgba(45, 190, 255, 0.62);
-  --lx-text: #f5f9ff;
-  --lx-text-muted: #9caeca;
-  --lx-text-subtle: #8095b4;
+  /* ==============================================================================================
+     REDISEÑO 360° (paquete LUPARX_UI_UX_360, 2026-09-18).
+     Fuente visual de verdad: 00_REFERENCIAS/REFERENCIA_MAESTRA_LUPARX_360.png
 
-  --lx-primary: #075cff;
-  --lx-primary-strong: #00a8ff;
-  --lx-primary-soft: rgba(8, 116, 255, 0.14);
-  --lx-primary-contrast: #ffffff;
+     ESTOS 34 VALORES SON LOS DE `02_DESIGN_SYSTEM/tokens.css`, VERBATIM. No se reinterpretan, no
+     se ajustan "a ojo" y no se mezclan con los anteriores: la regla 1 del paquete dice que la
+     referencia gobierna cualquier ambigüedad, y la del master prompt prohíbe cambiar la paleta por
+     gusto propio. Si un valor de acá no coincide con el archivo de la guía, es un error.
 
-  --lx-success: #35e0a1;
-  --lx-success-soft: rgba(41, 211, 145, 0.14);
-  --lx-warning: #ffc766;
-  --lx-warning-soft: rgba(255, 189, 74, 0.14);
-  --lx-danger: #ff7d8a;
-  --lx-danger-soft: rgba(255, 90, 106, 0.16);
-  --lx-info: #62ccff;
-  --lx-info-soft: rgba(67, 191, 255, 0.14);
-
-  --lx-focus-ring: #38d2ff;
-
-  /* ---- Gradient & glow (single primary CTA per screen, DESIGN_SYSTEM §2) */
-  --lx-gradient-primary: linear-gradient(135deg, var(--lx-primary) 0%, var(--lx-primary-strong) 100%);
-  /* A radiating glow (blur only, no offset) rather than a directional drop
-     shadow — this is what the source site's buttons/CTAs actually use. */
-  --lx-glow-primary: 0 0 28px rgba(8, 116, 255, 0.34);
-
-  /* ---- Glass depth model (source site's "three depth levels, nothing in
-     between" — level 0 = --lx-bg on body, level 1 = --lx-surface + blur-1,
-     level 2 = --lx-surface-raised + blur-2). Nested blur is disabled below,
-     phones halve the radius, and reduced-transparency/contrast solidify. */
-  --lx-blur-1: 18px;
-  --lx-blur-2: 26px;
-  --lx-inset-highlight: inset 0 1px 0 rgba(150, 200, 255, 0.09);
-
-  /* ---- Shape & space ---------------------------------------------------- */
-  --lx-radius-sm: 10px;
-  --lx-radius-md: 16px;
-  --lx-radius-lg: 20px;
-  --lx-radius-pill: 999px;
-
+     Lo que cambió respecto de la paleta anterior (LuParx Neon):
+     - `--lx-surface` y `--lx-surface-2` pasan de rgba() translúcido a HEX SÓLIDO. Ese es el
+       cambio de fondo del rediseño y es deliberado: la regla 2 pide "no glassmorphism excesivo".
+     - Los radios bajan un escalón (sm 10→8, md 16→12, lg 20→16) y entra `xl: 20px`.
+     - Entran `primary-2`, `primary-hover`, `shadow-focus`, `sidebar`, `content-max`, `transition`,
+       `space-8` y `space-10`.
+     ============================================================================================== */
+  --lx-bg: #020A18;
+  --lx-bg-elevated: #06152A;
+  --lx-surface: #081A32;
+  --lx-surface-2: #0B2140;
+  --lx-surface-hover: #102A4D;
+  --lx-border: rgba(117, 170, 235, 0.2);
+  --lx-border-strong: rgba(69, 151, 255, 0.42);
+  --lx-primary: #087BFF;
+  --lx-primary-2: #08B7FF;
+  --lx-primary-hover: #2490FF;
+  --lx-text: #F7FAFF;
+  --lx-text-muted: #9AAAC0;
+  --lx-text-subtle: #6F829B;
+  --lx-success: #22D39A;
+  --lx-warning: #F4C95D;
+  --lx-danger: #FF5E73;
+  --lx-info: #43A5FF;
+  --lx-radius-sm: 8px;
+  --lx-radius-md: 12px;
+  --lx-radius-lg: 16px;
+  --lx-radius-xl: 20px;
+  --lx-shadow-card: 0 12px 32px rgba(0, 0, 0, 0.24);
+  --lx-shadow-focus: 0 0 0 3px rgba(8, 123, 255, 0.25);
   --lx-space-1: 4px;
   --lx-space-2: 8px;
   --lx-space-3: 12px;
   --lx-space-4: 16px;
   --lx-space-5: 20px;
   --lx-space-6: 24px;
-  --lx-space-7: 32px;
+  --lx-space-8: 32px;
+  --lx-space-10: 40px;
+  --lx-sidebar: 232px;
+  --lx-content-max: 1600px;
+  --lx-transition: 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
 
-  --lx-card-padding: 16px;
-  --lx-card-gap: 12px;
+  /* ==============================================================================================
+     TOKENS QUE LA GUÍA NO CUBRE — derivados de los de arriba, nunca valores sueltos.
 
-  /* ---- Elevation --------------------------------------------------------- */
-  --lx-shadow-card: var(--lx-inset-highlight), 0 12px 32px rgba(0, 0, 0, 0.34);
+     El paquete define 34 tokens; este sistema usa 76 en 4.090 referencias. Los 42 restantes son la
+     escala tipográfica, los fondos `*-soft` de los estados, las alturas de control y el color por
+     municipalidad. Sin ellos quedaban 1.583 referencias sin valor: en CSS eso no da error, la
+     propiedad simplemente se ignora, así que los textos pierden tamaño, los botones su altura
+     táctil mínima y el foco desaparece — las cuatro apps rotas sin un solo mensaje.
+
+     El README del paquete contempla exactamente esto: «instalar tokens de tokens.css **o mapearlos
+     al stack actual**». Esto es lo segundo. Todo lo de abajo o bien deriva de un token de la guía
+     con `color-mix`, o bien es una medida que la guía fija en prosa (44px táctil, sidebar 232px).
+     ============================================================================================== */
+
+  /* Derivados de la paleta nueva. `color-mix` en vez de un rgba() a mano: si mañana cambia
+     `--lx-success`, su fondo suave cambia con él en vez de quedarse en el verde viejo. */
+  --lx-primary-strong: var(--lx-primary-2);
+  --lx-primary-soft: color-mix(in srgb, var(--lx-primary) 14%, transparent);
+  --lx-primary-contrast: #ffffff;
+  --lx-success-soft: color-mix(in srgb, var(--lx-success) 14%, transparent);
+  --lx-warning-soft: color-mix(in srgb, var(--lx-warning) 14%, transparent);
+  --lx-danger-soft: color-mix(in srgb, var(--lx-danger) 16%, transparent);
+  --lx-info-soft: color-mix(in srgb, var(--lx-info) 14%, transparent);
+
+  /* Superficies que la guía no nombra pero el sistema necesita. Sólidas, como las suyas. */
+  --lx-surface-raised: #0C2444;
+  --lx-surface-active: #143257;
+  --lx-surface-input: #061224;
+
+  /* El foco: la guía lo define como sombra (`--lx-shadow-focus`). `--lx-focus-ring` es el color
+     del `outline` que usan 105 lugares; se alinea con el primary nuevo. */
+  --lx-focus-ring: var(--lx-primary-2);
+
+  /* La guía pide "gradiente sutil primary→primary-2" en los botones primarios. */
+  --lx-gradient-primary: linear-gradient(135deg, var(--lx-primary) 0%, var(--lx-primary-2) 100%);
+
+  /* Regla 2: nada de glass excesivo, y COMPONENTES.md dice "nada de glow permanente; glow azul
+     sólo en foco/acción clave". El desenfoque baja y los gradientes de vidrio se retiran a
+     transparente: los 21 usos siguen compilando y dejan de pintar vidrio. */
+  --lx-blur-1: 0px;
+  --lx-blur-2: 0px;
+  --lx-glass-gradient: none;
+  --lx-glass-gradient-raised: none;
+  --lx-inset-highlight: 0 0 #0000;
+  --lx-glow-primary: var(--lx-shadow-focus);
+
+  /* `radius-pill` (85 usos) no está en la guía, pero sus badges y píldoras son redondos. */
+  --lx-radius-pill: 999px;
+
+  /* `space-7` es el nombre viejo de 32px; la guía lo llama `space-8`. Se mantiene como ALIAS para
+     no tocar 71 usos en este mismo cambio: mismo valor, dos nombres, cero riesgo. Migrarlos a
+     `space-8` es limpieza aparte. */
+  --lx-space-7: var(--lx-space-8);
+
+  --lx-card-padding: var(--lx-space-4);
+  --lx-card-gap: var(--lx-space-3);
+
   --lx-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
   --lx-shadow-md: 0 24px 64px rgba(0, 0, 0, 0.48);
 
-  /* ---- Typography --------------------------------------------------------- */
-  --lx-font-sans: system-ui, -apple-system, 'SF Pro Text', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  /* COMPONENTES.md: "Inter, system-ui, sans-serif" si el repositorio no define una familia. */
+  --lx-font-sans: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+    sans-serif;
 
+  /* Escala tipográfica: 203 + 140 + 49 + ... referencias. La guía fija los PESOS (400 cuerpo,
+     500 labels, 600 controles, 700 KPIs) y esos se respetan; los tamaños son los que ya tenía el
+     producto, que la guía no contradice. */
   --lx-text-screen-title-size: 28px;
   --lx-text-screen-title-weight: 700;
   --lx-text-greeting-size: 24px;
@@ -119,7 +149,8 @@
   --lx-text-timer-tracking: 0.02em;
   --lx-text-appbar-title-size: 22px;
 
-  /* ---- Control sizing (density-aware, see [data-density="outdoor"]) ---- */
+  /* RESPONSIVE_ACCESIBILIDAD.md: "Touch target mínimo 44x44 px". COMPONENTES.md: inputs de 48px,
+     botones 44–48, items de sidebar 44–48. */
   --lx-control-height: 44px;
   --lx-control-height-lg: 52px;
   --lx-touch-target-min: 44px;
@@ -989,6 +1020,33 @@ body {
   .lx-page-layout__content {
     padding: var(--lx-space-4);
   }
+}
+
+/* ---- Utilidades de composición (ADR 0028) ---------------------------------------------------
+   Extraídas de estilos inline duplicados. No son "utilidades sueltas": cada una existe porque el
+   mismo bloque estaba escrito a mano en dos o más archivos, y un defecto en esa forma había que
+   corregirlo tantas veces como copias hubiera. Pasó dos veces el 2026-09-18 — la cabecera sin
+   `flex-wrap` y el grid de dos columnas sin `minmax`. */
+
+/* La fila de la cabecera de consola: marca a la izquierda, acciones a la derecha. Estaba inline en
+   AdminShell y PlatformShell, y NO eran iguales: la de platform se había quedado sin el `gap`. Esa
+   clase de diferencia silenciosa es justamente lo que una clase compartida elimina. */
+.lx-shell-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--lx-space-3);
+  width: 100%;
+}
+
+/* Dos columnas que ceden parejo. `minmax(0, 1fr)` y no `1fr`: el mínimo implícito de `1fr` es el
+   contenido, así que un hijo que no quiebra —un Select con placeholder largo, un monto— infla su
+   columna y empuja la otra fuera de la pantalla. Estaba inline en PlateLookupPage,
+   NewCitationPage y HomePage. */
+.lx-grid-2 {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--lx-space-3);
 }
 
 /* ---- Side navigation (the shells' own nav, DESIGN_SYSTEM.md §3) -----------

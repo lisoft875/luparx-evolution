@@ -1,0 +1,71 @@
+/* =================================================================================================
+   Puente entre Tailwind v4 y el sistema de diseño `--lx-*` (ADR 0028).
+   =================================================================================================
+
+   ESTE ARCHIVO NO DEFINE COLORES NI ESPACIADOS: los toma de tokens.css.
+
+   Es la única forma de que los dos sistemas convivan sin desincronizarse. Si acá se escribiera
+   `--color-primary: #075cff`, el día que alguien cambie `--lx-primary` en tokens.css tendríamos dos
+   azules distintos en la misma pantalla, y nadie se daría cuenta hasta verlo en producción. Cada
+   valor de abajo es una REFERENCIA, no una copia.
+
+   Tailwind v4 no usa tailwind.config.js ni PostCSS: el tema se declara con `@theme` en el CSS y el
+   plugin de Vite hace el resto.
+
+   La escalera de espaciado de LupaRX (4/8/12/16/20/24/32) coincide con la de Tailwind, que es lo
+   que hace que esta migración sea viable: `gap-2` ES `var(--lx-space-2)`, no una aproximación.
+   Por eso los 23 `gap: 8` y los 11 `gap: 12` escritos a mano en estilos inline se convierten en
+   `gap-2` y `gap-3` sin cambiar un píxel. */
+
+@import 'tailwindcss';
+
+/* Las clases `lx-*` siguen mandando mientras dure la convivencia: se importan DESPUÉS de Tailwind
+   para que, ante un empate de especificidad, gane el sistema existente. Una pantalla a medio migrar
+   debe verse como antes, nunca a medias. */
+@import './tokens.css';
+
+@theme {
+  /* ---- Espaciado: la escalera propia, no la de Tailwind por defecto -------------------------- */
+  --spacing-1: var(--lx-space-1);
+  --spacing-2: var(--lx-space-2);
+  --spacing-3: var(--lx-space-3);
+  --spacing-4: var(--lx-space-4);
+  --spacing-5: var(--lx-space-5);
+  --spacing-6: var(--lx-space-6);
+  --spacing-7: var(--lx-space-7);
+
+  /* ---- Radios ------------------------------------------------------------------------------- */
+  --radius-sm: var(--lx-radius-sm);
+  --radius-md: var(--lx-radius-md);
+  --radius-lg: var(--lx-radius-lg);
+  --radius-pill: var(--lx-radius-pill);
+
+  /* ---- Superficies y fondo ------------------------------------------------------------------ */
+  --color-bg: var(--lx-bg);
+  --color-bg-elevated: var(--lx-bg-elevated);
+  --color-surface: var(--lx-surface);
+  --color-surface-2: var(--lx-surface-2);
+  --color-surface-raised: var(--lx-surface-raised);
+  --color-surface-hover: var(--lx-surface-hover);
+  --color-surface-active: var(--lx-surface-active);
+  --color-surface-input: var(--lx-surface-input);
+
+  /* ---- Texto -------------------------------------------------------------------------------- */
+  --color-text: var(--lx-text);
+  --color-text-muted: var(--lx-text-muted);
+  --color-text-subtle: var(--lx-text-subtle);
+
+  /* ---- Bordes ------------------------------------------------------------------------------- */
+  --color-border: var(--lx-border);
+  --color-border-strong: var(--lx-border-strong);
+
+  /* ---- Semánticos: el significado va en el nombre, nunca el color ---------------------------- */
+  --color-primary: var(--lx-primary);
+  --color-primary-strong: var(--lx-primary-strong);
+  --color-primary-soft: var(--lx-primary-soft);
+  --color-primary-contrast: var(--lx-primary-contrast);
+  --color-success: var(--lx-success);
+  --color-success-soft: var(--lx-success-soft);
+  --color-warning: var(--lx-warning);
+  --color-danger: var(--lx-danger);
+}

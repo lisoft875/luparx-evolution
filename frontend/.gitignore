@@ -14,3 +14,10 @@ dist
 # decir nada: el primero que clonara se encontraría sin app que compilar.
 *.tsbuildinfo
 .DS_Store
+
+# Capturas del arnés de regresión visual: se generan con
+# `node tests/visual/snapshot.cjs --base` y pesan ~10 MB por corrida. El SCRIPT sí se versiona;
+# las imágenes no, porque dependen del estado de los datos del ambiente que se midió.
+tests/visual/referencia/
+tests/visual/actual/
+tests/visual/diferencias/

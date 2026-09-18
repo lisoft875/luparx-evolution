@@ -181,7 +181,7 @@ export function HomePage(): React.JSX.Element {
         // absent value, which turned a failed wallet call and a citizen with no car into the same
         // permanent spinner; now a failure states itself and offers the retry, and "no vehicles
         // yet" says so and offers the way to add one.
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 'var(--lx-card-gap)' }}>
+        <div className="lx-grid-2" style={{ gap: 'var(--lx-card-gap)' }}>
           <QueryBoundary
             query={walletQuery}
             errorTitle={t('citizen.wallet.balanceLabel')}

@@ -31,7 +31,7 @@ export function MyCitationsPage(): React.JSX.Element {
 
       {query.isError ? (
         <Alert tone="danger">
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--lx-space-2)', alignItems: 'flex-start' }}>
+          <div className="flex flex-col items-start gap-2">
             <span>{apiErrorMessage(query.error, t)}</span>
             <Button type="button" variant="secondary" onClick={() => void query.refetch()}>
               {t('common.retry')}
@@ -52,8 +52,8 @@ export function MyCitationsPage(): React.JSX.Element {
                 key={citation.id}
                 icon={<IconFine size={18} />}
                 title={
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--lx-space-2)', flexWrap: 'wrap' }}>
-                    <strong style={{ fontVariantNumeric: 'tabular-nums' }}>{citation.plate}</strong>
+                  <span className="flex flex-wrap items-center gap-2">
+                    <strong className="tabular-nums">{citation.plate}</strong>
                     <Badge tone={citationStatusTone(citation.status)}>{t(citationStatusKey(citation.status))}</Badge>
                   </span>
                 }

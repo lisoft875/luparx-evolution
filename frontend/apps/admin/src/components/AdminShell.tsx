@@ -51,7 +51,7 @@ export function AdminShell({ children }: AdminShellProps): React.JSX.Element {
   return (
     <PageLayout
       header={
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 'var(--lx-space-3)' }}>
+        <div className="lx-shell-header-row">
           <div style={{ display: 'flex', gap: 'var(--lx-space-3)', alignItems: 'center', minWidth: 0 }}>
             <Brand name={t('app.name')} />
             {/* Which of the shells you are in, beside the product mark. The mark stays LuParX's;

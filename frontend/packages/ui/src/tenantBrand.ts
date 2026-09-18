@@ -10,7 +10,7 @@ import type { CSSProperties } from 'react';
  *
  * The hard part is contrast, and it is not solved by "put white text on it". The seeded palette
  * alone spans `#1d4ed8` (relative luminance ≈ 0.08) to `#b45309` (≈ 0.21), and the product's
- * default ground is near-black `#020612`: a municipality that picks a dark navy would draw a ring
+ * default ground is near-black `#020A18`: a municipality that picks a dark navy would draw a ring
  * that is invisible against the page and a monogram whose white initials sit at a fine contrast
  * while its dark twin on the light theme would do the opposite. So each colour is projected to a
  * legible one **per theme** — lightened until it reads on the dark ground, darkened until it reads
@@ -107,7 +107,8 @@ export function readableInkOn(background: Rgb): string {
 
 /**
  * Minimum luminance an accent needs to be visible against the product's near-black ground
- * (`--lx-bg: #020612`, luminance ≈ 0.004), and the maximum it may have on the light ground
+ * (`--lx-bg: #020A18`, luminance ≈ 0.005 tras el rediseño 360°; antes #020612, ≈ 0.004 — el
+ * umbral de abajo no depende del fondo, así que el cálculo no cambió), y el máximo en el claro
  * (`#f4f6fb`, ≈ 0.90). Both were picked so the resulting ring clears roughly 3:1 against its own
  * background — the WCAG 2.1 threshold for a non-text graphical object, which is exactly what a
  * selection ring is.

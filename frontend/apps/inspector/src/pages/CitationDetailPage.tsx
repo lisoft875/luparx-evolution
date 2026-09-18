@@ -33,7 +33,7 @@ export function CitationDetailPage(): React.JSX.Element {
     <InspectorShell title={t('inspector.citations.detail.title')} onBack={() => navigate('/citations')}>
       {query.isError ? (
         <Alert tone="danger">
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--lx-space-2)', alignItems: 'flex-start' }}>
+          <div className="flex flex-col items-start gap-2">
             <span>{apiErrorMessage(query.error, t)}</span>
             <Button type="button" variant="secondary" onClick={() => void query.refetch()}>
               {t('common.retry')}

@@ -401,17 +401,7 @@ export function NewCitationPage(): React.JSX.Element {
               />
             )}
           </FormField>
-          {/* minmax(0, 1fr): mismo par zona/bahía que en PlateLookupPage, con el mismo Select de
-              placeholder largo que no quiebra. Con `1fr` esa columna se infla y empuja la otra
-              fuera de la pantalla a 320px. */}
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',
-              gap: 'var(--lx-space-3)',
-              marginTop: 'var(--lx-space-3)',
-            }}
-          >
+          <div className="lx-grid-2" style={{ marginTop: 'var(--lx-space-3)' }}>
             <FormField label={t('inspector.lookup.zoneLabel')} optionalLabel={t('common.optional')}>
               {({ inputId }) => (
                 <Select
