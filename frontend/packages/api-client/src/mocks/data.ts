@@ -4,7 +4,7 @@ import type {
   AuditEvent,
   CountryCatalogEntry,
   DocumentTypeCatalogEntry,
-  FeatureFlag,
+  FeatureFlagsResponse,
   MembershipSummary,
   ParkingPolicy,
   ParkingSession,
@@ -427,14 +427,26 @@ export const mockTenantSettings = new Map<string, Record<string, string | number
   ['tenant-escazu', { 'parking.gracePeriodMinutes': 15, 'parking.currency': 'CRC', 'notifications.smsEnabled': false }],
 ]);
 
-export const MOCK_FEATURE_FLAGS: FeatureFlag[] = [
-  { key: 'parking.moduleEnabled', enabled: false, description: 'Enables the parking-meter domain end to end.' },
-  { key: 'exports.async', enabled: false, description: 'Async export job status polling (currently synchronous CSV).' },
-];
+/**
+ * La forma es la del servidor (`PlatformDtos.FeatureFlagsResponse`): un MAPA dentro de `{flags}`,
+ * no una lista de objetos, y **sin descripción por bandera** — el backend no la tiene.
+ *
+ * Este mock la tenía como `FeatureFlag[]` con `description`, y ese es exactamente el motivo por el
+ * que el defecto llegó a producción: en desarrollo la pantalla recibía la lista que esperaba, y
+ * contra el servidor de verdad recibía el sobre y tumbaba el portal entero con
+ * `t.map is not a function`. Un mock más amable que producción no ahorra trabajo: lo esconde.
+ */
+export const MOCK_FEATURE_FLAGS: FeatureFlagsResponse = {
+  flags: {
+    'parking.moduleEnabled': false,
+    'exports.async': false,
+  },
+};
 
+/** `state`, no `status`, y con `pending`: los nombres son los de `PlatformDtos.JobStatus`. */
 export const MOCK_SYSTEM_JOBS: SystemJob[] = [
-  { name: 'refresh-token-cleanup', status: 'IDLE', lastRunAt: '2026-09-07T03:00:00Z' },
-  { name: 'audit-events-archive', status: 'IDLE', lastRunAt: '2026-09-06T03:00:00Z' },
+  { name: 'refresh-token-cleanup', state: 'IDLE', lastRunAt: '2026-09-07T03:00:00Z', pending: 0 },
+  { name: 'audit-events-archive', state: 'IDLE', lastRunAt: '2026-09-06T03:00:00Z', pending: 0 },
 ];
 
 export const MOCK_SYSTEM_HEALTH: SystemHealth = {

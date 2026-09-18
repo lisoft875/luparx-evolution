@@ -20,6 +20,16 @@ export function SystemPage(): React.JSX.Element {
   const flagsQuery = useQuery({ queryKey: ['platform', 'system', 'feature-flags'], queryFn: () => apiClient.platformSystem.featureFlags() });
   const jobsQuery = useQuery({ queryKey: ['platform', 'system', 'jobs'], queryFn: () => apiClient.platformSystem.jobs() });
 
+  // El servidor manda las banderas como un mapa `{nombre: activa}`; la tabla necesita filas.
+  // Ordenadas por nombre para que la lista no baile entre recargas.
+  const flagRows = React.useMemo(
+    () =>
+      Object.entries(flagsQuery.data?.flags ?? {})
+        .map(([key, enabled]) => ({ key, enabled }))
+        .sort((a, b) => a.key.localeCompare(b.key)),
+    [flagsQuery.data],
+  );
+
   return (
     <PlatformShell>
       <h1>{t('platform.system.title')}</h1>
@@ -47,12 +57,11 @@ export function SystemPage(): React.JSX.Element {
           loading={flagsQuery.isLoading}
           loadingLabel={t('common.loading')}
           emptyLabel={t('common.empty')}
-          rows={flagsQuery.data ?? []}
+          rows={flagRows}
           rowKey={(row) => row.key}
           columns={[
             { key: 'key', header: t('platform.catalogs.adminLevels.column.labelKey'), render: (row) => row.key },
             { key: 'enabled', header: t('common.status'), render: (row) => <Badge tone={row.enabled ? 'success' : 'neutral'}>{row.enabled ? t('common.yes') : t('common.no')}</Badge> },
-            { key: 'description', header: t('common.actions'), render: (row) => row.description ?? '' },
           ]}
         />
       </Card>
@@ -65,11 +74,11 @@ export function SystemPage(): React.JSX.Element {
           loading={jobsQuery.isLoading}
           loadingLabel={t('common.loading')}
           emptyLabel={t('common.empty')}
-          rows={jobsQuery.data ?? []}
+          rows={jobsQuery.data?.jobs ?? []}
           rowKey={(row) => row.name}
           columns={[
             { key: 'name', header: t('admin.audit.column.action'), render: (row) => row.name },
-            { key: 'status', header: t('common.status'), render: (row) => row.status },
+            { key: 'state', header: t('common.status'), render: (row) => row.state },
             { key: 'lastRunAt', header: t('admin.audit.column.occurredAt'), render: (row) => (row.lastRunAt ? formatDateTime(row.lastRunAt, locale) : '—') },
           ]}
         />

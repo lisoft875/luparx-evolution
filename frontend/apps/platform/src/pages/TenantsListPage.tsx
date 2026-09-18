@@ -55,7 +55,7 @@ export function TenantsListPage(): React.JSX.Element {
         loading={query.isLoading}
         loadingLabel={t('common.loading')}
         emptyLabel={t('platform.tenants.empty')}
-        rows={query.data ?? []}
+        rows={query.data?.items ?? []}
         rowKey={(row) => row.id}
         columns={[
           {

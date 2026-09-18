@@ -970,21 +970,37 @@ export interface SystemHealthComponent {
   status: 'UP' | 'DOWN' | 'DEGRADED';
 }
 
+/**
+ * `GET /platform/system/health` contesta hoy `{"status":"UP"}` y nada más
+ * (`PlatformOperationsController.systemHealth`, deliberadamente delgado: las sondas de verdad son
+ * las del actuator). `components` es opcional porque **el servidor no lo manda**: declararlo
+ * obligatorio hacía que el componente creyera tener una lista donde no hay nada.
+ */
 export interface SystemHealth {
   status: 'UP' | 'DOWN' | 'DEGRADED';
-  components: SystemHealthComponent[];
+  components?: SystemHealthComponent[];
 }
 
-export interface FeatureFlag {
-  key: string;
-  enabled: boolean;
-  description?: string;
+/**
+ * Las banderas viajan como un **mapa** `{nombre: activa}` dentro de `{flags: …}`
+ * (`PlatformDtos.FeatureFlagsResponse`), no como una lista de objetos. El cliente las declaraba
+ * `FeatureFlag[]` y la pantalla hacía `rows.map(...)` sobre el sobre: `t.map is not a function`, y
+ * el portal entero en blanco. Tampoco existe una descripción por bandera del lado del servidor.
+ */
+export interface FeatureFlagsResponse {
+  flags: Record<string, boolean>;
 }
 
+/** El campo del servidor se llama `state`, no `status` (`PlatformDtos.JobStatus`). */
 export interface SystemJob {
   name: string;
-  status: 'IDLE' | 'RUNNING' | 'FAILED';
+  state: string;
   lastRunAt?: string;
+  pending: number;
+}
+
+export interface JobsResponse {
+  jobs: SystemJob[];
 }
 
 // ---- Citizen: vehicles (CONTRACT.md "v0.2 — Dominio de parqueo", §"Vehículos") -----------------

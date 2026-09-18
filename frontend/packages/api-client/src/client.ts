@@ -145,7 +145,7 @@ import type {
   CitationStatus,
   CreateCitationRequest,
   ExtendParkingSessionRequest,
-  FeatureFlag,
+  FeatureFlagsResponse,
   Fine,
   FineDetail,
   ForgotPasswordRequest,
@@ -188,7 +188,7 @@ import type {
   SwitchTenantResponse,
   StartParkingSessionRequest,
   SystemHealth,
-  SystemJob,
+  JobsResponse,
   TenantAdmin,
   TenantCatalogEntry,
   TenantLocale,
@@ -838,7 +838,13 @@ export class ApiClient {
   // module boundaries below (catalog writes, system) are extension points, not a closed surface.
 
   readonly platformTenants = {
-    list: (query: PlatformTenantsQuery): Promise<PlatformTenant[]> =>
+    /**
+     * `GET /platform/tenants` returns `PageResponse<TenantResponse>`, like every other list in
+     * this API. It was typed as a bare array, so `.map()` on the result threw
+     * "t.map is not a function" at runtime and white-screened the whole portal while `tsc`
+     * stayed silent.
+     */
+    list: (query: PlatformTenantsQuery & PageParams): Promise<PagedResponse<PlatformTenant>> =>
       this.http.request('GET', '/api/v1/platform/tenants', { query }),
     get: (id: string): Promise<PlatformTenant> => this.http.request('GET', `/api/v1/platform/tenants/${id}`),
     create: (payload: CreateTenantRequest): Promise<PlatformTenant> =>
@@ -1226,7 +1232,10 @@ export class ApiClient {
     // TODO(extension): scope of what's controlled here is defined later (CONTRACT.md §4) — health/flags/jobs
     // are read-only placeholders today; billing, plans and usage limits arrive as new resources, not changes to these.
     health: (): Promise<SystemHealth> => this.http.request('GET', '/api/v1/platform/system/health'),
-    featureFlags: (): Promise<FeatureFlag[]> => this.http.request('GET', '/api/v1/platform/system/feature-flags'),
-    jobs: (): Promise<SystemJob[]> => this.http.request('GET', '/api/v1/platform/system/jobs'),
+    // Los dos devuelven un SOBRE (`{flags:…}`, `{jobs:[…]}`), no la lista pelada. Declararlos como
+    // arrays hacía que la pantalla de Sistema hiciera `.map()` sobre el objeto y tumbara el portal.
+    featureFlags: (): Promise<FeatureFlagsResponse> =>
+      this.http.request('GET', '/api/v1/platform/system/feature-flags'),
+    jobs: (): Promise<JobsResponse> => this.http.request('GET', '/api/v1/platform/system/jobs'),
   };
 }

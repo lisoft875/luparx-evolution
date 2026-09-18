@@ -142,7 +142,7 @@ export function UserDetailPage(): React.JSX.Element {
                     value={grantTenantId}
                     onChange={(value) => setGrantTenantId(value)}
                     placeholder={t('common.select.placeholder')}
-                    options={(tenantsQuery.data ?? []).map((tenant) => ({ value: tenant.id, label: tenant.displayName }))}
+                    options={(tenantsQuery.data?.items ?? []).map((tenant) => ({ value: tenant.id, label: tenant.displayName }))}
                   />
                 </FormField>
                 <FormField label={t('platform.users.detail.createMembership.portalLabel')}>

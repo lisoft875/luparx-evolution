@@ -401,10 +401,13 @@ export function NewCitationPage(): React.JSX.Element {
               />
             )}
           </FormField>
+          {/* minmax(0, 1fr): mismo par zona/bahía que en PlateLookupPage, con el mismo Select de
+              placeholder largo que no quiebra. Con `1fr` esa columna se infla y empuja la otra
+              fuera de la pantalla a 320px. */}
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: '1fr 1fr',
+              gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',
               gap: 'var(--lx-space-3)',
               marginTop: 'var(--lx-space-3)',
             }}

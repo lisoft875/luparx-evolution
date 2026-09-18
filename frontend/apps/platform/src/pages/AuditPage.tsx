@@ -47,7 +47,7 @@ export function AuditPage(): React.JSX.Element {
             setTenantId(value);
           }}
           placeholder={t('platform.audit.filter.allTenants')}
-          options={(tenantsQuery.data ?? []).map((tenant) => ({ value: tenant.id, label: tenant.displayName }))}
+          options={(tenantsQuery.data?.items ?? []).map((tenant) => ({ value: tenant.id, label: tenant.displayName }))}
         />
       </div>
       <Table

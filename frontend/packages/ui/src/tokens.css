@@ -724,6 +724,10 @@ body {
 .lx-pagination {
   display: flex;
   align-items: center;
+  /* Wraps rather than overflowing: the status label plus two nowrap buttons measure ~420px,
+     which pushed the whole page 45px sideways at 375px wide on every paginated admin list
+     (auditoria, usuarios, funcionarios, reclamos, exoneraciones). */
+  flex-wrap: wrap;
   justify-content: space-between;
   gap: var(--lx-space-3);
   padding: var(--lx-space-3) 0;
@@ -732,6 +736,10 @@ body {
 }
 .lx-pagination__controls {
   display: flex;
+  flex-wrap: wrap;
+  /* Keeps the buttons together on the right once the label has taken its own line. */
+  margin-left: auto;
+  justify-content: flex-end;
   gap: var(--lx-space-2);
 }
 
@@ -943,6 +951,29 @@ body {
   max-width: 72ch;
 }
 
+/* The console header is a single desktop row: brand + portal word + municipality badge on the
+   left, profile + logout on the right. Below ~600px that row is over-subscribed, and because the
+   nav items do not shrink, the tenant badge absorbs the whole deficit: its label was measured
+   collapsed to 0px (needing 57) and painted on top of "Perfil". Letting the row wrap gives the
+   badge its width back; the portal word is what goes, since the sidebar already says where you
+   are. */
+@media (max-width: 600px) {
+  .lx-page-layout__header {
+    padding: var(--lx-space-2) var(--lx-space-4);
+  }
+  .lx-page-layout__header > * {
+    flex-wrap: wrap;
+    row-gap: var(--lx-space-2);
+  }
+  /* La palabra del portal y el descriptivo del back-office: los dos son lo que sobra en un
+     teléfono, porque la barra lateral ya dice dónde estás. Sin esto el tagline de platform
+     ("· Back-office de plataforma") empuja la fila 35px fuera de la pantalla a 320px. */
+  .lx-brand-suffix,
+  .lx-brand__tagline {
+    display: none;
+  }
+}
+
 @media (max-width: 900px) {
   .lx-page-layout__body {
     flex-direction: column;
@@ -1105,6 +1136,9 @@ body {
   display: flex;
   flex-direction: column;
   gap: var(--lx-space-2);
+  /* Without this a StatCard in a grid refuses to shrink below its widest child, so a long
+     formatted amount widens the column instead of being made to fit inside it. */
+  min-width: 0;
 }
 .lx-stat-card__label {
   font-size: var(--lx-text-meta-size);
@@ -1114,6 +1148,10 @@ body {
   font-size: var(--lx-text-amount-lg-size);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+  min-width: 0;
+  /* An amount has no spaces to break at, so without this it overruns the card's edges
+     rather than wrapping. */
+  overflow-wrap: anywhere;
 }
 .lx-stat-card__hint {
   font-size: var(--lx-text-meta-size);
@@ -1130,7 +1168,11 @@ body {
    needs a smaller value size than a full-width one so a long formatted currency
    or plate string never overflows its ~half-screen column. */
 .lx-stat-card--compact .lx-stat-card__value {
-  font-size: 1.375rem;
+  /* Fluid, not a second fixed number: measured on the citizen home at 320px, a half-screen
+     column is ~96px wide, where 1.375rem fits "₡1.000" and overflows "₡147.000" by 10px and a
+     seven-figure balance by 44px. Any fixed size only moves that threshold, so this scales
+     with the viewport and stops at 1.375rem, which is reached by ~400px. */
+  font-size: clamp(1.05rem, 5.5vw, 1.375rem);
 }
 
 .lx-list-row {

@@ -2037,7 +2037,8 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
     if (resource === 'system') {
       if (segments[4] === 'health') return json(MOCK_SYSTEM_HEALTH);
       if (segments[4] === 'feature-flags') return json(MOCK_FEATURE_FLAGS);
-      if (segments[4] === 'jobs') return json(MOCK_SYSTEM_JOBS);
+      // Envuelto, como lo manda el servidor (`JobsResponse`), no la lista pelada.
+      if (segments[4] === 'jobs') return json({ jobs: MOCK_SYSTEM_JOBS });
     }
   }
 
