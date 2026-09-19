@@ -198,18 +198,25 @@
 }
 
 /* ---- Platform back-office accent (DESIGN_SYSTEM §5) --------------------- */
+/* El rediseño 360° PROHÍBE el morado (regla 2: "No purple, neón multicolor, glassmorphism
+   excesivo ni gradientes decorativos ajenos"). Este bloque tenía #8b5cf6 y #6221ea, que son
+   exactamente eso, y por eso la plataforma seguía viéndose morada con la paleta nueva puesta.
+
+   Sigue siendo inconfundible del admin municipal, pero por INTENSIDAD dentro del mismo azul en vez
+   de por un tono ajeno: el cian del sistema como acento, un escalón más brillante. */
 :root[data-portal='platform'] {
-  --lx-primary: #8b5cf6;
-  --lx-primary-strong: #6221ea;
-  --lx-primary-soft: rgba(139, 92, 246, 0.16);
-  --lx-focus-ring: #8b5cf6;
-  --lx-glow-primary: 0 8px 24px rgba(139, 92, 246, 0.4);
+  --lx-primary: var(--lx-primary-2);
+  --lx-primary-strong: #0ea5e9;
+  --lx-primary-soft: color-mix(in srgb, var(--lx-primary-2) 16%, transparent);
+  --lx-focus-ring: var(--lx-primary-2);
+  --lx-glow-primary: var(--lx-shadow-focus);
 }
 :root[data-portal='platform'][data-theme='light'] {
-  --lx-primary: #6221ea;
-  --lx-primary-strong: #4c14b8;
-  --lx-primary-soft: rgba(98, 33, 234, 0.1);
-  --lx-focus-ring: #6221ea;
+  /* Sobre fondo claro el cian no contrasta: se baja al azul profundo de la misma familia. */
+  --lx-primary: #0369a1;
+  --lx-primary-strong: #075985;
+  --lx-primary-soft: color-mix(in srgb, #0369a1 10%, transparent);
+  --lx-focus-ring: #0369a1;
 }
 
 /* ---- Outdoor density (inspector, DESIGN_SYSTEM §5) ----------------------- */
@@ -242,9 +249,12 @@ body {
    through rather than a huge painted layer repainted on every scroll frame. */
 body {
   background:
-    radial-gradient(62rem 40rem at 8% -10%, rgba(7, 92, 255, 0.16), transparent 70%),
-    radial-gradient(52rem 36rem at 100% 8%, rgba(0, 168, 255, 0.1), transparent 70%),
-    radial-gradient(46rem 34rem at 50% 108%, rgba(123, 97, 255, 0.08), transparent 70%),
+    /* Derivados de los tokens, no hex a mano. El tercero era rgba(123, 97, 255) —morado, que la
+       regla 2 del rediseño prohíbe— y los otros dos eran el azul de la paleta anterior: el fondo
+       seguía siendo el viejo aunque los tokens hubieran cambiado. Así cambian con `--lx-primary`.
+       Y más tenues (0.16 → 0.10): la misma regla pide no decorar de más. */
+    radial-gradient(62rem 40rem at 8% -10%, color-mix(in srgb, var(--lx-primary) 10%, transparent), transparent 70%),
+    radial-gradient(52rem 36rem at 100% 8%, color-mix(in srgb, var(--lx-primary-2) 8%, transparent), transparent 70%),
     var(--lx-bg);
   background-attachment: fixed;
   color-scheme: dark;
@@ -334,7 +344,7 @@ body {
    buttons is the "gaming interface" the brand brief rules out. */
 .lx-btn--primary {
   background: var(--lx-gradient-primary);
-  border-color: rgba(65, 183, 255, 0.55);
+  border-color: var(--lx-border-strong);
   color: var(--lx-primary-contrast);
   box-shadow: none;
 }
@@ -426,7 +436,7 @@ body {
   outline: 2px solid var(--lx-focus-ring);
   outline-offset: 1px;
   border-color: var(--lx-border-strong);
-  box-shadow: 0 0 0 3px rgba(56, 210, 255, 0.18);
+  box-shadow: var(--lx-shadow-focus);
 }
 .lx-input--invalid,
 .lx-select--invalid {
@@ -777,7 +787,7 @@ body {
 .lx-modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(3, 6, 14, 0.6);
+  background: color-mix(in srgb, var(--lx-bg) 72%, transparent);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1178,11 +1188,11 @@ body {
 }
 .lx-card--tone-success {
   background: var(--lx-success-soft);
-  border-color: rgba(34, 197, 94, 0.3);
+  border-color: color-mix(in srgb, var(--lx-success) 30%, transparent);
 }
 .lx-card--tone-warning {
   background: var(--lx-warning-soft);
-  border-color: rgba(245, 165, 36, 0.3);
+  border-color: color-mix(in srgb, var(--lx-warning) 30%, transparent);
 }
 .lx-card-stack {
   display: flex;
@@ -1910,9 +1920,12 @@ button.lx-list-row {
      the login screen is part of the one continuous dark environment, not a
      separately-styled page. */
   background:
-    radial-gradient(62rem 40rem at 8% -10%, rgba(7, 92, 255, 0.16), transparent 70%),
-    radial-gradient(52rem 36rem at 100% 8%, rgba(0, 168, 255, 0.1), transparent 70%),
-    radial-gradient(46rem 34rem at 50% 108%, rgba(123, 97, 255, 0.08), transparent 70%),
+    /* Derivados de los tokens, no hex a mano. El tercero era rgba(123, 97, 255) —morado, que la
+       regla 2 del rediseño prohíbe— y los otros dos eran el azul de la paleta anterior: el fondo
+       seguía siendo el viejo aunque los tokens hubieran cambiado. Así cambian con `--lx-primary`.
+       Y más tenues (0.16 → 0.10): la misma regla pide no decorar de más. */
+    radial-gradient(62rem 40rem at 8% -10%, color-mix(in srgb, var(--lx-primary) 10%, transparent), transparent 70%),
+    radial-gradient(52rem 36rem at 100% 8%, color-mix(in srgb, var(--lx-primary-2) 8%, transparent), transparent 70%),
     var(--lx-bg);
   display: flex;
   flex-direction: column;
