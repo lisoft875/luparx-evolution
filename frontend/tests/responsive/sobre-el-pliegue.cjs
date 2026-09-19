@@ -29,6 +29,31 @@ const { chromium, devices } = require('playwright');
 
 const BASE = process.env.BASE ?? 'https://staging.luparx.com';
 const PASS = process.env.PASS ?? 'Password123!';
+
+/*
+  `Password123!` es la contraseña de los seeds del repositorio y NO es la de staging: las cuentas se
+  cambiaron a la de demostración. Se avisa antes de gastar un intento, porque el limitador cuenta
+  5 fallos por cuenta y después bloquea 15 minutos — y un bloqueo por una contraseña que ya se
+  sabía vieja es tiempo perdido dos veces.
+
+  También se atrapa el marcador de posición pegado literalmente: pasó, y cada pegada cuenta como
+  intento fallido y realimenta el bloqueo.
+*/
+if (/^<.*>$/.test(PASS)) {
+  console.error(
+    `\n  ✗ PASS llegó como marcador de posición literal (${PASS}).\n` +
+      '    Poné la contraseña de verdad entre comillas simples:\n' +
+      "      PASS='laQueSea' node tests/responsive/sobre-el-pliegue.cjs\n",
+  );
+  process.exit(2);
+}
+if (!process.env.PASS) {
+  console.warn(
+    '\n  ⚠ Sin PASS: se usará la de los seeds del repo, que en staging NO sirve desde el\n' +
+      '    2026-09-19. Si esto es staging, cortá ahora y pasá PASS=... (ver\n' +
+      '    claude/credenciales-y-arneses-de-prueba.md).\n',
+  );
+}
 const PORTAL = process.env.PORTAL ?? 'citizen';
 
 const CUENTAS = {
@@ -181,6 +206,35 @@ async function entrar(page, portal) {
   console.log(`\n${BASE}${PREFIJO[PORTAL]} · ${CUENTAS[PORTAL]}`);
   console.log('Alto "visible" = lo que queda para la página después de las barras del navegador.\n');
 
+  /*
+    UN solo login para los cinco viewports, y su estado reusado. Antes se entraba una vez por
+    viewport: cinco intentos por corrida, así que una contraseña vieja quemaba de una el crédito del
+    limitador (5 fallos = 15 min) y la segunda corrida ya no podía ni medir ni averiguar nada.
+    Además tarda cinco veces menos.
+  */
+  const ctxLogin = await browser.newContext({
+    viewport: { width: 390, height: 664 },
+    isMobile: true,
+    hasTouch: true,
+    locale: 'es-CR',
+    ignoreHTTPSErrors: true,
+  });
+  const pageLogin = await ctxLogin.newPage();
+  let sesion;
+  try {
+    await entrar(pageLogin, PORTAL);
+    sesion = await ctxLogin.storageState();
+  } catch (e) {
+    // Se ABORTA, no se sigue. Antes esto era un aviso en una línea entre cuarenta, y la corrida
+    // continuaba midiendo el login como si fuera cada una de las pantallas.
+    console.error(`\n  ✗ ${String(e.message).split('\n')[0]}\n`);
+    await ctxLogin.close();
+    await browser.close();
+    process.exit(2);
+  }
+  await ctxLogin.close();
+  console.log('  Sesión iniciada una vez y reusada en todos los tamaños.');
+
   for (const tel of TELEFONOS) {
     console.log(`\n########## ${tel.nombre}  ${tel.viewport.width}x${tel.viewport.height} (visible ${tel.visible}) ##########`);
     const ctx = await browser.newContext({
@@ -191,23 +245,36 @@ async function entrar(page, portal) {
       hasTouch: true,
       locale: 'es-CR',
       ignoreHTTPSErrors: true,
+      storageState: sesion,
     });
     const page = await ctx.newPage();
-    try {
-      await entrar(page, PORTAL);
-    } catch (e) {
-      // Se ABORTA, no se sigue. Antes esto era un aviso en una línea entre cuarenta, y la corrida
-      // continuaba midiendo el login como si fuera cada una de las pantallas.
-      console.error(`\n  ✗ ${String(e.message).split('\n')[0]}\n`);
-      await ctx.close();
-      await browser.close();
-      process.exit(2);
-    }
 
     for (const ruta of RUTAS[PORTAL]) {
       try {
         await page.goto(`${BASE}${PREFIJO[PORTAL]}${ruta}`, { waitUntil: 'domcontentloaded' });
         await page.waitForTimeout(1100);
+
+        /*
+          La sesión reusada puede caerse a mitad de corrida —token vencido, sesión revocada— y
+          entonces la ruta protegida vuelve a mostrar el login. Se comprueba en CADA ruta y no sólo
+          al entrar: sin esto, medir el login disfrazado de pantalla real es exactamente el informe
+          de cuarenta hallazgos falsos que originó todas estas redes.
+        */
+        const cayoAlLogin = await page
+          .locator('input[type="password"]')
+          .first()
+          .isVisible()
+          .catch(() => false);
+        if (cayoAlLogin) {
+          console.error(
+            `\n  ✗ ${ruta} devolvió el login: la sesión se cayó a mitad de corrida. Se aborta en vez\n` +
+              '    de medir el formulario como si fuera esta pantalla.\n',
+          );
+          await ctx.close();
+          await browser.close();
+          process.exit(2);
+        }
+
         const r = await medir(page, tel.visible);
         vistas++;
 
