@@ -64,12 +64,16 @@ export const enUS: Record<TranslationKey, string> = {
   'auth.forgotPassword.emailLabel': 'Email address',
   'auth.forgotPassword.submit': 'Send instructions',
   'auth.forgotPassword.success': 'If the email exists, you will receive instructions shortly.',
+  'auth.forgotPassword.checkInbox': 'Check your inbox and your spam folder. The link expires in 1 hour.',
+  'auth.forgotPassword.backToLogin': 'Back to sign in',
 
   'auth.resetPassword.title': 'Reset password',
   'auth.resetPassword.newPasswordLabel': 'New password',
   'auth.resetPassword.confirmPasswordLabel': 'Confirm password',
   'auth.resetPassword.submit': 'Reset password',
   'auth.resetPassword.success': 'Your password was updated successfully.',
+  'auth.resetPassword.redirecting': 'Taking you to sign in…',
+  'auth.resetPassword.goToLogin': 'Sign in now',
 
   'auth.register.title': 'Create account',
   'auth.register.submit': 'Sign up',

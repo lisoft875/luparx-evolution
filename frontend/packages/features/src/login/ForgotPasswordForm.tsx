@@ -7,7 +7,15 @@ import { useAuth } from '@luparx/auth';
 import { useTranslation } from '@luparx/i18n';
 import { Alert, Button, FormField, Input } from '@luparx/ui';
 
-export function ForgotPasswordForm(): React.JSX.Element {
+export interface ForgotPasswordFormProps {
+  /**
+   * Volver al login. Lo decide el portal, igual que en `LoginForm.onSuccess`: cada uno monta el
+   * login bajo su propio `basename`. Opcional: sin él sólo se muestra el mensaje, como antes.
+   */
+  onBackToLogin?: () => void;
+}
+
+export function ForgotPasswordForm({ onBackToLogin }: ForgotPasswordFormProps = {}): React.JSX.Element {
   const { t } = useTranslation();
   const { apiClient } = useAuth();
   const [sent, setSent] = useState(false);
@@ -30,7 +38,22 @@ export function ForgotPasswordForm(): React.JSX.Element {
   }
 
   if (sent) {
-    return <Alert tone="success">{t('auth.forgotPassword.success')}</Alert>;
+    return (
+      <div aria-live="polite">
+        <Alert tone="success">{t('auth.forgotPassword.success')}</Alert>
+        {/*
+          Decir dónde mirar y cuánto dura el enlace evita el reintento que antes mandaba otro correo
+          e invalidaba el primero. No se ofrece «reenviar»: el backend mantiene un enfriamiento de
+          2 minutos y un botón que parece funcionar sin hacer nada es peor que no tenerlo.
+        */}
+        <p className="lx-auth-card__notice">{t('auth.forgotPassword.checkInbox')}</p>
+        {onBackToLogin ? (
+          <Button type="button" variant="secondary" fullWidth onClick={onBackToLogin}>
+            {t('auth.forgotPassword.backToLogin')}
+          </Button>
+        ) : null}
+      </div>
+    );
   }
 
   return (

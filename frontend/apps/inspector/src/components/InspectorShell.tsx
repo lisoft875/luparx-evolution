@@ -105,7 +105,7 @@ export function InspectorShell({ children, title, subtitle, onBack }: InspectorS
   ];
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: 'transparent' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100dvh', background: 'transparent' }}>
       <AppBar
         start={
           !onBack ? (

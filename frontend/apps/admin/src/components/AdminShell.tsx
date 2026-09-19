@@ -84,6 +84,11 @@ export function AdminShell({ children }: AdminShellProps): React.JSX.Element {
               <NavItem to="/zones">{t('nav.zones')}</NavItem>
               <NavItem to="/spaces">{t('nav.spaces')}</NavItem>
               <NavItem to="/tariffs">{t('nav.tariffs')}</NavItem>
+              {/* El horario vive acá y no en Ajustes: dice CUÁNDO se cobra, que es la otra mitad de
+                  lo que dicen las tarifas —cuánto—. Buscarlo en Ajustes obligaba a salir de
+                  Operación a mitad de una tarea que es una sola. Lo que queda en Ajustes se toca
+                  una vez al instalar; esto se toca cada feriado. */}
+              <NavItem to="/settings/schedule">{t('admin.settings.schedule.title')}</NavItem>
               <NavItem to="/parking-policy">{t('nav.parkingPolicy')}</NavItem>
             </div>
           ) : null}
@@ -123,14 +128,20 @@ export function AdminShell({ children }: AdminShellProps): React.JSX.Element {
             {permissions.has('WALLET_TOPUP') ? <NavItem to="/billing">{t('nav.billing')}</NavItem> : null}
           </div>
 
-          {/* Municipal operation settings (CONTRACT.md v0.3) — everything a municipality tunes for
-              itself: the languages its portals speak, how a bay is numbered, and when it charges. */}
-          <div className="lx-nav-group">
-            <strong className="lx-nav-heading">{t('nav.settings')}</strong>
-            <NavItem to="/settings/locales">{t('admin.settings.locales.title')}</NavItem>
-            <NavItem to="/settings/space-format">{t('admin.settings.spaceFormat.title')}</NavItem>
-            <NavItem to="/settings/schedule">{t('admin.settings.schedule.title')}</NavItem>
-          </div>
+          {/* Municipal operation settings (CONTRACT.md v0.3) — lo que una municipalidad ajusta una
+              vez y casi no vuelve a tocar: los idiomas de sus portales y cómo se numera una bahía.
+              El horario de cobro se mudó a Operación, que es donde se usa.
+
+              Tras `TENANT_MANAGE` como el resto: `AdminSettingsController` ya exige
+              `PERM_TENANT_MANAGE` en las cuatro operaciones, así que sin ese permiso estas entradas
+              llevaban a un 403. Un menú que ofrece lo que no se puede abrir es peor que uno corto. */}
+          {permissions.has('TENANT_MANAGE') ? (
+            <div className="lx-nav-group">
+              <strong className="lx-nav-heading">{t('nav.settings')}</strong>
+              <NavItem to="/settings/locales">{t('admin.settings.locales.title')}</NavItem>
+              <NavItem to="/settings/space-format">{t('admin.settings.spaceFormat.title')}</NavItem>
+            </div>
+          ) : null}
         </div>
       }
     >

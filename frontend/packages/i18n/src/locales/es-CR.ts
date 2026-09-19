@@ -68,12 +68,16 @@ export const esCR = {
   'auth.forgotPassword.emailLabel': 'Correo electrónico',
   'auth.forgotPassword.submit': 'Enviar instrucciones',
   'auth.forgotPassword.success': 'Si el correo existe, recibirás instrucciones en breve.',
+  'auth.forgotPassword.checkInbox': 'Revisá tu bandeja de entrada y la carpeta de spam. El enlace vence en 1 hora.',
+  'auth.forgotPassword.backToLogin': 'Volver a iniciar sesión',
 
   'auth.resetPassword.title': 'Restablecer contraseña',
   'auth.resetPassword.newPasswordLabel': 'Nueva contraseña',
   'auth.resetPassword.confirmPasswordLabel': 'Confirmar contraseña',
   'auth.resetPassword.submit': 'Restablecer',
   'auth.resetPassword.success': 'Tu contraseña se actualizó correctamente.',
+  'auth.resetPassword.redirecting': 'Te llevamos a iniciar sesión…',
+  'auth.resetPassword.goToLogin': 'Iniciar sesión ahora',
 
   'auth.register.title': 'Crear cuenta',
   'auth.register.submit': 'Registrarme',

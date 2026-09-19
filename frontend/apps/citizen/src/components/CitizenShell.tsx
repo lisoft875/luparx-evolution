@@ -124,7 +124,12 @@ export function CitizenShell({
   ];
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: 'transparent' }}>
+    // `100dvh` y no `100vh`: en Safari de iPhone `vh` es la altura con la barra de herramientas
+    // RETRAÍDA, o sea más alta que lo que se ve. El shell se declaraba más alto que la pantalla, la
+    // barra de pestañas quedaba empujada fuera del área visible y había que hacer scroll para
+    // alcanzar acciones que están arriba del todo —reportado en un iPhone 14 Pro Max al buscar
+    // «agregar vehículo», que vive en la cabecera. `dvh` sigue a la barra en vez de ignorarla.
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100dvh', background: 'transparent' }}>
       {/* On a `bare` screen the heading scrolls away like ordinary content and the timer bar below
           it is what stays — so the screen is titled by its own name, not by whatever is parked
           (CONTRACT.md v0.10). It sits outside `main` only so the bar can come between the two. */}

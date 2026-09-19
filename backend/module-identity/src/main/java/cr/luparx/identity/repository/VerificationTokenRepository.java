@@ -15,6 +15,16 @@ public interface VerificationTokenRepository extends JpaRepository<VerificationT
 
     Optional<VerificationToken> findByTokenHash(String tokenHash);
 
+    /**
+     * El token vigente más reciente de ese propósito, si queda alguno sin usar ni vencer.
+     *
+     * Se usa para NO emitir uno nuevo cuando la persona vuelve a pedir el enlace a los pocos
+     * segundos: cada emisión invalida la anterior (ver {@link #consumeOutstanding}), así que diez
+     * clics dejaban diez correos en la bandeja de los cuales sólo el último servía.
+     */
+    Optional<VerificationToken> findTopByUserIdAndPurposeAndUsedAtIsNullAndExpiresAtAfterOrderByCreatedAtDesc(
+            UUID userId, VerificationPurpose purpose, Instant now);
+
     /** Invalidates any outstanding token of the same purpose before issuing a new one. */
     @Modifying
     @Query("""

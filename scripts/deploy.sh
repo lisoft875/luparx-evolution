@@ -127,6 +127,25 @@ if [[ -n "${COMPOSE_PROFILES:-}" ]]; then
   echo "Perfiles activos: $COMPOSE_PROFILES"
   if [[ "$COMPOSE_PROFILES" == *edge* ]]; then
     echo "  edge      → Caddy toma los puertos 80 y 443 y gestiona el certificado."
+    # Se comprueba ANTES de compilar y no se descubre al final. El 2026-09-19 un despliegue con
+    # `edge` activo en una instancia que ya corría Caddy del sistema compiló las dos imágenes
+    # completas (≈10 min en una instancia de 2 GB) y murió en el último paso con
+    # "failed to bind host port 0.0.0.0:80/tcp: address already in use". Las imágenes quedaron
+    # bien y el sitio siguió en pie, pero el script reportó fallo y no dijo por qué.
+    #
+    # `ss` está en iproute2 (presente en Ubuntu Server); si no está, no se bloquea el despliegue.
+    if command -v ss >/dev/null 2>&1; then
+      DUENO_80=$(ss -ltnpH '( sport = :80 )' 2>/dev/null | grep -v 'docker-proxy' | head -1)
+      if [[ -n "$DUENO_80" ]]; then
+        fail "El perfil 'edge' quiere el puerto 80, pero ya hay otro proceso escuchando ahí:
+       $DUENO_80
+
+       Esta instancia ya tiene un proxy propio (el que sirve los otros sitios). Quitá 'edge' de
+       COMPOSE_PROFILES en $ENV_FILE y dejá que ese proxy reenvíe a este contenedor —
+       docs/DEPLOYMENT.md §3 tiene el bloque de configuración. Con 'edge' fuera, el servicio web
+       publica sólo en 127.0.0.1 y el proxy de arriba lo alcanza igual."
+      fi
+    fi
   fi
   if [[ "$COMPOSE_PROFILES" == *demo-mail* ]]; then
     echo "  demo-mail → Mailpit recibe los correos en ${MAILPIT_BIND_ADDRESS:-127.0.0.1}:${MAILPIT_UI_PORT:-8035}."

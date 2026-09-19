@@ -44,7 +44,7 @@ export function HomePage(): React.JSX.Element {
   const activeMemberships = memberships.filter((m) => m.status === 'ACTIVE');
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: 'transparent' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100dvh', background: 'transparent' }}>
       <AppBar
         start={
           <>

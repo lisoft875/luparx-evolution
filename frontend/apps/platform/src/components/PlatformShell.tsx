@@ -36,7 +36,7 @@ export function PlatformShell({ children }: PlatformShellProps): React.JSX.Eleme
   const location = useLocation();
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100dvh' }}>
       <PlatformBanner>{t('platform.banner.default')}</PlatformBanner>
       <PageLayout
         header={

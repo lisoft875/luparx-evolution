@@ -36,6 +36,23 @@ public class PasswordResetService {
 
     private static final Duration TOKEN_TTL = Duration.ofHours(1);
 
+    /**
+     * Cuánto hay que esperar entre dos correos de restablecimiento para la misma cuenta.
+     *
+     * Sin esto, diez clics en «Enviar instrucciones» mandaban diez correos, y el problema no era
+     * sólo el ruido: cada emisión invalida la anterior ({@code consumeOutstanding}), así que de los
+     * diez enlaces servía únicamente el del último correo. Quien abriera el primero —lo normal—
+     * recibía «enlace inválido» sobre un correo legítimo que acababa de pedir.
+     *
+     * También le quita gracia al uso del formulario como amplificador para inundar el buzón de un
+     * tercero: el atacante no elige el ritmo, lo elige este valor.
+     *
+     * Dentro de la ventana la respuesta sigue siendo 202 y sin detalle, igual que para un correo que
+     * no existe: decir «ya te mandamos uno hace poco» confirmaría que la cuenta existe, que es justo
+     * lo que el 202 uniforme evita (SECURITY.md §2).
+     */
+    private static final Duration REENVIO_MINIMO = Duration.ofMinutes(2);
+
     private final VerificationTokenRepository tokenRepository;
     private final UserRepository userRepository;
     private final UserCredentialsRepository credentialsRepository;
@@ -67,8 +84,21 @@ public class PasswordResetService {
         if (normalizedEmail == null) {
             return Optional.empty();
         }
+        Instant now = clock.instant();
         return userRepository.findByEmail(normalizedEmail)
-                .map(user -> new Issued(user, issueToken(UserId.of(user.getId()))));
+                .flatMap(user -> {
+                    // Un token vigente y recién emitido significa que el correo anterior todavía
+                    // está en camino o sin abrir: se devuelve vacío y NO se manda otro.
+                    boolean recien = tokenRepository
+                            .findTopByUserIdAndPurposeAndUsedAtIsNullAndExpiresAtAfterOrderByCreatedAtDesc(
+                                    user.getId(), VerificationPurpose.PASSWORD_RESET, now)
+                            .filter(vigente -> vigente.getCreatedAt().isAfter(now.minus(REENVIO_MINIMO)))
+                            .isPresent();
+                    if (recien) {
+                        return Optional.<Issued>empty();
+                    }
+                    return Optional.of(new Issued(user, issueToken(UserId.of(user.getId()))));
+                });
     }
 
     /** Administrative forced reset: same token flow, plus the account must change its password. */

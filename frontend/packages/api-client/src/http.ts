@@ -113,12 +113,34 @@ export class HttpClient {
     this.defaultHeaders = options.defaultHeaders ?? {};
   }
 
+  /**
+   * Cuerpo de la respuesta, o `undefined` cuando no hay cuerpo que leer.
+   *
+   * Mirar sólo el 204 no alcanza y costó un defecto visible: `POST /auth/{portal}/password/forgot`
+   * contesta **202** con cuerpo vacío (siempre 202, registrado o no, para no filtrar qué correos
+   * existen — SECURITY.md §2). `response.json()` sobre un cuerpo vacío lanza SyntaxError, el
+   * formulario lo atrapaba en su `catch` genérico y mostraba «ocurrió un error» **después de haber
+   * enviado el correo**: la persona veía un fallo, volvía a intentar, y recibía otro correo.
+   *
+   * Se decide por `Content-Length: 0` y por la ausencia de un `Content-Type` JSON, no por una lista
+   * de códigos: así cubre 202, 205 y cualquier 200 sin cuerpo que aparezca después, sin que nadie
+   * tenga que acordarse de agregarlo acá.
+   */
+  private static async bodyOrUndefined<T>(response: Response): Promise<T> {
+    if (response.status === 204 || response.status === 205) return undefined as T;
+    if (response.headers.get('content-length') === '0') return undefined as T;
+    const tipo = response.headers.get('content-type') ?? '';
+    // Un 202 de este backend sale sin Content-Type; si algún día trae uno que no es JSON, tampoco
+    // hay nada que parsear.
+    if (tipo && !/\bjson\b/.test(tipo)) return undefined as T;
+    const texto = await response.text();
+    if (texto.trim() === '') return undefined as T;
+    return JSON.parse(texto) as T;
+  }
+
   async request<T>(method: HttpMethod, path: string, options: RequestOptions = {}): Promise<T> {
     const response = await this.execute(method, path, options, /* isRetry */ false);
-    if (response.status === 204) {
-      return undefined as T;
-    }
-    return (await response.json()) as T;
+    return HttpClient.bodyOrUndefined<T>(response);
   }
 
   /**
@@ -135,10 +157,7 @@ export class HttpClient {
     options: RequestOptions = {},
   ): Promise<{ data: T; status: number }> {
     const response = await this.execute(method, path, options, /* isRetry */ false);
-    if (response.status === 204) {
-      return { data: undefined as T, status: 204 };
-    }
-    return { data: (await response.json()) as T, status: response.status };
+    return { data: await HttpClient.bodyOrUndefined<T>(response), status: response.status };
   }
 
   /**
@@ -151,8 +170,7 @@ export class HttpClient {
    */
   async upload<T>(path: string, form: FormData, options: RequestOptions = {}): Promise<T> {
     const response = await this.execute('POST', path, { ...options, formData: form }, false);
-    if (response.status === 204) return undefined as T;
-    return (await response.json()) as T;
+    return HttpClient.bodyOrUndefined<T>(response);
   }
 
   /**

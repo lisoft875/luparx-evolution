@@ -914,7 +914,9 @@ body {
 }
 
 .lx-page-layout {
-  min-height: 100vh;
+  /* `dvh` y no `vh`: en Safari de iPhone `vh` ignora la barra de herramientas y declara la página
+     más alta que el área visible, lo que empuja fuera de pantalla lo que esté anclado abajo. */
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
   /* Transparent so the Level 0 radial-gradient ground painted on <body> shows
@@ -963,7 +965,7 @@ body {
   /* Exactly the viewport minus the sticky bar, so the sidebar's own scroll starts where
      the page's ends instead of the two fighting each other. */
   top: var(--lx-topbar-height);
-  height: calc(100vh - var(--lx-topbar-height));
+  height: calc(100dvh - var(--lx-topbar-height));
   overflow-y: auto;
 }
 .lx-page-layout__content {
@@ -1129,7 +1131,7 @@ body {
 }
 
 .lx-centered-layout {
-  min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   align-items: center;
   justify-content: center;
