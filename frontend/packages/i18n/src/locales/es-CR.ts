@@ -787,8 +787,6 @@ export const esCR = {
   'notification.type.PARKING_SESSION_EXPIRING': 'Tu estacionamiento de la placa {{plate}} vence a las {{when}}.',
   'notification.type.PARKING_SESSION_EXPIRED': 'El estacionamiento de la placa {{plate}} venció a las {{when}}.',
   'notification.type.CITATION_ISSUED': 'Te levantaron la boleta {{citationNumber}} por {{amount}}.',
-  'notification.type.CITATION_PLATE_UNCLAIMED':
-    'Hay una boleta para la placa {{plate}}, que tenés registrada. Varias personas tienen esa placa, así que revisá si el carro es tuyo.',
   'notification.type.APPEAL_RESOLVED': 'La municipalidad resolvió tu reclamo de la boleta {{citationNumber}}.',
   'notification.type.WALLET_TOPUP_CREDITED': 'Se acreditaron {{amount}} a tu billetera.',
   'notification.type.TIME_CREDITS_EXPIRING': 'Tus {{minutes}} minutos a favor vencen el {{when}}.',

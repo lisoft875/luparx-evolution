@@ -386,29 +386,64 @@ public class CitationService {
     }
 
     /**
-     * The citizen's fines in this municipality: only citations linked to a vehicle they registered.
-     * See {@code CitationRepository.findForVehicles} for why matching on the plate alone would be a
-     * data leak rather than a convenience.
+     * Las multas del ciudadano: por vínculo con un vehículo suyo, o por una placa que tiene en ficha.
+     *
+     * <p>Lo segundo es lo que hace visible una boleta cuando dos personas comparten el carro —el caso
+     * del carro familiar con padre e hijo, cada uno con la placa en su aplicación para pagar sus
+     * propios estacionamientos—. Antes la boleta se vinculaba a lo sumo a uno y el otro no la veía;
+     * con la placa registrada por dos, a ninguno.</p>
+     *
+     * <p>Las listas se pasan sin deduplicar a propósito: quien llama ya las tiene y una placa que
+     * además está vinculada aparece una sola vez por ser la misma fila.</p>
      */
     @Transactional(readOnly = true)
     public PageResponse<Citation> listForVehicles(TenantId tenantId, Collection<UUID> vehicleIds,
+                                                  Collection<String> plates,
                                                   CitationStatus status, PageRequest request) {
-        if (vehicleIds == null || vehicleIds.isEmpty()) {
+        boolean sinVehiculos = vehicleIds == null || vehicleIds.isEmpty();
+        boolean sinPlacas = plates == null || plates.isEmpty();
+        if (sinVehiculos && sinPlacas) {
             return PageResponse.empty(request);
         }
-        Page<Citation> page = citationRepository.findForVehicles(tenantId.value(), vehicleIds, status,
+        // `in ()` vacío no es SQL válido en todos los motores: se manda un elemento imposible en vez
+        // de ramificar la consulta en dos.
+        Collection<UUID> ids = sinVehiculos ? List.of(NINGUN_VEHICULO) : vehicleIds;
+        Collection<String> placas = sinPlacas ? List.of("") : plates;
+        Page<Citation> page = citationRepository.findForVehicles(tenantId.value(), ids, placas, status,
                 toPageable(request));
         return PageResponse.of(page.getContent(), request.page(), request.size(), page.getTotalElements());
     }
 
+    /** Centinela para un `in ()` que no puede quedar vacío. Ningún vehículo real lo tiene. */
+    private static final UUID NINGUN_VEHICULO = new UUID(0L, 0L);
+
     @Transactional(readOnly = true)
-    public Citation requireForVehicles(TenantId tenantId, Collection<UUID> vehicleIds, UUID citationId) {
-        if (vehicleIds == null || vehicleIds.isEmpty()) {
+    public Citation requireForVehicles(TenantId tenantId, Collection<UUID> vehicleIds,
+                                       Collection<String> plates, UUID citationId) {
+        boolean sinVehiculos = vehicleIds == null || vehicleIds.isEmpty();
+        boolean sinPlacas = plates == null || plates.isEmpty();
+        if (sinVehiculos && sinPlacas) {
             throw NotFoundException.of(ErrorCode.CITATION_NOT_FOUND, "error.enforcement.citation.notFound");
         }
-        return citationRepository.findForVehicle(tenantId.value(), citationId, vehicleIds)
+        return citationRepository
+                .findForVehicle(tenantId.value(), citationId,
+                        sinVehiculos ? List.of(NINGUN_VEHICULO) : vehicleIds,
+                        sinPlacas ? List.of("") : plates)
                 .orElseThrow(() -> NotFoundException.of(ErrorCode.CITATION_NOT_FOUND,
                         "error.enforcement.citation.notFound"));
+    }
+
+    /**
+     * ¿Esta boleta llegó por un vínculo con un vehículo del ciudadano, o sólo por coincidencia de
+     * placa?
+     *
+     * <p>Es la pregunta que hace segura la apertura por placa. Una boleta vinculada es del acto de
+     * esta persona y se entrega completa; una que sólo coincide en placa se entrega SIN fotografías,
+     * dirección ni coordenadas, porque quien registró una placa ajena no tiene por qué saber dónde
+     * estaba ese carro ni ver fotos de quien lo conducía.</p>
+     */
+    public static boolean vinculadaA(Citation citation, Collection<UUID> vehicleIds) {
+        return citation.getVehicleId() != null && vehicleIds != null && vehicleIds.contains(citation.getVehicleId());
     }
 
     /** The citation's own history — part of the act, and returned with it. */

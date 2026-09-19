@@ -20,8 +20,8 @@ import cr.luparx.enforcement.service.AppealNoticeService;
 import cr.luparx.enforcement.service.AppealService;
 import cr.luparx.app.billing.FinePaymentService;
 import cr.luparx.core.error.ErrorCode;
+import cr.luparx.core.error.NotFoundException;
 import cr.luparx.core.error.ValidationException;
-import cr.luparx.core.id.UserId;
 import cr.luparx.enforcement.service.CitationService;
 import cr.luparx.enforcement.service.EvidenceService;
 import cr.luparx.enforcement.service.InfractionTypeService;
@@ -123,10 +123,13 @@ public class CitizenFinesController {
             @RequestParam(required = false) Integer page,
             @RequestParam(required = false) Integer size) {
         TenantId tenantId = TenantContextHolder.requireTenantId();
-        List<UUID> vehicleIds = ownVehicleIds(TenantContextHolder.requireUserId());
+        UserId userId = TenantContextHolder.requireUserId();
+        List<UUID> vehicleIds = ownVehicleIds(userId);
+        List<String> plates = ownPlates(userId);
         PageRequest request = PageRequest.parse(page, size, null);
         CitationStatus filter = CitationStatus.parse(status).orElse(null);
-        PageResponse<Citation> citations = citationService.listForVehicles(tenantId, vehicleIds, filter, request);
+        PageResponse<Citation> citations =
+                citationService.listForVehicles(tenantId, vehicleIds, plates, filter, request);
         return new PageResponse<>(mapper.toFines(citations.items(), tenantId.value(), appealableByType(tenantId)),
                 citations.page(), citations.size(), citations.totalElements(), citations.totalPages());
     }
@@ -143,17 +146,31 @@ public class CitizenFinesController {
     @Operation(summary = "One of my fines, with its evidence and history")
     public EnforcementDtos.FineDetailResponse fine(@PathVariable UUID id) {
         TenantId tenantId = TenantContextHolder.requireTenantId();
-        List<UUID> vehicleIds = ownVehicleIds(TenantContextHolder.requireUserId());
-        Citation citation = citationService.requireForVehicles(tenantId, vehicleIds, id);
-        return detailOf(tenantId, citation);
+        UserId userId = TenantContextHolder.requireUserId();
+        List<UUID> vehicleIds = ownVehicleIds(userId);
+        Citation citation = citationService.requireForVehicles(tenantId, vehicleIds, ownPlates(userId), id);
+        return detailOf(tenantId, citation, CitationService.vinculadaA(citation, vehicleIds));
     }
 
     /**
      * The citation as the detail screen reads it. Extracted in v0.41 so that paying can answer with
      * exactly the same shape the screen already knows how to render, instead of a second one.
      */
-    private EnforcementDtos.FineDetailResponse detailOf(TenantId tenantId, Citation citation) {
-        List<CitationEvidence> evidence = evidenceService.list(tenantId, citation.getId());
+    private EnforcementDtos.FineDetailResponse detailOf(TenantId tenantId, Citation citation,
+                                                       boolean vinculada) {
+        /*
+          Sin vínculo con un vehículo del ciudadano, la boleta se entrega SIN fotografías.
+          Es lo que hace segura la apertura por placa (2026-09-19): la boleta se muestra a todos los
+          que tienen esa placa en ficha —el carro familiar de padre e hijo— pero quien registre una
+          placa ajena no tiene por qué ver fotos del carro ni saber dónde estaba. Lo que sí ve
+          —que existe una boleta, la infracción y el monto— es lo mismo que ve cualquiera que mire
+          el parabrisas.
+
+          Lo que pesa acá es una decisión de negocio, así que se expresa como tal y no se esconde en
+          un mapeador: la lista vacía es deliberada.
+        */
+        List<CitationEvidence> evidence =
+                vinculada ? evidenceService.list(tenantId, citation.getId()) : List.of();
         boolean appealable = Boolean.TRUE.equals(appealableByType(tenantId).get(citation.getInfractionTypeId()))
                 && citation.getStatus().isPayable();
         return new EnforcementDtos.FineDetailResponse(
@@ -179,8 +196,15 @@ public class CitizenFinesController {
     @Operation(summary = "A photograph attached to one of my fines")
     public ResponseEntity<byte[]> evidenceContent(@PathVariable UUID id, @PathVariable UUID evidenceId) {
         TenantId tenantId = TenantContextHolder.requireTenantId();
-        List<UUID> vehicleIds = ownVehicleIds(TenantContextHolder.requireUserId());
-        citationService.requireForVehicles(tenantId, vehicleIds, id);
+        UserId userId = TenantContextHolder.requireUserId();
+        List<UUID> vehicleIds = ownVehicleIds(userId);
+        Citation citation = citationService.requireForVehicles(tenantId, vehicleIds, ownPlates(userId), id);
+        // Los bytes de la fotografía exigen VÍNCULO, no coincidencia de placa. El detalle ya no
+        // lista evidencia sin vínculo, pero un identificador adivinado no debe poder saltarse eso:
+        // la puerta se cierra donde están los bytes y no sólo donde se listan.
+        if (!CitationService.vinculadaA(citation, vehicleIds)) {
+            throw NotFoundException.of(ErrorCode.CITATION_NOT_FOUND, "error.enforcement.citation.notFound");
+        }
         EvidenceStorage.Content content = evidenceService.read(tenantId, id, evidenceId);
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.noStore())
@@ -238,7 +262,7 @@ public class CitizenFinesController {
         TenantId tenantId = TenantContextHolder.requireTenantId();
         UserId userId = TenantContextHolder.requireUserId();
         String locale = localeService.resolveTag(null, tenantId);
-        CitationAppeal appeal = appealService.file(tenantId, actor(), ownVehicleIds(userId), id, request.body(),
+        CitationAppeal appeal = appealService.file(tenantId, actor(), ownVehicleIds(userId), ownPlates(userId), id, request.body(),
                 request.acceptedNoticeId(), locale);
         auditRecorder.record(AuditAction.CITATION_APPEAL_FILED, "citation-appeal", appeal.getId().toString(),
                 Map.of("citationId", id.toString(),
@@ -254,7 +278,7 @@ public class CitizenFinesController {
     public EnforcementDtos.AppealResponse appeal(@PathVariable UUID id) {
         TenantId tenantId = TenantContextHolder.requireTenantId();
         UserId userId = TenantContextHolder.requireUserId();
-        CitationAppeal appeal = appealService.requireOwn(tenantId, ownVehicleIds(userId), id);
+        CitationAppeal appeal = appealService.requireOwn(tenantId, ownVehicleIds(userId), ownPlates(userId), id);
         appealService.requireAuthor(appeal, userId);
         return toAppeal(tenantId, appeal);
     }
@@ -274,7 +298,7 @@ public class CitizenFinesController {
                                                         @RequestPart("file") MultipartFile file) {
         TenantId tenantId = TenantContextHolder.requireTenantId();
         UserId userId = TenantContextHolder.requireUserId();
-        CitationAppeal appeal = appealService.requireOpenOwn(tenantId, userId, ownVehicleIds(userId), id);
+        CitationAppeal appeal = appealService.requireOpenOwn(tenantId, userId, ownVehicleIds(userId), ownPlates(userId), id);
         CitationEvidence evidence = evidenceService.attachAppealPhoto(tenantId, actor(), appeal,
                 appealService.appealMaxImages(tenantId), bytesOf(file), file.getOriginalFilename(), null, null,
                 null);
@@ -316,15 +340,16 @@ public class CitizenFinesController {
             throw new ValidationException("method", ErrorCode.VALIDATION_FAILED,
                     "error.enforcement.citation.paymentMethodUnsupported");
         }
+        List<UUID> vehicleIds = ownVehicleIds(userId);
         FinePaymentService.Result result = finePaymentService.pay(tenantId, userId, actor(),
-                ownVehicleIds(userId), id, idempotencyKey);
+                vehicleIds, ownPlates(userId), id, idempotencyKey);
 
         auditRecorder.record(AuditAction.CITATION_PAID, "citation", id.toString(),
                 Map.of("number", result.citation().getNumber() == null ? "-" : result.citation().getNumber(),
                         "amountMinor", String.valueOf(result.charged().minorUnits()),
                         "appealWithdrawn", String.valueOf(result.withdrewAppeal())));
         return new EnforcementDtos.FinePaymentResponse(
-                detailOf(tenantId, result.citation()),
+                detailOf(tenantId, result.citation(), CitationService.vinculadaA(result.citation(), vehicleIds)),
                 mapper.toMoney(result.charged()),
                 result.withdrewAppeal(),
                 result.movement() == null ? null : result.movement().getId());
@@ -356,6 +381,22 @@ public class CitizenFinesController {
             ids.add(vehicle.getId());
         }
         return ids;
+    }
+
+    /**
+     * Las placas que este ciudadano tiene en ficha, normalizadas.
+     *
+     * <p>Con esto una boleta llega también a quien comparte el carro: el caso del carro familiar en
+     * el que padre e hijo tienen cada uno la placa en su aplicación. Antes la boleta se vinculaba a
+     * lo sumo a uno y, con la placa registrada por dos, a ninguno.</p>
+     */
+    private List<String> ownPlates(UserId userId) {
+        List<Vehicle> vehicles = vehicleService.listOwn(userId);
+        List<String> plates = new ArrayList<>(vehicles.size());
+        for (Vehicle vehicle : vehicles) {
+            plates.add(vehicle.getPlateNormalized());
+        }
+        return plates;
     }
 
     /**

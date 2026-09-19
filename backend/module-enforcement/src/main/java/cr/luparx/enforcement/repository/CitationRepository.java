@@ -135,36 +135,55 @@ public interface CitationRepository extends JpaRepository<Citation, UUID> {
                           Pageable pageable);
 
     /**
-     * The citizen's fines: only citations linked to a vehicle they registered, never a match on the
-     * plate alone. Plates are unique per citizen and not globally, so "every citation for a plate I
-     * typed into my garage" would show one person another person's fines — a leak that anybody could
-     * trigger by registering a plate they do not own (CONTRACT.md v0.6, "Multas del ciudadano").
-     * Drafts are excluded: what is not yet an administrative act is not yet anybody's debt.
+     * Las multas del ciudadano: las vinculadas a un vehículo suyo <b>o</b> las que llevan una placa
+     * que tiene en ficha.
+     *
+     * <p>Hasta el 2026-09-19 era sólo lo primero, con este argumento: las placas son únicas por
+     * ciudadano y no globalmente, así que «toda boleta con una placa que escribí en mi garaje»
+     * dejaría ver las multas de otro a quien registre una placa ajena. El riesgo es real y sigue
+     * ahí; lo que cambió es entender que el caso normal <em>también</em> es real: un carro familiar
+     * que padre e hijo tienen cada uno en su aplicación para pagar sus propios estacionamientos.
+     * Negarles la boleta a los dos —que es lo que pasaba— no protegía a nadie: la boleta existe, el
+     * plazo de descuento corre, y ninguno se enteraba.</p>
+     *
+     * <p>La fuga se ataja en <b>qué se muestra</b> y no en <b>si se muestra</b>: una boleta que
+     * llegó por placa y no por vínculo se entrega sin fotografías, sin dirección y sin coordenadas
+     * (ver {@code EnforcementMapper.toFines} y {@code CitizenFinesController.detailOf}). Quien
+     * registre una placa ajena verá que existe una boleta y su monto —lo mismo que ve cualquiera
+     * que mire el parabrisas— pero no dónde estaba el carro ni las fotos de quien lo conducía.</p>
+     *
+     * <p>Pagar y apelar siguen siendo del ACTO y no de la persona: el estado de la boleta es uno
+     * solo, así que el segundo pago choca con {@code CITATION_NOT_PAYABLE} y la segunda apelación
+     * con {@code APPEAL_ALREADY_FILED}. Si uno paga, queda pagada para los dos.</p>
+     *
+     * <p>Los borradores se excluyen: lo que todavía no es acto administrativo no es deuda de nadie.</p>
      */
     @Query("""
             select c from Citation c
             where c.tenantId = :tenantId
-              and c.vehicleId in :vehicleIds
+              and (c.vehicleId in :vehicleIds or c.plateNormalized in :plates)
               and c.status <> cr.luparx.enforcement.model.CitationStatus.DRAFT
               and (:status is null or c.status = :status)
             order by c.issuedAt desc
             """)
     Page<Citation> findForVehicles(@Param("tenantId") UUID tenantId,
                                    @Param("vehicleIds") Collection<UUID> vehicleIds,
+                                   @Param("plates") Collection<String> plates,
                                    @Param("status") CitationStatus status,
                                    Pageable pageable);
 
-    /** One fine of one citizen, narrowed by their own vehicles for the same reason as the listing. */
+    /** Una multa del ciudadano, con el mismo criterio que el listado: vínculo o placa en ficha. */
     @Query("""
             select c from Citation c
             where c.tenantId = :tenantId
               and c.id = :id
-              and c.vehicleId in :vehicleIds
+              and (c.vehicleId in :vehicleIds or c.plateNormalized in :plates)
               and c.status <> cr.luparx.enforcement.model.CitationStatus.DRAFT
             """)
     Optional<Citation> findForVehicle(@Param("tenantId") UUID tenantId,
                                       @Param("id") UUID id,
-                                      @Param("vehicleIds") Collection<UUID> vehicleIds);
+                                      @Param("vehicleIds") Collection<UUID> vehicleIds,
+                                      @Param("plates") Collection<String> plates);
 
     /** Overdue citations, for the job that moves them to EXPIRED in bulk. Bounded by the page. */
     @Query("""

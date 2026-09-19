@@ -72,8 +72,15 @@ public class FinePaymentService {
      */
     @Transactional
     public Result pay(TenantId tenantId, UserId payer, EnforcementActor actor,
-                      Collection<UUID> ownVehicleIds, UUID citationId, String idempotencyKey) {
-        Citation citation = citationService.requireForVehicles(tenantId, ownVehicleIds, citationId);
+                      Collection<UUID> ownVehicleIds, Collection<String> ownPlates,
+                      UUID citationId, String idempotencyKey) {
+        /*
+          Vínculo O placa en ficha, igual que el listado: quien comparte el carro tiene que poder
+          pagar la boleta que ve —si no, ver sin poder pagar sería peor que no ver—. Y no hay riesgo
+          en abrirlo: pagar una boleta ajena es regalarle plata a su dueño, no quitársela, y el
+          estado del acto es uno solo, así que el segundo pago choca abajo con CITATION_NOT_PAYABLE.
+        */
+        Citation citation = citationService.requireForVehicles(tenantId, ownVehicleIds, ownPlates, citationId);
 
         // A citation raised in the municipality's other system is collected there. Checked first, and
         // before the status: a mirrored row's status is a copy of what that system last said, so

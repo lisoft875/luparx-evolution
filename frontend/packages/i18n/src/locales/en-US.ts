@@ -768,8 +768,6 @@ export const enUS: Record<TranslationKey, string> = {
   'notification.type.PARKING_SESSION_EXPIRING': 'Your parking for plate {{plate}} runs out at {{when}}.',
   'notification.type.PARKING_SESSION_EXPIRED': 'The parking for plate {{plate}} ran out at {{when}}.',
   'notification.type.CITATION_ISSUED': 'Citation {{citationNumber}} was issued against you, for {{amount}}.',
-  'notification.type.CITATION_PLATE_UNCLAIMED':
-    'There is a citation for plate {{plate}}, which you have registered. Several people have that plate, so check whether the car is yours.',
   'notification.type.APPEAL_RESOLVED': 'The municipality has resolved your defence against citation {{citationNumber}}.',
   'notification.type.WALLET_TOPUP_CREDITED': '{{amount}} was credited to your wallet.',
   'notification.type.TIME_CREDITS_EXPIRING': 'Your {{minutes}} saved minutes lapse on {{when}}.',

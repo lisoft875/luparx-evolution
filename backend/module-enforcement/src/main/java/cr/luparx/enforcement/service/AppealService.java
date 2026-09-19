@@ -96,8 +96,9 @@ public class AppealService {
      */
     @Transactional
     public CitationAppeal file(TenantId tenantId, EnforcementActor actor, Collection<UUID> ownVehicleIds,
+                               Collection<String> ownPlates,
                                UUID citationId, String body, UUID acceptedNoticeId, String locale) {
-        Citation citation = citationService.requireForVehicles(tenantId, ownVehicleIds, citationId);
+        Citation citation = citationService.requireForVehicles(tenantId, ownVehicleIds, ownPlates, citationId);
         // Before anything else, including before reading the catalogue: a mirrored citation may have
         // no infraction type of ours at all, so asking whether "the type allows an appeal" would fail
         // on a lookup instead of answering the question the citizen asked (CONTRACT.md v0.34). The
@@ -158,8 +159,9 @@ public class AppealService {
 
     /** The citizen's own defence, reachable only through a citation that is already theirs. */
     @Transactional(readOnly = true)
-    public CitationAppeal requireOwn(TenantId tenantId, Collection<UUID> ownVehicleIds, UUID citationId) {
-        Citation citation = citationService.requireForVehicles(tenantId, ownVehicleIds, citationId);
+    public CitationAppeal requireOwn(TenantId tenantId, Collection<UUID> ownVehicleIds,
+                                     Collection<String> ownPlates, UUID citationId) {
+        Citation citation = citationService.requireForVehicles(tenantId, ownVehicleIds, ownPlates, citationId);
         return appealRepository.findByTenantIdAndCitationId(tenantId.value(), citation.getId())
                 .orElseThrow(() -> NotFoundException.of(ErrorCode.APPEAL_NOT_FOUND,
                         "error.enforcement.appeal.notFound"));
@@ -274,8 +276,11 @@ public class AppealService {
     /** Guard used before accepting an image: the defence must be the caller's and still open. */
     @Transactional(readOnly = true)
     public CitationAppeal requireOpenOwn(TenantId tenantId, UserId userId, Collection<UUID> ownVehicleIds,
-                                         UUID citationId) {
-        CitationAppeal appeal = requireOwn(tenantId, ownVehicleIds, citationId);
+                                         Collection<String> ownPlates, UUID citationId) {
+        // Alcanzar la apelación exige vínculo o placa; MODIFICARLA sigue exigiendo haberla
+        // presentado (la comprobación de abajo). Con un carro compartido cualquiera de los dos
+        // puede apelar, pero el descargo es de quien lo escribió.
+        CitationAppeal appeal = requireOwn(tenantId, ownVehicleIds, ownPlates, citationId);
         if (!appeal.getUserId().equals(userId.value())) {
             // Same answer as "does not exist": confirming it would tell one citizen that another
             // filed a defence on a citation they can see.
