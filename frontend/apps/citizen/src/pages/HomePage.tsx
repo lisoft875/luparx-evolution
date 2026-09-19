@@ -9,6 +9,7 @@ import {
   HeroCard,
   IconCar,
   IconCheck,
+  IconFine,
   IconPark,
   IconPlus,
   ListRow,
@@ -23,11 +24,13 @@ import { QueryBoundary } from '../components/QueryBoundary';
 import { ExtendSessionSheet } from '../components/ExtendSessionSheet';
 import { FinishSessionConfirm } from '../components/FinishSessionConfirm';
 import { MOVEMENT_ICON, MOVEMENT_ICON_TONE, MOVEMENT_TITLE_KEY } from '../lib/movementPresentation';
+import { resumenPorPagar } from '../lib/fineStatus';
 import { useAuth } from '@luparx/auth';
 import {
   useActiveParkingSessions,
   useParkingPolicy,
   useTenantTimeZone,
+  useFines,
   useVehicles,
   useWallet,
 } from '../lib/queries';
@@ -133,6 +136,9 @@ export function HomePage(): React.JSX.Element {
   const { data: policy } = useParkingPolicy();
   const walletQuery = useWallet();
   const vehiclesQuery = useVehicles();
+  // La primera página alcanza: la tarjeta dice «tenés N por pagar», y quien tenga más de una
+  // página de multas impagas necesita la pantalla completa, no un contador más preciso.
+  const finesQuery = useFines(0, 20);
   const { me } = useAuth();
   const timeZone = useTenantTimeZone();
 
@@ -250,18 +256,62 @@ export function HomePage(): React.JSX.Element {
         </div>
       )}
 
-      <Card tone="success">
-        <ListRow
-          icon={<IconCheck size={18} />}
-          iconTone="success"
-          iconShape="circle"
-          title={t('citizen.home.finesCard.label')}
-          meta={
-            <span style={{ color: 'var(--lx-success)', fontWeight: 700 }}>{t('citizen.home.finesCard.none')}</span>
-          }
-          onClick={() => navigate('/fines')}
-        />
-      </Card>
+      {/*
+        Esta tarjeta decía «Ninguna», en verde y con un tic, SIN consultar nada: estaba escrita a
+        mano. Alguien con una boleta impaga veía «al día» en la primera pantalla y sólo se enteraba
+        entrando a Más → Multas (reportado el 2026-09-19).
+
+        Se cuenta lo que se debe HOY —`resumenPorPagar`, que deja fuera las apeladas— y no lo que
+        está «abierto»: una multa bajo apelación no debe nada mientras la municipalidad no resuelva.
+        El criterio es el mismo módulo que usa la pantalla de Multas, para que las dos no puedan
+        volver a contestar distinto.
+
+        Mientras carga NO se afirma nada. Decir «Ninguna» y corregirlo medio segundo después es
+        exactamente el error que esto viene a arreglar, en pequeño.
+      */}
+      {(() => {
+        const deuda = finesQuery.data ? resumenPorPagar(finesQuery.data.items) : null;
+        const cargando = finesQuery.isPending;
+        const hayDeuda = !!deuda && deuda.cantidad > 0;
+        return (
+          <Card tone={hayDeuda ? 'warning' : 'success'}>
+            <ListRow
+              icon={hayDeuda ? <IconFine size={18} /> : <IconCheck size={18} />}
+              iconTone={hayDeuda ? 'warning' : 'success'}
+              iconShape="circle"
+              title={t('citizen.home.finesCard.label')}
+              meta={
+                <span
+                  style={{
+                    color: hayDeuda ? 'var(--lx-warning)' : 'var(--lx-success)',
+                    fontWeight: 700,
+                  }}
+                >
+                  {cargando
+                    ? t('citizen.home.finesCard.loading')
+                    : hayDeuda
+                      ? deuda.cantidad === 1
+                        ? t('citizen.home.finesCard.one')
+                        : t('citizen.home.finesCard.many', { count: String(deuda.cantidad) })
+                      : t('citizen.home.finesCard.none')}
+                </span>
+              }
+              // `value` y no una segunda línea: va alineado a la derecha, que es donde esta
+              // lista pone siempre los montos (DESIGN_SYSTEM.md §3).
+              value={
+                hayDeuda && deuda.currencyCode ? (
+                  <AmountText
+                    amountMinor={deuda.totalMinor}
+                    currencyCode={deuda.currencyCode}
+                    locale={locale}
+                  />
+                ) : undefined
+              }
+              onClick={() => navigate('/fines')}
+            />
+          </Card>
+        );
+      })()}
 
       <div>
         <SectionHeader

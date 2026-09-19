@@ -133,4 +133,33 @@ public interface ParkingStatusPort {
      */
     record RegisteredVehicle(UUID vehicleId, UUID ownerUserId, String plateNormalized) {
     }
+
+    /**
+     * Cada vehículo registrado con esta placa, el más antiguo primero.
+     *
+     * <p>Distinto de {@link #findUniqueVehicleByPlate}, que devuelve vacío en cuanto hay más de uno:
+     * acá se devuelven TODOS precisamente para los casos en que hay varios. Quien llama decide qué
+     * hacer con el empate; este puerto no elige dueño.</p>
+     *
+     * <p>Existe porque negarse a elegir dejaba la boleta sin vincular Y sin notificar a nadie. Para
+     * un carro que nunca usó la aplicación eso es correcto —no hay a quién avisarle—, pero cuando
+     * dos personas registraron la placa (el dueño anterior que no la quitó tras vender, o alguien
+     * que la escribió mal) el resultado era que la boleta desaparecía para todos, incluido el dueño
+     * verdadero. Reportado el 2026-09-19.</p>
+     */
+    List<RegisteredVehicle> findVehiclesByPlate(String plateNormalized);
+
+    /**
+     * El vehículo registrado que tenía una estadía corriendo en esta placa en ese instante.
+     *
+     * <p>El desempate que el resto de los datos no puede dar: {@code is_owner} es una declaración
+     * del ciudadano y viene en {@code true} por omisión, así que el dueño anterior que no borró el
+     * carro también afirma ser el dueño. Haber pagado una estadía en esa placa, en cambio, es un
+     * hecho: es quien estaba usando el carro de verdad.</p>
+     *
+     * <p>Vacío cuando nadie tenía estadía —lo normal en una boleta a un carro que no pagó— o cuando
+     * la estadía la inició alguien que no tiene el vehículo en ficha (la escribió como invitado).
+     * En ese caso el empate sigue sin resolverse y quien llama debe tratarlo como tal.</p>
+     */
+    Optional<RegisteredVehicle> findVehicleWithStayAt(TenantId tenantId, String plateNormalized, Instant moment);
 }

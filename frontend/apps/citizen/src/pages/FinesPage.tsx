@@ -7,6 +7,7 @@ import { AmountText, Badge, Card, ChipGroup, EmptyState, IconCheck, IconFine, Li
 import { CitizenShell } from '../components/CitizenShell';
 import { QueryBoundary } from '../components/QueryBoundary';
 import { useFines } from '../lib/queries';
+import { estaAbierta } from '../lib/fineStatus';
 
 type FinesTab = 'pending' | 'history';
 
@@ -15,18 +16,14 @@ const PAGE_SIZE = 20;
 /**
  * The citizen's fines, as the server actually holds them.
  *
- * The two tabs split on **whether the matter is still open for this person** — the server's payable
- * set (`ISSUED`, `UPHELD`, `EXPIRED`) plus `APPEALED`. The addition is not a widening of "owed": a
- * fine under appeal owes nothing today. It is there because "Historial" is where a person stops
- * looking, and a defence waiting for an answer is the one thing on this screen they will come back
- * to check (CONTRACT.md v0.17). An annulled fine, which needs nothing from anybody, stays in
- * history where it belongs.
+ * Qué cuenta como «abierta» vive en `../lib/fineStatus`, junto al criterio de «por pagar» que usa
+ * la tarjeta del Inicio. Estaban separados y el Inicio ni siquiera consultaba: afirmaba «Ninguna»
+ * a mano. Dos pantallas que contestan la misma pregunta comparten el código que la contesta.
  *
- * The filtering is done on the page the server returned rather than by asking for two filtered
- * pages: `GET /citizen/fines` takes one `status`, not a set, and paging two lists that must agree
- * on a total is a worse problem than a short client-side partition of twenty rows.
+ * El filtrado se hace sobre la página que devolvió el servidor y no pidiendo dos páginas filtradas:
+ * `GET /citizen/fines` recibe un `status`, no un conjunto, y paginar dos listas que deben coincidir
+ * en un total es peor problema que partir veinte filas del lado del cliente.
  */
-const OPEN_STATUSES = new Set(['ISSUED', 'UPHELD', 'EXPIRED', 'APPEALED']);
 
 export function FinesPage(): React.JSX.Element {
   const { t, tPlural, locale } = useTranslation();
@@ -40,7 +37,7 @@ export function FinesPage(): React.JSX.Element {
   const rows = useMemo(() => {
     const items = query.data?.items ?? [];
     return items.filter((fine) =>
-      tab === 'pending' ? OPEN_STATUSES.has(fine.status) : !OPEN_STATUSES.has(fine.status),
+      tab === 'pending' ? estaAbierta(fine) : !estaAbierta(fine),
     );
   }, [query.data, tab]);
 

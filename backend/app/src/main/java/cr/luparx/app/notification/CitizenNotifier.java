@@ -12,7 +12,10 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -52,14 +55,18 @@ public class CitizenNotifier {
     }
 
     /**
-     * A citation was issued against a plate somebody registered.
+     * Se emitió una boleta contra una placa que alguien registró.
      *
-     * <p>The recipient is resolved through {@link ParkingStatusPort#findUniqueVehicleByPlate}, which
-     * answers only when <b>exactly one</b> person has that plate on the platform. That restraint is
-     * the point and it is inherited rather than invented here: plates are unique per citizen and not
-     * globally (CONTRACT.md v0.2, rule 2), so telling the wrong person they have been fined is worse
-     * than telling nobody — they would go looking for a citation that is not theirs, and the person
-     * who was actually fined would learn nothing either way.</p>
+     * <p>Con una sola persona dueña de esa placa —o con el empate ya resuelto al emitir, porque
+     * tenía una estadía corriendo— se le dice «te multaron» y se le dan los datos: es su boleta.</p>
+     *
+     * <p>Cuando varias personas tienen la placa en ficha y ninguna estaba parqueada, la plataforma
+     * no sabe de quién es el carro. Antes no se mandaba nada, con el argumento de que decirle a la
+     * persona equivocada es peor que no decirle a nadie. El argumento vale para una notificación que
+     * AFIRMA propiedad, pero dejaba al dueño verdadero sin enterarse de una boleta a su nombre
+     * (reportado el 2026-09-19: «vendí el carro y el dueño anterior no lo quitó»). Así que a todos
+     * se les manda {@link NotificationType#CITATION_PLATE_UNCLAIMED}, que pregunta en vez de
+     * afirmar y NO lleva monto, infracción, lugar ni evidencia.</p>
      */
     public void citationIssued(Citation citation) {
         record(citation.getPlateNormalized(), () -> {
@@ -114,12 +121,34 @@ public class CitizenNotifier {
         try {
             Optional<ParkingStatusPort.RegisteredVehicle> owner =
                     parkingStatus.findUniqueVehicleByPlate(plateNormalized);
-            if (owner.isEmpty()) {
-                // Ordinary and frequent: most citations are written against cars that never used the
-                // app. There is nobody to tell, and that is not a failure of anything.
+            if (owner.isPresent()) {
+                notifications.record(tenantId, UserId.of(owner.get().ownerUserId()), type, subjectId, params.get());
                 return;
             }
-            notifications.record(tenantId, UserId.of(owner.get().ownerUserId()), type, subjectId, params.get());
+
+            List<ParkingStatusPort.RegisteredVehicle> registered =
+                    parkingStatus.findVehiclesByPlate(plateNormalized);
+            if (registered.isEmpty()) {
+                // Lo corriente y lo más frecuente: la mayoría de las boletas se escriben contra
+                // carros que nunca usaron la aplicación. No hay a quién avisarle, y eso no es un
+                // fallo de nada.
+                return;
+            }
+
+            // Empate. Se avisa a todos, pero con el tipo que pregunta en vez de afirmar y sin los
+            // datos del hecho. Un `Set` porque la misma persona puede tener la placa en dos fichas
+            // (la registró dos veces) y no debe recibir dos avisos iguales.
+            Map<String, Object> soloPlaca = new HashMap<>();
+            Object placa = params.get().get("plate");
+            soloPlaca.put("plate", placa != null ? placa : plateNormalized);
+            Set<UUID> avisados = new HashSet<>();
+            for (ParkingStatusPort.RegisteredVehicle candidato : registered) {
+                if (!avisados.add(candidato.ownerUserId())) {
+                    continue;
+                }
+                notifications.record(tenantId, UserId.of(candidato.ownerUserId()),
+                        NotificationType.CITATION_PLATE_UNCLAIMED, subjectId, new HashMap<>(soloPlaca));
+            }
         } catch (RuntimeException failure) {
             LOGGER.warn("Could not record a {} notification for subject {}.", type, subjectId, failure);
         }

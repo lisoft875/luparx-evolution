@@ -192,6 +192,39 @@ public class ParkingStatusAdapter implements ParkingStatusPort {
                 vehicle.getPlateNormalized()));
     }
 
+    /** Todos los vehículos con esta placa, el más antiguo primero. Ver el puerto. */
+    @Override
+    @Transactional(readOnly = true)
+    public List<RegisteredVehicle> findVehiclesByPlate(String plateNormalized) {
+        return vehicleRepository.findByPlateNormalizedOrderByCreatedAtAsc(plateNormalized).stream()
+                .map(v -> new RegisteredVehicle(v.getId(), v.getUserId(), v.getPlateNormalized()))
+                .toList();
+    }
+
+    /**
+     * Quién tenía una estadía corriendo en esta placa en ese instante, si fue un vehículo en ficha.
+     *
+     * <p>Se toma la que empezó más tarde cuando hay varias: entre dos estadías que se solapan, la
+     * que arrancó después es la que describe la situación en ese momento. Y se comprueba que el
+     * vehículo siga existiendo antes de devolverlo — la estadía guarda el id, pero el ciudadano pudo
+     * haber borrado el carro después.</p>
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<RegisteredVehicle> findVehicleWithStayAt(TenantId tenantId, String plateNormalized,
+                                                             Instant moment) {
+        for (ParkingSession stay : sessionRepository.findRegisteredStaysCovering(
+                tenantId.value(), plateNormalized, moment)) {
+            Optional<Vehicle> vehicle = vehicleRepository.findById(stay.getVehicleId());
+            if (vehicle.isPresent()) {
+                Vehicle found = vehicle.get();
+                return Optional.of(new RegisteredVehicle(found.getId(), found.getUserId(),
+                        found.getPlateNormalized()));
+            }
+        }
+        return Optional.empty();
+    }
+
     private Bay toBay(ParkingSpace space) {
         ParkingZone zone = zoneRepository.findByTenantIdAndId(space.getTenantId(), space.getZoneId()).orElse(null);
         return new Bay(space.getId(), space.getCode(), space.getZoneId(),

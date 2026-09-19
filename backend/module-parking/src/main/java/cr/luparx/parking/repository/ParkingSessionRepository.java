@@ -96,6 +96,30 @@ public interface ParkingSessionRepository extends JpaRepository<ParkingSession, 
                                              @Param("since") Instant since);
 
     /**
+     * Estadías de un VEHÍCULO REGISTRADO que cubrían este instante, la que empezó más tarde primero.
+     *
+     * <p>Sirve para desempatar a quién pertenece una boleta cuando dos personas registraron la misma
+     * placa: haber pagado una estadía en ese momento es un hecho, mientras que {@code is_owner} es
+     * una declaración que viene en {@code true} por omisión y que el dueño anterior de un carro
+     * vendido también sigue afirmando.</p>
+     *
+     * <p>{@code vehicleId is not null} es la condición que hace esto útil: una estadía escrita como
+     * invitado no dice de quién es el carro, sólo que alguien lo tecleó. Se exige además que el
+     * instante caiga dentro de la estadía —no se acepta una de la semana pasada— y no se filtra por
+     * estado, porque una estadía que ya terminó sigue probando quién estaba parqueado entonces.</p>
+     */
+    @Query("""
+            select s from ParkingSession s
+            where s.tenantId = :tenantId and s.plateSnapshot = :plate
+              and s.vehicleId is not null
+              and s.startedAt <= :moment and s.expiresAt >= :moment
+            order by s.startedAt desc
+            """)
+    List<ParkingSession> findRegisteredStaysCovering(@Param("tenantId") UUID tenantId,
+                                                     @Param("plate") String plate,
+                                                     @Param("moment") Instant moment);
+
+    /**
      * Stays whose clock lands inside a window, across every municipality (v0.38).
      *
      * <p>Deliberately not tenant-scoped: this answers a scheduled job that has no municipality of its

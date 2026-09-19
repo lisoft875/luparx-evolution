@@ -155,11 +155,24 @@ public class CitationService {
             throw ForbiddenException.of(ErrorCode.ZONE_NOT_ASSIGNED, "error.enforcement.zone.notAssigned");
         }
 
-        // The vehicle in the register, only when the plate resolves to exactly one. A reference, and
-        // never a copy of the owner's data: the citation is against the vehicle, not against a person.
-        UUID vehicleId = parkingStatus.findUniqueVehicleByPlate(plateNormalized)
-                .map(ParkingStatusPort.RegisteredVehicle::vehicleId)
-                .orElse(null);
+        // El vehículo en el registro, como referencia y nunca como copia de los datos del dueño: la
+        // boleta es contra el vehículo, no contra una persona.
+        //
+        // Con una sola placa registrada la respuesta es obvia. Con VARIAS hay que desempatar, y
+        // hasta el 2026-09-19 no se desempataba: la boleta quedaba sin vincular y sin notificar a
+        // nadie. Para un carro que nunca usó la aplicación eso es correcto —no hay a quién
+        // avisarle—, pero cuando dos personas tienen la placa en ficha (el dueño anterior que no la
+        // quitó tras vender el carro, o alguien que la escribió por error) la boleta desaparecía
+        // para todos, incluido el dueño verdadero.
+        //
+        // El desempate es haber tenido una estadía corriendo en esa placa en ese momento: es un
+        // hecho, a diferencia de `is_owner`, que es una declaración del ciudadano y viene en `true`
+        // por omisión, así que el dueño anterior también afirma ser el dueño y no desempata nada.
+        //
+        // Si nadie tenía estadía, sigue sin vincularse a una persona —elegir al azar sería peor—,
+        // pero `CitizenNotifier` ahora avisa a todos los que tienen la placa en ficha, que es cómo
+        // el dueño verdadero se entera de que existe.
+        UUID vehicleId = resolveVehicleForPlate(tenantId, plateNormalized, occurredAt);
 
         // What the platform knew about the plate at that moment, kept as part of the act: it is the
         // evidence that the officer checked before writing, and the first thing an appeal asks about.
@@ -489,6 +502,25 @@ public class CitationService {
     }
 
     /** Coordinates are either a complete, plausible fix or absent. Half a fix is not a location. */
+    /**
+     * A qué vehículo registrado se vincula una boleta, cuando se puede saber.
+     *
+     * <p>Uno solo: ese. Varios: el que tenía una estadía corriendo en ese instante. Ninguno de los
+     * dos casos: {@code null}, y la boleta vive por su placa como vivía antes de esta plataforma.</p>
+     */
+    private UUID resolveVehicleForPlate(TenantId tenantId, String plateNormalized, Instant occurredAt) {
+        List<ParkingStatusPort.RegisteredVehicle> registered = parkingStatus.findVehiclesByPlate(plateNormalized);
+        if (registered.size() == 1) {
+            return registered.get(0).vehicleId();
+        }
+        if (registered.isEmpty()) {
+            return null;
+        }
+        return parkingStatus.findVehicleWithStayAt(tenantId, plateNormalized, occurredAt)
+                .map(ParkingStatusPort.RegisteredVehicle::vehicleId)
+                .orElse(null);
+    }
+
     private void validateLocation(Capture command) {
         boolean hasLatitude = command.latitude() != null;
         boolean hasLongitude = command.longitude() != null;

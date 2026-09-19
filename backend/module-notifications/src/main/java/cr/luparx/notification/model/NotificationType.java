@@ -23,6 +23,21 @@ public enum NotificationType {
 
     /** A fiscalizador issued a citation against a plate this person registered. */
     CITATION_ISSUED(NotificationCategory.FINES, NotificationSubjectType.CITATION),
+    /**
+     * Hay una boleta para una placa que ESTA persona tiene en ficha, pero la plataforma no sabe de
+     * quién es el carro: varias personas registraron la misma placa y ninguna tenía una estadía
+     * corriendo en ese momento.
+     *
+     * <p>Distinto de {@link #CITATION_ISSUED} a propósito, y la diferencia no es cosmética: aquél
+     * afirma «te multaron» y este dice «hay una boleta para esta placa, revisá si es tuya». Mandar
+     * el primero a quien tal vez no es el dueño lo haría buscar una boleta ajena; no mandar nada
+     * dejaba al dueño verdadero sin enterarse, que es el defecto que esto corrige (2026-09-19).</p>
+     *
+     * <p>Lleva sólo la placa y la municipalidad. NO lleva monto, ni infracción, ni lugar, ni la
+     * evidencia: eso ya sería contarle a un tercero dónde estaba parqueado un carro que puede no ser
+     * suyo. Quien reconozca la placa entra a la aplicación y la reclama; los datos aparecen ahí.</p>
+     */
+    CITATION_PLATE_UNCLAIMED(NotificationCategory.FINES, NotificationSubjectType.CITATION),
     /** The municipality accepted or rejected their appeal; which one is in the parameters. */
     APPEAL_RESOLVED(NotificationCategory.FINES, NotificationSubjectType.CITATION),
 

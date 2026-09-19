@@ -169,5 +169,18 @@ class PlateStatusServiceOverlappingStaysTest {
         public Optional<RegisteredVehicle> findUniqueVehicleByPlate(String plateNormalized) {
             return Optional.empty();
         }
+
+        // Esta prueba es sobre solapes de estadías y no sobre a quién pertenece un vehículo: sin
+        // registro, que es el caso de la mayoría de las placas.
+        @Override
+        public List<RegisteredVehicle> findVehiclesByPlate(String plateNormalized) {
+            return List.of();
+        }
+
+        @Override
+        public Optional<RegisteredVehicle> findVehicleWithStayAt(TenantId tenantId, String plateNormalized,
+                                                                 Instant moment) {
+            return Optional.empty();
+        }
     }
 }
