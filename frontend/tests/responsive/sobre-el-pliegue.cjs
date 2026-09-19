@@ -56,10 +56,16 @@ if (!process.env.PASS) {
 }
 const PORTAL = process.env.PORTAL ?? 'citizen';
 
+/*
+  La cuenta se puede sobrescribir: el limitador cuenta POR CUENTA, así que cuando una queda
+  bloqueada 15 minutos hay otra disponible y no hace falta esperar.
+
+    CUENTA=citizen@luparx.test PASS='...' node tests/responsive/sobre-el-pliegue.cjs
+*/
 const CUENTAS = {
-  citizen: 'ana.morales@luparx.test',
-  inspector: 'inspector@luparx.test',
-  admin: 'admin@luparx.test',
+  citizen: process.env.CUENTA ?? 'ana.morales@luparx.test',
+  inspector: process.env.CUENTA ?? 'inspector@luparx.test',
+  admin: process.env.CUENTA ?? 'admin@luparx.test',
 };
 const PREFIJO = { citizen: '', admin: '/admin', inspector: '/inspector' };
 
