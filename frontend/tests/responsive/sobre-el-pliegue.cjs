@@ -108,14 +108,47 @@ async function medir(page, altoVisible) {
   }, altoVisible);
 }
 
+/**
+ * Entra, y ABORTA si no entró.
+ *
+ * La primera corrida (2026-09-19) reportó «40 vistas · 40 con problemas» y las 40 eran la MISMA
+ * pantalla: el login. La contraseña por omisión del arnés había quedado vieja —las cuentas se
+ * cambiaron a la de demostración para el tutorial del cliente—, el login fallaba en silencio y la
+ * aplicación dejaba el formulario en pantalla, así que el medidor encontraba «¿Olvidaste tu
+ * contraseña?» y «Crear cuenta» fuera del pliegue y los reportaba como defectos de /vehicles,
+ * /wallet y las demás. Un informe entero de hallazgos falsos, que además vació el crédito del
+ * limitador: 40 intentos fallidos dejaron la cuenta bloqueada 15 minutos.
+ *
+ * De ahí las dos comprobaciones de abajo. Una medición que no puede confirmar QUÉ está midiendo
+ * no vale nada, y es peor que ninguna: manda a arreglar pantallas que no están rotas.
+ */
 async function entrar(page, portal) {
   const prefijo = PREFIJO[portal];
   await page.goto(`${BASE}${prefijo}/login`, { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(700);
   await page.fill('input[type="email"]', CUENTAS[portal]);
   await page.fill('input[type="password"]', PASS);
+
+  // La respuesta del login, no lo que quede en pantalla: 401 y 429 se distinguen, y un 429 tras
+  // varias corridas seguidas es el limitador y no una contraseña mala.
+  const respuesta = page
+    .waitForResponse((r) => r.url().includes('/password') === false && /\/auth\/[a-z]+\/login$/.test(r.url()), {
+      timeout: 15000,
+    })
+    .catch(() => null);
   await page.click('button[type="submit"]');
-  await page.waitForTimeout(2200);
+  const login = await respuesta;
+  await page.waitForTimeout(1800);
+
+  if (login && !login.ok()) {
+    const pista =
+      login.status() === 429
+        ? 'el limitador bloqueó la cuenta (5 fallos = 15 min). Esperá y no reintentes en bucle.'
+        : login.status() === 401
+          ? `contraseña incorrecta para ${CUENTAS[portal]}. Pasá la vigente con PASS=...`
+          : `el servidor respondió ${login.status()}.`;
+    throw new Error(`No se pudo entrar: ${pista}`);
+  }
 
   // El selector de municipalidad se disfraza de pantalla real. Se busca el botón que CONTIENE el
   // nombre (la ficha trae además la insignia «Ya la usás»), no un texto exacto.
@@ -123,6 +156,20 @@ async function entrar(page, portal) {
   if (await ficha.isVisible().catch(() => false)) {
     await ficha.click();
     await page.waitForTimeout(1400);
+  }
+
+  // Segunda red: aunque el login haya dado 200, si el formulario sigue en pantalla no se entró.
+  // Se comprueba por un campo de contraseña visible y no por un texto, que cambia con el idioma.
+  const sigueEnLogin = await page
+    .locator('input[type="password"]')
+    .first()
+    .isVisible()
+    .catch(() => false);
+  if (sigueEnLogin) {
+    throw new Error(
+      'No se pudo entrar: seguimos en el formulario de login. Medir desde acá produce hallazgos ' +
+        'falsos en TODAS las rutas (ya pasó una vez).',
+    );
   }
 }
 
@@ -149,7 +196,12 @@ async function entrar(page, portal) {
     try {
       await entrar(page, PORTAL);
     } catch (e) {
-      console.log(`  (login: ${String(e.message).split('\n')[0]})`);
+      // Se ABORTA, no se sigue. Antes esto era un aviso en una línea entre cuarenta, y la corrida
+      // continuaba midiendo el login como si fuera cada una de las pantallas.
+      console.error(`\n  ✗ ${String(e.message).split('\n')[0]}\n`);
+      await ctx.close();
+      await browser.close();
+      process.exit(2);
     }
 
     for (const ruta of RUTAS[PORTAL]) {
