@@ -129,7 +129,20 @@ export function CitizenShell({
     // barra de pestañas quedaba empujada fuera del área visible y había que hacer scroll para
     // alcanzar acciones que están arriba del todo —reportado en un iPhone 14 Pro Max al buscar
     // «agregar vehículo», que vive en la cabecera. `dvh` sigue a la barra en vez de ignorarla.
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100dvh', background: 'transparent' }}>
+    <div
+      // La altura REAL de la barra de pestañas, medida acá y publicada como variable para que un
+      // CTA fijo pueda apoyarse en ella sin volver a medirla ni codificar un número: la barra
+      // cambia de alto con la safe-area del aparato y con el modo de accesibilidad.
+      style={
+        {
+          display: 'flex',
+          flexDirection: 'column',
+          minHeight: '100dvh',
+          background: 'transparent',
+          '--lx-bottom-nav-height': `${footerHeight}px`,
+        } as React.CSSProperties
+      }
+    >
       {/* On a `bare` screen the heading scrolls away like ordinary content and the timer bar below
           it is what stays — so the screen is titled by its own name, not by whatever is parked
           (CONTRACT.md v0.10). It sits outside `main` only so the bar can come between the two. */}

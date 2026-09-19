@@ -64,7 +64,6 @@ export function MovementsPage(): React.JSX.Element {
                   amountMinor={movement.amountMinor}
                   currencyCode={movement.currencyCode}
                   locale={locale}
-                  showSignPrefix={false}
                 />
               }
             />

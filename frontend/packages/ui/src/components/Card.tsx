@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-export type CardTone = 'default' | 'success' | 'warning';
+export type CardTone = 'default' | 'success' | 'warning' | 'danger';
 
 export interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
   tone?: CardTone;

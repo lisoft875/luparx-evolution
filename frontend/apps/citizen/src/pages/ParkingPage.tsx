@@ -10,11 +10,11 @@ import {
   ErrorDialog,
   FormField,
   IconCar,
-  IconClock,
   IconPin,
   IconPlus,
   Input,
   ListRow,
+  RadioCardGroup,
   Select,
   StepList,
   type Step,
@@ -33,6 +33,7 @@ import {
   useParkingSpaceFormat,
   useParkingZones,
   useStartParkingSession,
+  useWallet,
   useTimeCredits,
   useVehicleColorCatalog,
   useVehicleTypeCatalog,
@@ -216,6 +217,17 @@ export function ParkingPage(): React.JSX.Element {
   const durationQuotes = useParkingQuotes(quoteZoneId, offeredMinutes, quoteVehicleId, quotePlate);
   const { data: quote } = useParkingQuote(quoteZoneId, minutes, quoteVehicleId, quotePlate);
   const { data: schedule } = useParkingSchedule();
+  // El saldo, para poder decirlo ANTES de confirmar y no descubrirlo en un error al enviar.
+  const walletQuery = useWallet();
+
+  // Saldo corto, detectado ANTES de enviar. Sólo cuando los dos números están: sin la billetera
+  // cargada no se afirma que falta plata —eso bloquearía el botón por no haber respondido todavía—
+  // y con `payableMinor` en 0 no hay nada que pagar.
+  const faltante =
+    walletQuery.data && quote && quote.payableMinor > 0
+      ? quote.payableMinor - walletQuery.data.balanceMinor
+      : 0;
+  const saldoCorto = faltante > 0;
   const startSession = useStartParkingSession();
   const [error, setError] = useState<string | null>(null);
 
@@ -441,55 +453,68 @@ export function ParkingPage(): React.JSX.Element {
                     row of chips this replaced showed three of them and hid the rest behind "Otro",
                     and none of them said what they cost — so the citizen chose a length and only
                     then learnt the price. Nothing in this file computes money. */}
-                <Select
-                  icon={<IconClock size={18} />}
-                  aria-label={t('citizen.parking.step3.title')}
+                {/*
+                  Tarjetas de opción y NO un desplegable. El precio de cada duración ya se calculaba
+                  —lo da el servidor, acá no se multiplica nada—, pero vivía aplastado en la línea
+                  `detail` de un `<Select>`, unido con «·» y escondido hasta abrir la lista: elegir
+                  cuánto tiempo y saber cuánto cuesta eran dos gestos distintos.
+
+                  Ahora es el mismo patrón que ya usa «Extender tiempo» para la misma decisión:
+                  duración a la izquierda, monto como badge a la derecha, todas las opciones a la
+                  vista. El beneficio de la zona se enuncia UNA vez arriba como contexto, en vez de
+                  repetirse en cada fila, y el «GRATIS» de una opción cubierta por ese beneficio se
+                  dice con palabra y no sólo con un ₡0 que se lee como «estacionar es gratis».
+                */}
+                {(zone?.freeMinutes ?? 0) > 0 ? (
+                  <p className="lx-text-meta" style={{ margin: 0 }}>
+                    {t('citizen.parking.step3.benefitHeading')}:{' '}
+                    {t('citizen.parking.step3.freeMinutesBenefit', {
+                      minutes: tPlural('citizen.parking.durationMinutes', zone?.freeMinutes ?? 0),
+                    })}
+                  </p>
+                ) : null}
+                <RadioCardGroup
+                  name="parking-minutes"
+                  legend={t('citizen.parking.step3.title')}
                   value={minutes !== null ? String(minutes) : ''}
                   onChange={(value) => setMinutes(Number(value))}
-                  placeholder={t('common.select.placeholder')}
                   options={offeredMinutes.map((option) => {
                     const optionQuote = durationQuotes.get(option);
-                    // What would actually leave the wallet, which is what the citizen is deciding
-                    // about — and, when the citizen's own minutes brought it down, why. A bare
-                    // "₡0" on an option that costs ₡600 to somebody with no credit is a number
-                    // nobody can act on.
-                    const price = optionQuote
-                      ? formatCurrencyMinor(optionQuote.payableMinor, optionQuote.currencyCode, locale)
-                      : undefined;
-                    const credited =
-                      optionQuote && optionQuote.creditMinutesApplied > 0
-                        ? t('citizen.parking.step3.creditApplied', {
-                            minutes: tPlural('citizen.parking.durationMinutes', optionQuote.creditMinutesApplied),
-                          })
-                        : undefined;
+                    // Cubierta por el beneficio de la zona: ni cuesta ni gasta minutos propios.
+                    const porBeneficio =
+                      option !== savedMinutesOption &&
+                      optionQuote &&
+                      optionQuote.payableMinor === 0 &&
+                      optionQuote.creditMinutesApplied === 0 &&
+                      (zone?.freeMinutes ?? 0) > 0 &&
+                      option <= (zone?.freeMinutes ?? 0);
                     return {
                       value: String(option),
                       label: formatDurationLabel(option, tPlural),
-                      // Absent while its quote is still in flight, and absent for good if that
-                      // request failed: a duration without a price is still choosable, and the
-                      // summary below states the amount before anything is charged. The saved-minute
-                      // option says so in words as well: its price is ₡0 for a reason the citizen
-                      // should be able to read, not because parking became free.
+                      // El monto del servidor, tal cual. Nunca minutos × tarifa, ni de vista previa.
+                      // Ausente mientras su cotización está en vuelo: una duración sin precio se
+                      // puede elegir igual y el resumen dice el monto antes de cobrar nada.
+                      trailing: porBeneficio
+                        ? t('citizen.parking.step3.freeBadge')
+                        : optionQuote
+                          ? formatCurrencyMinor(optionQuote.payableMinor, optionQuote.currencyCode, locale)
+                          : undefined,
                       detail:
                         [
                           option === savedMinutesOption ? t('citizen.parking.step3.savedMinutes') : undefined,
-                          // Courtesy says so in words, for the same reason the saved-minute option
-                          // does: a bare "₡0" reads as parking having become free, and this one is
-                          // free once a day and only for a short stay.
-                          option !== savedMinutesOption &&
-                          optionQuote &&
-                          optionQuote.payableMinor === 0 &&
-                          optionQuote.creditMinutesApplied === 0 &&
-                          (zone?.freeMinutes ?? 0) > 0 &&
-                          option <= (zone?.freeMinutes ?? 0)
-                            ? t('citizen.parking.step3.courtesy')
-                            : undefined,
-                          price,
-                          option === savedMinutesOption ? undefined : credited,
+                          option === savedMinutesOption
+                            ? undefined
+                            : optionQuote && optionQuote.creditMinutesApplied > 0
+                              ? t('citizen.parking.step3.creditApplied', {
+                                  minutes: tPlural(
+                                    'citizen.parking.durationMinutes',
+                                    optionQuote.creditMinutesApplied,
+                                  ),
+                                })
+                              : undefined,
                         ]
                           .filter(Boolean)
                           .join(' · ') || undefined,
-                      icon: <IconClock size={16} />,
                     };
                   })}
                 />
@@ -575,6 +600,46 @@ export function ParkingPage(): React.JSX.Element {
                   title={t('citizen.parking.step4.payableLabel')}
                   value={formatCurrencyMinor(quote.payableMinor, quote.currencyCode, locale)}
                 />
+                {/*
+                  Saldo antes y después, que era lo que faltaba para que el resumen respondiera la
+                  pregunta completa: no «cuánto cuesta» sino «puedo pagarlo y con qué me quedo».
+                  La resta la hace el cliente, pero los dos números son del servidor: `payableMinor`
+                  de la cotización y `balanceMinor` de la billetera. Acá no se calcula ninguna
+                  tarifa.
+                */}
+                {walletQuery.data ? (
+                  <>
+                    <ListRow
+                      title={t('citizen.parking.step4.balanceLabel')}
+                      value={formatCurrencyMinor(
+                        walletQuery.data.balanceMinor,
+                        walletQuery.data.currencyCode,
+                        locale,
+                      )}
+                    />
+                    {quote.payableMinor > 0 ? (
+                      <ListRow
+                        title={t('citizen.parking.step4.balanceAfterLabel')}
+                        value={
+                          <span
+                            style={{
+                              color:
+                                walletQuery.data.balanceMinor - quote.payableMinor < 0
+                                  ? 'var(--lx-danger)'
+                                  : undefined,
+                            }}
+                          >
+                            {formatCurrencyMinor(
+                              walletQuery.data.balanceMinor - quote.payableMinor,
+                              walletQuery.data.currencyCode,
+                              locale,
+                            )}
+                          </span>
+                        }
+                      />
+                    ) : null}
+                  </>
+                ) : null}
               </>
             ) : (
               <ListRow title={t('citizen.parking.step4.amountLabel')} value={t('common.loading')} />
@@ -618,16 +683,46 @@ export function ParkingPage(): React.JSX.Element {
     <CitizenShell title={t('citizen.parking.title')} subtitle={t('citizen.parking.subtitle')} onBack={() => navigate('/')}>
       {notChargingNotice ? <Alert tone="info">{notChargingNotice}</Alert> : null}
       <StepList steps={steps} />
-      <Button
-        type="button"
-        variant="primary"
-        fullWidth
-        loading={startSession.isPending}
-        disabled={!vehicleChosen || !minutes || !quote || !zoneId || spaceCode.trim().length === 0 || Boolean(spaceProblem)}
-        onClick={handleSubmit}
-      >
-        {t('citizen.parking.submit')}
-      </Button>
+      {/*
+        CTA fijo sobre la barra de pestañas. Antes era un hijo inline de `main` después de cinco
+        pasos de formulario: en un teléfono quedaba fuera de pantalla justo cuando hacía falta, y la
+        persona tenía que buscarlo con scroll. `.lx-sticky-cta` paga la safe-area y deja espacio a
+        la barra inferior.
+
+        Y cuando el saldo no alcanza, el botón principal cambia de destino en vez de dejar enviar y
+        fallar: el mismo patrón que ya usa PayFineDialog para las multas. La selección NO se pierde
+        —esta pantalla mantiene su estado y se vuelve con «atrás»—, así que recargar no obliga a
+        rehacer zona, espacio, vehículo y duración.
+      */}
+      <div className="lx-sticky-cta">
+        {saldoCorto ? (
+          <>
+            <p className="lx-sticky-cta__notice">
+              {t('citizen.parking.step4.shortBy', {
+                amount: formatCurrencyMinor(
+                  faltante,
+                  walletQuery.data?.currencyCode ?? quote?.currencyCode ?? 'CRC',
+                  locale,
+                ),
+              })}
+            </p>
+            <Button type="button" variant="primary" fullWidth onClick={() => navigate('/wallet')}>
+              {t('citizen.parking.step4.topUpCta')}
+            </Button>
+          </>
+        ) : (
+          <Button
+            type="button"
+            variant="primary"
+            fullWidth
+            loading={startSession.isPending}
+            disabled={!vehicleChosen || !minutes || !quote || !zoneId || spaceCode.trim().length === 0 || Boolean(spaceProblem)}
+            onClick={handleSubmit}
+          >
+            {t('citizen.parking.submit')}
+          </Button>
+        )}
+      </div>
       {/* The submit button sits under four steps of form: a refusal rendered at the top of the page
           is off screen at the moment it arrives. It interrupts instead. */}
       <ErrorDialog

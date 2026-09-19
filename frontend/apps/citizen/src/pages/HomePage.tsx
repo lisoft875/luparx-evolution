@@ -66,7 +66,9 @@ function ActiveSessionCard({ session, policy }: { session: ParkingSession; polic
   const [finishOpen, setFinishOpen] = useState(false);
 
   return (
-    <Card tone={remainingSeconds <= 600 ? 'warning' : 'success'}>
+    // Tres estados y no dos: vencido es `danger` porque a partir de ahí puede llegar una boleta,
+    // y pintarlo igual que «quedan pocos minutos» borra justo la diferencia que importa.
+    <Card tone={remainingSeconds <= 0 ? 'danger' : remainingSeconds <= 600 ? 'warning' : 'success'}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--lx-space-4)' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--lx-space-3)' }}>
@@ -80,7 +82,13 @@ function ActiveSessionCard({ session, policy }: { session: ParkingSession; polic
           <span
             className="lx-status-dot"
             role="status"
-            aria-label={t('citizen.home.activeSession.statusActive')}
+            // Decía «Activo» para siempre, incluso con el contador en cero: a un lector de
+            // pantalla le estaba afirmando lo contrario de lo que pasaba.
+            aria-label={t(
+              remainingSeconds <= 0
+                ? 'citizen.home.activeSession.statusExpired'
+                : 'citizen.home.activeSession.statusActive',
+            )}
           />
         </div>
         <p className="lx-text-amount-lg" style={{ margin: 0 }}>
@@ -90,7 +98,11 @@ function ActiveSessionCard({ session, policy }: { session: ParkingSession; polic
           {t('citizen.home.activeSession.zoneAndSpace', { zone: session.zoneName, space: session.spaceCode })}
         </p>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-          <Timer remainingSeconds={remainingSeconds} aria-label={t('citizen.home.activeSession.title')} />
+          <Timer
+            remainingSeconds={remainingSeconds}
+            expiredLabel={t('citizen.timer.expired')}
+            aria-label={t('citizen.home.activeSession.title')}
+          />
           <span className="lx-text-meta">{t('citizen.home.activeSession.remainingLabel')}</span>
         </div>
         <p className="lx-text-meta" style={{ margin: 0, textAlign: 'center' }}>
@@ -345,7 +357,6 @@ export function HomePage(): React.JSX.Element {
                       amountMinor={recentMovement.amountMinor}
                       currencyCode={recentMovement.currencyCode}
                       locale={locale}
-                      showSignPrefix={false}
                     />
                   }
                   onClick={() => navigate('/movements')}

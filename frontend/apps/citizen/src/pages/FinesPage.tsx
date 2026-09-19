@@ -90,10 +90,18 @@ export function FinesPage(): React.JSX.Element {
                       .filter(Boolean)
                       .join(' · ')}
                     value={
+                      /*
+                        Monto POSITIVO y `sign="charge"` explícito, no un `amountMinor` negado.
+                        Negarlo era un truco para conseguir el color rojo, y obligaba a esconder el
+                        signo: «−₡25.000» en una multa pendiente se lee como si ya se hubiera
+                        pagado. Lo que se debe no es un cargo aplicado; se pinta con el tono de
+                        cargo y se dice el número tal cual.
+                      */
                       <AmountText
-                        amountMinor={-fine.amountPayableMinor}
+                        amountMinor={fine.amountPayableMinor}
                         currencyCode={fine.currencyCode}
                         locale={locale}
+                        sign="charge"
                         showSignPrefix={false}
                       />
                     }

@@ -24,7 +24,31 @@ import { WalletPage } from './pages/WalletPage';
 import { MovementsPage } from './pages/MovementsPage';
 
 const queryClient = new QueryClient({
-  defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      /*
+        `true`, y es deliberado aunque antes estuviera apagado.
+        El contador de una estadía activa se dibuja con el reloj del TELÉFONO contra el `expiresAt`
+        del servidor. Mientras la pestaña está en background el `refetchInterval` de React Query no
+        corre, así que al volver el número seguía bajando desde `Date.now()` sin haber preguntado
+        nada: el teléfono podía mostrar tiempo que ya no existía —o, con el reloj corrido, tiempo
+        que nunca existió—. La guía de auditoría lo pone como criterio de aceptación: cerrar y
+        reabrir la pestaña, o bloquear el teléfono, no debe desincronizar una sesión activa.
+
+        El costo es una tanda de refetches al volver al frente. Se acota abajo con `staleTime`: sólo
+        se vuelve a pedir lo que ya está viejo, y lo que se acaba de leer no se pide de nuevo.
+      */
+      refetchOnWindowFocus: true,
+      /*
+        Diez segundos. Corto porque acá casi todo es dinero o tiempo que corre, y largo como para
+        que volver a la aplicación no dispare la lista completa de consultas de una pantalla.
+        Las consultas que necesitan estar siempre frescas ya lo dicen por su cuenta
+        (`extension-options` usa `staleTime: 0`).
+      */
+      staleTime: 10_000,
+    },
+  },
 });
 
 /**

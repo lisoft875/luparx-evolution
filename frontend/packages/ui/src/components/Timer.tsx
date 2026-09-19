@@ -5,6 +5,15 @@ export interface TimerProps {
   remainingSeconds: number;
   /** Below this many seconds remaining, the timer switches to the warning tone (DESIGN_SYSTEM.md §3, default 10 min). */
   warningThresholdSeconds?: number;
+  /**
+   * Texto para cuando ya no queda tiempo — «Expirado», normalmente.
+   *
+   * Sin esto el contador se quedaba en `00:00` con el mismo aspecto que uno corriendo, y «00:00»
+   * no dice si la estadía venció o si está por vencer: el número es el mismo en los dos casos y
+   * el color tampoco cambia. Quien pasara de los 10 minutos de advertencia a cero no tenía forma
+   * de saber que ya debía plata.
+   */
+  expiredLabel?: string;
   className?: string;
   'aria-label'?: string;
 }
@@ -24,14 +33,26 @@ function formatDuration(totalSeconds: number): string {
 export function Timer({
   remainingSeconds,
   warningThresholdSeconds = 600,
+  expiredLabel,
   className,
   ...aria
 }: TimerProps): React.JSX.Element {
-  const isWarning = remainingSeconds <= warningThresholdSeconds;
-  const classes = ['lx-timer', isWarning ? 'lx-timer--warning' : '', className].filter(Boolean).join(' ');
+  // Vencido gana sobre advertencia: son estados distintos y el de advertencia ya pasó.
+  const isExpired = remainingSeconds <= 0;
+  const isWarning = !isExpired && remainingSeconds <= warningThresholdSeconds;
+  const classes = [
+    'lx-timer',
+    isExpired ? 'lx-timer--expired' : '',
+    isWarning ? 'lx-timer--warning' : '',
+    className,
+  ]
+    .filter(Boolean)
+    .join(' ');
   return (
     <span className={classes} role="timer" aria-label={aria['aria-label']}>
-      {formatDuration(remainingSeconds)}
+      {/* Palabra y no «00:00»: sin `expiredLabel` se mantiene el número, para no cambiar en silencio
+          lo que ve quien llama sin pasarlo. */}
+      {isExpired && expiredLabel ? expiredLabel : formatDuration(remainingSeconds)}
     </span>
   );
 }

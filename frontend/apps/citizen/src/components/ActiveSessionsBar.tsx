@@ -32,6 +32,7 @@ function SessionCountdown({
   session: ParkingSession;
   onWarningChange?: (isWarning: boolean) => void;
 }): React.JSX.Element {
+  const { t } = useTranslation();
   const [remaining, setRemaining] = useState(() => remainingSecondsOf(session));
   const wasWarningRef = useRef<boolean | null>(null);
 
@@ -54,7 +55,15 @@ function SessionCountdown({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session.id, session.expiresAt]);
 
-  return <Timer remainingSeconds={remaining} warningThresholdSeconds={WARNING_THRESHOLD_SECONDS} aria-label={session.plateSnapshot} />;
+  return (
+    <Timer
+      remainingSeconds={remaining}
+      warningThresholdSeconds={WARNING_THRESHOLD_SECONDS}
+      // A cero se dice la palabra: «00:00» no distingue «venció» de «está por vencer».
+      expiredLabel={t('citizen.timer.expired')}
+      aria-label={session.plateSnapshot}
+    />
+  );
 }
 
 /**

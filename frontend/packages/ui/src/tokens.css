@@ -1196,6 +1196,12 @@ body {
   background: var(--lx-warning-soft);
   border-color: color-mix(in srgb, var(--lx-warning) 30%, transparent);
 }
+/* Para lo que ya salió mal, no para lo que está por salir mal: una estadía vencida, un pago
+   rechazado. `warning` avisa, `danger` informa un hecho. */
+.lx-card--tone-danger {
+  background: var(--lx-danger-soft);
+  border-color: color-mix(in srgb, var(--lx-danger) 30%, transparent);
+}
 .lx-card-stack {
   display: flex;
   flex-direction: column;
@@ -1616,6 +1622,38 @@ button.lx-list-row {
 
 /* ---- BottomTabBar (5 destinations, DESIGN_SYSTEM §3) --------------------- */
 
+/* ---- CTA fijo sobre la navegación inferior --------------------------------------------------
+   Un botón de confirmar que vive al final de un formulario largo queda fuera de pantalla justo
+   cuando hace falta, y la persona tiene que buscarlo con scroll: reportado el 2026-09-19 en el
+   flujo de estacionar, que tiene cinco pasos.
+
+   Se apoya en `--lx-bottom-nav-height`, que CitizenShell publica con la altura MEDIDA de la barra
+   de pestañas. No un número fijo: esa barra cambia de alto con la safe-area del aparato y con el
+   modo de accesibilidad, y un valor a mano deja el botón flotando o tapado en la mitad de los
+   teléfonos. El fallback de 0px cubre las pantallas sin barra (las de `onBack`).
+
+   El fondo es opaco y no translúcido a propósito: debajo pasa contenido que scrollea, y un botón
+   de confirmar tiene que leerse siempre igual. */
+.lx-sticky-cta {
+  position: sticky;
+  bottom: calc(var(--lx-bottom-nav-height, 0px) + env(safe-area-inset-bottom));
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: var(--lx-space-2);
+  margin: var(--lx-space-4) calc(-1 * var(--lx-space-4)) 0;
+  padding: var(--lx-space-3) var(--lx-space-4)
+    calc(var(--lx-space-3) + env(safe-area-inset-bottom));
+  background: var(--lx-bg);
+  border-top: 1px solid var(--lx-border);
+}
+.lx-sticky-cta__notice {
+  margin: 0;
+  font-size: var(--lx-text-meta-size);
+  color: var(--lx-warning);
+  text-align: center;
+}
+
 .lx-bottom-tab-bar {
   display: flex;
   border-top: 1px solid var(--lx-border);
@@ -1790,6 +1828,13 @@ button.lx-list-row {
 }
 .lx-timer--warning {
   color: var(--lx-warning);
+}
+/* Vencido no es «a punto de vencer»: otro color y otro peso, porque a partir de acá la persona ya
+   está en falta y puede recibir una boleta. El texto cambia a palabra en el componente; el color
+   solo nunca alcanza. */
+.lx-timer--expired {
+  color: var(--lx-danger);
+  font-variant-numeric: normal;
 }
 
 /* ---- Brand / Logo --------------------------------------------------------- */
