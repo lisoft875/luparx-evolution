@@ -76,7 +76,23 @@ export function CitizenShell({
     if (!node) return;
     const observer = new ResizeObserver((entries) => {
       const entry = entries[0];
-      if (entry) setFooterHeight(entry.contentRect.height);
+      if (!entry) return;
+      /*
+        `borderBoxSize` y NO `contentRect`: éste devuelve la caja de CONTENIDO, sin el padding, y la
+        barra de pestañas paga `padding-bottom: env(safe-area-inset-bottom)` — la franja del gesto
+        del iPhone. En un 14 Pro Max eso son 34px que la barra ocupa y que `contentRect` no reporta:
+        medido, 90px reales contra 56 informados.
+
+        El efecto era que `main` reservaba 34px de menos y lo ÚLTIMO de cada pantalla quedaba debajo
+        de la barra: la tarjeta de multas y «Ver todas» en el Inicio, «Agregar tarjeta» en la
+        Billetera, el selector de idioma en Más. Detectado por
+        tests/responsive/sobre-el-pliegue.cjs el 2026-09-19.
+
+        `getBoundingClientRect()` de respaldo para navegadores sin `borderBoxSize` (Safari < 15.4),
+        que devuelve lo mismo y está siempre disponible.
+      */
+      const alto = entry.borderBoxSize?.[0]?.blockSize ?? node.getBoundingClientRect().height;
+      setFooterHeight(alto);
     });
     observer.observe(node);
     return () => observer.disconnect();

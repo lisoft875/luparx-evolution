@@ -254,6 +254,8 @@ async function entrar(page, portal) {
       storageState: sesion,
     });
     const page = await ctx.newPage();
+    // Un solo reintento de sesión por viewport: si hace falta dos veces, no es el vencimiento.
+    let reintentado = false;
 
     for (const ruta of RUTAS[PORTAL]) {
       try {
@@ -272,23 +274,65 @@ async function entrar(page, portal) {
           .isVisible()
           .catch(() => false);
         if (cayoAlLogin) {
-          console.error(
-            `\n  ✗ ${ruta} devolvió el login: la sesión se cayó a mitad de corrida. Se aborta en vez\n` +
-              '    de medir el formulario como si fuera esta pantalla.\n',
-          );
-          await ctx.close();
-          await browser.close();
-          process.exit(2);
+          /*
+            El token de acceso dura 15 minutos y la aplicación lo renueva sola con el refresh token;
+            el arnés reusa un `storageState` congelado del primer login, así que en una corrida larga
+            —cinco viewports por ocho rutas— se le vence a mitad. Es una limitación del arnés y no un
+            defecto del producto (comprobado: `expiresIn` 900 s y refresh token presente).
+
+            Se vuelve a entrar UNA vez y se sigue. Si tras reentrar sigue apareciendo el login,
+            entonces sí es otra cosa y se aborta: medir el formulario como si fuera esta pantalla es
+            lo que produjo el informe de cuarenta hallazgos falsos.
+          */
+          if (!reintentado) {
+            reintentado = true;
+            console.log('  ↻  la sesión venció; se vuelve a entrar y se continúa');
+            await entrar(page, PORTAL);
+            await page.goto(`${BASE}${PREFIJO[PORTAL]}${ruta}`, { waitUntil: 'domcontentloaded' });
+            await page.waitForTimeout(1100);
+          }
+          const sigueCaido = await page
+            .locator('input[type="password"]')
+            .first()
+            .isVisible()
+            .catch(() => false);
+          if (sigueCaido) {
+            console.error(
+              `\n  ✗ ${ruta} devuelve el login incluso después de volver a entrar. Se aborta en vez\n` +
+                '    de medir el formulario como si fuera esta pantalla.\n',
+            );
+            await ctx.close();
+            await browser.close();
+            process.exit(2);
+          }
         }
 
         const r = await medir(page, tel.visible);
         vistas++;
 
-        const malas = r.acciones.filter((a) => a.fueraDelPliegue || a.tapadaAbajo || a.tapadaArriba);
+        /*
+          TAPADA y FUERA DEL PLIEGUE no son el mismo defecto, y mezclarlos hace ilegible el informe.
+
+          Tapada = el cromo fijo está encima; no hay scroll que lo arregle y siempre es un defecto.
+          Fuera del pliegue = hay que bajar para verlo, lo que en una pantalla con contenido real
+          —el Inicio con una estadía activa mide 790px en 425 visibles— es scroll legítimo y no un
+          fallo de maquetación.
+
+          Sólo cuenta como fallo lo tapado, más el caso en que la PRIMERA acción de la pantalla
+          exige scroll: eso sí dice que el orden está mal, no que la página sea larga.
+        */
+        const tapadas = r.acciones.filter((a) => a.tapadaAbajo || a.tapadaArriba);
+        const bajoElPliegue = r.acciones.filter((a) => a.fueraDelPliegue);
+        const malas = tapadas;
         const primeraExigeScroll = r.primeraAccion && r.primeraAccion.fueraDelPliegue;
 
-        if (malas.length === 0) {
-          console.log(`  ok  ${ruta}  · útil ${r.espacioUtil}px · ${r.acciones.length} acciones a la vista`);
+        if (malas.length === 0 && !primeraExigeScroll) {
+          const nota = bajoElPliegue.length
+            ? ` · ${bajoElPliegue.length} bajo el pliegue (scroll normal)`
+            : '';
+          console.log(
+            `  ok  ${ruta}  · útil ${r.espacioUtil}px · ${r.acciones.length} acciones${nota}`,
+          );
           continue;
         }
         problemas++;
