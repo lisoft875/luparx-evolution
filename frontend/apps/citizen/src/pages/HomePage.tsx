@@ -25,6 +25,7 @@ import { ExtendSessionSheet } from '../components/ExtendSessionSheet';
 import { FinishSessionConfirm } from '../components/FinishSessionConfirm';
 import { MOVEMENT_ICON, MOVEMENT_ICON_TONE, MOVEMENT_TITLE_KEY } from '../lib/movementPresentation';
 import { resumenPorPagar } from '../lib/fineStatus';
+import { cardToneFor, urgencyMessageKey, urgencyOf } from '../lib/sessionUrgency';
 import { useAuth } from '@luparx/auth';
 import {
   useActiveParkingSessions,
@@ -65,10 +66,14 @@ function ActiveSessionCard({ session, policy }: { session: ParkingSession; polic
   const [extendOpen, setExtendOpen] = useState(false);
   const [finishOpen, setFinishOpen] = useState(false);
 
+  const urgency = urgencyOf(remainingSeconds);
+  const urgencyKey = urgencyMessageKey(urgency);
+
   return (
-    // Tres estados y no dos: vencido es `danger` porque a partir de ahí puede llegar una boleta,
-    // y pintarlo igual que «quedan pocos minutos» borra justo la diferencia que importa.
-    <Card tone={remainingSeconds <= 0 ? 'danger' : remainingSeconds <= 600 ? 'warning' : 'success'}>
+    // El nivel y su tono salen de `sessionUrgency`, no de un literal acá: el umbral estaba
+    // duplicado en tres archivos y una discrepancia dejaba la barra en advertencia con la tarjeta
+    // en verde, sin que nadie lo notara.
+    <Card tone={cardToneFor(urgency)}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--lx-space-4)' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--lx-space-3)' }}>
@@ -104,6 +109,20 @@ function ActiveSessionCard({ session, policy }: { session: ParkingSession; polic
             aria-label={t('citizen.home.activeSession.title')}
           />
           <span className="lx-text-meta">{t('citizen.home.activeSession.remainingLabel')}</span>
+          {/*
+            El aviso en PALABRAS. Un color más intenso no dice qué hacer, y quien no distingue bien
+            los colores —o mira la pantalla al sol— no ve ningún cambio. `aria-live` para que un
+            lector de pantalla lo anuncie al cruzar el umbral y no sólo si la persona vuelve a leer.
+          */}
+          {urgencyKey ? (
+            <span
+              className="lx-text-meta"
+              style={{ color: 'var(--lx-warning)', textAlign: 'center' }}
+              aria-live="polite"
+            >
+              {t(urgencyKey)}
+            </span>
+          ) : null}
         </div>
         <p className="lx-text-meta" style={{ margin: 0, textAlign: 'center' }}>
           {t('citizen.home.activeSession.expiresAt', {

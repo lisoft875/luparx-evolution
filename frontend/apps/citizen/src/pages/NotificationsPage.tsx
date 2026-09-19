@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { CitizenNotification, NotificationCategory } from '@luparx/api-client';
 import { formatCurrencyMinor, formatDateTime, useTranslation, type TranslationKey } from '@luparx/i18n';
@@ -24,6 +24,7 @@ import {
   useMarkNotificationRead,
   useNotificationPreferences,
   useNotifications,
+  useUnreadNotificationCount,
   useTenantTimeZone,
   useUpdateNotificationPreferences,
 } from '../lib/queries';
@@ -84,10 +85,13 @@ export function NotificationsPage(): React.JSX.Element {
   const markRead = useMarkNotificationRead();
   const markAllRead = useMarkAllNotificationsRead();
 
-  const unreadOnPage = useMemo(
-    () => (query.data?.items ?? []).filter((item) => !item.readAt).length,
-    [query.data],
-  );
+  /*
+    El total de no leídas, no las de ESTA página. El botón «Marcar todas como leídas» contaba los
+    items visibles mientras la mutación actúa sobre todo: en la página 2 sin no-leídas quedaba
+    deshabilitado aunque hubiera pendientes en la 1, y decía «todas» sobre un conteo parcial.
+  */
+  const unreadQuery = useUnreadNotificationCount();
+  const unreadTotal = unreadQuery.data?.unread ?? 0;
 
   /**
    * One line, in the reader's language.
@@ -137,15 +141,22 @@ export function NotificationsPage(): React.JSX.Element {
         <Button type="button" variant="secondary" onClick={() => setPreferencesOpen(true)}>
           {t('citizen.notifications.preferences.open')}
         </Button>
-        <Button
-          type="button"
-          variant="secondary"
-          disabled={unreadOnPage === 0}
-          loading={markAllRead.isPending}
-          onClick={() => markAllRead.mutate()}
-        >
-          {t('citizen.notifications.markAllRead')}
-        </Button>
+        {/*
+          Se OCULTA cuando no hay nada que marcar, en vez de quedarse gris. Un botón deshabilitado
+          invita a pulsarlo y no explica por qué no responde; ausente no plantea la pregunta.
+          Mientras el conteo viene en camino tampoco se muestra: aparecer y desaparecer es peor que
+          aparecer un instante después.
+        */}
+        {unreadTotal > 0 ? (
+          <Button
+            type="button"
+            variant="secondary"
+            loading={markAllRead.isPending}
+            onClick={() => markAllRead.mutate()}
+          >
+            {t('citizen.notifications.markAllRead')}
+          </Button>
+        ) : null}
       </div>
 
       <QueryBoundary

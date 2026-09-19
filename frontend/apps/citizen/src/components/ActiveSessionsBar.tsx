@@ -5,8 +5,9 @@ import { IconCar, Modal, Timer } from '@luparx/ui';
 import type { ParkingSession } from '@luparx/api-client';
 import { useParkingReminders } from '@luparx/features';
 import { useActiveParkingSessions, useParkingPolicy } from '../lib/queries';
-
-const WARNING_THRESHOLD_SECONDS = 600;
+// El umbral vive acá y no como literal en este archivo: estaba duplicado en tres lugares y una
+// discrepancia dejaba esta barra en advertencia con la tarjeta del Inicio en verde.
+import { WARNING_THRESHOLD_SECONDS } from '../lib/sessionUrgency';
 
 /**
  * Always floored, never rounded (CONTRACT.md v0.10). A countdown that rounds to nearest shows

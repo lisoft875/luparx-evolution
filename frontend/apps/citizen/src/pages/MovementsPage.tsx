@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useTranslation, formatDateTime } from '@luparx/i18n';
+import { formatCurrencyMinor, formatDateTime, useTranslation } from '@luparx/i18n';
 import { AmountText, Card, ChipGroup, EmptyState, IconTopUp, ListRow } from '@luparx/ui';
 import { CitizenShell } from '../components/CitizenShell';
 import {
@@ -57,6 +57,26 @@ export function MovementsPage(): React.JSX.Element {
                   {movement.reference ? (
                     <span className="lx-list-row__meta-line">{movement.reference}</span>
                   ) : null}
+                  {/*
+                    El saldo que quedó DESPUÉS de este movimiento. Es el dato que se busca al
+                    revisar la lista —«¿de dónde salió este número?»— y el único que el servidor
+                    manda y la fila no mostraba.
+
+                    La auditoría pedía abrir un detalle por movimiento con referencia, zona,
+                    vehículo y método. No se hace: esos campos NO existen —`WalletTransaction` sólo
+                    trae id, tipo, monto, saldo posterior, referencia y fecha— y no hay endpoint de
+                    detalle. Una pantalla que repitiera lo que ya está en la fila sería un toque
+                    extra a cambio de nada. Queda anotado como cambio de contrato.
+                  */}
+                  <span className="lx-list-row__meta-line">
+                    {t('citizen.movements.balanceAfter', {
+                      amount: formatCurrencyMinor(
+                        movement.balanceAfterMinor,
+                        movement.currencyCode,
+                        locale,
+                      ),
+                    })}
+                  </span>
                 </>
               }
               value={

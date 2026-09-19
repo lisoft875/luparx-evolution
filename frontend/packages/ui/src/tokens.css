@@ -123,7 +123,12 @@
   --lx-card-gap: var(--lx-space-3);
 
   --lx-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --lx-shadow-md: 0 24px 64px rgba(0, 0, 0, 0.48);
+  /* Para lo que flota: modal y desplegable. Era `0 24px 64px rgba(0,0,0,.48)` — el doble de
+     desenfoque y el doble de opacidad que `--lx-shadow-card`, que la guía del rediseño 360° fijó
+     en `0 12px 32px / .24`. Esa sombra no pasó por aquella revisión y sobre el fondo casi negro se
+     leía como una mancha, no como elevación. Se alinea con la escala: un paso por encima de la
+     tarjeta, no cuatro. */
+  --lx-shadow-md: 0 16px 40px rgba(0, 0, 0, 0.32);
 
   /* COMPONENTES.md: "Inter, system-ui, sans-serif" si el repositorio no define una familia. */
   --lx-font-sans: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
@@ -2294,14 +2299,18 @@ button.lx-list-row {
   backdrop-filter: none;
 }
 
-/* Phones composite on far less GPU, and a full-bleed blurred surface is where it shows. Halve
-   the radius rather than dropping it: the surfaces stay translucent, the cost does not. */
-@media (max-width: 640px) {
-  :root {
-    --lx-blur-1: 10px;
-    --lx-blur-2: 14px;
-  }
-}
+/* Acá VIVÍA un bloque que subía el blur a 10/14px en pantallas de hasta 640px. Su comentario decía
+   «reducir a la mitad en vez de quitarlo», y era correcto cuando la base eran 20/28px.
+
+   El rediseño 360° puso `--lx-blur-1/2` en `0px` en la raíz (regla «nada de glassmorphism
+   gratuito»), y este bloque quedó huérfano de ese cambio: con la base en cero ya no reducía nada,
+   INTRODUCÍA blur únicamente en el teléfono — justo donde el propio comentario explica que más
+   cuesta en GPU, y en las superficies a sangre completa (barra de pestañas, app bar, tarjetas).
+
+   Se elimina en vez de bajarlo a un número menor: el valor de la raíz es la decisión de diseño, y
+   un media query que la contradiga sólo en móvil es la forma de que nadie vuelva a entender cuál
+   de los dos manda. Si algún día se quiere blur, se sube en la raíz y ESTE bloque lo reduce; al
+   revés no. */
 
 /* Reduced transparency is an accessibility preference, not a performance one — honour it by
    making the surfaces solid rather than blurrier, and increase contrast likewise. */

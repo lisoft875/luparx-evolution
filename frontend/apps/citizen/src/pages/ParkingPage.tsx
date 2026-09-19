@@ -335,7 +335,23 @@ export function ParkingPage(): React.JSX.Element {
                   aria-describedby={describedBy}
                   invalid={Boolean(spaceCodeError)}
                   value={spaceCode}
-                  inputMode={spaceFormat && !spaceFormat.allowLetters && !spaceFormat.prefix ? 'numeric' : 'text'}
+                  /*
+                    Teclado numérico cuando lo que hay que teclear son sólo dígitos. La persona
+                    escribe el código COMPLETO, prefijo incluido, así que un prefijo con letras
+                    («A-001») necesita el teclado de texto de verdad.
+
+                    Antes era `!spaceFormat.prefix`, que descartaba también los prefijos numéricos y,
+                    peor, dejaba `text` mientras el formato venía en camino: en una municipalidad
+                    puramente numérica el teclado salía alfabético al abrir la pantalla y sólo
+                    cambiaba después, cuando el campo ya podía estar enfocado —y iOS no rehace el
+                    teclado de un campo enfocado—. Con el formato en vuelo se asume numérico, que es
+                    el caso de la gran mayoría.
+                  */
+                  inputMode={
+                    !spaceFormat || (!spaceFormat.allowLetters && /^[0-9-]*$/.test(spaceFormat.prefix))
+                      ? 'numeric'
+                      : 'text'
+                  }
                   autoCapitalize="characters"
                   autoCorrect="off"
                   spellCheck={false}
