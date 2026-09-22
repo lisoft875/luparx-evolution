@@ -860,6 +860,10 @@ export const enUS: Record<TranslationKey, string> = {
   'citizen.parking.step4.creditAppliedLabel': 'Time credit applied',
   'citizen.parking.step4.balanceLabel': 'Available balance',
   'citizen.parking.step4.balanceAfterLabel': 'Balance after paying',
+  'citizen.parking.falta.zona': 'Choose a zone to continue.',
+  'citizen.parking.falta.espacio': 'Enter the bay code.',
+  'citizen.parking.falta.vehiculo': 'Choose a vehicle.',
+  'citizen.parking.falta.duracion': 'Choose how long you will park.',
   'citizen.parking.step4.shortBy': 'You are {{amount}} short for this stay.',
   'citizen.parking.step4.topUpCta': 'Top up and come back',
   'citizen.parking.step4.payableLabel': 'Payable from your wallet',
@@ -962,7 +966,7 @@ export const enUS: Record<TranslationKey, string> = {
   'citizen.wallet.timeCredits.noExpiry': "Doesn't expire",
   'citizen.wallet.timeCredits.empty': "You don't have time credit in this municipality.",
 
-  'citizen.movements.balanceAfter': 'Balance: {{amount}}',
+  'citizen.movements.balanceAfter': 'Balance after: {{amount}}',
   'citizen.movements.title': 'Movements',
   'citizen.movements.filter.all': 'All',
   'citizen.movements.filter.parking': 'Parking',
@@ -1320,6 +1324,8 @@ export const enUS: Record<TranslationKey, string> = {
   'citation.evidence.note': 'Note',
   'citation.evidence.title': 'Evidence',
   'citation.evidence.empty': 'No evidence is attached to this citation.',
+  'citation.evidence.withheld':
+    'This citation has evidence, but we cannot show it to you: the vehicle is not registered to you.',
   'citation.evidence.digest': 'SHA-256 digest',
   'citation.evidence.capturedAt': 'Captured',
   'citation.evidence.size': 'Size',
@@ -1765,6 +1771,7 @@ export const enUS: Record<TranslationKey, string> = {
   // ---- Citizen: fines --------------------------------------------------------------------------
 
   'citizen.fines.detail.title': 'Fine',
+  'citizen.fines.amountOriginal': 'Original amount',
   'citizen.fines.amountPayable': 'Amount payable today',
   'citizen.fines.discountUntil': 'Discounted until {{date}}',
   'citizen.fines.pay': 'Pay the fine',

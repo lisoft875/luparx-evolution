@@ -331,10 +331,19 @@ export function HomePage(): React.JSX.Element {
               // lista pone siempre los montos (DESIGN_SYSTEM.md §3).
               value={
                 hayDeuda && deuda.currencyCode ? (
+                  /*
+                    `sign="charge"` y sin prefijo. Sin el `sign` explícito, `AmountText` lo deduce
+                    del número: positivo = ingreso = verde con «+». Y así salía «+₡750 verde» sobre
+                    una DEUDA, que es lo contrario de lo que significa (auditoría del 22-09-2026,
+                    P0 del Inicio). La regla global del documento: verde es entrada, rojo/ámbar es
+                    salida o deuda, y el color nunca se reutiliza al revés.
+                  */
                   <AmountText
                     amountMinor={deuda.totalMinor}
                     currencyCode={deuda.currencyCode}
                     locale={locale}
+                    sign="charge"
+                    showSignPrefix={false}
                   />
                 ) : undefined
               }

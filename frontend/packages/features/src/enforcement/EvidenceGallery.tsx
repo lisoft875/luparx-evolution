@@ -13,6 +13,20 @@ export interface EvidenceGalleryProps {
    * the place that decides which.
    */
   loadContent: (evidenceId: string) => Promise<Blob>;
+  /**
+   * `true` cuando la boleta SÍ tiene pruebas pero esta persona no puede verlas.
+   *
+   * Sin esto la pantalla se contradecía: «Esta boleta no tiene pruebas adjuntas» arriba y «Prueba
+   * adjuntada» en el historial, que son dos fuentes de datos independientes (auditoría del
+   * 22-09-2026, P0). Y la contradicción es REAL, no un error de datos: desde que la boleta de una
+   * placa compartida se ve desde varias cuentas, quien no tiene el vehículo vinculado recibe
+   * `evidence: []` a propósito, mientras el historial sigue contando lo que pasó.
+   *
+   * Decirlo en voz alta es mejor que las dos alternativas: esconder el historial sería ocultarle a
+   * la persona lo que le hicieron a su boleta, y dejar la contradicción enseña a no leer la
+   * pantalla.
+   */
+  evidenceWithheld?: boolean;
   timeZone?: string;
 }
 
@@ -25,7 +39,7 @@ export interface EvidenceGalleryProps {
  * behind a bearer token, and a plain `src` would be an unauthenticated request that renders as a
  * broken image. Every URL created here is revoked when the component unmounts.
  */
-export function EvidenceGallery({ evidence, loadContent, timeZone }: EvidenceGalleryProps): React.JSX.Element {
+export function EvidenceGallery({ evidence, loadContent, evidenceWithheld, timeZone }: EvidenceGalleryProps): React.JSX.Element {
   const { t, locale } = useTranslation();
   const photos = evidence.filter((item) => item.kind === 'PHOTO');
   const [urls, setUrls] = useState<Record<string, string>>({});
@@ -59,7 +73,9 @@ export function EvidenceGallery({ evidence, loadContent, timeZone }: EvidenceGal
     <Card>
       <SectionHeader title={t('citation.evidence.title')} />
       {evidence.length === 0 ? (
-        <EmptyState title={t('citation.evidence.empty')} />
+        <EmptyState
+          title={t(evidenceWithheld ? 'citation.evidence.withheld' : 'citation.evidence.empty')}
+        />
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--lx-space-4)' }}>
           {evidence.map((item) => (

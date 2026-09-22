@@ -58,7 +58,11 @@ export function WalletPage(): React.JSX.Element {
       <div>
         <SectionHeader
           title={t('citizen.wallet.paymentMethods.title')}
-          action={{ label: t('citizen.wallet.paymentMethods.viewAllCta'), onClick: () => undefined }}
+          /*
+            Sin acción: el «Ver todos» tenía `onClick: () => undefined` —un enlace que no llevaba a
+            ninguna parte— y sólo hay una tarjeta. Un control que no hace nada gasta la confianza en
+            todos los demás. Vuelve cuando exista la pantalla de métodos de pago.
+          */
         />
         <Card>
           {MOCK_PAYMENT_CARDS.map((card) => (

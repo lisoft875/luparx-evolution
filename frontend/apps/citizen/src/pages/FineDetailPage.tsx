@@ -118,7 +118,13 @@ export function FineDetailPage(): React.JSX.Element {
                     value={`${fine.infractionCode} · ${fine.infractionName}`}
                   />
                   <SummaryRow
-                    label={t('citation.field.fine')}
+                    label={t(
+                  // «Monto original» cuando hay un descuento vigente y por tanto DOS cifras en
+                  // pantalla; «Monto» a secas cuando sólo hay una y no hay nada que distinguir.
+                  fine.amountPayableMinor !== fine.fineMinor
+                    ? 'citizen.fines.amountOriginal'
+                    : 'citation.field.fine',
+                )}
                     value={formatCurrencyMinor(fine.fineMinor, fine.currencyCode, locale)}
                   />
                   <SummaryRow label={t('citation.field.zone')} value={fine.zoneName ?? '—'} />
@@ -199,7 +205,20 @@ export function FineDetailPage(): React.JSX.Element {
                 />
               ) : null}
 
-              <EvidenceGallery evidence={detail.evidence} loadContent={loadEvidence} />
+              {/*
+                El historial es la única fuente que sabe que hubo pruebas cuando la lista llega
+                vacía: el servidor las omite a propósito para quien comparte la placa pero no tiene
+                el vehículo vinculado (ADR 0029). Sin esto la pantalla decía «no tiene pruebas» y
+                «Prueba adjuntada» a la vez.
+              */}
+              <EvidenceGallery
+                evidence={detail.evidence}
+                loadContent={loadEvidence}
+                evidenceWithheld={
+                  detail.evidence.length === 0 &&
+                  detail.history.some((event) => event.action === 'EVIDENCE_ATTACHED')
+                }
+              />
               <CitationHistory events={detail.history} />
             </>
           );

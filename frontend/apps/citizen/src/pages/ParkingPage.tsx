@@ -2,6 +2,7 @@ import * as React from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation, formatCurrencyMinor, formatWeekdayTime } from '@luparx/i18n';
+import type { TranslationKey } from '@luparx/i18n';
 import { TenantSwitchControl } from '@luparx/features';
 import {
   Alert,
@@ -228,6 +229,24 @@ export function ParkingPage(): React.JSX.Element {
       ? quote.payableMinor - walletQuery.data.balanceMinor
       : 0;
   const saldoCorto = faltante > 0;
+
+  /*
+    Qué falta para poder continuar, en el ORDEN del flujo: se nombra lo primero pendiente y no una
+    lista de seis cosas. Un botón gris sin explicación obliga a adivinar cuál de los cinco pasos
+    quedó a medias, y en un teléfono ni siquiera se ven todos a la vez (auditoría del 22-09-2026).
+
+    El error del código de espacio no entra acá: ya se muestra bajo su propio campo, que es donde
+    se corrige, y repetirlo abajo sería decir dos veces lo mismo.
+  */
+  const faltaParaContinuar: TranslationKey | null = !zoneId
+    ? 'citizen.parking.falta.zona'
+    : spaceCode.trim().length === 0
+      ? 'citizen.parking.falta.espacio'
+      : !vehicleChosen
+        ? 'citizen.parking.falta.vehiculo'
+        : !minutes
+          ? 'citizen.parking.falta.duracion'
+          : null;
   const startSession = useStartParkingSession();
   const [error, setError] = useState<string | null>(null);
 
@@ -335,6 +354,12 @@ export function ParkingPage(): React.JSX.Element {
                   aria-describedby={describedBy}
                   invalid={Boolean(spaceCodeError)}
                   value={spaceCode}
+                  /*
+                    El ejemplo que da el servidor para esta municipalidad («0001», «A-12»…), no un
+                    literal: el formato lo decide cada una. El hint de abajo sigue diciendo el rango
+                    completo; esto es para saber qué escribir sin leer nada.
+                  */
+                  placeholder={spaceFormat?.example ?? undefined}
                   /*
                     Teclado numérico cuando lo que hay que teclear son sólo dígitos. La persona
                     escribe el código COMPLETO, prefijo incluido, así que un prefijo con letras
@@ -612,10 +637,18 @@ export function ParkingPage(): React.JSX.Element {
                     }
                   />
                 ) : null}
-                <ListRow
-                  title={t('citizen.parking.step4.payableLabel')}
-                  value={formatCurrencyMinor(quote.payableMinor, quote.currencyCode, locale)}
-                />
+                {/*
+                  «Monto» y «A pagar de tu billetera» sólo cuando DIFIEREN. Coinciden siempre que no
+                  haya minutos a favor, cortesía ni horario parcial, y entonces son dos filas con el
+                  mismo número: ruido que enseña a saltarse el resumen. Cuando difieren, la
+                  diferencia es justo lo que hay que ver.
+                */}
+                {quote.payableMinor !== quote.amountMinor ? (
+                  <ListRow
+                    title={t('citizen.parking.step4.payableLabel')}
+                    value={formatCurrencyMinor(quote.payableMinor, quote.currencyCode, locale)}
+                  />
+                ) : null}
                 {/*
                   Saldo antes y después, que era lo que faltaba para que el resumen respondiera la
                   pregunta completa: no «cuánto cuesta» sino «puedo pagarlo y con qué me quedo».
@@ -727,16 +760,23 @@ export function ParkingPage(): React.JSX.Element {
             </Button>
           </>
         ) : (
-          <Button
-            type="button"
-            variant="primary"
-            fullWidth
-            loading={startSession.isPending}
-            disabled={!vehicleChosen || !minutes || !quote || !zoneId || spaceCode.trim().length === 0 || Boolean(spaceProblem)}
-            onClick={handleSubmit}
-          >
-            {t('citizen.parking.submit')}
-          </Button>
+          <>
+            {faltaParaContinuar ? (
+              <p className="lx-sticky-cta__notice" aria-live="polite">
+                {t(faltaParaContinuar)}
+              </p>
+            ) : null}
+            <Button
+              type="button"
+              variant="primary"
+              fullWidth
+              loading={startSession.isPending}
+              disabled={!vehicleChosen || !minutes || !quote || !zoneId || spaceCode.trim().length === 0 || Boolean(spaceProblem)}
+              onClick={handleSubmit}
+            >
+              {t('citizen.parking.submit')}
+            </Button>
+          </>
         )}
       </div>
       {/* The submit button sits under four steps of form: a refusal rendered at the top of the page

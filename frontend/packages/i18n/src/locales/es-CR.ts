@@ -749,7 +749,7 @@ export const esCR = {
   'nav.more': 'Más',
   'citizen.more.profile': 'Mi perfil',
   'citizen.more.fines': 'Multas',
-  'citizen.more.fines.meta': 'Consultá y apelá tus multas.',
+  'citizen.more.fines.meta': 'Consultá tus multas y presentá un reclamo.',
   'citizen.more.language': 'Seleccionar idioma',
   'citizen.more.notifications': 'Notificaciones',
   'citizen.more.notifications.meta': 'Lo que pasó, y qué de eso te llega al correo.',
@@ -879,6 +879,10 @@ export const esCR = {
   'citizen.parking.step4.creditAppliedLabel': 'Minutos a favor aplicados',
   'citizen.parking.step4.balanceLabel': 'Saldo disponible',
   'citizen.parking.step4.balanceAfterLabel': 'Saldo después de pagar',
+  'citizen.parking.falta.zona': 'Elegí una zona para continuar.',
+  'citizen.parking.falta.espacio': 'Escribí el código del espacio.',
+  'citizen.parking.falta.vehiculo': 'Elegí un vehículo.',
+  'citizen.parking.falta.duracion': 'Elegí cuánto tiempo vas a estacionar.',
   'citizen.parking.step4.shortBy': 'Te faltan {{amount}} para esta estadía.',
   'citizen.parking.step4.topUpCta': 'Recargar y volver acá',
   'citizen.parking.step4.payableLabel': 'A pagar de tu billetera',
@@ -983,7 +987,7 @@ export const esCR = {
   'citizen.wallet.timeCredits.noExpiry': 'No vencen',
   'citizen.wallet.timeCredits.empty': 'No tienes minutos a favor en esta municipalidad.',
 
-  'citizen.movements.balanceAfter': 'Saldo: {{amount}}',
+  'citizen.movements.balanceAfter': 'Saldo posterior: {{amount}}',
   'citizen.movements.title': 'Movimientos',
   'citizen.movements.filter.all': 'Todos',
   'citizen.movements.filter.parking': 'Parqueo',
@@ -1352,6 +1356,8 @@ export const esCR = {
   'citation.evidence.note': 'Nota',
   'citation.evidence.title': 'Pruebas',
   'citation.evidence.empty': 'Esta boleta no tiene pruebas adjuntas.',
+  'citation.evidence.withheld':
+    'Esta boleta tiene pruebas, pero no podemos mostrártelas: el vehículo no está registrado a tu nombre.',
   'citation.evidence.digest': 'Huella SHA-256',
   'citation.evidence.capturedAt': 'Capturada',
   'citation.evidence.size': 'Tamaño',
@@ -1800,6 +1806,7 @@ export const esCR = {
   // ---- Ciudadano: multas -----------------------------------------------------------------------
 
   'citizen.fines.detail.title': 'Multa',
+  'citizen.fines.amountOriginal': 'Monto original',
   'citizen.fines.amountPayable': 'Monto exigible hoy',
   'citizen.fines.discountUntil': 'Con descuento hasta el {{date}}',
   'citizen.fines.pay': 'Pagar multa',

@@ -66,9 +66,12 @@ import java.util.UUID;
 // Two locks, and the profile is the one that matters. `luparx.payments.provider` defaults to
 // `simulated` so that a developer who configures nothing still gets a working flow — which means the
 // property ALONE would leave a deployment that forgot to set it collecting through a gateway that
-// charges nothing. The profile closes that: outside `dev` this bean does not exist, whatever the
-// property says, and the registry then reports no gateway wired instead of pretending to have one.
-@Profile("dev")
+// charges nothing. The profile closes that: only `dev` and `demo` register this bean (demo is
+// staging, where the fake gateway lets a tester run the whole card flow). In PRODUCTION — any other
+// profile — the bean does not exist whatever the property says, and the registry then reports no
+// gateway wired instead of pretending to have one. The day a real municipality collects for real,
+// its profile must NOT be `demo`.
+@Profile({"dev", "demo"})
 @ConditionalOnProperty(name = "luparx.payments.provider", havingValue = PaymentsProperties.SIMULATED,
         matchIfMissing = true)
 public class SimulatedPaymentGateway implements PaymentGateway {

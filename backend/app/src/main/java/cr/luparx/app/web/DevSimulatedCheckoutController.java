@@ -54,7 +54,7 @@ import java.util.UUID;
  */
 @RestController
 @RequestMapping("/dev/payments/checkout")
-@Profile("dev")
+@Profile({"dev", "demo"})
 // Also conditional on the provider, not only on the profile: a developer testing a real sandbox in the
 // dev profile has no simulated gateway bean, and a page that demanded one would stop the context from
 // starting over a fixture.

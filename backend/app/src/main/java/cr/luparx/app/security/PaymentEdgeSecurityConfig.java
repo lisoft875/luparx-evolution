@@ -57,7 +57,7 @@ public class PaymentEdgeSecurityConfig {
      */
     @Bean
     @Order(4)
-    @Profile("dev")
+    @Profile({"dev", "demo"})
     public SecurityFilterChain simulatedCheckoutChain(HttpSecurity http) throws Exception {
         http.securityMatcher("/dev/payments/**")
                 .cors(cors -> cors.disable())

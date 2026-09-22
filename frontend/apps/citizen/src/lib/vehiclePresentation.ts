@@ -46,9 +46,31 @@ export interface VehicleDescriptorOptions {
 /** `Mi carro · Toyota Yaris · Gris · 2015`, with every missing part dropped. */
 export function vehicleDescriptor(vehicle: Vehicle, options: VehicleDescriptorOptions = {}): string {
   const makeAndModel = [vehicle.brand, vehicle.model].filter(Boolean).join(' ').trim() || undefined;
+  const nombre = vehicle.name?.trim() || undefined;
+
+  /*
+    El apodo se omite cuando ya está contenido en marca+modelo. Mucha gente llama a su carro por el
+    modelo, así que con `name: "Rav4"`, `brand: "Toyota"` y `model: "Rav4"` esto producía
+    «Rav4 · Toyota Rav4 · Blanco · 2018» —el modelo dos veces en la misma línea— porque el apodo y
+    marca+modelo eran posiciones independientes que nadie comparaba (auditoría del 22-09-2026).
+
+    La comparación ignora mayúsculas y acentos: quien escribe «rav4» o «RAV-4» quiere decir lo
+    mismo, y una coincidencia que falla por una tilde deja el defecto intacto. Se comprueba por
+    INCLUSIÓN y no por igualdad, porque el apodo suele ser sólo el modelo mientras marca+modelo trae
+    también la marca.
+  */
+  const normalizar = (texto: string): string =>
+    texto
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]/gi, '')
+      .toLowerCase();
+  const nombreRedundante =
+    !!nombre && !!makeAndModel && normalizar(makeAndModel).includes(normalizar(nombre));
+
   const parts = [
-    options.includeName ? vehicle.name?.trim() || undefined : undefined,
-    makeAndModel ?? (options.includeName ? undefined : vehicle.name?.trim() || undefined),
+    options.includeName && !nombreRedundante ? nombre : undefined,
+    makeAndModel ?? (options.includeName ? undefined : nombre),
     options.colorLabel,
     options.includeYear !== false && vehicle.year ? String(vehicle.year) : undefined,
   ];
