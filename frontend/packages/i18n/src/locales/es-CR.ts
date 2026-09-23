@@ -1553,6 +1553,10 @@ export const esCR = {
     'La boleta se emitió sin ubicación GPS. Queda constancia de que no hubo coordenadas.',
   'citation.clockSkew.seconds': '{{seconds}} s',
 
+  // Una consulta que NO concluyó: se rechazó por falta de señal, placa ilegible o bahía fuera de
+  // zona, así que quedó con su código de rechazo y sin veredicto. No es «desconocido» por error:
+  // es que no se llegó a preguntar.
+  'plate.verdict.unknown': 'Sin resolver',
   'plate.verdict.exempt': 'Exonerado',
   'plate.verdict.expired': 'Pago vencido',
   'plate.verdict.covered': 'Pago vigente en esta bahía',

@@ -1511,6 +1511,7 @@ export const enUS: Record<TranslationKey, string> = {
     'The citation was issued without GPS. It is recorded that no coordinates were taken.',
   'citation.clockSkew.seconds': '{{seconds}} s',
 
+  'plate.verdict.unknown': 'Unresolved',
   'plate.verdict.exempt': 'Exempt',
   'plate.verdict.expired': 'Payment expired',
   'plate.verdict.covered': 'Paid for this bay',

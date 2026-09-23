@@ -154,8 +154,14 @@ public class AdminDashboardController {
                                         zone.percent()))
                                 .toList()),
                 data.checks().stream()
+                        // El veredicto puede ser NULO y no es un caso raro: una consulta rechazada
+                        // —sin señal, placa ilegible, fuera de zona— se guarda con su `refusalCode`
+                        // y sin veredicto, porque no concluyó nada. Sin esta guarda el panel entero
+                        // devolvía 500 en cuanto el período incluía una, y se llevaba también los
+                        // KPIs del Inicio, que leen el mismo endpoint. El mapeo de estacionamientos,
+                        // tres líneas más arriba, ya protegía su nulo; este no.
                         .map(group -> new DashboardDtos.VerdictGroupDto(group.verdict(),
-                                group.verdict().labelKey(), group.count()))
+                                verdictLabelKey(group.verdict()), group.count()))
                         .toList(),
                 data.citations().stream()
                         .map(group -> new DashboardDtos.CitationGroupDto(group.status(),
@@ -183,6 +189,25 @@ public class AdminDashboardController {
     }
 
     /** Null stays null, as everywhere: an absent amount is not an amount of zero. */
+    /**
+     * La etiqueta de un veredicto, incluido el caso en que no hay veredicto.
+     *
+     * <p>El veredicto es NULO y no es un caso raro: una consulta rechazada —sin señal, placa
+     * ilegible, bahía fuera de zona— se guarda con su código de rechazo y sin veredicto, porque no
+     * concluyó nada. La columna es nullable justamente para poder decir eso.</p>
+     *
+     * <p>Sin esta guarda el panel devolvía <b>500</b> en cuanto el período incluía una de esas, y se
+     * llevaba también los KPIs del Inicio, que leen el mismo endpoint. El mapeo de estacionamientos,
+     * unas líneas más arriba, ya protegía su nulo desde el principio; éste nunca lo hizo, y el fallo
+     * esperó a que alguien rechazara una consulta para aparecer.</p>
+     *
+     * <p>Método aparte —y no un ternario dentro del `map`— para poder probarlo: la regla que hay que
+     * dejar escrita es que un veredicto ausente tiene nombre, no que este `stream` esté bien.</p>
+     */
+    static String verdictLabelKey(cr.luparx.enforcement.model.PlateVerdict verdict) {
+        return verdict == null ? "plate.verdict.unknown" : verdict.labelKey();
+    }
+
     private static ParkingDtos.MoneyDto money(Money amount) {
         return amount == null ? null : new ParkingDtos.MoneyDto(amount.minorUnits(), amount.currencyCode());
     }
