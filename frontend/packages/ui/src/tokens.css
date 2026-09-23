@@ -1016,6 +1016,10 @@ body {
   top: var(--lx-topbar-height);
   height: calc(100dvh - var(--lx-topbar-height));
   overflow-y: auto;
+  /* El scroll del menú termina en el menú. Sin esto, al llegar al final de la lista la rueda
+     sigue de largo y se lleva la página entera, que es la otra mitad de «el menú se mueve solo»:
+     la persona cree que sigue moviendo el menú y lo que se movió fue todo lo demás. */
+  overscroll-behavior: contain;
 }
 .lx-page-layout__content {
   flex: 1;
