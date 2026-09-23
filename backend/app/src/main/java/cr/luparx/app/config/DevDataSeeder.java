@@ -29,6 +29,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Profile;
 import org.springframework.data.domain.PageRequest;
@@ -181,6 +182,14 @@ public class DevDataSeeder implements ApplicationRunner {
     private final DevActivitySeeder activitySeeder;
     private final DevEnforcementSeeder enforcementSeeder;
     private final DevSeedProperties properties;
+    /**
+     * El andamio visual del Inicio, cuando está encendido.
+     *
+     * <p>{@code ObjectProvider} y no una dependencia normal: ese bean sólo existe cuando
+     * {@code luparx.dev.seed-dashboard-demo} vale {@code true}, y exigirlo siempre convertiría una
+     * bandera apagada en un arranque fallido.</p>
+     */
+    private final ObjectProvider<DevDashboardSeeder> dashboardSeeder;
 
     public DevDataSeeder(PlatformDefaultsProperties defaults,
                          TenantService tenantService,
@@ -195,7 +204,8 @@ public class DevDataSeeder implements ApplicationRunner {
                          DevParkingSeeder parkingSeeder,
                          DevActivitySeeder activitySeeder,
                          DevEnforcementSeeder enforcementSeeder,
-                         DevSeedProperties properties) {
+                         DevSeedProperties properties,
+                         ObjectProvider<DevDashboardSeeder> dashboardSeeder) {
         this.defaults = defaults;
         this.tenantService = tenantService;
         this.tenantRepository = tenantRepository;
@@ -210,6 +220,7 @@ public class DevDataSeeder implements ApplicationRunner {
         this.activitySeeder = activitySeeder;
         this.enforcementSeeder = enforcementSeeder;
         this.properties = properties;
+        this.dashboardSeeder = dashboardSeeder;
     }
 
     @Override
@@ -423,6 +434,17 @@ public class DevDataSeeder implements ApplicationRunner {
         } catch (RuntimeException exception) {
             LOGGER.warn("Development seed: enforcement fixture skipped ({}).", exception.toString());
         }
+        // Y al final del todo, si alguien lo encendió: los pagos y la ocupación que hacen mirable la
+        // portada del administrador. Va acá y no como su propio ApplicationRunner para no depender
+        // del orden en que Spring los llame: necesita las zonas y las bahías que creó todo lo de
+        // arriba.
+        dashboardSeeder.ifAvailable(seeder -> {
+            try {
+                seeder.seed(tenants, citizenUserId());
+            } catch (RuntimeException exception) {
+                LOGGER.warn("Development seed: dashboard demo data skipped ({}).", exception.toString());
+            }
+        });
     }
 
     /**

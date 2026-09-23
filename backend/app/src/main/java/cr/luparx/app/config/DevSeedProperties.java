@@ -20,7 +20,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  *                           with five thousand bays each would be a load test, not a fixture
  */
 @ConfigurationProperties(prefix = "luparx.dev")
-public record DevSeedProperties(Boolean seedDemoData, Integer parkingSpaces, Integer parkingSpacesTotal) {
+public record DevSeedProperties(Boolean seedDemoData, Boolean seedDashboardDemo, Integer parkingSpaces,
+                                Integer parkingSpacesTotal) {
 
     /** Used when {@code luparx.dev.parking-spaces} is absent or not a positive number. */
     public static final int DEFAULT_PARKING_SPACES = 5_000;

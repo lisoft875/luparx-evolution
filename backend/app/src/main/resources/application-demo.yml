@@ -38,6 +38,12 @@ luparx:
     # Cinco municipalidades, sus zonas, tarifas, horarios, espacios numerados y unos ciudadanos con
     # billetera e historial (DevDataSeeder + DevParkingSeeder + DevActivitySeeder).
     seed-demo-data: ${LUPARX_DEV_SEED_DEMO_DATA:true}
+    # Andamio visual del Inicio del administrador: pagos de siete días y ocupación por zona, para
+    # poder comparar la pantalla contra su referencia. APAGADO por omisión y a propósito — el
+    # sembrado de arriba es el estado normal de esta instancia, esto es un andamio que se levanta
+    # para sacar una captura y se baja después, y un andamio que se enciende solo es uno que
+    # alguien se olvida de bajar. DevDashboardSeeder documenta cómo se borra lo que escribe.
+    seed-dashboard-demo: ${LUPARX_DEV_SEED_DASHBOARD_DEMO:false}
     # Menos espacios que en la laptop: 5 000 filas por municipalidad son útiles para probar
     # paginación y una pérdida de tiempo y de disco en una instancia de demostración.
     parking-spaces: ${LUPARX_DEV_PARKING_SPACES:800}

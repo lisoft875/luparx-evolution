@@ -30,6 +30,7 @@ luparx:
     # when the rows are already there. The beans only exist under this profile; set to false to keep
     # the database untouched.
     seed-demo-data: ${LUPARX_DEV_SEED_DEMO_DATA:true}
+    seed-dashboard-demo: ${LUPARX_DEV_SEED_DASHBOARD_DEMO:false}
     # How many bays the LAUNCH municipality (San José) creates, codes "0001".."NNNN", dealt to its
     # zones in contiguous blocks. Configuration rather than a constant in Java so a developer can seed
     # 50 while debugging a screen and the full set when exercising pagination. Values above 9999 are

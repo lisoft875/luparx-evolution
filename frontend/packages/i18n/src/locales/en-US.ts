@@ -331,7 +331,7 @@ export const enUS: Record<TranslationKey, string> = {
   'admin.home.kpi.noBaysHint': 'No zone has numbered bays, so there is nothing to measure it against.',
   'admin.home.revenue.title': 'Revenue over the last 7 days',
   'admin.home.revenue.description': 'Captured each day, in the municipality\u2019s own calendar.',
-  'admin.home.revenue.empty': 'No captured payments in this period yet.',
+  'admin.home.revenue.empty': 'No revenue recorded in this period.',
   'admin.home.revenue.columnDay': 'Day',
   'admin.home.revenue.columnAmount': 'Collected',
   'admin.home.zones.title': 'Occupancy by zone',

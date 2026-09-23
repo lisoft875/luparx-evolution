@@ -347,7 +347,7 @@ export const esCR = {
   'admin.home.kpi.noBaysHint': 'Ninguna zona tiene bahías numeradas, así que no hay contra qué medirla.',
   'admin.home.revenue.title': 'Recaudación de los últimos 7 días',
   'admin.home.revenue.description': 'Lo capturado cada día, en el calendario de la municipalidad.',
-  'admin.home.revenue.empty': 'Todavía no hay pagos capturados en este período.',
+  'admin.home.revenue.empty': 'Sin recaudación registrada en este período.',
   'admin.home.revenue.columnDay': 'Día',
   'admin.home.revenue.columnAmount': 'Recaudado',
   'admin.home.zones.title': 'Ocupación por zona',
