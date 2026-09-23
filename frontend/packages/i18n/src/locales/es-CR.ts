@@ -15,6 +15,10 @@ export const esCR = {
   'common.error.network': 'No se pudo conectar con el servidor.',
   'common.empty': 'No hay datos para mostrar.',
   'common.retry': 'Reintentar',
+  'app.error.title': 'Algo se rompió en esta pantalla',
+  'app.error.body':
+    'No es culpa suya y no se perdió nada de lo que estaba guardado. Puede reintentar; si vuelve ' +
+    'a pasar, pásele este mensaje a quien mantiene la plataforma.',
   // Support reference for a server-produced Problem Details (CONTRACT.md §4): the stable `code`
   // is what an engineer greps for and the `traceId` is what correlates the user's report with the
   // server's log line. Shown instead of a bare "something went wrong", which costs a whole

@@ -55,6 +55,8 @@ export { Chip, ChipGroup } from './components/Chip';
 export type { ChipProps, ChipGroupProps, ChipGroupOption } from './components/Chip';
 export { StepList } from './components/StepList';
 export type { StepListProps, Step, StepState } from './components/StepList';
+export { ErrorBoundary } from './components/ErrorBoundary';
+export type { ErrorBoundaryProps } from './components/ErrorBoundary';
 export { EmptyState } from './components/EmptyState';
 export type { EmptyStateProps, EmptyStateTone } from './components/EmptyState';
 export { Badge } from './components/Badge';

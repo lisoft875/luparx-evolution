@@ -2,7 +2,7 @@ import * as React from 'react';
 import { BrowserRouter, HashRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { I18nProvider } from '@luparx/i18n';
-import { LocalePreferenceSync, TenantCacheReset } from '@luparx/features';
+import { LocalePreferenceSync, TenantCacheReset, PortalErrorBoundary } from '@luparx/features';
 import { AuthProvider, RequireAuth, RequireTenant } from '@luparx/auth';
 import { mockFetch } from '@luparx/api-client/mocks';
 import { API_BASE_URL, PORTAL, USE_MOCKS } from './env';
@@ -70,6 +70,10 @@ const routerProps = import.meta.env.VITE_ROUTER === 'hash' ? {} : { basename: BA
 export function App(): React.JSX.Element {
   return (
     <I18nProvider storageScope={PORTAL}>
+      {/* Lo primero adentro del idioma y lo último antes de todo lo demás: un fallo de
+          render en cualquier pantalla se detiene acá en vez de vaciar el portal entero
+          (23-09-2026). */}
+      <PortalErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <AuthProvider portal={PORTAL} apiBaseUrl={API_BASE_URL} fetchImpl={USE_MOCKS ? mockFetch : undefined}>
           <LocalePreferenceSync />
@@ -207,6 +211,7 @@ export function App(): React.JSX.Element {
           </Router>
         </AuthProvider>
       </QueryClientProvider>
+      </PortalErrorBoundary>
     </I18nProvider>
   );
 }

@@ -163,7 +163,19 @@ async function medir(page, dedo) {
       if (etiquetas[i].left < etiquetas[i - 1].right - 1) ejesEncimados++;
     }
 
-    return { desborde, anchos: anchos.slice(0, 4), kpis, primeraFila, rotas, encimados, chicos: chicos.slice(0, 5), barras, franja, zonas, accesos, ejesEncimados, textoPagina };
+    // Dónde estamos parados de verdad. Sin esto, «0 KPIs» es indistinguible de «la página reventó»
+    // y de «esto es la pantalla de login»: tres hechos distintos con la misma salida. Ya costó dos
+    // vueltas creerle a un arnés que medía otra pantalla.
+    const donde = {
+      ruta: location.pathname,
+      titulo: rec(document.querySelector('h1')?.textContent).slice(0, 60),
+      hayShell: Boolean(document.querySelector('.lx-nav')),
+      // Un React sin error boundary deja el contenedor vacío cuando algo revienta al renderizar.
+      raizVacia: (document.querySelector('#root')?.childElementCount ?? 0) === 0,
+      primerTexto: rec(document.body.textContent).slice(0, 120),
+    };
+
+    return { desborde, anchos: anchos.slice(0, 4), kpis, primeraFila, rotas, encimados, chicos: chicos.slice(0, 5), barras, franja, zonas, accesos, ejesEncimados, textoPagina, donde };
   }, dedo);
 }
 
@@ -189,6 +201,19 @@ async function medir(page, dedo) {
       ignoreHTTPSErrors: true,
     });
     const page = await ctx.newPage();
+    // Lo que la pantalla no puede decir. Un fallo de render no deja rastro en el DOM —deja el DOM
+    // vacío— así que el único lugar donde queda escrito es la consola.
+    const consola = [];
+    page.on('console', (msg) => {
+      if (msg.type() === 'error') consola.push(msg.text().slice(0, 200));
+    });
+    page.on('pageerror', (err) => consola.push(`pageerror: ${String(err.message).slice(0, 200)}`));
+    const fallidas = [];
+    page.on('response', (res) => {
+      if (res.status() >= 400 && res.url().includes('/api/')) {
+        fallidas.push(`${res.status()} ${res.url().replace(BASE, '')}`);
+      }
+    });
     try {
       await page.goto(`${BASE}/admin/`, { waitUntil: 'domcontentloaded' });
       // El Inicio hace tres consultas; se espera a que las barras o el vacío del gráfico existan.
@@ -220,6 +245,14 @@ async function medir(page, dedo) {
         fallos++;
         console.log(`  ✗   ${tam.nombre.padEnd(18)} ${tam.width}x${tam.height}`);
         for (const p of problemas) console.log(`        ${p}`);
+        // El contexto se imprime SIEMPRE que algo falla, no sólo cuando se sospecha: la vez que no
+        // se imprime es la vez que se necesitaba.
+        console.log(`        ruta=${r.donde.ruta} · h1="${r.donde.titulo}" · shell=${r.donde.hayShell} · raízVacía=${r.donde.raizVacia}`);
+        if (r.donde.raizVacia || !r.donde.hayShell) {
+          console.log(`        body: "${r.donde.primerTexto}"`);
+        }
+        for (const linea of consola.slice(0, 4)) console.log(`        consola: ${linea}`);
+        for (const linea of fallidas.slice(0, 4)) console.log(`        API: ${linea}`);
       }
     } catch (e) {
       fallos++;

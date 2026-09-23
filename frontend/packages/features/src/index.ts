@@ -1,3 +1,4 @@
+export { PortalErrorBoundary } from './PortalErrorBoundary';
 export { RegistrationForm } from './registration/RegistrationForm';
 export type { RegistrationFormProps } from './registration/RegistrationForm';
 export { AcceptInvitationForm } from './invitation/AcceptInvitationForm';

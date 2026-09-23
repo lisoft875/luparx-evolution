@@ -3176,3 +3176,47 @@ button.lx-list-row {
   font-size: 0.75rem;
   white-space: nowrap;
 }
+
+/* --- Error boundary ---------------------------------------------------------------------------
+   Lo que se ve en vez de una pantalla en blanco. Centrado y sobre el fondo de siempre: sigue siendo
+   la aplicación, no una página de error del servidor. */
+.lx-error-boundary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100dvh;
+  padding: var(--lx-space-4);
+  background: var(--lx-bg);
+}
+
+.lx-error-boundary__card {
+  max-width: 34rem;
+  padding: var(--lx-space-5);
+  border: 1px solid var(--lx-border);
+  border-radius: var(--lx-radius-lg);
+  background: var(--lx-surface);
+}
+
+.lx-error-boundary__title {
+  margin: 0 0 var(--lx-space-2);
+  color: var(--lx-text);
+  font-size: 1.25rem;
+}
+
+.lx-error-boundary__body {
+  margin: 0 0 var(--lx-space-3);
+  color: var(--lx-text-muted);
+}
+
+/* El detalle técnico se puede seleccionar y copiar: es para pegarlo en un reporte. Quiebra en vez
+   de desbordar —un mensaje de error con scroll horizontal se copia a medias—. */
+.lx-error-boundary__detail {
+  margin: 0 0 var(--lx-space-4);
+  padding: var(--lx-space-3);
+  border-radius: var(--lx-radius-sm);
+  background: var(--lx-surface-2);
+  color: var(--lx-text-muted);
+  font-size: 0.8125rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}

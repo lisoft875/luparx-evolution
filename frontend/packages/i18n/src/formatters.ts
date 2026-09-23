@@ -2,6 +2,46 @@ import type { SupportedLocale } from './locale';
 import { minorToMajor } from './currency';
 import { applyNumberSymbolOverrides, currencyDisplayFractionDigits, localeHourCycle } from './presentation';
 
+/**
+ * Los campos que `Intl` NO deja convivir con `dateStyle`/`timeStyle`.
+ *
+ * <p>Pedir «mes corto y día» junto a un estilo entero no es una combinación rara: es un
+ * {@code TypeError} en el constructor. Y como estos ayudantes traen el estilo por omisión, bastaba
+ * con pedir `{ day: 'numeric', month: 'short' }` —una llamada que se lee perfectamente válida— para
+ * que reventara. El 23-09-2026 eso dejó el portal de administración COMPLETAMENTE en blanco: no hay
+ * error boundary, así que un formateo mal armado desmonta la aplicación entera.</p>
+ */
+const CAMPOS_SUELTOS = [
+  'weekday',
+  'era',
+  'year',
+  'month',
+  'day',
+  'dayPeriod',
+  'hour',
+  'minute',
+  'second',
+  'fractionalSecondDigits',
+  'timeZoneName',
+] as const;
+
+/**
+ * El estilo por omisión, salvo que quien llama esté pidiendo campos sueltos.
+ *
+ * <p>Ese «salvo» es el punto: un valor por omisión que no se puede quitar no es un valor por
+ * omisión, es una trampa. Quien pide `{ month: 'short', day: 'numeric' }` está diciendo con
+ * claridad que no quiere el estilo entero, y hasta ahora la única forma de decirlo era además
+ * acordarse de escribir `dateStyle: undefined`.</p>
+ */
+function conEstilo(
+  porOmision: Intl.DateTimeFormatOptions,
+  options?: Intl.DateTimeFormatOptions,
+): Intl.DateTimeFormatOptions {
+  if (!options) return porOmision;
+  const pideCampos = CAMPOS_SUELTOS.some((campo) => options[campo] !== undefined);
+  return pideCampos ? { ...options } : { ...porOmision, ...options };
+}
+
 /** Locale-aware date formatting. Pass `timeZone` explicitly for tenant/user-zone conversion; UTC is the storage format. */
 export function formatDate(
   value: Date | string,
@@ -9,7 +49,7 @@ export function formatDate(
   options?: Intl.DateTimeFormatOptions & { timeZone?: string },
 ): string {
   const date = typeof value === 'string' ? new Date(value) : value;
-  return new Intl.DateTimeFormat(locale, { dateStyle: 'medium', ...options }).format(date);
+  return new Intl.DateTimeFormat(locale, conEstilo({ dateStyle: 'medium' }, options)).format(date);
 }
 
 /**
@@ -24,10 +64,8 @@ export function formatDateTime(
 ): string {
   const date = typeof value === 'string' ? new Date(value) : value;
   return new Intl.DateTimeFormat(locale, {
-    dateStyle: 'medium',
-    timeStyle: 'short',
     hourCycle: localeHourCycle(locale),
-    ...options,
+    ...conEstilo({ dateStyle: 'medium', timeStyle: 'short' }, options),
   }).format(date);
 }
 
@@ -42,7 +80,10 @@ export function formatTime(
   options?: Intl.DateTimeFormatOptions & { timeZone?: string },
 ): string {
   const date = typeof value === 'string' ? new Date(value) : value;
-  return new Intl.DateTimeFormat(locale, { timeStyle: 'short', hourCycle: localeHourCycle(locale), ...options }).format(date);
+  return new Intl.DateTimeFormat(locale, {
+    hourCycle: localeHourCycle(locale),
+    ...conEstilo({ timeStyle: 'short' }, options),
+  }).format(date);
 }
 
 /**

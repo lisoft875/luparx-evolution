@@ -16,6 +16,10 @@ export const enUS: Record<TranslationKey, string> = {
   'common.error.network': 'Could not connect to the server.',
   'common.empty': 'No data to display.',
   'common.retry': 'Retry',
+  'app.error.title': 'Something broke on this screen',
+  'app.error.body':
+    'This is not your fault and nothing that was saved has been lost. You can retry; if it keeps ' +
+    'happening, pass this message to whoever maintains the platform.',
   'common.error.reference': 'Code {{code}} · Trace {{traceId}}',
   'common.error.referenceNoTrace': 'Code {{code}}',
   'common.cancel': 'Cancel',
