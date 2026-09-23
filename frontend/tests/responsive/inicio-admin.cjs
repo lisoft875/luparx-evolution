@@ -119,6 +119,13 @@ async function medir(page, dedo) {
 
     // --- cifras rotas: lo que la §14 prohíbe mostrar ---
     const textoPagina = rec(document.querySelector('main')?.textContent);
+    // Literal, NUNCA expresión regular. La primera versión hacía
+    // `new RegExp('\\b' + mala + '\\b')`, y con `[object Object]` eso no busca ese texto: los
+    // corchetes lo convierten en una CLASE de caracteres —{o,b,j,e,c,t,espacio,O}— así que el patrón
+    // pasa a ser «un carácter de ese conjunto entre dos límites de palabra». Un espacio cumple, y
+    // entonces marcaba como rota cualquier pantalla que tuviera un espacio: las ocho, siempre.
+    // Costó un ciclo entero de deploy perseguir un defecto que no existía.
+    //
     // No basta con decir QUE hay una cifra rota: hay que decir DÓNDE. «[object Object]» repetido en
     // ocho tamaños sin más pista obliga a adivinar cuál de veinte campos es, que es el mismo punto
     // ciego que tenía este arnés cuando decía «0 KPIs» sin decir que la página había reventado.
