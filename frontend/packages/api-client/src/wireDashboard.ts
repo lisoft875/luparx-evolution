@@ -1,4 +1,4 @@
-import type { Dashboard } from './types/domain';
+import type { Dashboard, RevenueSeries } from './types/domain';
 
 /**
  * Wire adapter for the dashboard (v0.36).
@@ -123,5 +123,35 @@ export function toDashboard(wire: WireDashboard): Dashboard {
         amountMinor: row.amount.amountMinor,
       })),
     },
+  };
+}
+
+export interface WireRevenueSeries {
+  from: string;
+  to: string;
+  zone: string;
+  days?: { date: string; total: WireMoney; count: number }[] | null;
+  total: WireMoney;
+}
+
+/**
+ * La serie diaria de recaudación.
+ *
+ * <p>La moneda sale del total y no de la primera barra: un rango donde el primer día no recaudó
+ * nada trae igual su moneda —el servidor escribe el cero con ella— pero depender de una fila que
+ * podría no existir es cómo se cuela un `undefined` en un eje de dinero.</p>
+ */
+export function toRevenueSeries(wire: WireRevenueSeries): RevenueSeries {
+  return {
+    from: wire.from,
+    to: wire.to,
+    zone: wire.zone,
+    currencyCode: wire.total.currencyCode,
+    totalMinor: wire.total.amountMinor,
+    days: (wire.days ?? []).map((day) => ({
+      date: day.date,
+      totalMinor: day.total.amountMinor,
+      count: day.count,
+    })),
   };
 }

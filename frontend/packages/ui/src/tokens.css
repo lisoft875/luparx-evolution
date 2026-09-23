@@ -2858,3 +2858,321 @@ button.lx-list-row {
   flex: 1 1 160px;
   min-width: 0;
 }
+
+/* --- Gráfico de barras ------------------------------------------------------------------------
+   Un solo color para todas las barras: la altura ya dice cuál es la más alta, y teñir por tamaño
+   codificaría dos veces lo mismo. El acento queda para la barra seleccionada, que es otra cosa —
+   dónde está parada la persona— y no un valor. */
+.lx-bars {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lx-space-2);
+}
+
+.lx-bars__callout {
+  display: flex;
+  align-items: baseline;
+  gap: var(--lx-space-2);
+  margin: 0;
+  /* Altura reservada aunque no haya nada seleccionado: si no, el gráfico entero salta hacia
+     arriba y hacia abajo cada vez que el mouse entra y sale. */
+  min-height: 1.5rem;
+}
+
+.lx-bars__callout-label {
+  color: var(--lx-text-muted);
+  font-size: 0.8125rem;
+}
+
+.lx-bars__callout-value {
+  color: var(--lx-text);
+  font-size: 1rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.lx-bars__plot {
+  display: flex;
+  gap: var(--lx-space-2);
+}
+
+.lx-bars__axis {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  /* El alto del área de barras menos el renglón de las fechas, para que las marcas caigan sobre
+     las líneas y no entre ellas. */
+  height: 160px;
+  color: var(--lx-text-subtle);
+  font-size: 0.6875rem;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.lx-bars__track {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  /* El espacio entre barras lo hace el fondo, no un borde: un contorno agrega tinta que no es
+     dato. 2px, igual para todas. */
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+  height: 180px;
+}
+
+.lx-bars__grid {
+  position: absolute;
+  inset: 0 0 20px 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  pointer-events: none;
+}
+
+.lx-bars__grid-line {
+  height: 1px;
+  background: var(--lx-border);
+}
+
+.lx-bars__col {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: stretch;
+  gap: 4px;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  /* El área de toque es la columna entera y no sólo la barra: una barra de tres píxeles de alto
+     —un día flojo— sería imposible de tocar en un teléfono. */
+  -webkit-tap-highlight-color: transparent;
+}
+
+.lx-bars__col:focus-visible {
+  outline: 2px solid var(--lx-focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--lx-radius-sm);
+}
+
+.lx-bars__bar {
+  display: block;
+  width: 100%;
+  /* Redondeada arriba y cuadrada contra la base: la base es el cero y un cero redondeado se lee
+     como si la barra flotara. */
+  border-radius: 4px 4px 0 0;
+  background: var(--lx-primary);
+  /* Un día en cero sigue siendo un día: se ve el tope apoyado en la línea de base en vez de
+     desaparecer y dejar un hueco que se lee como dato faltante. */
+  min-height: 2px;
+  transition: background 120ms ease;
+}
+
+.lx-bars__col--on .lx-bars__bar {
+  background: var(--lx-primary-2);
+}
+
+.lx-bars__col-label {
+  height: 16px;
+  overflow: hidden;
+  color: var(--lx-text-subtle);
+  font-size: 0.6875rem;
+  line-height: 16px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+@media (max-width: 520px) {
+  .lx-bars__track,
+  .lx-bars__axis {
+    height: 140px;
+  }
+  .lx-bars__track {
+    height: 160px;
+  }
+  /* En un teléfono no caben siete fechas completas; se achican antes que encimarse. */
+  .lx-bars__col-label {
+    font-size: 0.625rem;
+  }
+}
+
+/* --- Portada administrativa (Inicio del admin) -------------------------------------------------
+   §13 de la especificación del 23-09-2026: escritorio 4 KPIs en una fila y los módulos en 2/3+1/3;
+   tablet 2 KPIs por fila y los módulos apilados; móvil 1 KPI por fila. Con `auto-fit` y un mínimo
+   no hay que escribir esos tres casos: las columnas caben las que caben. Lo que sí es decisión —y
+   por eso está escrito— es el mínimo: 220px es el ancho donde un monto en colones con separadores
+   todavía entra en un renglón. Por debajo el número se parte, y un monto partido en dos líneas se
+   lee mal aunque el layout «funcione». */
+.lx-home-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--lx-space-3);
+}
+
+/* Dos tercios y un tercio, hasta que no caben. El mínimo de 320px es el ancho donde el gráfico de
+   siete barras deja de ser legible; antes de llegar ahí las dos columnas se apilan. */
+.lx-home-split {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: var(--lx-space-3);
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .lx-home-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* La franja de estado. Envuelve en vez de comprimirse: un indicador de estado ilegible es peor que
+   uno en el renglón de abajo. */
+.lx-status-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--lx-space-2) var(--lx-space-4);
+  align-items: center;
+}
+
+.lx-status-strip__item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--lx-space-2);
+  color: var(--lx-text-muted);
+  font-size: 0.8125rem;
+  white-space: nowrap;
+}
+
+/* El punto NUNCA va solo: el estado lo dice la palabra que tiene al lado. Un tablero que informa
+   sólo por color no informa a quien no distingue el verde del ámbar, y tampoco a quien mira la
+   pantalla al sol. */
+.lx-status-strip__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.lx-status-strip__dot--ok { background: var(--lx-success); }
+.lx-status-strip__dot--warn { background: var(--lx-warning); }
+.lx-status-strip__dot--bad { background: var(--lx-danger); }
+/* Sin fuente de datos: gris, que es la ausencia de estado y no un estado más. */
+.lx-status-strip__dot--none {
+  background: transparent;
+  border: 1px dashed var(--lx-text-subtle);
+}
+
+/* Ocupación por zona: una barra por zona, con su porcentaje al lado en texto. */
+.lx-zone-bar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--lx-space-2);
+  align-items: center;
+  padding: var(--lx-space-2) 0;
+}
+
+.lx-zone-bar__name {
+  color: var(--lx-text);
+  font-size: 0.875rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lx-zone-bar__value {
+  color: var(--lx-text-muted);
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.lx-zone-bar__track {
+  grid-column: 1 / -1;
+  height: 8px;
+  border-radius: 4px;
+  /* La pista es un paso del mismo tono, no un gris: así el estado se lee a lo largo de toda la
+     barra y no sólo donde hay relleno. */
+  background: var(--lx-surface-2);
+  overflow: hidden;
+}
+
+.lx-zone-bar__fill {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  background: var(--lx-primary);
+}
+
+/* El lleno se tiñe por severidad —no por identidad—: una zona al tope es una decisión operativa
+   distinta de una a la mitad. */
+.lx-zone-bar__fill--warn { background: var(--lx-warning); }
+.lx-zone-bar__fill--full { background: var(--lx-danger); }
+
+/* Accesos rápidos: tarjetas de navegación, no botones sueltos. */
+.lx-quick-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--lx-space-2);
+}
+
+.lx-quick-action {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--lx-space-3);
+  border: 1px solid var(--lx-border);
+  border-radius: var(--lx-radius-md);
+  background: var(--lx-surface-2);
+  color: inherit;
+  text-decoration: none;
+  /* 44px de alto mínimo: el objetivo táctil que no obliga a apuntar. */
+  min-height: 44px;
+}
+
+.lx-quick-action:hover {
+  background: var(--lx-surface-hover);
+}
+
+.lx-quick-action__title {
+  color: var(--lx-text);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.lx-quick-action__hint {
+  color: var(--lx-text-muted);
+  font-size: 0.75rem;
+}
+
+/* Actividad reciente: una fila por evento. */
+.lx-activity-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--lx-space-2);
+  align-items: baseline;
+  padding: var(--lx-space-2) 0;
+  border-top: 1px solid var(--lx-border);
+}
+
+.lx-activity-row:first-of-type {
+  border-top: 0;
+}
+
+.lx-activity-row__what {
+  color: var(--lx-text);
+  font-size: 0.875rem;
+}
+
+.lx-activity-row__who {
+  color: var(--lx-text-muted);
+  font-size: 0.75rem;
+}
+
+.lx-activity-row__when {
+  color: var(--lx-text-subtle);
+  font-size: 0.75rem;
+  white-space: nowrap;
+}

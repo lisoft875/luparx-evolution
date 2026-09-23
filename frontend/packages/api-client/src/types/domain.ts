@@ -2657,6 +2657,31 @@ export interface Dashboard {
   paymentFailures: DashboardPaymentFailures;
 }
 
+/**
+ * Lo recaudado día por día.
+ *
+ * @see `GET /api/v1/admin/dashboard/revenue-series`
+ */
+export interface RevenueSeries {
+  /** Fecha ISO, en el calendario de la municipalidad. */
+  from: string;
+  to: string;
+  /** La zona horaria con la que se cortaron los días. Viene dicha para no tener que suponerla. */
+  zone: string;
+  currencyCode: string;
+  totalMinor: number;
+  /** Todos los días del rango. Un día sin recaudación viene en cero, no ausente. */
+  days: RevenueSeriesDay[];
+}
+
+export interface RevenueSeriesDay {
+  /** Fecha ISO `YYYY-MM-DD`, sin hora: es un día del calendario, no un instante. */
+  date: string;
+  totalMinor: number;
+  /** Cuántos pagos, no cuántas estadías: un pago puede cubrir más de una. */
+  count: number;
+}
+
 export interface DashboardRevenue {
   capturedGrossMinor: number;
   capturedNetMinor: number;

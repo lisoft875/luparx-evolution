@@ -27,6 +27,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -124,6 +126,57 @@ public class DashboardService {
                 exemptions(tenantId),
                 inspectors(tenantId, from, to),
                 paymentFailures(tenantId, from, to, currencyCode));
+    }
+
+    /**
+     * Lo recaudado día por día, con los días vacíos escritos como cero.
+     *
+     * <h2>El cero tiene que estar</h2>
+     *
+     * <p>La consulta sólo devuelve los días que tuvieron algo. Dibujar eso tal cual daría un gráfico
+     * de siete barras donde el domingo sin ventas simplemente no aparece, y el ojo lee eso como
+     * «faltan datos» o, peor, corre las fechas y hace ver el lunes donde va el martes. Un día sin
+     * recaudación es un hecho —la municipalidad no cobró— y se escribe como tal.</p>
+     *
+     * <h2>El día es el del reloj de la municipalidad</h2>
+     *
+     * <p>Los límites se calculan en su zona horaria, no en UTC: el «hoy» de San José empieza a las
+     * 06:00Z, y agrupar en UTC le pasaría la venta de las 7 p.m. al día siguiente.</p>
+     */
+    @Transactional(readOnly = true)
+    public RevenueSeries revenueSeries(TenantId tenantId, LocalDate from, LocalDate to, ZoneId zone,
+                                       String currencyCode) {
+        Map<LocalDate, long[]> porDia = new HashMap<>();
+        for (Object[] row : paymentRepository.capturedByDay(tenantId.value(),
+                DailyBuckets.startOf(from, zone), DailyBuckets.endOf(to, zone), zone.getId())) {
+            porDia.put(asLocalDate(row[0]), new long[] {
+                    ((Number) row[1]).longValue(),
+                    ((Number) row[2]).longValue() });
+        }
+
+        List<RevenueDay> days = DailyBuckets.fill(from, to, porDia, currencyCode);
+        long total = 0L;
+        for (RevenueDay day : days) {
+            total += day.total().minorUnits();
+        }
+        return new RevenueSeries(from, to, zone.getId(), days, Money.ofMinor(total, currencyCode));
+    }
+
+    /**
+     * La fecha de una consulta nativa, venga como venga.
+     *
+     * <p>Hibernate devuelve {@code LocalDate} para una columna {@code date}, pero un driver o una
+     * versión distinta puede entregar {@code java.sql.Date}. Costó descubrirlo una vez; no vale la
+     * pena que cueste dos.</p>
+     */
+    private static LocalDate asLocalDate(Object value) {
+        if (value instanceof LocalDate date) {
+            return date;
+        }
+        if (value instanceof java.sql.Date date) {
+            return date.toLocalDate();
+        }
+        return LocalDate.parse(String.valueOf(value));
     }
 
     // --- 1. recaudación ----------------------------------------------------------------------------
@@ -333,6 +386,18 @@ public class DashboardService {
     }
 
     public record TransactionGroup(WalletTransactionType type, long count, Money total) {
+    }
+
+    /**
+     * @param zone la zona horaria con la que se cortaron los días, dicha en voz alta para que nadie
+     *             tenga que suponer de qué calendario son esas fechas
+     */
+    public record RevenueSeries(LocalDate from, LocalDate to, String zone, List<RevenueDay> days,
+                                Money total) {
+    }
+
+    /** @param count cuántos pagos, no cuántas estadías: un pago puede cubrir más de una. */
+    public record RevenueDay(LocalDate date, Money total, long count) {
     }
 
     public record ParkingGroup(PaymentStatus paymentStatus, long count, Money total) {

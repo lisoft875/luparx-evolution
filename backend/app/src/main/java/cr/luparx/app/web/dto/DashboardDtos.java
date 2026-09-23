@@ -7,6 +7,7 @@ import cr.luparx.parking.model.PaymentStatus;
 import cr.luparx.parking.model.WalletTransactionType;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -21,6 +22,27 @@ import java.util.UUID;
 public final class DashboardDtos {
 
     private DashboardDtos() {
+    }
+
+    /**
+     * La recaudación con el eje del tiempo puesto: {@code GET /api/v1/admin/dashboard/revenue-series}.
+     *
+     * <p>Aparte del dashboard y no dentro, porque responde a otra pregunta. El dashboard dice cuánto
+     * se recaudó en un período; esto dice cómo se repartió, que es lo que deja ver el martes que cayó
+     * a la mitad. Meterlo adentro obligaría a cargar la serie a quien sólo quiere los totales.</p>
+     *
+     * @param zone la zona horaria con la que se cortaron los días. Va en la respuesta a propósito:
+     *             una fecha sin decir de qué calendario es invita a leerla en el del navegador
+     * @param days todos los días del rango, incluidos los que no recaudaron nada. Un día en cero es
+     *             un hecho —no se cobró— y omitirlo haría un gráfico con huecos que se leen como
+     *             datos faltantes
+     */
+    public record RevenueSeriesResponse(LocalDate from, LocalDate to, String zone,
+                                        List<RevenueDayDto> days, ParkingDtos.MoneyDto total) {
+    }
+
+    /** @param count cuántos pagos, no cuántas estadías: un pago puede cubrir más de una. */
+    public record RevenueDayDto(LocalDate date, ParkingDtos.MoneyDto total, long count) {
     }
 
     /**

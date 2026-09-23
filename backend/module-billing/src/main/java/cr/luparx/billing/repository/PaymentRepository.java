@@ -99,6 +99,43 @@ public interface PaymentRepository extends JpaRepository<Payment, UUID> {
                              @Param("to") Instant to);
 
     /**
+     * Lo capturado de cada día del período, en la zona horaria de la municipalidad.
+     *
+     * <p>Existe porque {@link #summarise} agrega el rango entero en un solo número y una municipalidad
+     * que mira su recaudación quiere ver la FORMA: el martes que cayó a la mitad, el viernes que se
+     * dispara. Un total de siete días no contesta eso, y siete llamadas de un día cada una convierten
+     * una pantalla en siete peticiones que pueden fallar por separado.</p>
+     *
+     * <p>Nativa, y no por gusto: el día de una municipalidad es un día <b>de su reloj</b>, y JPQL no
+     * tiene forma de truncar un instante a la fecha de una zona horaria. Agrupar en UTC le movería la
+     * recaudación de la noche al día siguiente a todo municipio al oeste de Greenwich —Costa Rica son
+     * seis horas— así que la venta de las 7 p.m. del lunes aparecería el martes. La zona viaja como
+     * parámetro y no está incrustada: la plataforma es multipaís.</p>
+     *
+     * <p>Sólo {@code CAPTURED}, igual que {@code capturedGross} del resumen: es la misma pregunta con
+     * el eje del tiempo puesto, y dos definiciones distintas de «recaudado» en la misma pantalla es
+     * exactamente el descuadre que nadie logra explicar después.</p>
+     *
+     * @return filas {@code (dia, totalMenor, cantidad)}, sólo de los días que tuvieron algo. Los días
+     *         vacíos los completa quien llama: acá no se puede distinguir «cero» de «no consultado».
+     */
+    @Query(value = """
+            select (p.requested_at at time zone :zone)::date as dia,
+                   coalesce(sum(p.gross_amount_minor), 0) as total_menor,
+                   count(*) as cantidad
+            from payments p
+            where p.tenant_id = :tenantId
+              and p.status = 'CAPTURED'
+              and p.requested_at >= :from and p.requested_at < :to
+            group by 1
+            order by 1
+            """, nativeQuery = true)
+    List<Object[]> capturedByDay(@Param("tenantId") UUID tenantId,
+                                 @Param("from") Instant from,
+                                 @Param("to") Instant to,
+                                 @Param("zone") String zone);
+
+    /**
      * Failed attempts of a period grouped by the provider's own code (CONTRACT.md v0.36).
      *
      * <p>By code and not merely counted, because the number alone tells a municipality nothing it can

@@ -19,6 +19,7 @@ export {
   formatDateTime,
   formatTime,
   formatWeekdayTime,
+  formatRelativeTime,
   formatNumber,
   formatCurrencyMinor,
   pluralCategory,

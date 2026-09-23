@@ -110,21 +110,26 @@ export function AdminShell({ children }: AdminShellProps): React.JSX.Element {
             </div>
           ) : null}
 
-          <div className="lx-nav-group">
-            <strong className="lx-nav-heading">{t('nav.group.people')}</strong>
-            <NavItem to="/users">{t('nav.users')}</NavItem>
-            {/* The staff panel is its own destination and not a filter of Usuarios: the questions
-                are different — that list is about the people of the municipality, this one is
-                about the posts it has granted. */}
-            {permissions.has('USER_READ') ? <NavItem to="/staff">{t('nav.staff')}</NavItem> : null}
-          </div>
+          {/* Administración (§10 de la especificación del 23-09-2026): una sola cabecera para lo
+              que antes eran «Personas» y «Control».
 
+              Los dos grupos separados tenían sentido leídos de arriba abajo —quiénes son y qué se
+              vigila— pero producían dos encabezados de dos y tres entradas cada uno, y dejaban a
+              Usuarios, Auditoría y Reportes lo bastante dispersos como para que el Inicio sintiera
+              que tenía que repetirlos como enlaces sueltos. Ahora el Inicio es una portada y estos
+              viven en un solo lugar, que es el que la persona ya buscaba. El orden conserva la
+              distinción: primero quiénes, después qué se revisa. */}
           <div className="lx-nav-group">
-            <strong className="lx-nav-heading">{t('nav.group.oversight')}</strong>
+            <strong className="lx-nav-heading">{t('nav.group.administration')}</strong>
+            <NavItem to="/users">{t('nav.users')}</NavItem>
+            {/* El panel de personal es su propio destino y no un filtro de Usuarios: las preguntas
+                son distintas —esa lista es sobre las personas de la municipalidad, esta sobre los
+                cargos que ha otorgado—. */}
+            {permissions.has('USER_READ') ? <NavItem to="/staff">{t('nav.staff')}</NavItem> : null}
             <NavItem to="/audit">{t('nav.audit')}</NavItem>
             <NavItem to="/reports">{t('nav.reports')}</NavItem>
-            {/* Under oversight rather than under settings: reconciliation is not something a
-                municipality configures, it is something it checks. */}
+            {/* Acá y no en Configuración: la conciliación no es algo que una municipalidad
+                configura, es algo que revisa. */}
             {permissions.has('WALLET_TOPUP') ? <NavItem to="/billing">{t('nav.billing')}</NavItem> : null}
           </div>
 

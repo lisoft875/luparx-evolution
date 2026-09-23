@@ -5,6 +5,8 @@ import cr.luparx.app.web.dto.DashboardDtos;
 import cr.luparx.app.web.dto.ParkingDtos;
 import cr.luparx.core.id.TenantId;
 import cr.luparx.core.money.Money;
+import cr.luparx.core.error.ErrorCode;
+import cr.luparx.core.error.ValidationException;
 import cr.luparx.core.tenant.TenantContextHolder;
 import cr.luparx.tenancy.entity.Tenant;
 import cr.luparx.tenancy.service.TenantService;
@@ -14,10 +16,13 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 
 /**
@@ -72,6 +77,50 @@ public class AdminDashboardController {
         DashboardService.Dashboard data = dashboardService.of(tenantId, start, end,
                 tenant.getCurrencyCode(), now);
         return toResponse(data);
+    }
+
+    /**
+     * El máximo de días que se sirven de una vez.
+     *
+     * <p>Un año. Alcanza para «este mes» y para comparar diciembres, y es el punto donde un gráfico
+     * de barras deja de ser un gráfico y pasa a ser una mancha. Quien quiera más años pide un
+     * reporte, que es la pantalla hecha para eso.</p>
+     */
+    private static final int MAX_SERIES_DAYS = 366;
+
+    @GetMapping("/revenue-series")
+    @PreAuthorize("hasAuthority('PERM_AUDIT_READ')")
+    @Operation(summary = "Lo recaudado día por día, en la zona horaria de la municipalidad")
+    public DashboardDtos.RevenueSeriesResponse revenueSeries(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        TenantId tenantId = TenantContextHolder.requireTenantId();
+        Tenant tenant = tenantService.requireActive(tenantId);
+        ZoneId zone = ZoneId.of(tenant.getTimeZone());
+
+        // Fechas y no instantes: el cliente pide «del 17 al 23», que son días del calendario de la
+        // municipalidad. Mandar instantes obligaría al navegador a calcular la medianoche de una zona
+        // que no es la suya, y ese cálculo hecho en el cliente es de donde salen los gráficos corridos
+        // un día.
+        LocalDate hoy = LocalDate.ofInstant(clock.instant(), zone);
+        LocalDate fin = to == null ? hoy : to;
+        LocalDate inicio = from == null ? fin.minusDays(6L) : from;
+
+        if (inicio.isAfter(fin)) {
+            throw new ValidationException("from", ErrorCode.VALIDATION_FAILED, "error.range.inverted");
+        }
+        if (java.time.temporal.ChronoUnit.DAYS.between(inicio, fin) >= MAX_SERIES_DAYS) {
+            throw new ValidationException("from", ErrorCode.VALIDATION_FAILED, "error.range.tooWide");
+        }
+
+        DashboardService.RevenueSeries serie =
+                dashboardService.revenueSeries(tenantId, inicio, fin, zone, tenant.getCurrencyCode());
+        return new DashboardDtos.RevenueSeriesResponse(
+                serie.from(), serie.to(), serie.zone(),
+                serie.days().stream()
+                        .map(day -> new DashboardDtos.RevenueDayDto(day.date(), money(day.total()), day.count()))
+                        .toList(),
+                money(serie.total()));
     }
 
     private static DashboardDtos.DashboardResponse toResponse(DashboardService.Dashboard data) {

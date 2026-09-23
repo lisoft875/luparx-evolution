@@ -46,7 +46,12 @@ import {
   type WireSettlement,
   type WireSettlementLine,
 } from './wireBilling';
-import { toDashboard, type WireDashboard } from './wireDashboard';
+import {
+  toDashboard,
+  toRevenueSeries,
+  type WireDashboard,
+  type WireRevenueSeries,
+} from './wireDashboard';
 import {
   withResolvedMeLogos,
   withResolvedMembershipLogo,
@@ -110,6 +115,7 @@ import type {
   AuditChain,
   AuditOriginProbe,
   Dashboard,
+  RevenueSeries,
   BillingPaymentsQuery,
   BillingTotals,
   ImportSettlementRequest,
@@ -615,6 +621,19 @@ export class ApiClient {
   readonly adminDashboard = {
     get: async (query: { from?: string; to?: string } = {}): Promise<Dashboard> =>
       toDashboard(await this.http.request<WireDashboard>('GET', '/api/v1/admin/dashboard', { query })),
+    /**
+     * La recaudación día por día.
+     *
+     * <p>`from` y `to` son FECHAS (`YYYY-MM-DD`), no instantes: el día de una municipalidad es el
+     * de su reloj, y calcular esa medianoche en el navegador —que está en otra zona— es de donde
+     * salen los gráficos corridos un día. El servidor corta con la zona del municipio.</p>
+     */
+    revenueSeries: async (query: { from?: string; to?: string } = {}): Promise<RevenueSeries> =>
+      toRevenueSeries(
+        await this.http.request<WireRevenueSeries>('GET', '/api/v1/admin/dashboard/revenue-series', {
+          query,
+        }),
+      ),
   };
 
   readonly adminReports = {

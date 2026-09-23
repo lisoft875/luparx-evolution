@@ -46,6 +46,39 @@ export function formatTime(
 }
 
 /**
+ * «Hace 8 minutos», en el idioma de quien mira.
+ *
+ * <p>Existe para las listas de actividad, donde la pregunta es <em>qué tan reciente</em> y no
+ * <em>cuándo exactamente</em>. Un rastro de seis filas con la fecha completa en cada una obliga a
+ * restar mentalmente seis veces para contestar lo único que se estaba preguntando.</p>
+ *
+ * <p>Se corta en la semana: más allá de eso «hace 23 días» ya no ubica a nadie y la fecha sí, así
+ * que devuelve `null` y quien llama imprime la fecha. El corte es de este lado —y no una decisión
+ * de cada pantalla— para que dos listas no elijan distinto.</p>
+ *
+ * <p>El futuro se formatea igual, sin caso especial: un reloj desincronizado por unos segundos
+ * produce instantes «por venir», y tratarlos como error mostraría un hueco donde va un dato.</p>
+ */
+export function formatRelativeTime(
+  value: Date | string,
+  locale: SupportedLocale,
+  now: Date = new Date(),
+): string | null {
+  const date = typeof value === 'string' ? new Date(value) : value;
+  if (Number.isNaN(date.getTime())) return null;
+
+  const segundos = Math.round((date.getTime() - now.getTime()) / 1000);
+  const magnitud = Math.abs(segundos);
+  const formato = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' });
+
+  if (magnitud < 45) return formato.format(0, 'second');
+  if (magnitud < 3600) return formato.format(Math.round(segundos / 60), 'minute');
+  if (magnitud < 86_400) return formato.format(Math.round(segundos / 3600), 'hour');
+  if (magnitud < 7 * 86_400) return formato.format(Math.round(segundos / 86_400), 'day');
+  return null;
+}
+
+/**
  * Locale-aware number formatting. Grouping/decimal glyphs follow the
  * platform's per-locale presentation config (`presentation.ts`) rather than
  * whatever ICU's default CLDR data happens to pick — every other part of

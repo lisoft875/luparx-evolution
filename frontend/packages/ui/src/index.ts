@@ -59,6 +59,8 @@ export { EmptyState } from './components/EmptyState';
 export type { EmptyStateProps, EmptyStateTone } from './components/EmptyState';
 export { Badge } from './components/Badge';
 export type { BadgeProps, BadgeTone } from './components/Badge';
+export { BarChart } from './components/BarChart';
+export type { BarChartProps, BarChartDatum } from './components/BarChart';
 export { AppBar } from './components/AppBar';
 export type { AppBarProps, AppBarAction } from './components/AppBar';
 export { BottomTabBar } from './components/BottomTabBar';
