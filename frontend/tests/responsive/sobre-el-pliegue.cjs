@@ -89,6 +89,18 @@ const TELEFONOS = [
   { nombre: 'Galaxy S8 chico',  viewport: { width: 360, height: 740 }, visible: 592 },
 ];
 
+/**
+ * Hasta abajo del todo, y esperar a que se asiente.
+ *
+ * <p>Es la única posición donde «la barra tapa esto» significa algo: arriba del todo, medio
+ * contenido cruza la barra fija por pura geometría y el scroll lo resuelve. Abajo del todo ya no
+ * queda scroll, así que lo que siga debajo de la barra está debajo para siempre.</p>
+ */
+async function alFondo(page) {
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  await page.waitForTimeout(450);
+}
+
 async function medir(page, altoVisible) {
   return page.evaluate((visible) => {
     const rec = (s) => String(s || '').replace(/\s+/g, ' ').trim().slice(0, 40);
@@ -307,21 +319,36 @@ async function entrar(page, portal) {
           }
         }
 
+        // Arriba del todo: qué se ve sin tocar nada.
         const r = await medir(page, tel.visible);
+        // Abajo del todo: qué queda tapado cuando ya no hay más scroll.
+        await alFondo(page);
+        const fondo = await medir(page, tel.visible);
         vistas++;
 
         /*
           TAPADA y FUERA DEL PLIEGUE no son el mismo defecto, y mezclarlos hace ilegible el informe.
 
-          Tapada = el cromo fijo está encima; no hay scroll que lo arregle y siempre es un defecto.
           Fuera del pliegue = hay que bajar para verlo, lo que en una pantalla con contenido real
           —el Inicio con una estadía activa mide 790px en 425 visibles— es scroll legítimo y no un
           fallo de maquetación.
 
-          Sólo cuenta como fallo lo tapado, más el caso en que la PRIMERA acción de la pantalla
-          exige scroll: eso sí dice que el orden está mal, no que la página sea larga.
+          Tapada = la barra fija está encima Y NO QUEDA SCROLL PARA CORRERLO. Esa segunda mitad es
+          la que faltaba: hasta el 2026-09-23 esto se medía con la página arriba del todo, donde
+          cualquier contenido que todavía no se desplazó cruza la barra por pura geometría. Así
+          reportó cuatro defectos inventados —«Agregar tarjeta», «Más opciones», «Español (Costa
+          Rica)»— en pantallas que se arreglan bajando dos dedos. `main` ya reserva
+          `padding-bottom: calc(space-4 + footerHeight)` justamente para que eso no pase, y el
+          arnés estaba acusando a la reserva de no existir mientras la medía en el único momento
+          en que no se nota.
+
+          Ahora se mide DESPUÉS de ir al fondo: si algo sigue debajo de la barra ahí, está debajo
+          para siempre, y eso sí es el defecto que este arnés vino a buscar.
+
+          Sólo cuenta como fallo eso, más el caso en que la PRIMERA acción de la pantalla exige
+          scroll: eso dice que el orden está mal, no que la página sea larga.
         */
-        const tapadas = r.acciones.filter((a) => a.tapadaAbajo || a.tapadaArriba);
+        const tapadas = fondo.acciones.filter((a) => a.tapadaAbajo || a.tapadaArriba);
         const bajoElPliegue = r.acciones.filter((a) => a.fueraDelPliegue);
         const malas = tapadas;
         const primeraExigeScroll = r.primeraAccion && r.primeraAccion.fueraDelPliegue;
@@ -342,9 +369,9 @@ async function entrar(page, portal) {
         }
         for (const a of malas.slice(0, 5)) {
           const causa = a.tapadaAbajo
-            ? `tapada por la barra inferior (empieza ${a.top}, la barra en ${r.pisoCromo})`
+            ? `tapada por la barra inferior con la página al fondo (empieza ${a.top}, la barra en ${fondo.pisoCromo})`
             : a.tapadaArriba
-              ? `tapada por la cabecera (termina ${a.bottom}, la cabecera hasta ${r.topeCromo})`
+              ? `tapada por la cabecera con la página al fondo (termina ${a.bottom}, la cabecera hasta ${fondo.topeCromo})`
               : `fuera del pliegue (empieza en ${a.top}, se ve hasta ${r.altoVisible})`;
           console.log(`        "${a.texto}" — ${causa}`);
         }
