@@ -20,7 +20,7 @@ import {
 } from '@luparx/ui';
 import type { TableColumn } from '@luparx/ui';
 import { AdminShell } from '../components/AdminShell';
-import { useAdminZones, useEnforcementCitations } from '../lib/queries';
+import { useAdminInspectors, useAdminZones, useEnforcementCitations } from '../lib/queries';
 
 const PAGE_SIZE = 20;
 
@@ -61,6 +61,7 @@ export function EnforcementCitationsPage(): React.JSX.Element {
   const { t, tPlural, locale } = useTranslation();
   const navigate = useNavigate();
   const zones = useAdminZones();
+  const inspectors = useAdminInspectors();
 
   // Seeded from the query string, so a count on the dashboard opens exactly the citations it counted
   // (CONTRACT.md v0.36).
@@ -205,14 +206,26 @@ export function EnforcementCitationsPage(): React.JSX.Element {
           </FormField>
           <FormField label={t('admin.enforcement.citations.filter.inspector')} optionalLabel={t('common.optional')}>
             {({ inputId }) => (
-              <Input
+              /*
+                Selector por NOMBRE, no un campo para escribir un UUID.
+                Era el único `placeholder="UUID"` del portal: filtrar por funcionario exigía
+                conocer de memoria un identificador de 36 caracteres, o ir a copiarlo de otra
+                pantalla (auditoría del 22-09-2026, P0: el UUID puede existir internamente, no como
+                dato que el funcionario escribe).
+              */
+              <Select
                 id={inputId}
-                name="inspectorUserId"
                 value={draft.inspectorUserId ?? ''}
-                onChange={(event) =>
-                  setDraft((current) => ({ ...current, inspectorUserId: event.target.value || undefined }))
+                onChange={(value) =>
+                  setDraft((current) => ({ ...current, inspectorUserId: value || undefined }))
                 }
-                placeholder="UUID"
+                placeholder={t('admin.enforcement.citations.filter.allInspectors')}
+                options={(inspectors.data?.items ?? [])
+                  .filter((member) => member.portal === 'inspector')
+                  .map((member) => ({
+                    value: member.userId,
+                    label: member.fullName ?? member.email ?? member.userId,
+                  }))}
               />
             )}
           </FormField>

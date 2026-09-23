@@ -28,6 +28,8 @@ export { Pagination } from './components/Pagination';
 export type { PaginationProps } from './components/Pagination';
 export { Modal } from './components/Modal';
 export type { ModalProps, ModalVariant } from './components/Modal';
+export { ConfirmDialog } from './components/ConfirmDialog';
+export type { ConfirmDialogProps, ConfirmChange } from './components/ConfirmDialog';
 export { ErrorDialog } from './components/ErrorDialog';
 export type { ErrorDialogProps } from './components/ErrorDialog';
 export { PageLayout, CenteredLayout } from './components/PageLayout';

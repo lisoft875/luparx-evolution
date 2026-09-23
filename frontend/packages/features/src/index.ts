@@ -64,4 +64,4 @@ export { EvidenceGallery } from './enforcement/EvidenceGallery';
 export type { EvidenceGalleryProps } from './enforcement/EvidenceGallery';
 export { CitationFacts } from './enforcement/CitationFacts';
 export type { CitationFactsProps } from './enforcement/CitationFacts';
-export { formatDurationLabel } from './parking/duration';
+export { formatDurationLabel, formatDurationWithMinutes } from './parking/duration';

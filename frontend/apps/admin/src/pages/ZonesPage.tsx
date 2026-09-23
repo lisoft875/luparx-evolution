@@ -5,7 +5,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { RequirePermission, useAuth } from '@luparx/auth';
 import { useTranslation, type TranslationKey } from '@luparx/i18n';
 import { ApiError, type AdminParkingZone } from '@luparx/api-client';
-import { Alert, Badge, Button, FormField, Input, Modal, Table } from '@luparx/ui';
+import { Alert, Badge, Button, FormField, Input, Modal, Table,
+  ConfirmDialog,
+} from '@luparx/ui';
 import { AdminShell } from '../components/AdminShell';
 import { ZoneRulesDialog } from '../components/ZoneRulesDialog';
 
@@ -37,6 +39,13 @@ export function ZonesPage(): React.JSX.Element {
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<AdminParkingZone | null>(null);
   const [rulesFor, setRulesFor] = useState<AdminParkingZone | null>(null);
+  /*
+    Desactivar una zona la saca de servicio: deja de aceptar estacionamientos y de recaudar. Hasta
+    ahora se hacía con un solo clic y sin decir nada (auditoría del 22-09-2026, P0). Confirmar no
+    es burocracia acá: un clic por error en la fila equivocada apaga una zona entera y nadie lo
+    nota hasta el cierre del mes.
+  */
+  const [toggling, setToggling] = useState<AdminParkingZone | null>(null);
   const [draft, setDraft] = useState<ZoneDraft>(EMPTY_DRAFT);
   const [error, setError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -179,7 +188,7 @@ export function ZonesPage(): React.JSX.Element {
                   <Button type="button" variant="secondary" onClick={() => setRulesFor(zone)}>
                     {t('admin.zones.action.rules')}
                   </Button>
-                  <Button type="button" variant="ghost" onClick={() => toggleMutation.mutate(zone)}>
+                  <Button type="button" variant="ghost" onClick={() => setToggling(zone)}>
                     {t(zone.active ? 'admin.zones.action.deactivate' : 'admin.zones.action.activate')}
                   </Button>
                 </RequirePermission>
@@ -303,6 +312,36 @@ export function ZonesPage(): React.JSX.Element {
         zoneId={rulesFor?.id ?? null}
         zoneName={rulesFor ? `${rulesFor.code} — ${rulesFor.name}` : ''}
         onClose={() => setRulesFor(null)}
+      />
+      {/*
+        El mismo diálogo para activar y desactivar: el texto cambia, el patrón no. Desactivar va en
+        tono `danger` porque saca la zona de servicio; activar es un guardado corriente.
+      */}
+      <ConfirmDialog
+        open={toggling !== null}
+        onClose={() => setToggling(null)}
+        title={t(toggling?.active ? 'admin.zones.deactivate.title' : 'admin.zones.activate.title')}
+        message={t(toggling?.active ? 'admin.zones.deactivate.body' : 'admin.zones.activate.body')}
+        changes={
+          toggling
+            ? [
+                {
+                  label: t('admin.zones.field.state'),
+                  before: t(toggling.active ? 'admin.zones.state.active' : 'admin.zones.state.inactive'),
+                  after: t(toggling.active ? 'admin.zones.state.inactive' : 'admin.zones.state.active'),
+                },
+              ]
+            : undefined
+        }
+        tone={toggling?.active ? 'danger' : 'primary'}
+        confirmLabel={t(toggling?.active ? 'admin.zones.deactivate.confirm' : 'admin.zones.activate.confirm')}
+        cancelLabel={t('common.cancel')}
+        closeLabel={t('common.close')}
+        loading={toggleMutation.isPending}
+        onConfirm={() => {
+          if (!toggling) return;
+          toggleMutation.mutate(toggling, { onSettled: () => setToggling(null) });
+        }}
       />
     </AdminShell>
   );

@@ -419,6 +419,50 @@ body {
     background-color 0.15s ease,
     box-shadow 0.15s ease;
 }
+/* Campo numérico con su unidad pegada. El sufijo se dibuja DENTRO del marco y el input reserva
+   espacio a la derecha con padding, en vez de recortarse: si el número crece —«1.440»— empuja al
+   sufijo y no queda debajo de él. Ver `Input.suffix` para por qué existe. */
+/* Diálogo de confirmación. Los botones a la derecha y Cancelar PRIMERO: el orden de lectura pone
+   la salida antes que la acción, y el foco inicial cae en Cancelar —lo que evita confirmar algo
+   con un Enter de inercia—. Se envuelven en pantallas angostas, donde dos botones lado a lado no
+   alcanzan el ancho táctil mínimo. */
+.lx-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lx-space-4);
+}
+.lx-confirm__message {
+  margin: 0;
+  color: var(--lx-text);
+}
+.lx-confirm__before {
+  text-decoration: line-through;
+  color: var(--lx-text-muted);
+}
+.lx-confirm__actions {
+  display: flex;
+  gap: var(--lx-space-3);
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.lx-input-wrap {
+  position: relative;
+  display: block;
+}
+.lx-input-wrap__suffix {
+  position: absolute;
+  right: var(--lx-space-3);
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--lx-text-muted);
+  font-size: var(--lx-text-meta-size);
+  pointer-events: none;
+}
+.lx-input-wrap .lx-input {
+  padding-right: 5.5rem;
+}
+
 .lx-input::placeholder {
   /* Firefox dims placeholders further by default and AA is tight enough already. */
   color: var(--lx-text-subtle);

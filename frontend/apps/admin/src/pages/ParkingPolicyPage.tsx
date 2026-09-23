@@ -2,7 +2,7 @@ import * as React from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import type { ParkingPolicy } from '@luparx/api-client';
 import { RequirePermission } from '@luparx/auth';
-import { formatDurationLabel } from '@luparx/features';
+import { formatDurationLabel, formatDurationWithMinutes } from '@luparx/features';
 import { useTranslation } from '@luparx/i18n';
 import { Alert, Button, Card, Checkbox, FormField, Input, SectionHeader, SummaryList, SummaryRow } from '@luparx/ui';
 import { AdminShell } from '../components/AdminShell';
@@ -248,7 +248,18 @@ export function ParkingPolicyPage(): React.JSX.Element {
     );
   }
 
-  const number = (value: number, onChange: (next: number) => void, min = 0, disabled = false) => (
+  /*
+    Todo número de esta pantalla es una cantidad de MINUTOS, así que el sufijo va acá y no campo
+    por campo: uno solo que se olvide vuelve a dejar un «720» que hay que adivinar. El sufijo se
+    puede sobreescribir para los pocos que no son minutos (los días de vencimiento del crédito).
+  */
+  const number = (
+    value: number,
+    onChange: (next: number) => void,
+    min = 0,
+    disabled = false,
+    suffix: React.ReactNode = t('common.unit.minutes'),
+  ) => (
     <Input
       type="number"
       min={min}
@@ -256,6 +267,7 @@ export function ParkingPolicyPage(): React.JSX.Element {
       disabled={disabled}
       value={String(value)}
       onChange={(event) => onChange(Number(event.target.value))}
+      suffix={suffix}
     />
   );
 
@@ -333,7 +345,16 @@ export function ParkingPolicyPage(): React.JSX.Element {
             <div style={{ width: 240, marginTop: 'var(--lx-space-4)' }}>
               <FormField
                 label={t('admin.policy.field.extensionMaxTotal')}
-                hint={t('admin.policy.field.extensionMaxTotalHint')}
+                /*
+                  La ayuda dice además cuánto es ESE número en horas: «12 horas (720 min)». Quien
+                  escribe un techo en minutos no debería tener que dividir entre 60 para saber si
+                  se pasó — y 720 es justo el valor donde el error no se nota.
+                */
+                hint={`${t('admin.policy.field.extensionMaxTotalHint')} ${formatDurationWithMinutes(
+                  form.extensionMaxTotalMinutes,
+                  tPlural,
+                  t,
+                )}.`}
               >
                 {() =>
                   number(
@@ -400,6 +421,8 @@ export function ParkingPolicyPage(): React.JSX.Element {
                     (value) => patch({ creditExpiryDays: value }),
                     0,
                     !form.creditOnEarlyFinishEnabled,
+                    // Este campo son DÍAS, no minutos: el único del formulario que rompe la regla.
+                    t('common.unit.days'),
                   )
                 }
               </FormField>

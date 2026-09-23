@@ -7,6 +7,7 @@ import type {
   InfractionType,
   InfractionTypeDraft,
   PagedResponse,
+  StaffMember,
   PageParams,
   ParkingPolicy,
   ParkingSchedule,
@@ -221,4 +222,22 @@ export function useUpdateInfractionTypes() {
 export function useAdminZones(): UseQueryResult<ParkingZone[]> {
   const { apiClient } = useAuth();
   return useQuery({ queryKey: ENFORCEMENT_KEYS.zones, queryFn: () => apiClient.adminParking.zones() });
+}
+
+/**
+ * Los fiscalizadores de esta municipalidad, para elegirlos por NOMBRE.
+ *
+ * Existe porque el filtro de boletas pedía un UUID escrito a mano: 36 caracteres que había que
+ * conocer de memoria o ir a copiar a otra pantalla (auditoría del 22-09-2026, P0). La lista se
+ * acota al portal `inspector` en el punto de uso: quien puede haber levantado una boleta.
+ *
+ * `size: 100` y no paginado: una municipalidad tiene decenas de fiscalizadores, no miles, y un
+ * selector que pagina es peor que uno largo.
+ */
+export function useAdminInspectors(): UseQueryResult<PagedResponse<StaffMember>> {
+  const { apiClient } = useAuth();
+  return useQuery({
+    queryKey: ['admin', 'staff', 'inspectors'],
+    queryFn: () => apiClient.adminStaff.list({ size: 100 }),
+  });
 }

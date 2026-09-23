@@ -15,6 +15,7 @@ import {
   Button,
   Card,
   Checkbox,
+  ConfirmDialog,
   DateField,
   FormField,
   Input,
@@ -87,6 +88,7 @@ export function SettingsSchedulePage(): React.JSX.Element {
   const [exceptions, setExceptions] = useState<ChargingException[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   useEffect(() => {
     const stored = scheduleQuery.data;
@@ -152,7 +154,12 @@ export function SettingsSchedulePage(): React.JSX.Element {
     ]);
   }
 
-  async function handleSave(): Promise<void> {
+  /*
+    Validar y guardar eran lo mismo; ahora validar abre la confirmación. El horario decide cuándo
+    se le cobra a todo el cantón, y se guardaba con un clic sin decir qué cambiaba (auditoría del
+    22-09-2026, P0 de confirmación + auditoría).
+  */
+  function pedirConfirmacion(): void {
     setError(null);
     setSaved(false);
     for (const day of week) {
@@ -165,6 +172,12 @@ export function SettingsSchedulePage(): React.JSX.Element {
         }
       }
     }
+    setConfirmOpen(true);
+  }
+
+  async function handleSave(): Promise<void> {
+    setError(null);
+    setSaved(false);
     try {
       await updateMutation.mutateAsync({
         chargesAllDay,
@@ -533,9 +546,42 @@ export function SettingsSchedulePage(): React.JSX.Element {
         })}
       </Card>
 
-      <Button type="button" onClick={handleSave} loading={updateMutation.isPending}>
+      <Button type="button" onClick={pedirConfirmacion} loading={updateMutation.isPending}>
         {t('common.save')}
       </Button>
+      <ConfirmDialog
+        open={confirmOpen}
+        onClose={() => setConfirmOpen(false)}
+        title={t('admin.settings.schedule.confirm.title')}
+        message={t('admin.settings.schedule.confirm.body')}
+        /*
+          Un resumen de lo que queda, no el formulario entero: cuántos días cobran, si es 24 horas
+          y cuántas excepciones hay. Quien llegó hasta acá ya vio el detalle; lo que necesita antes
+          de confirmar es comprobar que no tocó algo sin querer.
+        */
+        changes={[
+          {
+            label: t('admin.settings.schedule.confirm.allDay'),
+            after: chargesAllDay ? t('common.yes') : t('common.no'),
+          },
+          {
+            label: t('admin.settings.schedule.confirm.days'),
+            after: String(week.filter((day) => day.bands.length > 0).length),
+          },
+          {
+            label: t('admin.settings.schedule.confirm.exceptions'),
+            after: String(exceptions.length),
+          },
+        ]}
+        confirmLabel={t('common.save')}
+        cancelLabel={t('common.cancel')}
+        closeLabel={t('common.close')}
+        loading={updateMutation.isPending}
+        onConfirm={() => {
+          setConfirmOpen(false);
+          void handleSave();
+        }}
+      />
       {scheduleQuery.data ? (
         <p className="lx-text-meta">
           {scheduleQuery.data.chargingNow

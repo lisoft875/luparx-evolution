@@ -295,12 +295,33 @@ public class AdminParkingController {
     public ParkingDtos.ParkingRateResponse setRate(
             @Valid @RequestBody ParkingDtos.UpdateParkingRateRequest request) {
         TenantId tenantId = TenantContextHolder.requireTenantId();
+        /*
+          La tarifa vigente ANTES de tocarla. Se registraba sólo el valor nuevo, y «la tarifa quedó
+          en ₡800» no permite revisar después si alguien se equivocó de cifra: hay que poder leer
+          de cuánto a cuánto cambió y quién lo hizo (auditoría del 22-09-2026, P0).
+
+          Se lee acá y no dentro del servicio para no guardar estado entre llamadas: `setRate` cierra
+          la ventana anterior por su cuenta, y sacarle el dato obligaría a un valor compartido que
+          se filtra a la siguiente petición si algo lanza en el medio.
+        */
+        ParkingRate anterior = catalogService.listRates(tenantId, request.zoneId()).stream()
+                .filter(current -> current.getValidTo() == null && !current.isExact())
+                .findFirst()
+                .orElse(null);
         ParkingRate rate = catalogService.setRate(tenantId, request.zoneId(),
                 request.amountMinor().longValue(), request.minutes().intValue());
         auditRecorder.record(AuditAction.PARKING_RATE_UPDATED, "parking-rate", rate.getId().toString(),
                 Map.of("zoneId", request.zoneId().toString(),
                         "amountMinor", String.valueOf(rate.getAmountMinor()),
-                        "minutes", String.valueOf(rate.getMinutes())));
+                        "minutes", String.valueOf(rate.getMinutes())),
+                AuditChanges.builder()
+                        .compare("amountMinor",
+                                anterior == null ? null : Long.valueOf(anterior.getAmountMinor()),
+                                Long.valueOf(rate.getAmountMinor()))
+                        .compare("minutes",
+                                anterior == null ? null : Integer.valueOf(anterior.getMinutes()),
+                                Integer.valueOf(rate.getMinutes()))
+                        .build());
         return mapper.toRate(rate);
     }
 
