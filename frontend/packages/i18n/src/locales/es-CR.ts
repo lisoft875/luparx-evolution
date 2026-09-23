@@ -316,6 +316,17 @@ export const esCR = {
     'Estas zonas no tienen tarifa vigente, así que nadie puede parquear en ellas: {{zones}}. Al ciudadano que lo intente se le rechaza la estadía.',
   'admin.tariffs.noZones': 'Esta municipalidad todavía no tiene zonas.',
   'admin.tariffs.set.submit': 'Poner tarifa',
+  'admin.tariffs.confirm.title': '¿Poner esta tarifa?',
+  'admin.tariffs.confirm.body':
+    'Es lo que se le va a cobrar a un ciudadano en la calle desde que usted confirme. Las estadías ' +
+    'que ya están corriendo mantienen el precio con el que se pagaron; el precio anterior pasa a ' +
+    '«Precios anteriores» y no se borra.',
+  'admin.tariffs.confirm.effectiveLabel': 'Rige',
+  'admin.tariffs.confirm.effectiveNow': 'Desde que confirme, hasta el próximo cambio',
+  'admin.tariffs.confirm.fromBase': '{{price}} (de la base)',
+  'admin.tariffs.confirm.none': 'Sin precio',
+  'admin.tariffs.set.blockExample':
+    'Cobra por bloque empezado: una estadía de {{minutes}} min paga {{blocks}} bloques, {{amount}}.',
   'admin.tariffs.history.title': 'Precios anteriores',
   'admin.tariffs.history.description':
     'Las ventanas ya cerradas. No se editan: son las que le pusieron precio a las estadías que se pagaron mientras regían.',
@@ -617,6 +628,21 @@ export const esCR = {
   'admin.policy.grace.notice':
     'Un fiscalizador que consulte una placa dentro de esos {{minutes}} después del vencimiento la va a ver como cubierta.',
   'admin.policy.summary.title': 'Cómo queda',
+  'admin.policy.confirm.title': '¿Guardar la política de parqueo?',
+  'admin.policy.confirm.body':
+    'Cambia desde este momento qué se le puede vender a un ciudadano en toda la municipalidad. ' +
+    'Las estadías que ya están corriendo siguen con las reglas que tenían.',
+  'admin.policy.confirm.noChanges':
+    'No hay nada distinto de lo que ya está guardado. Puede guardar igual, pero no va a cambiar nada.',
+  'admin.policy.confirm.extension': 'Se puede extender',
+  'admin.policy.confirm.extensionList': 'Duraciones de extensión',
+  'admin.policy.confirm.extensionMax': 'Tope con extensiones',
+  'admin.policy.confirm.earlyFinish': 'Se puede terminar antes',
+  'admin.policy.confirm.credit': 'Devuelve crédito al terminar antes',
+  'admin.policy.confirm.creditMin': 'Mínimo que queda para devolver',
+  'admin.policy.confirm.creditExpiry': 'El crédito vence en',
+  'admin.policy.confirm.days.one': '{{count}} día',
+  'admin.policy.confirm.days.other': '{{count}} días',
   'admin.policy.summary.session': 'Duraciones',
   'admin.policy.summary.extension': 'Extensiones',
   'admin.policy.summary.credit': 'Minutos guardados',
@@ -1258,7 +1284,13 @@ export const esCR = {
   'admin.settings.schedule.exceptions.easter.goodFriday': 'Viernes Santo',
   'admin.settings.schedule.exceptions.easter.sunday': 'Domingo de Resurrección',
   'admin.settings.schedule.exceptions.easter.monday': 'Lunes de Pascua',
-  'admin.settings.schedule.exceptions.nextDate': 'La próxima vez cae el {{date}}.',
+  // Las tres fechas de un feriado, cada una con su nombre. Ver `admin/src/lib/holidayDates.ts`:
+  // la de ley es el día del año que manda la ley, la efectiva es el día en que de verdad no se
+  // cobra, y entre las dos puede haber un traslado al lunes.
+  'admin.settings.schedule.exceptions.legalDate': 'Fecha de ley: {{date}}',
+  'admin.settings.schedule.exceptions.effectiveDate': 'No se cobra el {{date}}',
+  'admin.settings.schedule.exceptions.effectivePast': 'No se cobró el {{date}} · ya pasó',
+  'admin.settings.schedule.exceptions.effectiveUnknown': 'Sin fecha: falta completar la regla.',
   'admin.settings.schedule.holidays.title': 'Feriados del país',
   'admin.settings.schedule.holidays.description':
     'Para no volver a digitarlos cada diciembre. Al agregarlos quedan como excepciones suyas, que puede editar o quitar cuando quiera.',

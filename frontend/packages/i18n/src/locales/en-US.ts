@@ -303,6 +303,17 @@ export const enUS: Record<TranslationKey, string> = {
     'These zones have no tariff in force, so nobody can park in them: {{zones}}. A citizen who tries has the stay refused.',
   'admin.tariffs.noZones': 'This municipality has no zones yet.',
   'admin.tariffs.set.submit': 'Set tariff',
+  'admin.tariffs.confirm.title': 'Set this tariff?',
+  'admin.tariffs.confirm.body':
+    'This is what a citizen on the street will be charged from the moment you confirm. Stays ' +
+    'already running keep the price they were paid at; the previous price moves to «Previous ' +
+    'prices» and is not deleted.',
+  'admin.tariffs.confirm.effectiveLabel': 'In force',
+  'admin.tariffs.confirm.effectiveNow': 'From the moment you confirm, until the next change',
+  'admin.tariffs.confirm.fromBase': '{{price}} (from the base)',
+  'admin.tariffs.confirm.none': 'No price',
+  'admin.tariffs.set.blockExample':
+    'Charged by started block: a {{minutes}} min stay pays {{blocks}} blocks, {{amount}}.',
   'admin.tariffs.history.title': 'Earlier prices',
   'admin.tariffs.history.description':
     'The windows already closed. They are never edited: they are what priced the stays paid while they were in force.',
@@ -604,6 +615,21 @@ export const enUS: Record<TranslationKey, string> = {
   'admin.policy.grace.notice':
     'An officer who checks a plate within {{minutes}} of expiry will see it as covered.',
   'admin.policy.summary.title': 'How it ends up',
+  'admin.policy.confirm.title': 'Save the parking policy?',
+  'admin.policy.confirm.body':
+    'From this moment it changes what can be sold to a citizen across the whole municipality. ' +
+    'Stays already running keep the rules they had.',
+  'admin.policy.confirm.noChanges':
+    'Nothing differs from what is already stored. You can save anyway, but nothing will change.',
+  'admin.policy.confirm.extension': 'Extensions allowed',
+  'admin.policy.confirm.extensionList': 'Extension durations',
+  'admin.policy.confirm.extensionMax': 'Ceiling including extensions',
+  'admin.policy.confirm.earlyFinish': 'Early finish allowed',
+  'admin.policy.confirm.credit': 'Credits back on early finish',
+  'admin.policy.confirm.creditMin': 'Minimum left to credit back',
+  'admin.policy.confirm.creditExpiry': 'Credit expires in',
+  'admin.policy.confirm.days.one': '{{count}} day',
+  'admin.policy.confirm.days.other': '{{count}} days',
   'admin.policy.summary.session': 'Durations',
   'admin.policy.summary.extension': 'Extensions',
   'admin.policy.summary.credit': 'Saved minutes',
@@ -1231,7 +1257,10 @@ export const enUS: Record<TranslationKey, string> = {
   'admin.settings.schedule.exceptions.easter.goodFriday': 'Good Friday',
   'admin.settings.schedule.exceptions.easter.sunday': 'Easter Sunday',
   'admin.settings.schedule.exceptions.easter.monday': 'Easter Monday',
-  'admin.settings.schedule.exceptions.nextDate': 'Next falls on {{date}}.',
+  'admin.settings.schedule.exceptions.legalDate': 'Statutory date: {{date}}',
+  'admin.settings.schedule.exceptions.effectiveDate': 'No charging on {{date}}',
+  'admin.settings.schedule.exceptions.effectivePast': 'No charging on {{date}} · already past',
+  'admin.settings.schedule.exceptions.effectiveUnknown': 'No date yet: the rule is incomplete.',
   'admin.settings.schedule.holidays.title': "The country's holidays",
   'admin.settings.schedule.holidays.description':
     'So nobody retypes them every December. Adding one makes it an exception of yours, which you can edit or remove whenever you like.',

@@ -23,6 +23,7 @@ import {
   Select,
 } from '@luparx/ui';
 import { AdminShell } from '../components/AdminShell';
+import { fechaDeLey, seTraslada } from '../lib/holidayDates';
 import { useCountryHolidays, useParkingScheduleSettings, useUpdateParkingSchedule } from '../lib/queries';
 
 /** Monday first: the working week is what this screen is mostly about, and the free day should read as the exception it is. */
@@ -309,7 +310,17 @@ export function SettingsSchedulePage(): React.JSX.Element {
           description={t('admin.settings.schedule.exceptions.description')}
         />
         {exceptions.length === 0 ? <p className="lx-text-meta">{t('admin.settings.schedule.exceptions.empty')}</p> : null}
-        {exceptions.map((entry, index) => (
+        {exceptions.map((entry, index) => {
+          // La fecha de ley sólo existe como día del año en las anuales. La de Semana Santa se
+          // define por su distancia a la Pascua, así que se nombra en el selector y no se fecha.
+          const ley = entry.recurrence === 'ANNUAL' ? fechaDeLey(entry.month, entry.day, locale) : null;
+          // El servidor sólo calcula `nextDate` mirando hacia adelante, así que una excepción de una
+          // sola fecha que ya pasó viene sin ella. No es una regla incompleta —es una regla vencida—
+          // y decirle «falta completar» a quien la escribió bien sería mandarlo a arreglar algo que
+          // está bien. Se nombra por lo que es, que además es la señal de que esa fila ya no sirve.
+          const efectiva = entry.nextDate ?? ((entry.recurrence ?? 'ONCE') === 'ONCE' ? entry.date : null);
+          const vencida = entry.nextDate === null && efectiva !== null;
+          return (
           <div
             key={`${entry.date}-${index}`}
             style={{ borderTop: '1px solid var(--lx-border)', padding: 'var(--lx-space-3) 0' }}
@@ -437,15 +448,25 @@ export function SettingsSchedulePage(): React.JSX.Element {
                 {t('admin.settings.schedule.exceptions.remove')}
               </Button>
             </div>
-            {/* When the rule actually lands next. The server computes it — a person reading
-                "Jueves Santo, se repite" should not have to work out Easter in their head. */}
-            {entry.nextDate ? (
-              <p className="lx-text-meta" style={{ margin: '4px 0 0' }}>
-                {t('admin.settings.schedule.exceptions.nextDate', {
-                  date: formatDate(entry.nextDate, locale),
-                })}
-              </p>
-            ) : null}
+            {/* Las TRES fechas del feriado, cada una con su nombre (auditoría 22-09-2026, P0).
+                Antes acá decía sólo «la próxima vez cae el X»: el traslado al lunes quedaba como un
+                casillero marcado arriba y la fecha de ley no aparecía en ningún lado, así que quien
+                leía la pantalla no podía saber si ese X era el día de la ley o el día corrido. Es
+                la diferencia entre dejar de cobrar el sábado o el lunes en todo el cantón. */}
+            <p className="lx-text-meta" style={{ margin: '4px 0 0' }}>
+              {ley ? <span>{t('admin.settings.schedule.exceptions.legalDate', { date: ley })} · </span> : null}
+              {seTraslada(entry.observance) ? (
+                <span>{t('admin.settings.schedule.exceptions.mondayLabel')} · </span>
+              ) : null}
+              {efectiva
+                ? t(
+                    vencida
+                      ? 'admin.settings.schedule.exceptions.effectivePast'
+                      : 'admin.settings.schedule.exceptions.effectiveDate',
+                    { date: formatDate(efectiva, locale) },
+                  )
+                : t('admin.settings.schedule.exceptions.effectiveUnknown')}
+            </p>
             {entry.charges && !entry.chargesAllDay ? (
               <div style={{ display: 'flex', gap: 'var(--lx-space-3)', flexWrap: 'wrap', alignItems: 'flex-end' }}>
                 <FormField label={t('admin.settings.schedule.fromLabel')}>
@@ -475,7 +496,8 @@ export function SettingsSchedulePage(): React.JSX.Element {
               </div>
             ) : null}
           </div>
-        ))}
+          );
+        })}
         <Button
           type="button"
           variant="secondary"
@@ -513,6 +535,7 @@ export function SettingsSchedulePage(): React.JSX.Element {
         ) : null}
         {(holidaysQuery.data ?? []).map((holiday) => {
           const added = holiday.alreadyAdded || exceptions.some((e) => e.holidayCode === holiday.code);
+          const leyDelCatalogo = fechaDeLey(holiday.month, holiday.day, locale);
           return (
             <div
               key={holiday.code}
@@ -528,10 +551,22 @@ export function SettingsSchedulePage(): React.JSX.Element {
               <div>
                 <div>{holiday.name}</div>
                 <div className="lx-text-meta">
-                  {holiday.thisYear ? formatDate(holiday.thisYear, locale) : '—'}
-                  {holiday.observance === 'MONDAY'
-                    ? ` · ${t('admin.settings.schedule.exceptions.mondayLabel')}`
-                    : ''}
+                  {/* `thisYear` viene del servidor YA trasladado (`observedIn`), así que imprimirlo
+                      seguido de «Se traslada al lunes» decía lo contrario de lo que pasaba: esa
+                      fecha ES el lunes. Cuando hay traslado se muestran las dos, nombradas. */}
+                  {leyDelCatalogo && seTraslada(holiday.observance) ? (
+                    <>
+                      {t('admin.settings.schedule.exceptions.legalDate', { date: leyDelCatalogo })}
+                      {' · '}
+                      {t('admin.settings.schedule.exceptions.mondayLabel')}
+                      {' · '}
+                    </>
+                  ) : null}
+                  {holiday.thisYear
+                    ? t('admin.settings.schedule.exceptions.effectiveDate', {
+                        date: formatDate(holiday.thisYear, locale),
+                      })
+                    : t('admin.settings.schedule.exceptions.effectiveUnknown')}
                 </div>
               </div>
               {added ? (

@@ -5,7 +5,19 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { RequirePermission, useAuth } from '@luparx/auth';
 import { formatDurationLabel } from '@luparx/features';
 import { useTranslation, formatCurrencyMinor, formatDateTime, majorToMinor } from '@luparx/i18n';
-import { Alert, Badge, Button, Card, FormField, Input, Modal, SectionHeader, Table } from '@luparx/ui';
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  ConfirmDialog,
+  FormField,
+  Input,
+  Modal,
+  SectionHeader,
+  Table,
+} from '@luparx/ui';
+import type { ConfirmChange } from '@luparx/ui';
 import { AdminShell } from '../components/AdminShell';
 import { useParkingPolicy, useUpdateParkingPolicy } from '../lib/queries';
 
@@ -49,6 +61,19 @@ export function TariffsPage(): React.JSX.Element {
   const [newMinutes, setNewMinutes] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
+  /**
+   * La tarifa que está esperando un «sí».
+   *
+   * <p>Es el cambio de mayor efecto del portal: lo que se ponga acá se le cobra a un ciudadano en la
+   * calle desde el momento en que se guarda, y hasta la auditoría del 22-09-2026 se guardaba con un
+   * solo clic y sin decir qué reemplazaba. Un 800 tecleado donde iba 80 no tenía ninguna pantalla
+   * que lo detuviera.</p>
+   *
+   * <p>Mientras hay confirmación pendiente el modal de edición se esconde en vez de cerrarse: los
+   * valores siguen escritos, así que «Cancelar» devuelve el formulario tal como estaba en lugar de
+   * obligar a teclear todo de nuevo.</p>
+   */
+  const [confirmando, setConfirmando] = useState<Target | null>(null);
 
   const zonesQuery = useQuery({ queryKey: ['admin', 'zones'], queryFn: () => apiClient.adminParking.zones() });
   const ratesQuery = useQuery({ queryKey: ['admin', 'rates'], queryFn: () => apiClient.adminParking.rates() });
@@ -130,6 +155,85 @@ export function TariffsPage(): React.JSX.Element {
     [zones, baseByZone],
   );
 
+  const dinero = (minor: number): string => formatCurrencyMinor(minor, currencyCode ?? 'CRC', locale);
+
+  /** El monto tecleado, en unidades menores, o `null` mientras todavía no sea un número cobrable. */
+  const montoMinor = useMemo(() => {
+    const valor = Number(amount);
+    if (!Number.isFinite(valor) || valor <= 0) return null;
+    return majorToMinor(valor, currencyCode ?? 'CRC');
+  }, [amount, currencyCode]);
+
+  /**
+   * Qué cobra hoy y qué va a cobrar, para ponerlo delante de quien confirma.
+   *
+   * <p>El «antes» no se guarda en ningún estado local: sale de las mismas ventanas vigentes con las
+   * que se pinta la grilla. Una copia del precio anterior tomada al abrir el modal se quedaría vieja
+   * si otra persona cambia la tarifa mientras este formulario está abierto, y la confirmación
+   * mostraría un antes que ya no existe.</p>
+   */
+  function cambiosDe(target: Target): ConfirmChange[] {
+    if (montoMinor === null) return [];
+    const zona: ConfirmChange = {
+      label: t('admin.tariffs.column.zone'),
+      after: `${target.zone.code} — ${target.zone.name}`,
+    };
+    // Rige desde el momento de confirmar y no desde una fecha que se elija: el servidor cierra la
+    // ventana vigente con `now` y abre la nueva ahí mismo. Decirlo es más honesto que ofrecer un
+    // campo de vigencia que nadie respetaría.
+    const vigencia: ConfirmChange = {
+      label: t('admin.tariffs.confirm.effectiveLabel'),
+      after: t('admin.tariffs.confirm.effectiveNow'),
+    };
+
+    if (target.minutes === null) {
+      const base = baseByZone.get(target.zone.id);
+      return [
+        zona,
+        {
+          label: t('admin.tariffs.base.label'),
+          before: base
+            ? t('admin.tariffs.price', { amount: dinero(base.amountMinor), minutes: String(base.minutes) })
+            : t('admin.tariffs.confirm.none'),
+          after: t('admin.tariffs.price', { amount: dinero(montoMinor), minutes: baseMinutes }),
+        },
+        vigencia,
+      ];
+    }
+
+    const minutos = target.minutes === 'new' ? Number(newMinutes) : target.minutes;
+    const propio = rungs.get(`${target.zone.id}:${minutos}`);
+    const hoy = priceOf(target.zone, minutos);
+    return [
+      zona,
+      {
+        label: format(minutos),
+        before: propio
+          ? dinero(propio.amountMinor)
+          : hoy
+            ? t('admin.tariffs.confirm.fromBase', { price: dinero(hoy.amountMinor) })
+            : t('admin.tariffs.confirm.none'),
+        after: dinero(montoMinor),
+      },
+      vigencia,
+    ];
+  }
+
+  /**
+   * «Por bloque empezado», dicho con los dos números que están en pantalla.
+   *
+   * <p>La regla estaba escrita dos veces —en la bajada de la página y en el cuerpo del modal— y en
+   * ninguna de las dos al lado del número que la produce. Una estadía de un minuto más que el bloque
+   * paga dos bloques: leerlo en plata concreta explica la regla mejor que la frase.</p>
+   */
+  function ejemploDeBloque(): { minutes: string; blocks: string; amount: string } | null {
+    const bloque = Number(baseMinutes);
+    if (montoMinor === null || !Number.isFinite(bloque) || bloque <= 0) return null;
+    const estadia = bloque + 1;
+    const bloques = Math.ceil(estadia / bloque);
+    return { minutes: String(estadia), blocks: String(bloques), amount: dinero(montoMinor * bloques) };
+  }
+
   const saveMutation = useMutation({
     mutationFn: async (target: Target) => {
       const amountMinor = majorToMinor(Number(amount), currencyCode ?? 'CRC');
@@ -161,6 +265,7 @@ export function TariffsPage(): React.JSX.Element {
     onSuccess: (_result, target) => {
       setError(null);
       setEditing(null);
+      setConfirmando(null);
       setAmount('');
       setFeedback(
         target.minutes === null
@@ -174,6 +279,7 @@ export function TariffsPage(): React.JSX.Element {
     },
     onError: (err: unknown) => {
       setFeedback(null);
+      setConfirmando(null);
       setError(describe(err));
     },
   });
@@ -215,6 +321,8 @@ export function TariffsPage(): React.JSX.Element {
   const loading = zonesQuery.isLoading || ratesQuery.isLoading || policyQuery.isLoading;
   const editingRung = editing !== null && typeof editing.minutes === 'number';
   const editingHasRung = editingRung && rungs.has(`${editing.zone.id}:${editing.minutes as number}`);
+
+  const ejemplo = ejemploDeBloque();
 
   return (
     <AdminShell>
@@ -364,7 +472,7 @@ export function TariffsPage(): React.JSX.Element {
       </Card>
 
       <Modal
-        open={editing !== null}
+        open={editing !== null && confirmando === null}
         onClose={() => setEditing(null)}
         title={
           editing === null
@@ -457,6 +565,12 @@ export function TariffsPage(): React.JSX.Element {
                 </div>
               ) : null}
             </div>
+            {/* La regla al lado de los números que la aplican, no sólo en la bajada de la página. */}
+            {editing?.minutes === null && ejemplo ? (
+              <p className="lx-text-meta" style={{ margin: 0 }}>
+                {t('admin.tariffs.set.blockExample', ejemplo)}
+              </p>
+            ) : null}
             <div className="lx-dialog-actions">
               {/* Clearing is offered only where there is something to clear, and it is not a
                   destructive act: the duration goes back to the base, which still prices it. */}
@@ -482,13 +596,12 @@ export function TariffsPage(): React.JSX.Element {
               <Button
                 type="button"
                 fullWidth
-                loading={saveMutation.isPending || updatePolicy.isPending}
                 disabled={
                   Number(amount) <= 0 ||
                   (editing?.minutes === null && Number(baseMinutes) <= 0) ||
                   (editing?.minutes === 'new' && !(Number(newMinutes) > 0))
                 }
-                onClick={() => editing && saveMutation.mutate(editing)}
+                onClick={() => editing && setConfirmando(editing)}
               >
                 {t('admin.tariffs.set.submit')}
               </Button>
@@ -496,6 +609,19 @@ export function TariffsPage(): React.JSX.Element {
           </div>
         </RequirePermission>
       </Modal>
+
+      <ConfirmDialog
+        open={confirmando !== null}
+        onClose={() => setConfirmando(null)}
+        title={t('admin.tariffs.confirm.title')}
+        message={t('admin.tariffs.confirm.body')}
+        changes={confirmando ? cambiosDe(confirmando) : undefined}
+        confirmLabel={t('admin.tariffs.set.submit')}
+        cancelLabel={t('common.cancel')}
+        closeLabel={t('common.close')}
+        loading={saveMutation.isPending || updatePolicy.isPending}
+        onConfirm={() => confirmando && saveMutation.mutate(confirmando)}
+      />
     </AdminShell>
   );
 }

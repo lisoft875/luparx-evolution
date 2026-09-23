@@ -4,7 +4,19 @@ import type { ParkingPolicy } from '@luparx/api-client';
 import { RequirePermission } from '@luparx/auth';
 import { formatDurationLabel, formatDurationWithMinutes } from '@luparx/features';
 import { useTranslation } from '@luparx/i18n';
-import { Alert, Button, Card, Checkbox, FormField, Input, SectionHeader, SummaryList, SummaryRow } from '@luparx/ui';
+import {
+  Alert,
+  Button,
+  Card,
+  Checkbox,
+  ConfirmDialog,
+  FormField,
+  Input,
+  SectionHeader,
+  SummaryList,
+  SummaryRow,
+} from '@luparx/ui';
+import type { ConfirmChange } from '@luparx/ui';
 import { AdminShell } from '../components/AdminShell';
 import { useParkingPolicy, useUpdateParkingPolicy } from '../lib/queries';
 
@@ -152,6 +164,8 @@ export function ParkingPolicyPage(): React.JSX.Element {
   const [form, setForm] = useState<ParkingPolicy | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  /** Lo que se va a mandar, esperando un «sí». `null` cuando no hay confirmación abierta. */
+  const [confirmando, setConfirmando] = useState<ParkingPolicy | null>(null);
 
   useEffect(() => {
     const stored = policyQuery.data;
@@ -200,7 +214,16 @@ export function ParkingPolicyPage(): React.JSX.Element {
   const derivedMin = offered[0] ?? 0;
   const derivedMax = offered[offered.length - 1] ?? 0;
 
-  async function handleSave(): Promise<void> {
+  /**
+   * Valida y abre la confirmación. NO guarda.
+   *
+   * <p>Esta pantalla decide qué duraciones se venden, cuánto dura la gracia antes de una boleta y
+   * cuántos días vive el crédito de un ciudadano: todo eso cambia para el cantón entero en el
+   * instante en que se manda, y hasta la auditoría del 22-09-2026 se mandaba con un clic. El
+   * resumen que ya existía abajo decía cómo va a quedar; lo que faltaba era decir de qué estado se
+   * viene, que es lo único que deja notar un 5 tecleado donde iba 15.</p>
+   */
+  function pedirConfirmacion(): void {
     if (!form) return;
     setError(null);
     setSaved(false);
@@ -218,25 +241,95 @@ export function ParkingPolicyPage(): React.JSX.Element {
       setError(t('admin.policy.error.extensionCeiling', { max: format(derivedMax) }));
       return;
     }
+    // Lo canonicalizado y lo derivado se calculan ACÁ y no al confirmar: lo que se muestra en el
+    // diálogo tiene que ser byte por byte lo que se manda, o la confirmación estaría confirmando
+    // otra cosa.
+    setConfirmando({
+      sessionIncrementsMinutes: offered,
+      sessionMinMinutes: derivedMin,
+      sessionMaxMinutes: derivedMax,
+      extensionEnabled: form.extensionEnabled,
+      extensionIncrementsMinutes: canonical(form.extensionIncrementsMinutes),
+      extensionMaxTotalMinutes: form.extensionMaxTotalMinutes,
+      earlyFinishEnabled: form.earlyFinishEnabled,
+      creditOnEarlyFinishEnabled: form.creditOnEarlyFinishEnabled,
+      creditMinRemainingMinutes: form.creditMinRemainingMinutes,
+      creditExpiryDays: form.creditExpiryDays,
+      graceMinutes: form.graceMinutes,
+      overlappingStaysEnabled: form.overlappingStaysEnabled,
+    });
+  }
+
+  async function handleSave(payload: ParkingPolicy): Promise<void> {
     try {
-      await updateMutation.mutateAsync({
-        sessionIncrementsMinutes: offered,
-        sessionMinMinutes: derivedMin,
-        sessionMaxMinutes: derivedMax,
-        extensionEnabled: form.extensionEnabled,
-        extensionIncrementsMinutes: canonical(form.extensionIncrementsMinutes),
-        extensionMaxTotalMinutes: form.extensionMaxTotalMinutes,
-        earlyFinishEnabled: form.earlyFinishEnabled,
-        creditOnEarlyFinishEnabled: form.creditOnEarlyFinishEnabled,
-        creditMinRemainingMinutes: form.creditMinRemainingMinutes,
-        creditExpiryDays: form.creditExpiryDays,
-        graceMinutes: form.graceMinutes,
-        overlappingStaysEnabled: form.overlappingStaysEnabled,
-      });
+      await updateMutation.mutateAsync(payload);
+      setConfirmando(null);
       setSaved(true);
     } catch {
+      // El error vuelve al formulario: lo que hay que corregir está ahí, no en el diálogo.
+      setConfirmando(null);
       setError(t('admin.policy.error.generic'));
     }
+  }
+
+  /**
+   * Sólo lo que de verdad cambia.
+   *
+   * <p>Listar los doce campos en cada confirmación sería una pantalla que nadie lee dos veces. Lo
+   * que no se tocó no aparece, así que lo que aparece es exactamente lo que hay que revisar.</p>
+   *
+   * <p>Un campo puede figurar sin que nadie lo haya tocado: al cargar, la pantalla recorta la lista
+   * de duraciones a lo que el piso y el techo guardados permitían de verdad. Ese recorte ES un
+   * cambio que se va a guardar, y por eso se muestra en vez de esconderse.</p>
+   */
+  function cambiosDe(nuevo: ParkingPolicy): ConfirmChange[] {
+    const previo = policyQuery.data;
+    if (!previo) return [];
+    const lista = (minutos: readonly number[]): string =>
+      minutos.length > 0 ? minutos.map(format).join(' · ') : t('admin.policy.preview.none');
+    const siNo = (valor: boolean): string => (valor ? t('common.yes') : t('common.no'));
+    const dias = (cantidad: number): string => tPlural('admin.policy.confirm.days', cantidad);
+
+    const filas: ConfirmChange[] = [];
+    const comparar = (label: string, antes: string, despues: string): void => {
+      if (antes !== despues) filas.push({ label, before: antes, after: despues });
+    };
+
+    comparar(
+      t('admin.policy.summary.session'),
+      lista(previo.sessionIncrementsMinutes),
+      lista(nuevo.sessionIncrementsMinutes),
+    );
+    comparar(t('admin.policy.confirm.extension'), siNo(previo.extensionEnabled), siNo(nuevo.extensionEnabled));
+    comparar(
+      t('admin.policy.confirm.extensionList'),
+      lista(previo.extensionIncrementsMinutes),
+      lista(nuevo.extensionIncrementsMinutes),
+    );
+    comparar(
+      t('admin.policy.confirm.extensionMax'),
+      format(previo.extensionMaxTotalMinutes),
+      format(nuevo.extensionMaxTotalMinutes),
+    );
+    comparar(t('admin.policy.confirm.earlyFinish'), siNo(previo.earlyFinishEnabled), siNo(nuevo.earlyFinishEnabled));
+    comparar(
+      t('admin.policy.confirm.credit'),
+      siNo(previo.creditOnEarlyFinishEnabled),
+      siNo(nuevo.creditOnEarlyFinishEnabled),
+    );
+    comparar(
+      t('admin.policy.confirm.creditMin'),
+      format(previo.creditMinRemainingMinutes),
+      format(nuevo.creditMinRemainingMinutes),
+    );
+    comparar(t('admin.policy.confirm.creditExpiry'), dias(previo.creditExpiryDays), dias(nuevo.creditExpiryDays));
+    comparar(t('admin.policy.summary.grace'), format(previo.graceMinutes), format(nuevo.graceMinutes));
+    comparar(
+      t('admin.policy.summary.overlap'),
+      siNo(previo.overlappingStaysEnabled),
+      siNo(nuevo.overlappingStaysEnabled),
+    );
+    return filas;
   }
 
   if (!form) {
@@ -506,12 +599,29 @@ export function ParkingPolicyPage(): React.JSX.Element {
             />
           </SummaryList>
           <div style={{ marginTop: 'var(--lx-space-4)' }}>
-            <Button type="button" loading={updateMutation.isPending} onClick={() => void handleSave()}>
+            <Button type="button" loading={updateMutation.isPending} onClick={() => pedirConfirmacion()}>
               {t('common.save')}
             </Button>
           </div>
         </Card>
       </RequirePermission>
+
+      <ConfirmDialog
+        open={confirmando !== null}
+        onClose={() => setConfirmando(null)}
+        title={t('admin.policy.confirm.title')}
+        message={
+          confirmando && cambiosDe(confirmando).length === 0
+            ? t('admin.policy.confirm.noChanges')
+            : t('admin.policy.confirm.body')
+        }
+        changes={confirmando ? cambiosDe(confirmando) : undefined}
+        confirmLabel={t('common.save')}
+        cancelLabel={t('common.cancel')}
+        closeLabel={t('common.close')}
+        loading={updateMutation.isPending}
+        onConfirm={() => confirmando && void handleSave(confirmando)}
+      />
     </AdminShell>
   );
 }
