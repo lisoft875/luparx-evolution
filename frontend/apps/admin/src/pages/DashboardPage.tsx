@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@luparx/auth';
@@ -11,31 +11,55 @@ import {
   type SupportedLocale,
   type TranslationKey,
 } from '@luparx/i18n';
-import { Alert, Badge, Card, Input, SectionHeader, Table } from '@luparx/ui';
+import { Alert, Button, Card, FormField, Input, SectionHeader, StatCard, Table } from '@luparx/ui';
 import { AdminShell } from '../components/AdminShell';
 
 /**
- * The municipal dashboard (CONTRACT.md v0.36).
+ * El panel de la municipalidad (CONTRACT.md v0.36; reordenado el 23-09-2026).
  *
  * <h2>«No solamente estadísticas bonitas»</h2>
  *
- * <p>Every figure on this screen is a count of rows, and every figure is a <b>link to those rows</b>,
- * already filtered. Nothing here is a score, an index or a trend through three points — the kind of
- * number that looks like insight and cannot be checked by anybody. If a municipality reads 47 here
- * and cannot get to the 47, the number is decoration.</p>
+ * <p>Toda cifra de esta pantalla es un conteo de filas, y toda cifra es un <b>enlace a esas filas</b>,
+ * ya filtradas. Acá no hay puntajes, índices ni tendencias trazadas entre tres puntos —la clase de
+ * número que parece hallazgo y nadie puede comprobar—. Si una municipalidad lee 47 acá y no puede
+ * llegar a los 47, el número es decoración.</p>
  *
  * <h2>Dos relojes, dichos en voz alta</h2>
  *
- * <p>Occupancy and running stays are <b>now</b>; everything else covers the window. The screen says
- * which is which next to each block, because a live count sitting beside a monthly total with no
- * label is how somebody reads one as the other.</p>
+ * <p>La ocupación y las estadías vigentes son <b>ahora</b>; todo lo demás cubre el período. La
+ * pantalla dice cuál es cuál al lado de cada bloque, porque un conteo en vivo junto a un total
+ * mensual sin etiqueta es cómo alguien lee uno por el otro.</p>
+ *
+ * <h2>Qué cambió en el reordenamiento, y qué NO</h2>
+ *
+ * <p>No cambió ni una cifra, ni un cálculo, ni una llamada, ni un destino de navegación: lo que
+ * cambió es que dejaron de ser once tarjetas de ancho completo apiladas en una página que había que
+ * recorrer entera para saber cómo fue el mes. Ahora hay cuatro KPIs arriba, los módulos que
+ * responden a la misma pregunta viven en la misma fila, y los vacíos ocupan un renglón en vez de
+ * una tarjeta.</p>
+ *
+ * <p>El texto también se acortó. Lo que explicaba POR QUÉ un número se cuenta así —que sigue siendo
+ * cierto y sigue importando— vive en los comentarios de este archivo y del servicio que lo calcula,
+ * que es donde lo necesita quien lo va a tocar. Un panel municipal no es el lugar para argumentar.</p>
  */
 export function DashboardPage(): React.JSX.Element {
   const { t, locale } = useTranslation();
   const { apiClient } = useAuth();
   const navigate = useNavigate();
+
+  /**
+   * Dos estados para las fechas: lo que está escrito y lo que se está consultando.
+   *
+   * <p>Antes eran uno solo, así que cada tecla en el campo de fecha disparaba una consulta —y al
+   * escribir «2026» el navegador pasa por «0002», que es un rango de dos mil años—. Con «Aplicar»
+   * de por medio, la consulta ocurre cuando la persona terminó de decidir.</p>
+   */
+  const [desdeBorrador, setDesdeBorrador] = useState('');
+  const [hastaBorrador, setHastaBorrador] = useState('');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
+  /** Los estados de estadía más allá del principal: plegados salvo que alguien los pida (§6). */
+  const [verTodosLosEstados, setVerTodosLosEstados] = useState(false);
 
   const query = useQuery({
     queryKey: ['admin', 'dashboard', { from, to }],
@@ -44,103 +68,255 @@ export function DashboardPage(): React.JSX.Element {
         from: from ? startOfDay(from) : undefined,
         to: to ? startOfNextDay(to) : undefined,
       }),
-    // Live figures go stale while somebody reads them. Thirty seconds is often enough that the
-    // occupancy is current and rare enough that a municipality on a slow connection is not
-    // re-rendering the page under its own hands.
+    // Las cifras en vivo se ponen viejas mientras alguien las lee. Treinta segundos es seguido como
+    // para que la ocupación sea de ahora y espaciado como para que una municipalidad con conexión
+    // lenta no esté re-dibujando la pantalla bajo sus propias manos.
     refetchInterval: 30_000,
   });
 
   const data = query.data;
   const currency = data?.currencyCode ?? 'CRC';
 
-  /** Every figure goes somewhere. This is the whole difference between consulting and looking. */
+  /** Toda cifra va a alguna parte. Es la diferencia entera entre consultar y mirar. */
   function open(path: string, params: Record<string, string | undefined> = {}): void {
     const search = new URLSearchParams();
     for (const [key, value] of Object.entries(params)) {
       if (value) search.set(key, value);
     }
-    // The window travels with the link, so the list opens showing the same period the number counted.
+    // El período viaja con el enlace, así que la lista abre mostrando el mismo que contó el número.
     if (from) search.set('from', from);
     if (to) search.set('to', to);
     const qs = search.toString();
     navigate(qs ? `${path}?${qs}` : path);
   }
 
+  function aplicar(): void {
+    setFrom(desdeBorrador);
+    setTo(hastaBorrador);
+  }
+
+  /**
+   * Los atajos de período.
+   *
+   * <p>Se aplican de una vez, sin pasar por «Aplicar»: un atajo ES la decisión tomada, y pedir un
+   * segundo clic para confirmar lo que ya se eligió con uno sólo agrega un paso.</p>
+   */
+  function preset(dias: number | 'mes'): void {
+    const hoy = new Date();
+    const fin = iso(hoy);
+    const inicio =
+      dias === 'mes'
+        ? iso(new Date(hoy.getFullYear(), hoy.getMonth(), 1))
+        : iso(new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() - (dias - 1)));
+    setDesdeBorrador(inicio);
+    setHastaBorrador(fin);
+    setFrom(inicio);
+    setTo(fin);
+  }
+
+  // --- KPIs (§3) ---------------------------------------------------------------------------------
+
+  /**
+   * Las estadías pagadas del período.
+   *
+   * <p>No es un cálculo nuevo: es la fila `PAID` de la misma agrupación que ya se mostraba debajo,
+   * subida a la altura de los ojos. Si el servidor deja de mandarla, acá no hay nada que inventar
+   * y se dice «Sin datos».</p>
+   */
+  const pagadas = useMemo(
+    () => (data?.parking ?? []).find((fila) => fila.paymentStatus === 'PAID') ?? null,
+    [data],
+  );
+
+  /**
+   * La ocupación del cantón: estadías vigentes sobre bahías en servicio.
+   *
+   * <p>Es la misma división que ya hace la columna «Ocupación» de la tabla de abajo, agregada sobre
+   * las zonas que tienen denominador. Una zona sin bahías numeradas no entra —no tiene con qué
+   * medirse— y por eso el total puede no cuadrar con la suma de estadías vigentes, que sí las
+   * incluye a todas.</p>
+   */
+  const ocupacion = useMemo(() => {
+    const zonas = (data?.occupancy.zones ?? []).filter((zona) => zona.percent !== null);
+    const activas = zonas.reduce((suma, zona) => suma + zona.activeSessions, 0);
+    const bahias = zonas.reduce((suma, zona) => suma + zona.baysInService, 0);
+    if (bahias === 0) return null;
+    return { percent: Math.round((activas / bahias) * 100), activas, bahias };
+  }, [data]);
+
+  /** Cuántas boletas se levantaron en el período, en cualquier estado en que estén hoy. */
+  const boletas = useMemo(
+    () => (data?.citations ?? []).reduce((suma, fila) => suma + fila.count, 0),
+    [data],
+  );
+
+  const sinDatos = t('admin.dashboard.noData');
+
   return (
     <AdminShell>
+      {/* --- 1. título y filtros --------------------------------------------------------------- */}
       <h1>{t('admin.dashboard.title')}</h1>
 
-      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end', margin: '12px 0' }}>
-        <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} aria-label={t('admin.audit.filter.from')} />
-        <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} aria-label={t('admin.audit.filter.to')} />
-      </div>
+      <Card>
+        <div className="lx-period-filter">
+          {/* Etiquetadas y visibles: dos campos con «dd/mm/aaaa» dentro obligan a deducir cuál es
+              el inicio y cuál el fin, y quien deduce mal lee un período que no pidió. */}
+          <FormField label={t('admin.audit.filter.from')}>
+            {({ inputId }) => (
+              <Input
+                id={inputId}
+                type="date"
+                value={desdeBorrador}
+                onChange={(e) => setDesdeBorrador(e.target.value)}
+              />
+            )}
+          </FormField>
+          <FormField label={t('admin.audit.filter.to')}>
+            {({ inputId }) => (
+              <Input
+                id={inputId}
+                type="date"
+                value={hastaBorrador}
+                onChange={(e) => setHastaBorrador(e.target.value)}
+              />
+            )}
+          </FormField>
+          <Button type="button" onClick={aplicar}>
+            {t('admin.dashboard.filters.apply')}
+          </Button>
+          <div className="lx-period-filter__presets">
+            <Button type="button" variant="secondary" onClick={() => preset(1)}>
+              {t('admin.dashboard.filters.preset.today')}
+            </Button>
+            <Button type="button" variant="secondary" onClick={() => preset(7)}>
+              {t('admin.dashboard.filters.preset.week')}
+            </Button>
+            <Button type="button" variant="secondary" onClick={() => preset(30)}>
+              {t('admin.dashboard.filters.preset.month')}
+            </Button>
+            <Button type="button" variant="secondary" onClick={() => preset('mes')}>
+              {t('admin.dashboard.filters.preset.thisMonth')}
+            </Button>
+          </div>
+        </div>
+        {data ? (
+          <p className="lx-text-meta" style={{ margin: 'var(--lx-space-2) 0 0' }}>
+            {t('admin.dashboard.window', {
+              from: formatDateTime(data.from, locale),
+              to: formatDateTime(data.to, locale),
+            })}
+          </p>
+        ) : null}
+      </Card>
 
       {query.isError ? <Alert tone="danger">{t('common.error.generic')}</Alert> : null}
       {!data ? (
         <p className="lx-text-meta">{t('common.loading')}</p>
       ) : (
         <>
-          <p className="lx-text-meta">
-            {t('admin.dashboard.window', {
-              from: formatDateTime(data.from, locale),
-              to: formatDateTime(data.to, locale),
-            })}
-          </p>
-
-          {/* --- 1. recaudación ------------------------------------------------------------- */}
-          <Card>
-            <SectionHeader
-              title={t('admin.dashboard.revenue.title')}
-              description={t('admin.dashboard.revenue.description')}
+          {/* --- 2. los cuatro KPIs ------------------------------------------------------------ */}
+          <div className="lx-dashboard-kpis">
+            <StatCard
+              label={t('admin.dashboard.kpi.netRevenue')}
+              value={
+                <button type="button" className="lx-linklike lx-stat-link" onClick={() => open('/billing')}>
+                  {formatCurrencyMinor(data.revenue.capturedNetMinor, currency, locale)}
+                </button>
+              }
+              hint={t('admin.billing.totals.netHint')}
             />
-            <div style={{ display: 'flex', gap: 'var(--lx-space-4)', flexWrap: 'wrap' }}>
-              <Figure
-                label={t('admin.dashboard.revenue.captured')}
-                value={formatCurrencyMinor(data.revenue.capturedGrossMinor, currency, locale)}
-                meta={t('admin.dashboard.revenue.capturedCount', { count: data.revenue.capturedCount })}
+            <StatCard
+              label={t('admin.dashboard.kpi.paidStays')}
+              value={pagadas ? formatNumber(pagadas.count, locale) : sinDatos}
+              hint={
+                pagadas ? formatCurrencyMinor(pagadas.totalMinor, currency, locale) : t('admin.dashboard.kpi.inPeriod')
+              }
+            />
+            <StatCard
+              label={t('admin.dashboard.kpi.occupancy')}
+              value={ocupacion ? `${ocupacion.percent}%` : sinDatos}
+              hint={
+                ocupacion
+                  ? t('admin.dashboard.occupancy.overBays', {
+                      active: formatNumber(ocupacion.activas, locale),
+                      bays: formatNumber(ocupacion.bahias, locale),
+                    })
+                  : t('admin.dashboard.kpi.rightNow')
+              }
+            />
+            <StatCard
+              label={t('admin.dashboard.kpi.citations')}
+              value={
+                <button
+                  type="button"
+                  className="lx-linklike lx-stat-link"
+                  onClick={() => open('/enforcement/citations')}
+                >
+                  {formatNumber(boletas, locale)}
+                </button>
+              }
+              hint={t('admin.dashboard.kpi.inPeriod')}
+            />
+          </div>
+
+          {/* --- 3. finanzas: recaudación y billetera, lado a lado ----------------------------- */}
+          <div className="lx-dashboard-split">
+            <Card>
+              <SectionHeader
+                title={t('admin.dashboard.revenue.title')}
+                description={t('admin.dashboard.revenue.description')}
+              />
+              <div className="lx-figure-row">
+                <Figure
+                  label={t('admin.dashboard.revenue.captured')}
+                  value={formatCurrencyMinor(data.revenue.capturedGrossMinor, currency, locale)}
+                  meta={t('admin.dashboard.revenue.capturedCount', { count: data.revenue.capturedCount })}
+                  onOpen={() => open('/billing')}
+                />
+                <Figure
+                  label={t('admin.dashboard.revenue.net')}
+                  value={formatCurrencyMinor(data.revenue.capturedNetMinor, currency, locale)}
+                  meta={t('admin.billing.totals.netHint')}
+                />
+                {/* Verde sólo cuando está en cero, que es el estado correcto; ámbar —no rojo— cuando
+                    hay pendiente: lo que falta confirmar no es un error, es trabajo por hacer. */}
+                <Figure
+                  label={t('admin.dashboard.revenue.unsettled')}
+                  value={formatCurrencyMinor(data.revenue.unsettledGrossMinor, currency, locale)}
+                  tone={data.revenue.unsettledGrossMinor > 0 ? 'warning' : 'success'}
+                  onOpen={() => open('/billing')}
+                />
+              </div>
+            </Card>
+
+            <Card>
+              <SectionHeader
+                title={t('admin.dashboard.transactions.title')}
+                description={t('admin.dashboard.transactions.description')}
+              />
+              <GroupRow
+                rows={data.transactions.map((row) => ({
+                  key: row.type ?? row.labelKey,
+                  label: t(row.labelKey as TranslationKey),
+                  count: row.count,
+                  // Con signo a propósito: un cargo es negativo en este libro.
+                  money: formatCurrencyMinor(row.totalMinor, currency, locale),
+                }))}
+                emptyLabel={t('admin.dashboard.empty')}
                 onOpen={() => open('/billing')}
+                locale={locale}
               />
-              <Figure
-                label={t('admin.dashboard.revenue.net')}
-                value={formatCurrencyMinor(data.revenue.capturedNetMinor, currency, locale)}
-                meta={t('admin.billing.totals.netHint')}
-              />
-              <Figure
-                label={t('admin.dashboard.revenue.unsettled')}
-                value={formatCurrencyMinor(data.revenue.unsettledGrossMinor, currency, locale)}
-                tone={data.revenue.unsettledGrossMinor > 0 ? 'danger' : 'success'}
-                onOpen={() => open('/billing')}
-              />
-            </div>
-          </Card>
+            </Card>
+          </div>
 
-          {/* --- 2 y 3. transacciones y estacionamientos ------------------------------------- */}
-          <Card>
-            <SectionHeader
-              title={t('admin.dashboard.transactions.title')}
-              description={t('admin.dashboard.transactions.description')}
-            />
-            <GroupRow
-              rows={data.transactions.map((row) => ({
-                key: row.type ?? row.labelKey,
-                label: t(row.labelKey as TranslationKey),
-                count: row.count,
-                // Signed on purpose: a charge is negative in this ledger.
-                money: formatCurrencyMinor(row.totalMinor, currency, locale),
-              }))}
-              emptyLabel={t('admin.dashboard.empty')}
-              onOpen={() => open('/billing')}
-              locale={locale}
-            />
-          </Card>
-
+          {/* --- estacionamientos: compacto, y el resto se despliega (§6) ---------------------- */}
           <Card>
             <SectionHeader
               title={t('admin.dashboard.parking.title')}
               description={t('admin.dashboard.parking.description')}
             />
             <GroupRow
-              rows={data.parking.map((row) => ({
+              rows={(verTodosLosEstados || !pagadas ? data.parking : [pagadas]).map((row) => ({
                 key: row.paymentStatus ?? row.labelKey,
                 label: t(row.labelKey as TranslationKey),
                 count: row.count,
@@ -149,129 +325,173 @@ export function DashboardPage(): React.JSX.Element {
               emptyLabel={t('admin.dashboard.empty')}
               locale={locale}
             />
-          </Card>
-
-          {/* --- 4. ocupación, que es AHORA -------------------------------------------------- */}
-          <Card>
-            <SectionHeader
-              title={t('admin.dashboard.occupancy.title')}
-              description={t('admin.dashboard.occupancy.description')}
-            />
-            {/* Said out loud, because this block does not cover the window above it. */}
-            <p className="lx-text-meta">
-              {t('admin.dashboard.occupancy.asOf', { time: formatDateTime(data.now, locale) })}
-            </p>
-            <p style={{ fontSize: 26, fontWeight: 700, margin: '0 0 8px 0', fontVariantNumeric: 'tabular-nums' }}>
-              {formatNumber(data.occupancy.activeSessions, locale)}{' '}
-              <span className="lx-text-meta" style={{ fontSize: 14, fontWeight: 400 }}>
-                {t('admin.dashboard.occupancy.active')}
-              </span>
-            </p>
-            {data.occupancy.unzonedActive > 0 ? (
-              // Reported, never folded away: a car parked somewhere is still a car parked somewhere.
-              <p className="lx-text-meta">
-                {t('admin.dashboard.occupancy.unzoned', { count: data.occupancy.unzonedActive })}
+            {/* El desplegable sólo aparece si hay algo escondido: un botón que no revela nada es
+                una promesa vacía. */}
+            {pagadas && data.parking.length > 1 ? (
+              <p style={{ margin: 'var(--lx-space-2) 0 0' }}>
+                <button
+                  type="button"
+                  className="lx-linklike"
+                  onClick={() => setVerTodosLosEstados((actual) => !actual)}
+                >
+                  {t(
+                    verTodosLosEstados
+                      ? 'admin.dashboard.parking.collapse'
+                      : 'admin.dashboard.parking.expand',
+                  )}
+                </button>
               </p>
             ) : null}
-            <Table
-              loadingLabel={t('common.loading')}
-              emptyLabel={t('admin.dashboard.occupancy.noZones')}
-              rows={data.occupancy.zones}
-              rowKey={(row) => row.zoneId}
-              columns={[
-                {
-                  key: 'zone',
-                  header: t('admin.dashboard.column.zone'),
-                  render: (row) => (
-                    <button type="button" className="lx-linklike" onClick={() => open('/zones')}>
-                      {row.name} ({row.code})
-                    </button>
-                  ),
-                },
-                {
-                  key: 'active',
-                  header: t('admin.dashboard.column.active'),
-                  render: (row) => formatNumber(row.activeSessions, locale),
-                },
-                {
-                  key: 'bays',
-                  header: t('admin.dashboard.column.bays'),
-                  render: (row) => formatNumber(row.baysInService, locale),
-                },
-                {
-                  key: 'percent',
-                  header: t('admin.dashboard.column.occupancy'),
-                  // Absent is not zero. A zone with no numbered bays gets a dash and an explanation
-                  // on hover, never "0%", which would be a figure that is wrong rather than missing.
-                  render: (row) =>
-                    row.percent === null ? (
-                      <span className="lx-text-meta" title={t('admin.dashboard.occupancy.noBays')}>
-                        —
-                      </span>
-                    ) : (
-                      <Badge tone={row.percent >= 90 ? 'danger' : row.percent >= 70 ? 'warning' : 'neutral'}>
-                        {row.percent}%
-                      </Badge>
+          </Card>
+
+          {/* --- 4. operación: ocupación (2/3) + fiscalización y exoneraciones (1/3) ----------- */}
+          <div className="lx-dashboard-split lx-dashboard-split--wide">
+            <Card>
+              <SectionHeader
+                title={t('admin.dashboard.occupancy.title')}
+                description={t('admin.dashboard.occupancy.description')}
+              />
+              {/* Dicho en voz alta, porque este bloque no cubre el período de arriba. */}
+              <p className="lx-text-meta" style={{ margin: 0 }}>
+                {t('admin.dashboard.occupancy.asOf', { time: formatDateTime(data.now, locale) })}
+              </p>
+              <p className="lx-dashboard-figure">
+                {formatNumber(data.occupancy.activeSessions, locale)}{' '}
+                <span className="lx-dashboard-figure__unit">{t('admin.dashboard.occupancy.active')}</span>
+              </p>
+              {data.occupancy.unzonedActive > 0 ? (
+                // Reportadas, nunca escondidas: un carro parqueado en algún lado sigue siendo un
+                // carro parqueado en algún lado.
+                <p className="lx-text-meta" style={{ margin: 0 }}>
+                  {t('admin.dashboard.occupancy.unzoned', { count: data.occupancy.unzonedActive })}
+                </p>
+              ) : null}
+              <Table
+                loadingLabel={t('common.loading')}
+                emptyLabel={t('admin.dashboard.occupancy.noZones')}
+                rows={data.occupancy.zones}
+                rowKey={(row) => row.zoneId}
+                columns={[
+                  {
+                    key: 'zone',
+                    header: t('admin.dashboard.column.zone'),
+                    render: (row) => (
+                      <button type="button" className="lx-linklike" onClick={() => open('/zones')}>
+                        {row.name} ({row.code})
+                      </button>
                     ),
-                },
-              ]}
-            />
-          </Card>
+                  },
+                  {
+                    key: 'active',
+                    header: t('admin.dashboard.column.active'),
+                    render: (row) => formatNumber(row.activeSessions, locale),
+                  },
+                  {
+                    key: 'bays',
+                    header: t('admin.dashboard.column.bays'),
+                    render: (row) => formatNumber(row.baysInService, locale),
+                  },
+                  {
+                    key: 'percent',
+                    header: t('admin.dashboard.column.occupancy'),
+                    // Ausente no es cero. Una zona sin bahías numeradas lleva raya y su explicación,
+                    // nunca «0%», que sería una cifra equivocada en vez de una que falta.
+                    render: (row) =>
+                      row.percent === null ? (
+                        <span className="lx-text-meta" title={t('admin.dashboard.occupancy.noBays')}>
+                          —
+                        </span>
+                      ) : (
+                        // Barra Y número: el porcentaje se lee de un vistazo y además se puede
+                        // leer exacto. La barra sola obligaría a estimar; el número solo obliga a
+                        // comparar de memoria entre filas.
+                        <span className="lx-occupancy-cell">
+                          <span className="lx-occupancy-cell__track">
+                            <span
+                              className={
+                                row.percent >= 90
+                                  ? 'lx-occupancy-cell__fill lx-occupancy-cell__fill--full'
+                                  : row.percent >= 70
+                                    ? 'lx-occupancy-cell__fill lx-occupancy-cell__fill--warn'
+                                    : 'lx-occupancy-cell__fill'
+                              }
+                              style={{ width: `${Math.min(row.percent, 100)}%` }}
+                            />
+                          </span>
+                          <span className="lx-occupancy-cell__value">{row.percent}%</span>
+                        </span>
+                      ),
+                  },
+                ]}
+              />
+            </Card>
 
-          {/* --- 5, 6 y 7. fiscalizaciones, infracciones, exoneraciones ---------------------- */}
-          <Card>
-            <SectionHeader
-              title={t('admin.dashboard.checks.title')}
-              description={t('admin.dashboard.checks.description')}
-            />
-            <GroupRow
-              rows={data.checks.map((row) => ({
-                key: row.verdict ?? row.labelKey,
-                label: t(row.labelKey as TranslationKey),
-                count: row.count,
-              }))}
-              emptyLabel={t('admin.dashboard.empty')}
-              onOpen={(key) => open('/enforcement/checks', { verdict: key })}
-              locale={locale}
-            />
-          </Card>
+            <div className="lx-dashboard-stack">
+              <Card>
+                <SectionHeader
+                  title={t('admin.dashboard.checks.title')}
+                  description={t('admin.dashboard.checks.description')}
+                />
+                <GroupRow
+                  rows={data.checks.map((row) => ({
+                    key: row.verdict ?? row.labelKey,
+                    label: t(row.labelKey as TranslationKey),
+                    count: row.count,
+                  }))}
+                  emptyLabel={t('admin.dashboard.empty')}
+                  onOpen={(key) => open('/enforcement/checks', { verdict: key })}
+                  locale={locale}
+                />
+              </Card>
 
+              <Card>
+                <SectionHeader
+                  title={t('admin.dashboard.exemptions.title')}
+                  description={t('admin.dashboard.exemptions.description')}
+                />
+                <GroupRow
+                  rows={data.exemptions.map((row) => ({
+                    key: row.status ?? row.labelKey,
+                    label: t(row.labelKey as TranslationKey),
+                    count: row.count,
+                  }))}
+                  emptyLabel={t('admin.dashboard.empty')}
+                  onOpen={(key) => open('/exemptions', { status: key })}
+                  locale={locale}
+                />
+              </Card>
+            </div>
+          </div>
+
+          {/* --- 5. infracciones: una fila de fichas, con cantidad y monto --------------------- */}
           <Card>
             <SectionHeader
               title={t('admin.dashboard.citations.title')}
               description={t('admin.dashboard.citations.description')}
             />
-            <GroupRow
-              rows={data.citations.map((row) => ({
-                key: row.status ?? row.labelKey,
-                label: t(row.labelKey as TranslationKey),
-                count: row.count,
-                money: formatCurrencyMinor(row.totalMinor, currency, locale),
-              }))}
-              emptyLabel={t('admin.dashboard.empty')}
-              onOpen={(key) => open('/enforcement/citations', { status: key })}
-              locale={locale}
-            />
+            {data.citations.length === 0 ? (
+              <p className="lx-text-meta">{t('admin.dashboard.empty')}</p>
+            ) : (
+              <div className="lx-chip-row">
+                {data.citations.map((row) => (
+                  <button
+                    key={row.status ?? row.labelKey}
+                    type="button"
+                    className="lx-stat-chip"
+                    onClick={() => open('/enforcement/citations', { status: row.status })}
+                  >
+                    <span className="lx-stat-chip__label">{t(row.labelKey as TranslationKey)}</span>
+                    <span className="lx-stat-chip__value">{formatNumber(row.count, locale)}</span>
+                    <span className="lx-stat-chip__money">
+                      {formatCurrencyMinor(row.totalMinor, currency, locale)}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
           </Card>
 
-          <Card>
-            <SectionHeader
-              title={t('admin.dashboard.exemptions.title')}
-              description={t('admin.dashboard.exemptions.description')}
-            />
-            <GroupRow
-              rows={data.exemptions.map((row) => ({
-                key: row.status ?? row.labelKey,
-                label: t(row.labelKey as TranslationKey),
-                count: row.count,
-              }))}
-              emptyLabel={t('admin.dashboard.empty')}
-              onOpen={(key) => open('/exemptions', { status: key })}
-              locale={locale}
-            />
-          </Card>
-
-          {/* --- 8. actividad por inspector --------------------------------------------------- */}
+          {/* --- 6. actividad por inspector ---------------------------------------------------- */}
           <Card>
             <SectionHeader
               title={t('admin.dashboard.inspectors.title')}
@@ -313,24 +533,31 @@ export function DashboardPage(): React.JSX.Element {
                 },
               ]}
             />
-            {/* Neither number means anything alone, and a supervisor acting on one of them alone
-                acts wrongly. Saying so on the screen is cheaper than explaining it afterwards. */}
-            <Alert tone="info">{t('admin.dashboard.inspectors.notice')}</Alert>
+            {/* Los dos números juntos son una pregunta; por separado no dicen nada. Se deja escrito
+                en una línea, sin el párrafo que antes explicaba de qué podría acusarse a quién. */}
+            {data.inspectors.length > 0 ? (
+              <p className="lx-text-meta" style={{ margin: 'var(--lx-space-2) 0 0' }}>
+                {t('admin.dashboard.inspectors.notice')}
+              </p>
+            ) : null}
           </Card>
 
-          {/* --- 9. fallos de pago ------------------------------------------------------------ */}
+          {/* --- 7. fallos de pago: una línea cuando no hay ------------------------------------ */}
           <Card>
             <SectionHeader
               title={t('admin.dashboard.failures.title')}
               description={t('admin.dashboard.failures.description')}
             />
             {data.paymentFailures.count === 0 ? (
-              <Alert tone="success">{t('admin.dashboard.failures.none')}</Alert>
+              <p className="lx-text-meta" style={{ margin: 0 }}>
+                <span className="lx-status-strip__dot lx-status-strip__dot--ok" aria-hidden="true" />{' '}
+                {t('admin.dashboard.failures.none')}
+              </p>
             ) : (
               <>
-                <p style={{ fontSize: 22, fontWeight: 700, margin: 0, fontVariantNumeric: 'tabular-nums' }}>
+                <p className="lx-dashboard-figure">
                   {formatNumber(data.paymentFailures.count, locale)}{' '}
-                  <span className="lx-text-meta" style={{ fontSize: 14, fontWeight: 400 }}>
+                  <span className="lx-dashboard-figure__unit">
                     {t('admin.dashboard.failures.count', {
                       amount: formatCurrencyMinor(data.paymentFailures.amountMinor, currency, locale),
                     })}
@@ -363,6 +590,13 @@ export function DashboardPage(): React.JSX.Element {
       )}
     </AdminShell>
   );
+}
+
+/** `YYYY-MM-DD` del calendario de quien mira, que es el que escriben los campos de fecha. */
+function iso(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(
+    date.getDate(),
+  ).padStart(2, '0')}`;
 }
 
 /**
@@ -425,7 +659,12 @@ function Figure({
   label: string;
   value: string;
   meta?: string;
-  tone?: 'danger' | 'success';
+  /**
+   * `warning` y no `danger` para lo que está pendiente: la §4 pide verde para lo correcto y ámbar
+   * o rojo para lo pendiente «según semántica». Plata que un proveedor todavía no confirmó es
+   * trabajo por hacer, no un fallo, y pintarla de rojo hace que se deje de mirar el rojo.
+   */
+  tone?: 'danger' | 'warning' | 'success';
   onOpen?: () => void;
 }): React.JSX.Element {
   return (
@@ -439,7 +678,14 @@ function Figure({
           fontSize: 26,
           fontWeight: 700,
           fontVariantNumeric: 'tabular-nums',
-          color: tone === 'danger' ? 'var(--lx-danger)' : tone === 'success' ? 'var(--lx-success)' : undefined,
+          color:
+            tone === 'danger'
+              ? 'var(--lx-danger)'
+              : tone === 'warning'
+                ? 'var(--lx-warning)'
+                : tone === 'success'
+                  ? 'var(--lx-success)'
+                  : undefined,
         }}
       >
         {onOpen ? (

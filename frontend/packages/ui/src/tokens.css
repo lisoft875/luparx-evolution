@@ -3253,3 +3253,186 @@ button.lx-list-row {
   white-space: pre-wrap;
   word-break: break-word;
 }
+
+/* --- Panel de la municipalidad: densidad (correcciones UX/UI v2, 23-09-2026) ------------------
+   El Panel era once tarjetas de ancho completo apiladas. Lo que sigue no esconde ninguna de ellas:
+   pone lado a lado las que contestan la misma pregunta, que es de donde sale el 35-45% de alto que
+   pedía la §13 sin quitar información. */
+
+.lx-period-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--lx-space-3);
+  align-items: flex-end;
+}
+
+/* Los atajos se agrupan y se van al final de su propio renglón cuando no caben, para que no se
+   mezclen con los campos: son otra forma de pedir lo mismo, no un tercer y cuarto campo. */
+.lx-period-filter__presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--lx-space-2);
+  margin-left: auto;
+}
+
+@media (max-width: 720px) {
+  .lx-period-filter__presets {
+    margin-left: 0;
+    width: 100%;
+  }
+}
+
+.lx-dashboard-kpis {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--lx-space-3);
+}
+
+@media (min-width: 600px) {
+  .lx-dashboard-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1100px) {
+  .lx-dashboard-kpis {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+/* Dos columnas iguales; con `--wide`, dos tercios y un tercio. Debajo de 900px se apilan: dos
+   columnas en el ancho que queda al lado del menú dejan una tabla de cuatro columnas ilegible. */
+.lx-dashboard-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--lx-space-3);
+  align-items: start;
+}
+
+@media (min-width: 900px) {
+  .lx-dashboard-split {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .lx-dashboard-split--wide {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  }
+}
+
+.lx-dashboard-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lx-space-3);
+  min-width: 0;
+}
+
+.lx-figure-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--lx-space-4);
+}
+
+/* La cifra grande de un bloque. Estaba escrita inline con `fontSize: 26` en dos lugares y con 22
+   en un tercero, que es como tres cifras del mismo rango terminan de tres tamaños distintos. */
+.lx-dashboard-figure {
+  margin: var(--lx-space-2) 0 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.lx-dashboard-figure__unit {
+  color: var(--lx-text-muted);
+  font-size: 0.875rem;
+  font-weight: 400;
+}
+
+/* Un valor de StatCard que además es un enlace: hereda el tamaño en vez de encogerse al del texto
+   corriente, que es lo que pasa cuando un <button> se mete dentro de una cifra. */
+.lx-stat-link {
+  font: inherit;
+  color: inherit;
+}
+
+/* --- Fichas de estado (infracciones) ---------------------------------------------------------
+   Cinco estados en una fila en vez de cinco renglones de tarjeta. Cada una es un botón porque cada
+   una abre su propia lista filtrada: la regla de esta pantalla es que toda cifra lleve a sus filas. */
+.lx-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--lx-space-2);
+}
+
+.lx-stat-chip {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 8.5rem;
+  padding: var(--lx-space-2) var(--lx-space-3);
+  border: 1px solid var(--lx-border);
+  border-radius: var(--lx-radius-md);
+  background: var(--lx-surface-2);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.lx-stat-chip:hover {
+  background: var(--lx-surface-hover);
+}
+
+.lx-stat-chip:focus-visible {
+  outline: 2px solid var(--lx-focus-ring);
+  outline-offset: 2px;
+}
+
+.lx-stat-chip__label {
+  color: var(--lx-text-muted);
+  font-size: 0.75rem;
+}
+
+.lx-stat-chip__value {
+  color: var(--lx-text);
+  font-size: 1.25rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.lx-stat-chip__money {
+  color: var(--lx-text-muted);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Ocupación dentro de la tabla ------------------------------------------------------------
+   Barra Y número: la barra deja comparar filas de un vistazo, el número deja leer el valor exacto.
+   Con una sola de las dos siempre falta la otra mitad. */
+.lx-occupancy-cell {
+  display: flex;
+  align-items: center;
+  gap: var(--lx-space-2);
+  min-width: 6rem;
+}
+
+.lx-occupancy-cell__track {
+  flex: 1;
+  min-width: 2.5rem;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--lx-surface-2);
+  overflow: hidden;
+}
+
+.lx-occupancy-cell__fill {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--lx-primary);
+}
+
+.lx-occupancy-cell__fill--warn { background: var(--lx-warning); }
+.lx-occupancy-cell__fill--full { background: var(--lx-danger); }
+
+.lx-occupancy-cell__value {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}

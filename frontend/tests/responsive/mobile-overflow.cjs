@@ -48,9 +48,17 @@ const PREFIJO = { citizen: '', admin: '/admin', inspector: '/inspector', platfor
  */
 const RUTAS = {
   citizen: ['/', '/wallet', '/movements', '/fines', '/vehicles', '/notifications', '/profile'],
+  // `/citations`, `/infractions` y `/reconciliation` NO EXISTEN en el portal de administración:
+  // la ruta comodín las mandaba a `/`, así que el barredor medía el Inicio tres veces y le ponía a
+  // cada medición el nombre de una pantalla distinta. Las verdaderas son `/enforcement/citations`,
+  // `/settings/infraction-types` y `/billing`. Es el mismo error que ya había pasado con
+  // `/admin/citations` en snapshot.cjs, y vuelve a entrar por el mismo lado: una lista de rutas
+  // escrita a mano que nadie comprueba contra App.tsx.
   admin: [
     '/audit', '/users', '/staff', '/appeals', '/exemptions', // paginadas: las que rompían
-    '/', '/zones', '/spaces', '/tariffs', '/citations', '/infractions', '/reconciliation',
+    '/', '/dashboard', '/zones', '/spaces', '/tariffs', '/parking-policy',
+    '/settings/schedule', '/enforcement/citations', '/enforcement/checks',
+    '/settings/infraction-types', '/billing', '/reports',
   ],
   // /new-citation tiene el MISMO grid zona/bahía que /plate-lookup y el mismo defecto: no estaba
   // en esta lista, así que el detector no lo vio y se encontró leyendo el código.
