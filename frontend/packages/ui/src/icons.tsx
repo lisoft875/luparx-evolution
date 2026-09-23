@@ -249,3 +249,51 @@ export const IconList = iconFactory(
   </>,
 );
 
+
+/* --- Añadidos para el Inicio municipal v3 (23-09-2026) ------------------------------------------
+   Misma factory, mismo `viewBox`, mismo grosor de trazo: la especificación pide UNA familia de
+   iconos, y traer una librería por cinco dibujos habría metido una segunda. */
+
+/** Recaudación. Barras que suben, no un signo de moneda: la moneda cambia por país. */
+export const IconChart = iconFactory(
+  <>
+    <path d="M4 20V4" />
+    <path d="M4 20h16" />
+    <rect x="7.5" y="12" width="3" height="5" rx="0.8" />
+    <rect x="13" y="8.5" width="3" height="8.5" rx="0.8" />
+    <rect x="18" y="5" width="3" height="12" rx="0.8" />
+  </>,
+);
+
+/** Ocupación: un indicador de aguja, que es como se lee «cuán lleno está». */
+export const IconGauge = iconFactory(
+  <>
+    <path d="M3.5 18a9 9 0 1 1 17 0" />
+    <path d="M12 18l4-5.2" />
+    <circle cx="12" cy="18" r="1.4" />
+  </>,
+);
+
+/** Buscar. */
+export const IconSearch = iconFactory(
+  <>
+    <circle cx="10.5" cy="10.5" r="6" />
+    <path d="M15 15l4.5 4.5" />
+  </>,
+);
+
+/** Configuración. */
+export const IconSettings = iconFactory(
+  <>
+    <circle cx="12" cy="12" r="3" />
+    <path d="M12 2.5v3M12 18.5v3M21.5 12h-3M5.5 12h-3M18.7 5.3l-2.1 2.1M7.4 16.6l-2.1 2.1M18.7 18.7l-2.1-2.1M7.4 7.4L5.3 5.3" />
+  </>,
+);
+
+/** Tarifa: una etiqueta de precio. */
+export const IconTag = iconFactory(
+  <>
+    <path d="M3.5 11.4V4.5a1 1 0 0 1 1-1h6.9a1 1 0 0 1 .7.3l8.1 8.1a1 1 0 0 1 0 1.4l-6.9 6.9a1 1 0 0 1-1.4 0L3.8 12.1a1 1 0 0 1-.3-.7Z" />
+    <circle cx="7.8" cy="7.8" r="1.3" />
+  </>,
+);

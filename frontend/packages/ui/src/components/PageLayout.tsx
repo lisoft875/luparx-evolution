@@ -30,10 +30,18 @@ export interface PageLayoutProps {
   header?: React.ReactNode;
   sidebar?: React.ReactNode;
   children: React.ReactNode;
+  /**
+   * La línea de cierre: producto y municipalidad.
+   *
+   * <p>Va fuera del `<main>` y después del área de contenido, no dentro de la columna: es del
+   * documento entero, no de la pantalla que se esté mirando. Sin él la página termina donde se
+   * acabó el último bloque, que es lo que hace que una consola se sienta a medio construir.</p>
+   */
+  footer?: React.ReactNode;
 }
 
 /** Generic app shell: optional top header, optional side navigation, and a main content region with a skip-link target. */
-export function PageLayout({ header, sidebar, children }: PageLayoutProps): React.JSX.Element {
+export function PageLayout({ header, sidebar, children, footer }: PageLayoutProps): React.JSX.Element {
   const menu = useRef<HTMLElement | null>(null);
 
   /**
@@ -68,6 +76,7 @@ export function PageLayout({ header, sidebar, children }: PageLayoutProps): Reac
         ) : null}
         <main id="main-content" className="lx-page-layout__content">
           {children}
+          {footer ? <footer className="lx-page-layout__footer">{footer}</footer> : null}
         </main>
       </div>
     </div>

@@ -62,6 +62,10 @@ export type { EmptyStateProps, EmptyStateTone } from './components/EmptyState';
 export { Badge } from './components/Badge';
 export type { BadgeProps, BadgeTone } from './components/Badge';
 export { BarChart } from './components/BarChart';
+export { MetricCard } from './components/MetricCard';
+export type { MetricCardProps, MetricTone, MetricTrend } from './components/MetricCard';
+export { Skeleton } from './components/Skeleton';
+export type { SkeletonProps } from './components/Skeleton';
 export type { BarChartProps, BarChartDatum } from './components/BarChart';
 export { AppBar } from './components/AppBar';
 export type { AppBarProps, AppBarAction } from './components/AppBar';
@@ -128,4 +132,10 @@ export {
   IconList,
   IconEye,
   IconEyeOff,
+  // Añadidos para el Inicio municipal v3.
+  IconChart,
+  IconGauge,
+  IconSearch,
+  IconSettings,
+  IconTag,
 } from './icons';

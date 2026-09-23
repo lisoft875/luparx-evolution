@@ -348,7 +348,19 @@ async function entrar(page, portal) {
           Sólo cuenta como fallo eso, más el caso en que la PRIMERA acción de la pantalla exige
           scroll: eso dice que el orden está mal, no que la página sea larga.
         */
-        const tapadas = fondo.acciones.filter((a) => a.tapadaAbajo || a.tapadaArriba);
+        // Cada una se mide donde su afirmación significa algo, y NO en el mismo sitio.
+        //
+        // Abajo del todo: lo que la barra inferior tapa ahí, lo tapa para siempre.
+        // Arriba del todo: lo que la cabecera tapa ahí, es que la página no le reservó espacio.
+        //
+        // Mezclarlas fue el arreglo a medias del 23-09-2026: se movieron las DOS al fondo, y ahí
+        // «tapada por la cabecera» se volvió cierta para todo el contenido que quedó por encima del
+        // viewport —que es la mitad de la página, legítimamente—. La salida lo decía sin disimulo:
+        // «la cabecera hasta 0».
+        const tapadas = [
+            ...fondo.acciones.filter((a) => a.tapadaAbajo),
+            ...r.acciones.filter((a) => a.tapadaArriba),
+        ];
         const bajoElPliegue = r.acciones.filter((a) => a.fueraDelPliegue);
         const malas = tapadas;
         const primeraExigeScroll = r.primeraAccion && r.primeraAccion.fueraDelPliegue;
@@ -371,7 +383,7 @@ async function entrar(page, portal) {
           const causa = a.tapadaAbajo
             ? `tapada por la barra inferior con la página al fondo (empieza ${a.top}, la barra en ${fondo.pisoCromo})`
             : a.tapadaArriba
-              ? `tapada por la cabecera con la página al fondo (termina ${a.bottom}, la cabecera hasta ${fondo.topeCromo})`
+              ? `tapada por la cabecera sin haber hecho scroll (termina ${a.bottom}, la cabecera hasta ${r.topeCromo})`
               : `fuera del pliegue (empieza en ${a.top}, se ve hasta ${r.altoVisible})`;
           console.log(`        "${a.texto}" — ${causa}`);
         }

@@ -321,6 +321,8 @@ export const esCR = {
   'admin.tariffs.noZones': 'Esta municipalidad todavía no tiene zonas.',
   'admin.tariffs.set.submit': 'Poner tarifa',
   // --- Portada del portal de administración (especificación del 23-09-2026) ---------------------
+  'admin.home.footer.product': 'LuParX · Plataforma municipal de parqueo',
+  'admin.home.kpi.inPeriod': 'Hoy',
   'admin.home.subtitle': 'Resumen operativo · {{date}}',
   'admin.home.system.api': 'Sistema',
   'admin.home.system.database': 'Base de datos',

@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import type { AuditEvent } from '@luparx/api-client';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth, usePermissions } from '@luparx/auth';
@@ -12,47 +12,53 @@ import {
   useTranslation,
   type TranslationKey,
 } from '@luparx/i18n';
-import { BarChart, Card, EmptyState, SectionHeader, StatCard } from '@luparx/ui';
-import type { BarChartDatum } from '@luparx/ui';
+import {
+  BarChart,
+  Button,
+  Card,
+  IconCar,
+  IconChart,
+  IconFine,
+  IconGauge,
+  IconPark,
+  IconPin,
+  IconReports,
+  IconSearch,
+  IconTopUp,
+  MetricCard,
+  SectionHeader,
+  Skeleton,
+} from '@luparx/ui';
+import type { BarChartDatum, MetricTone } from '@luparx/ui';
 import { AdminShell } from '../components/AdminShell';
 
 /**
- * Los actos que esta lista muestra, y cómo se llaman en castellano.
+ * Los actos que la actividad muestra: cómo se llaman y con qué icono.
  *
- * <p>El rastro de auditoría guarda ochenta y pico de acciones, y la mayoría son de sistema: cada
- * inicio de sesión, cada cambio de municipalidad activa. Una lista de «actividad reciente» llena de
- * `LOGIN_SUCCEEDED` no le dice nada a quien administra un cantón. Acá viven las que SÍ son
- * actividad del municipio, y el mapa hace dos trabajos a la vez: decide qué se muestra y cómo se
- * nombra. Un acto que no esté acá no se cuela sin traducir —se filtra— así que la pantalla no puede
- * terminar mostrando `PLATE_EXEMPTION_AMENDED` en la cara de nadie.</p>
+ * <p>El rastro guarda ochenta y pico de acciones y la mayoría son de sistema. Este mapa hace tres
+ * trabajos a la vez —decide qué se muestra, cómo se nombra y con qué se dibuja— y por eso un acto
+ * que no esté acá no puede colarse sin traducir ni sin icono.</p>
  */
-const ACTOS: Readonly<Record<string, TranslationKey>> = {
-  WALLET_TOPUP_RECORDED: 'admin.home.activity.WALLET_TOPUP_RECORDED',
-  CITATION_ISSUED: 'admin.home.activity.CITATION_ISSUED',
-  CITATION_PAID: 'admin.home.activity.CITATION_PAID',
-  CITATION_CANCELLED: 'admin.home.activity.CITATION_CANCELLED',
-  CITATION_APPEAL_FILED: 'admin.home.activity.CITATION_APPEAL_FILED',
-  CITATION_APPEAL_RESOLVED: 'admin.home.activity.CITATION_APPEAL_RESOLVED',
-  PLATE_EXEMPTION_GRANTED: 'admin.home.activity.PLATE_EXEMPTION_GRANTED',
-  PARKING_SPACE_CREATED: 'admin.home.activity.PARKING_SPACE_CREATED',
-  PARKING_ZONE_UPDATED: 'admin.home.activity.PARKING_ZONE_UPDATED',
-  PARKING_RATE_UPDATED: 'admin.home.activity.PARKING_RATE_UPDATED',
-  PARKING_POLICY_UPDATED: 'admin.home.activity.PARKING_POLICY_UPDATED',
-  PARKING_SCHEDULE_UPDATED: 'admin.home.activity.PARKING_SCHEDULE_UPDATED',
+const ACTOS: Readonly<Record<string, { key: TranslationKey; icon: React.ReactNode }>> = {
+  WALLET_TOPUP_RECORDED: { key: 'admin.home.activity.WALLET_TOPUP_RECORDED', icon: <IconTopUp size={16} /> },
+  CITATION_ISSUED: { key: 'admin.home.activity.CITATION_ISSUED', icon: <IconFine size={16} /> },
+  CITATION_PAID: { key: 'admin.home.activity.CITATION_PAID', icon: <IconFine size={16} /> },
+  CITATION_CANCELLED: { key: 'admin.home.activity.CITATION_CANCELLED', icon: <IconFine size={16} /> },
+  CITATION_APPEAL_FILED: { key: 'admin.home.activity.CITATION_APPEAL_FILED', icon: <IconFine size={16} /> },
+  CITATION_APPEAL_RESOLVED: { key: 'admin.home.activity.CITATION_APPEAL_RESOLVED', icon: <IconFine size={16} /> },
+  PLATE_EXEMPTION_GRANTED: { key: 'admin.home.activity.PLATE_EXEMPTION_GRANTED', icon: <IconCar size={16} /> },
+  PARKING_SPACE_CREATED: { key: 'admin.home.activity.PARKING_SPACE_CREATED', icon: <IconPark size={16} /> },
+  PARKING_ZONE_UPDATED: { key: 'admin.home.activity.PARKING_ZONE_UPDATED', icon: <IconPin size={16} /> },
+  PARKING_RATE_UPDATED: { key: 'admin.home.activity.PARKING_RATE_UPDATED', icon: <IconChart size={16} /> },
+  PARKING_POLICY_UPDATED: { key: 'admin.home.activity.PARKING_POLICY_UPDATED', icon: <IconPark size={16} /> },
+  PARKING_SCHEDULE_UPDATED: { key: 'admin.home.activity.PARKING_SCHEDULE_UPDATED', icon: <IconPark size={16} /> },
 };
 
-/** Cuántos eventos se piden para poder filtrar y que igual queden seis que mostrar. */
 const EVENTOS_A_PEDIR = 40;
-const EVENTOS_A_MOSTRAR = 6;
-
-/** Desde qué porcentaje una zona deja de estar cómoda. */
+const EVENTOS_A_MOSTRAR = 5;
 const OCUPACION_ALTA = 85;
 const OCUPACION_MEDIA = 70;
-
-/** Cuántas zonas caben en la tarjeta antes de que sea una lista y no un resumen. */
 const ZONAS_EN_PORTADA = 6;
-
-/** Los últimos siete días, contados desde hoy inclusive. */
 const DIAS_DEL_GRAFICO = 7;
 
 function isoDate(date: Date): string {
@@ -62,44 +68,42 @@ function isoDate(date: Date): string {
 }
 
 /**
- * La portada del portal de administración.
+ * La portada del portal de administración (especificación v3, 23-09-2026).
  *
- * <h2>Qué había acá antes</h2>
+ * <h2>Qué cambió respecto de la v2, y por qué no alcanzaba con «agregar datos»</h2>
  *
- * <p>El título de la aplicación, el nombre de quien entró y tres enlaces sueltos —Usuarios,
- * Auditoría, Reportes— sobre un espacio vacío. Un administrador que entraba a las ocho de la mañana
- * no se enteraba de nada: ni cuánto se recaudó ayer, ni cuántos carros hay parqueados ahora, ni que
- * entraron cuatro reclamos durante la noche. Tenía que ir a buscarlo pantalla por pantalla.
- * (Especificación del 23-09-2026.)</p>
+ * <p>La v2 puso las cifras correctas en la pantalla y aun así se leía como la original: cuatro
+ * tarjetas de texto plano en fila, un gráfico que desaparecía cuando no había recaudación, un vacío
+ * de actividad que ocupaba media pantalla y los accesos en una columna de botones. Los datos
+ * estaban; la composición no.</p>
  *
- * <h2>Cada número es una fila que alguien puede ir a leer</h2>
+ * <p>Lo que hace la v3 es estructura: cada métrica tiene icono y acento propios —se reconoce antes
+ * de leerla—, la analítica y la operación viven en dos columnas de proporción distinta, la
+ * actividad es un feed y los accesos una cuadrícula. El fondo, los tokens y los endpoints son los
+ * mismos.</p>
  *
- * <p>Ninguna cifra de esta pantalla es un índice, un puntaje ni una tendencia trazada entre tres
- * puntos. Son conteos y sumas que existen en una tabla, y por eso cada bloque lleva al listado que
- * los contiene. Es la misma regla con la que está escrito el servicio del panel, y es lo que
- * distingue un tablero que una municipalidad puede <em>comprobar</em> de uno que sólo puede mirar.</p>
+ * <h2>Las tres reglas que no se negocian</h2>
  *
- * <h2>Lo que NO se inventó</h2>
+ * <p><b>Ninguna cifra es inventada.</b> Los montos de la referencia visual —₡1.248.350, 342, 28,
+ * 78%— no están en este archivo ni en ningún otro: cada número sale de su endpoint. El arnés
+ * `inicio-admin.cjs` lo comprueba en cada corrida.</p>
  *
- * <p>La franja de estado del mockup traía cuatro servicios. Sólo tres son comprobables desde este
- * portal: que la API contesta y que la base respondió (si no, la consulta habría fallado) y si hubo
- * fiscalización hoy. La pasarela de pagos no tiene ningún endpoint que la reporte, así que se
- * muestra como lo que es —sin fuente— en vez de pintarle un punto verde que nadie verificó. Un
- * indicador que dice «Operativo» sin haber preguntado es peor que no tener indicador: hace que
- * alguien confíe.</p>
+ * <p><b>La variación sólo aparece si existe.</b> Se muestra en recaudación, donde hay un ayer con
+ * el cual comparar. Estadías activas y ocupación son valores de AHORA, sin historia: ahí no hay
+ * variación que mostrar y no se muestra ninguna.</p>
+ *
+ * <p><b>Cargando no es lo mismo que vacío, y vacío no es lo mismo que cero.</b> Mientras viene el
+ * dato hay un bloque del tamaño del dato; un cero medido se escribe 0; y lo que no tiene fuente
+ * dice que no la tiene.</p>
  */
 export function HomePage(): React.JSX.Element {
   const { t, locale } = useTranslation();
   const { activeTenant, apiClient } = useAuth();
   const permissions = usePermissions();
+  const navigate = useNavigate();
   const puedeVerCifras = permissions.has('AUDIT_READ');
 
   const ahora = new Date();
-
-  // Los límites de «hoy» según el reloj de quien mira. El dinero NO se calcula así —la serie la
-  // corta el servidor con la zona horaria de la municipalidad— pero el conteo de boletas sí, y un
-  // administrador que esté en otro país podría ver el corte del día desplazado unas horas. Se deja
-  // dicho acá en vez de resolverse con una llamada extra sólo para averiguar la zona.
   const desdeHoy = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
 
   const panel = useQuery({
@@ -128,15 +132,6 @@ export function HomePage(): React.JSX.Element {
 
   const dinero = (minor: number, currency: string): string => formatCurrencyMinor(minor, currency, locale);
 
-  // --- KPIs -------------------------------------------------------------------------------------
-
-  /**
-   * Lo recaudado hoy y cuánto cambió contra ayer, los dos de la misma fuente.
-   *
-   * <p>Sale de la serie y no del bloque `revenue` del panel, aunque los dos contestarían lo mismo:
-   * dos fuentes para el mismo número es cómo una pantalla termina mostrando dos cifras que no
-   * coinciden y nadie logra explicar cuál está mal.</p>
-   */
   const recaudacion = useMemo(() => {
     const days = serie.data?.days ?? [];
     if (days.length === 0) return null;
@@ -156,13 +151,6 @@ export function HomePage(): React.JSX.Element {
     [panel.data],
   );
 
-  /**
-   * La ocupación del cantón: estadías corriendo sobre bahías en servicio.
-   *
-   * <p>Sólo entran las zonas que tienen bahías numeradas. Una zona que se cobra por sector sin
-   * pintar números no tiene denominador, y meterla con cero capacidad haría ver al municipio más
-   * lleno de lo que está justo en la semana en que más importa.</p>
-   */
   const ocupacion = useMemo(() => {
     const zones = (panel.data?.occupancy.zones ?? []).filter((zona) => zona.percent !== null);
     if (zones.length === 0) return null;
@@ -177,8 +165,6 @@ export function HomePage(): React.JSX.Element {
     const currency = serie.data?.currencyCode ?? 'CRC';
     return days.map((day) => ({
       key: day.date,
-      // Numérica bajo la barra —«17/9»— porque a 320px cada columna mide unos 30px y «17 sept» se
-      // corta. La completa va al rótulo, al `aria-label` y a la tabla.
       label: formatDate(`${day.date}T12:00:00`, locale, { day: 'numeric', month: 'numeric' }),
       labelLong: formatDate(`${day.date}T12:00:00`, locale, { day: 'numeric', month: 'long' }),
       value: day.totalMinor,
@@ -190,23 +176,10 @@ export function HomePage(): React.JSX.Element {
   }, [serie.data, locale]);
 
   const eventos: AuditEvent[] = useMemo(
-    () =>
-      (actividad.data?.items ?? [])
-        .filter((evento) => evento.action in ACTOS)
-        .slice(0, EVENTOS_A_MOSTRAR),
+    () => (actividad.data?.items ?? []).filter((e) => e.action in ACTOS).slice(0, EVENTOS_A_MOSTRAR),
     [actividad.data],
   );
 
-  // --- estado del sistema -----------------------------------------------------------------------
-
-  /**
-   * Lo único comprobable desde acá, y nada más.
-   *
-   * <p>Si `panel` respondió, la API contestó y leyó la base: son dos hechos, no dos suposiciones.
-   * Fiscalización se lee de la actividad de inspectores que ya viene en el panel. La pasarela no
-   * tiene endpoint en este portal —el de salud vive en el portal de plataforma— y se muestra sin
-   * estado a propósito.</p>
-   */
   const servicios = useMemo(() => {
     const respondio = panel.isSuccess;
     const fallo = panel.isError;
@@ -214,51 +187,57 @@ export function HomePage(): React.JSX.Element {
     const fallos = panel.data?.paymentFailures.count ?? 0;
     return [
       {
-        clave: 'api' as const,
+        clave: 'api',
         etiqueta: t('admin.home.system.api'),
-        estado: fallo ? ('bad' as const) : respondio ? ('ok' as const) : ('none' as const),
-        texto: fallo ? t('admin.home.system.down') : respondio ? t('admin.home.system.up') : t('common.loading'),
+        estado: fallo ? 'bad' : respondio ? 'ok' : 'none',
+        texto: fallo ? t('admin.home.system.down') : respondio ? t('admin.home.system.up') : '…',
       },
       {
-        clave: 'db' as const,
+        clave: 'db',
         etiqueta: t('admin.home.system.database'),
-        estado: fallo ? ('bad' as const) : respondio ? ('ok' as const) : ('none' as const),
-        texto: fallo ? t('admin.home.system.unknown') : respondio ? t('admin.home.system.up') : t('common.loading'),
+        estado: fallo ? 'bad' : respondio ? 'ok' : 'none',
+        texto: fallo ? t('admin.home.system.unknown') : respondio ? t('admin.home.system.up') : '…',
       },
       {
-        clave: 'enforcement' as const,
+        clave: 'enforcement',
         etiqueta: t('admin.home.system.enforcement'),
         // Sin actividad hoy NO es una falla: es un dato. Gris, no ámbar.
-        estado: inspectoresActivos > 0 ? ('ok' as const) : ('none' as const),
+        estado: inspectoresActivos > 0 ? 'ok' : 'none',
         texto:
           inspectoresActivos > 0
             ? t('admin.home.system.enforcementActive', { count: String(inspectoresActivos) })
             : t('admin.home.system.enforcementIdle'),
       },
       {
-        clave: 'gateway' as const,
+        clave: 'gateway',
         etiqueta: t('admin.home.system.gateway'),
-        estado: 'none' as const,
+        estado: 'none',
         texto: t('admin.home.system.noSource'),
       },
       {
-        clave: 'alerts' as const,
+        clave: 'alerts',
         etiqueta: t('admin.home.system.alerts'),
-        estado: fallos > 0 ? ('warn' as const) : ('ok' as const),
+        estado: fallos > 0 ? 'warn' : 'ok',
         texto:
           fallos > 0
             ? t('admin.home.system.failedPayments', { count: String(fallos) })
             : t('admin.home.system.noAlerts'),
       },
-    ];
+    ] as const;
   }, [panel.isSuccess, panel.isError, panel.data, t]);
 
   const municipalidad = activeTenant?.name ?? t('app.name');
+  const pie = (
+    <>
+      <span>{t('admin.home.footer.product')}</span>
+      <span>{municipalidad}</span>
+    </>
+  );
 
   return (
-    <AdminShell>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--lx-space-4)' }}>
-        {/* --- encabezado (§3) ------------------------------------------------------------------ */}
+    <AdminShell footer={pie}>
+      <div className="lx-home">
+        {/* --- A. encabezado ------------------------------------------------------------------- */}
         <header className="lx-shell-header-row" style={{ alignItems: 'flex-start' }}>
           <div style={{ minWidth: 0 }}>
             <h1 style={{ margin: 0 }}>{municipalidad}</h1>
@@ -266,7 +245,6 @@ export function HomePage(): React.JSX.Element {
               {t('admin.home.subtitle', { date: formatDate(ahora, locale, { dateStyle: 'full' }) })}
             </p>
           </div>
-          {/* La hora del reloj de quien mira, no una fecha escrita a mano. */}
           <p className="lx-text-meta" style={{ margin: 0, whiteSpace: 'nowrap' }}>
             {formatTime(ahora, locale)}
           </p>
@@ -274,81 +252,133 @@ export function HomePage(): React.JSX.Element {
 
         {puedeVerCifras ? (
           <>
-            {/* --- estado del sistema (§4) ------------------------------------------------------ */}
-            <Card>
-              <div className="lx-status-strip">
-                {servicios.map((servicio) => (
-                  <span key={servicio.clave} className="lx-status-strip__item">
-                    <span
-                      className={`lx-status-strip__dot lx-status-strip__dot--${servicio.estado}`}
-                      aria-hidden="true"
-                    />
-                    <span>
-                      {servicio.etiqueta}: <strong>{servicio.texto}</strong>
-                    </span>
+            {/* --- B. estado del sistema, una sola fila -------------------------------------- */}
+            <div className="lx-status-bar" aria-busy={panel.isLoading}>
+              {servicios.map((servicio) => (
+                <span key={servicio.clave} className="lx-status-bar__item">
+                  <span
+                    className={`lx-status-strip__dot lx-status-strip__dot--${servicio.estado}`}
+                    aria-hidden="true"
+                  />
+                  <span>
+                    {servicio.etiqueta}: <strong>{servicio.texto}</strong>
                   </span>
-                ))}
-              </div>
-            </Card>
+                </span>
+              ))}
+            </div>
 
-            {/* --- los cuatro KPIs (§5) --------------------------------------------------------- */}
+            {/* --- C. los cuatro KPIs --------------------------------------------------------- */}
             <div className="lx-home-kpis">
-              <StatCard
+              <MetricCard
+                icon={<IconChart size={20} />}
+                tone="primary"
                 label={t('admin.home.kpi.revenue')}
                 value={
-                  recaudacion ? dinero(recaudacion.totalMinor, recaudacion.currencyCode) : t('common.loading')
+                  serie.isLoading ? (
+                    <Skeleton height="1.5rem" width="70%" />
+                  ) : recaudacion ? (
+                    dinero(recaudacion.totalMinor, recaudacion.currencyCode)
+                  ) : (
+                    t('admin.dashboard.noData')
+                  )
                 }
-                hint={
+                // La variación existe SÓLO acá, que es donde hay un ayer con el cual comparar.
+                delta={
                   recaudacion?.variacion != null
                     ? t('admin.home.kpi.vsYesterday', {
                         delta: `${recaudacion.variacion > 0 ? '+' : ''}${recaudacion.variacion}%`,
                       })
                     : undefined
                 }
+                trend={
+                  recaudacion?.variacion == null
+                    ? 'flat'
+                    : recaudacion.variacion > 0
+                      ? 'up'
+                      : recaudacion.variacion < 0
+                        ? 'down'
+                        : 'flat'
+                }
+                onOpen={() => navigate('/billing')}
+                openLabel={t('admin.home.kpi.revenue')}
               />
-              <StatCard
+              <MetricCard
+                icon={<IconCar size={20} />}
+                tone="info"
                 label={t('admin.home.kpi.activeSessions')}
-                value={panel.data ? String(panel.data.occupancy.activeSessions) : t('common.loading')}
+                value={
+                  panel.isLoading ? (
+                    <Skeleton height="1.5rem" width="50%" />
+                  ) : (
+                    String(panel.data?.occupancy.activeSessions ?? 0)
+                  )
+                }
                 hint={t('admin.home.kpi.rightNow')}
               />
-              <StatCard
+              <MetricCard
+                icon={<IconFine size={20} />}
+                tone="warning"
                 label={t('admin.home.kpi.citations')}
-                value={panel.data ? String(boletasHoy) : t('common.loading')}
+                value={panel.isLoading ? <Skeleton height="1.5rem" width="40%" /> : String(boletasHoy)}
+                hint={t('admin.home.kpi.inPeriod')}
               />
-              <StatCard
+              <MetricCard
+                icon={<IconGauge size={20} />}
+                tone={ocupacionTone(ocupacion)}
                 label={t('admin.home.kpi.occupancy')}
                 value={
-                  panel.data
-                    ? ocupacion != null
-                      ? `${ocupacion}%`
-                      : t('admin.home.kpi.noBays')
-                    : t('common.loading')
+                  panel.isLoading ? (
+                    <Skeleton height="1.5rem" width="40%" />
+                  ) : ocupacion != null ? (
+                    `${ocupacion}%`
+                  ) : (
+                    t('admin.dashboard.noData')
+                  )
                 }
-                hint={panel.data && ocupacion == null ? t('admin.home.kpi.noBaysHint') : undefined}
+                hint={ocupacion != null ? t('admin.home.kpi.rightNow') : t('admin.home.kpi.noBaysHint')}
               />
             </div>
 
-            {/* --- analítica: 2/3 + 1/3 (§6, §7) ------------------------------------------------ */}
-            <div className="lx-home-split">
+            {/* --- D. analítica: gráfico 65% + ocupación 35% ---------------------------------- */}
+            <div className="lx-home-grid">
               <Card>
                 <SectionHeader
                   title={t('admin.home.revenue.title')}
                   description={t('admin.home.revenue.description')}
                 />
-                <BarChart
-                  title={t('admin.home.revenue.title')}
-                  data={barras}
-                  loading={serie.isLoading}
-                  loadingLabel={t('common.loading')}
-                  emptyLabel={t('admin.home.revenue.empty')}
-                  formatAxis={(valor) =>
-                    dinero(Math.round(valor), serie.data?.currencyCode ?? 'CRC')
-                  }
-                  tableHeaders={{
-                    label: t('admin.home.revenue.columnDay'),
-                    value: t('admin.home.revenue.columnAmount'),
-                  }}
-                />
+                {serie.isLoading ? (
+                  // Un bloque del tamaño del gráfico, no la palabra «Cargando»: así la pantalla no
+                  // se reacomoda cuando el dato llega.
+                  <Skeleton height={200} shape="block" />
+                ) : serie.isError ? (
+                  <div className="lx-inline-error">
+                    <span>{t('common.error.generic')}</span>
+                    <Button type="button" variant="secondary" onClick={() => void serie.refetch()}>
+                      {t('common.retry')}
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <BarChart
+                      title={t('admin.home.revenue.title')}
+                      data={barras}
+                      emptyLabel={t('admin.home.revenue.empty')}
+                      formatAxis={(valor) => dinero(Math.round(valor), serie.data?.currencyCode ?? 'CRC')}
+                      tableHeaders={{
+                        label: t('admin.home.revenue.columnDay'),
+                        value: t('admin.home.revenue.columnAmount'),
+                      }}
+                    />
+                    {/* Con TODO en cero el gráfico se queda —los siete días siguen dibujados— y la
+                        nota va debajo. Convertir la tarjeta en un párrafo escondería que la semana
+                        existe y que la municipalidad no cobró en ella, que es el dato. */}
+                    {barras.length > 0 && barras.every((b) => b.value === 0) ? (
+                      <p className="lx-text-meta" style={{ margin: 'var(--lx-space-2) 0 0' }}>
+                        {t('admin.home.revenue.empty')}
+                      </p>
+                    ) : null}
+                  </>
+                )}
               </Card>
 
               <Card>
@@ -356,49 +386,67 @@ export function HomePage(): React.JSX.Element {
                   title={t('admin.home.zones.title')}
                   description={t('admin.home.zones.description')}
                 />
-                <ZonesOccupancy
-                  zones={panel.data?.occupancy.zones ?? []}
-                  loading={panel.isLoading}
-                  loadingLabel={t('common.loading')}
-                  emptyLabel={t('admin.home.zones.empty')}
-                  noBaysLabel={t('admin.home.zones.noBays')}
-                />
+                {panel.isLoading ? (
+                  <>
+                    <Skeleton height="2.5rem" />
+                    <Skeleton height="2.5rem" />
+                    <Skeleton height="2.5rem" />
+                  </>
+                ) : (
+                  <ZonesOccupancy
+                    zones={panel.data?.occupancy.zones ?? []}
+                    emptyLabel={t('admin.home.zones.empty')}
+                    noBaysLabel={t('admin.home.zones.noBays')}
+                  />
+                )}
               </Card>
             </div>
 
-            {/* --- operación: 2/3 + 1/3 (§8, §9) ------------------------------------------------ */}
-            <div className="lx-home-split">
+            {/* --- E. operación: actividad 60% + accesos 40% ---------------------------------- */}
+            <div className="lx-home-grid lx-home-grid--operation">
               <Card>
                 <SectionHeader
                   title={t('admin.home.activity.title')}
                   description={t('admin.home.activity.description')}
                 />
                 {actividad.isLoading ? (
-                  <p className="lx-text-meta">{t('common.loading')}</p>
+                  <>
+                    <Skeleton height="2.5rem" />
+                    <Skeleton height="2.5rem" />
+                    <Skeleton height="2.5rem" />
+                  </>
                 ) : eventos.length === 0 ? (
-                  <EmptyState
-                    title={t('admin.home.activity.emptyTitle')}
-                    description={t('admin.home.activity.emptyBody')}
-                  />
+                  // Dos líneas, no un párrafo centrado en media pantalla.
+                  <p className="lx-feed__empty">
+                    <span className="lx-feed__empty-title">{t('admin.home.activity.emptyTitle')}</span>
+                    <span className="lx-feed__empty-body">{t('admin.home.activity.emptyBody')}</span>
+                  </p>
                 ) : (
                   <>
-                    {eventos.map((evento) => (
-                      <div key={evento.id} className="lx-activity-row">
-                        <span>
-                          <span className="lx-activity-row__what">{t(ACTOS[evento.action] as TranslationKey)}</span>
-                          <br />
-                          <span className="lx-activity-row__who">
-                            {evento.actorName ?? t('admin.home.activity.system')}
-                          </span>
-                        </span>
-                        <span className="lx-activity-row__when">
-                          {formatRelativeTime(evento.occurredAt, locale, ahora) ??
-                            formatDate(evento.occurredAt, locale)}
-                        </span>
-                      </div>
-                    ))}
+                    <div className="lx-feed">
+                      {eventos.map((evento) => {
+                        const acto = ACTOS[evento.action];
+                        return (
+                          <div key={evento.id} className="lx-feed__item">
+                            <span className="lx-feed__icon" aria-hidden="true">
+                              {acto?.icon}
+                            </span>
+                            <span className="lx-feed__what">
+                              <span className="lx-feed__title">{t(acto?.key as TranslationKey)}</span>
+                              <span className="lx-feed__context">
+                                {evento.actorName ?? t('admin.home.activity.system')}
+                              </span>
+                            </span>
+                            <span className="lx-feed__when">
+                              {formatRelativeTime(evento.occurredAt, locale, ahora) ??
+                                formatDate(evento.occurredAt, locale)}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
                     <p style={{ margin: 'var(--lx-space-3) 0 0' }}>
-                      <Link to="/audit" className="lx-nav-link">
+                      <Link to="/audit" className="lx-linklike">
                         {t('admin.home.activity.seeAll')}
                       </Link>
                     </p>
@@ -413,8 +461,6 @@ export function HomePage(): React.JSX.Element {
             </div>
           </>
         ) : (
-          /* Sin `AUDIT_READ` no hay cifras que mostrar: el servidor las niega y ofrecerlas sería
-             ofrecer un 403. Quedan los accesos, que llevan a lo que esta cuenta sí puede abrir. */
           <>
             <Card>
               <SectionHeader
@@ -433,27 +479,36 @@ export function HomePage(): React.JSX.Element {
   );
 }
 
+/** El acento del KPI de ocupación: es la única métrica cuyo valor sí tiene estado. */
+function ocupacionTone(percent: number | null): MetricTone {
+  if (percent == null) return 'primary';
+  if (percent >= OCUPACION_ALTA) return 'warning';
+  return 'success';
+}
 /**
- * Una barra por zona, con el porcentaje escrito al lado.
+ * Una fila por zona: nombre a la izquierda, porcentaje a la derecha, barra fina debajo.
  *
- * <p>El color del lleno dice severidad y no identidad: una zona al tope es una decisión operativa
- * distinta de una a la mitad. Y el porcentaje va SIEMPRE en texto: un tablero que informa por color
- * no le informa a quien no distingue el ámbar del rojo.</p>
+ * <p>Compacta a propósito (§6 de la v3): seis zonas tienen que caber en la columna angosta sin que
+ * la tarjeta crezca más que el gráfico de al lado. El porcentaje va SIEMPRE en texto —el color dice
+ * severidad, no valor— porque un tablero que informa sólo por color no le informa a quien no
+ * distingue el ámbar del rojo.</p>
  */
 function ZonesOccupancy({
   zones,
-  loading,
-  loadingLabel,
   emptyLabel,
   noBaysLabel,
 }: {
-  zones: readonly { zoneId: string; code: string; name: string; activeSessions: number; baysInService: number; percent: number | null }[];
-  loading: boolean;
-  loadingLabel: string;
+  zones: readonly {
+    zoneId: string;
+    code: string;
+    name: string;
+    activeSessions: number;
+    baysInService: number;
+    percent: number | null;
+  }[];
   emptyLabel: string;
   noBaysLabel: string;
 }): React.JSX.Element {
-  if (loading) return <p className="lx-text-meta">{loadingLabel}</p>;
   if (zones.length === 0) return <p className="lx-text-meta">{emptyLabel}</p>;
 
   // Las más llenas primero: es la pregunta que trae a alguien a esta tarjeta. Las que no tienen
@@ -466,18 +521,28 @@ function ZonesOccupancy({
     <div>
       {ordenadas.map((zona) => {
         const pct = zona.percent;
-        const tono = pct == null ? '' : pct >= OCUPACION_ALTA ? ' lx-zone-bar__fill--full' : pct >= OCUPACION_MEDIA ? ' lx-zone-bar__fill--warn' : '';
+        const tono =
+          pct == null
+            ? ''
+            : pct >= OCUPACION_ALTA
+              ? ' lx-zone-row__fill--full'
+              : pct >= OCUPACION_MEDIA
+                ? ' lx-zone-row__fill--warn'
+                : '';
         return (
-          <div key={zona.zoneId} className="lx-zone-bar">
-            <span className="lx-zone-bar__name" title={zona.name}>
+          <div key={zona.zoneId} className="lx-zone-row">
+            <span className="lx-zone-row__name" title={zona.name}>
               {zona.name}
             </span>
-            <span className="lx-zone-bar__value">{pct == null ? noBaysLabel : `${pct}%`}</span>
-            <span className="lx-zone-bar__track">
+            <span className="lx-zone-row__value">{pct == null ? noBaysLabel : `${pct}%`}</span>
+            <span className="lx-zone-row__track">
               {/* Una zona sin bahías numeradas no tiene barra: no hay proporción que dibujar, y
                   pintarla en cero diría que está vacía. */}
               {pct == null ? null : (
-                <span className={`lx-zone-bar__fill${tono}`} style={{ width: `${Math.min(pct, 100)}%` }} />
+                <span
+                  className={`lx-zone-row__fill${tono}`}
+                  style={{ width: `${Math.min(pct, 100)}%` }}
+                />
               )}
             </span>
           </div>
@@ -488,39 +553,52 @@ function ZonesOccupancy({
 }
 
 /**
- * Cuatro atajos a rutas que ya existen.
+ * Cuatro atajos en cuadrícula 2×2, cada uno con su icono.
  *
- * <p>Cada uno aparece sólo si la cuenta tiene el permiso de la pantalla a la que lleva. Esconder el
- * botón no reemplaza la validación del servidor —que se vuelve a hacer— pero ofrecer un atajo que
+ * <p>Era una columna de botones grandes que obligaba a desplazar dentro de la tarjeta. Cada baldosa
+ * entera es el enlace —no sólo el título— porque un blanco de 64px es el que no obliga a apuntar.</p>
+ *
+ * <p>Cada acceso aparece sólo si la cuenta tiene el permiso de la pantalla a la que lleva. Esconder
+ * el botón no reemplaza la validación del servidor, que se vuelve a hacer; pero ofrecer un atajo que
  * termina en «no tiene permiso» es una promesa rota en la primera pantalla.</p>
  */
 function QuickActions(): React.JSX.Element {
   const { t } = useTranslation();
   const permissions = usePermissions();
 
-  const accesos: { to: string; title: TranslationKey; hint: TranslationKey; visible: boolean }[] = [
+  const accesos: {
+    to: string;
+    title: TranslationKey;
+    hint: TranslationKey;
+    icon: React.ReactNode;
+    visible: boolean;
+  }[] = [
     {
       to: '/zones',
       title: 'admin.home.quick.zone',
       hint: 'admin.home.quick.zoneHint',
+      icon: <IconPin size={18} />,
       visible: permissions.has('TENANT_MANAGE'),
     },
     {
       to: '/spaces',
       title: 'admin.home.quick.space',
       hint: 'admin.home.quick.spaceHint',
+      icon: <IconPark size={18} />,
       visible: permissions.has('TENANT_MANAGE'),
     },
     {
       to: '/enforcement/citations',
       title: 'admin.home.quick.plate',
       hint: 'admin.home.quick.plateHint',
+      icon: <IconSearch size={18} />,
       visible: permissions.has('CITATION_READ'),
     },
     {
       to: '/reports',
       title: 'admin.home.quick.report',
       hint: 'admin.home.quick.reportHint',
+      icon: <IconReports size={18} />,
       visible: permissions.has('EXPORT_RUN'),
     },
   ];
@@ -531,11 +609,14 @@ function QuickActions(): React.JSX.Element {
   }
 
   return (
-    <div className="lx-quick-actions">
+    <div className="lx-quick-grid">
       {visibles.map((acceso) => (
-        <Link key={acceso.to} to={acceso.to} className="lx-quick-action">
-          <span className="lx-quick-action__title">{t(acceso.title)}</span>
-          <span className="lx-quick-action__hint">{t(acceso.hint)}</span>
+        <Link key={acceso.to} to={acceso.to} className="lx-quick-tile">
+          <span className="lx-quick-tile__icon" aria-hidden="true">
+            {acceso.icon}
+          </span>
+          <span className="lx-quick-tile__title">{t(acceso.title)}</span>
+          <span className="lx-quick-tile__hint">{t(acceso.hint)}</span>
         </Link>
       ))}
     </div>

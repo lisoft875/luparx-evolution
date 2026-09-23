@@ -307,6 +307,8 @@ export const enUS: Record<TranslationKey, string> = {
     'These zones have no tariff in force, so nobody can park in them: {{zones}}. A citizen who tries has the stay refused.',
   'admin.tariffs.noZones': 'This municipality has no zones yet.',
   'admin.tariffs.set.submit': 'Set tariff',
+  'admin.home.footer.product': 'LuParX · Municipal parking platform',
+  'admin.home.kpi.inPeriod': 'Today',
   'admin.home.subtitle': 'Operational summary · {{date}}',
   'admin.home.system.api': 'System',
   'admin.home.system.database': 'Database',

@@ -1137,7 +1137,11 @@ body {
   margin: var(--lx-space-4) 0 var(--lx-space-1);
 }
 .lx-nav-link {
-  display: block;
+  /* Fila de icono + texto (§9 de la v3). Era `block`; con el icono adentro el texto quedaría
+     debajo del dibujo en vez de al lado. */
+  display: flex;
+  align-items: center;
+  gap: var(--lx-space-2);
   padding: var(--lx-space-2) var(--lx-space-3);
   border-radius: var(--lx-radius-sm);
   font-size: var(--lx-text-body-size);
@@ -1154,9 +1158,30 @@ body {
   background: var(--lx-surface-hover);
   text-decoration: none;
 }
+/* El icono es apoyo, no protagonista: va un tono por debajo del texto y sólo se enciende en el
+   destino activo, que es donde ayuda a confirmar dónde está uno. */
+.lx-nav-link__icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--lx-text-subtle);
+}
+
+.lx-nav-link > span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .lx-nav-link--active {
   background: var(--lx-surface-active);
   color: var(--lx-primary-strong);
+  /* El estado activo tiene que ser evidente (§9): además del fondo y el color, una barra a la
+     izquierda, que es lo que se ve de reojo sin leer. */
+  box-shadow: inset 3px 0 0 var(--lx-primary-2);
+}
+
+.lx-nav-link--active .lx-nav-link__icon {
+  color: var(--lx-primary-2);
 }
 /* The role suffix beside the wordmark: which of the three consoles this is. Cyan because it
    is the one piece of the bar that is not the product's own name. */
@@ -3444,4 +3469,377 @@ button.lx-list-row {
 .lx-occupancy-cell__value {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+
+/* --- Inicio municipal v3 (23-09-2026) ----------------------------------------------------------
+   La v2 quedó «demasiado parecida a la original»: los datos estaban pero la composición no. Lo que
+   sigue es lo que cambia eso — tarjetas de métrica con icono, franja de estado compacta, feed,
+   cuadrícula de accesos y un pie— todo sobre los mismos tokens y el mismo fondo oscuro. */
+
+.lx-skeleton {
+  display: block;
+  background: linear-gradient(
+    90deg,
+    var(--lx-surface-2) 0%,
+    var(--lx-surface-hover) 50%,
+    var(--lx-surface-2) 100%
+  );
+  background-size: 200% 100%;
+  animation: lx-skeleton-slide 1.4s ease-in-out infinite;
+}
+
+.lx-skeleton--pill { border-radius: var(--lx-radius-pill); }
+.lx-skeleton--block { border-radius: var(--lx-radius-md); }
+
+@keyframes lx-skeleton-slide {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+
+/* Quien pidió menos movimiento no quiere una pantalla latiendo. El bloque se queda, quieto. */
+@media (prefers-reduced-motion: reduce) {
+  .lx-skeleton {
+    animation: none;
+  }
+}
+
+/* --- Tarjeta de métrica ----------------------------------------------------------------------- */
+.lx-metric {
+  /* Sin relleno propio: lo pone el botón de adentro, para que el área de clic llegue al borde. */
+  padding: 0;
+  overflow: hidden;
+}
+
+.lx-metric__hit {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas:
+    'icono etiqueta'
+    'icono valor'
+    'icono delta';
+  gap: 0 var(--lx-space-3);
+  align-content: center;
+  width: 100%;
+  padding: var(--lx-space-4);
+  border: 0;
+  background: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.lx-metric__hit--static { cursor: default; }
+
+.lx-metric__hit:focus-visible {
+  outline: 2px solid var(--lx-focus-ring);
+  outline-offset: -2px;
+}
+
+.lx-metric:hover .lx-metric__hit:not(.lx-metric__hit--static) {
+  background: var(--lx-surface-hover);
+}
+
+/* El bloque del icono: un cuadrado tenue del color de la métrica. El acento vive acá y no en el
+   número —un monto en verde se lee como «bueno» y un monto es sólo un monto—. */
+.lx-metric__icon {
+  grid-area: icono;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--lx-radius-md);
+  align-self: center;
+}
+
+.lx-metric__icon--primary { background: var(--lx-primary-soft); color: var(--lx-primary-2); }
+.lx-metric__icon--success { background: var(--lx-success-soft); color: var(--lx-success); }
+.lx-metric__icon--warning { background: var(--lx-warning-soft); color: var(--lx-warning); }
+.lx-metric__icon--info { background: var(--lx-info-soft); color: var(--lx-info); }
+
+.lx-metric__label {
+  grid-area: etiqueta;
+  color: var(--lx-text-muted);
+  font-size: 0.75rem;
+  line-height: 1.2;
+}
+
+.lx-metric__value {
+  grid-area: valor;
+  color: var(--lx-text);
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.25;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.lx-metric__delta,
+.lx-metric__hint {
+  grid-area: delta;
+  font-size: 0.75rem;
+  line-height: 1.2;
+}
+
+.lx-metric__hint { color: var(--lx-text-subtle); }
+.lx-metric__delta--up { color: var(--lx-success); }
+.lx-metric__delta--down { color: var(--lx-danger); }
+.lx-metric__delta--flat { color: var(--lx-text-subtle); }
+
+/* --- Franja de estado, versión compacta -------------------------------------------------------- */
+.lx-status-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--lx-space-2) var(--lx-space-4);
+  padding: var(--lx-space-3) var(--lx-space-4);
+  border: 1px solid var(--lx-border);
+  border-radius: var(--lx-radius-md);
+  background: var(--lx-surface);
+}
+
+.lx-status-bar__item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--lx-space-2);
+  min-width: 0;
+  font-size: 0.8125rem;
+  color: var(--lx-text-muted);
+}
+
+.lx-status-bar__item > strong {
+  color: var(--lx-text);
+  font-weight: 600;
+}
+
+/* --- Feed de actividad ------------------------------------------------------------------------ */
+.lx-feed {
+  display: flex;
+  flex-direction: column;
+}
+
+.lx-feed__item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--lx-space-3);
+  align-items: center;
+  padding: var(--lx-space-3) 0;
+  border-top: 1px solid var(--lx-border);
+}
+
+.lx-feed__item:first-child { border-top: 0; }
+
+.lx-feed__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--lx-radius-sm);
+  background: var(--lx-surface-2);
+  color: var(--lx-text-muted);
+}
+
+.lx-feed__what { min-width: 0; }
+
+.lx-feed__title {
+  display: block;
+  color: var(--lx-text);
+  font-size: 0.875rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lx-feed__context {
+  display: block;
+  color: var(--lx-text-muted);
+  font-size: 0.75rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lx-feed__when {
+  color: var(--lx-text-subtle);
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+/* Un vacío de dos líneas, no un párrafo centrado en media pantalla. */
+.lx-feed__empty {
+  padding: var(--lx-space-4) 0;
+}
+
+.lx-feed__empty-title {
+  display: block;
+  color: var(--lx-text);
+  font-size: 0.875rem;
+}
+
+.lx-feed__empty-body {
+  display: block;
+  color: var(--lx-text-muted);
+  font-size: 0.75rem;
+}
+
+/* --- Accesos rápidos: cuadrícula 2×2, no una columna de botones -------------------------------- */
+.lx-quick-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--lx-space-2);
+}
+
+@media (max-width: 380px) {
+  .lx-quick-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.lx-quick-tile {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas:
+    'icono titulo'
+    'icono texto';
+  gap: 0 var(--lx-space-3);
+  align-content: center;
+  min-height: 64px;
+  padding: var(--lx-space-3);
+  border: 1px solid var(--lx-border);
+  border-radius: var(--lx-radius-md);
+  background: var(--lx-surface-2);
+  color: inherit;
+  text-decoration: none;
+}
+
+.lx-quick-tile:hover { background: var(--lx-surface-hover); }
+
+.lx-quick-tile__icon {
+  grid-area: icono;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--lx-radius-sm);
+  background: var(--lx-primary-soft);
+  color: var(--lx-primary-2);
+  align-self: center;
+}
+
+.lx-quick-tile__title {
+  grid-area: titulo;
+  color: var(--lx-text);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.lx-quick-tile__hint {
+  grid-area: texto;
+  color: var(--lx-text-muted);
+  font-size: 0.75rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* --- Ocupación por zona, compacta -------------------------------------------------------------- */
+.lx-zone-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--lx-space-1) var(--lx-space-2);
+  padding: var(--lx-space-2) 0;
+}
+
+.lx-zone-row__name {
+  color: var(--lx-text);
+  font-size: 0.8125rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lx-zone-row__value {
+  color: var(--lx-text-muted);
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.lx-zone-row__track {
+  grid-column: 1 / -1;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--lx-surface-2);
+  overflow: hidden;
+}
+
+.lx-zone-row__fill {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--lx-primary);
+}
+
+.lx-zone-row__fill--warn { background: var(--lx-warning); }
+.lx-zone-row__fill--full { background: var(--lx-danger); }
+
+/* --- Analítica y operación: las proporciones que pide la §3 ------------------------------------ */
+.lx-home-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--lx-space-3);
+  align-items: start;
+}
+
+@media (min-width: 1000px) {
+  /* 65/35 para analítica y 60/40 para operación. En una sola regla con variable para no repetir
+     el corte y que los dos bloques se muevan juntos el día que cambie. */
+  .lx-home-grid {
+    grid-template-columns: minmax(0, var(--lx-home-grid-main, 65fr)) minmax(0, var(--lx-home-grid-side, 35fr));
+  }
+}
+
+.lx-home-grid--operation {
+  --lx-home-grid-main: 60fr;
+  --lx-home-grid-side: 40fr;
+}
+
+/* --- Pie de página ------------------------------------------------------------------------------ */
+.lx-page-layout__footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--lx-space-2);
+  /* Separado del contenido y pegado abajo: `margin-top: auto` lo empuja al final aunque la
+     pantalla sea corta, así una página con dos tarjetas tampoco deja el pie flotando a media
+     altura. */
+  margin-top: auto;
+  padding: var(--lx-space-4) 0 0;
+  border-top: 1px solid var(--lx-border);
+  color: var(--lx-text-subtle);
+  font-size: 0.75rem;
+}
+
+/* El contenedor del Inicio: una columna con el espaciado de la escala, y el pie empujado abajo. */
+.lx-home {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--lx-space-4);
+  min-height: 0;
+}
+
+/* Error compacto con reintento (§5 y §12 de la v3): un renglón y un botón, no una tarjeta roja
+   del alto del bloque que falló. */
+.lx-inline-error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--lx-space-3);
+  padding: var(--lx-space-3);
+  border: 1px solid var(--lx-danger);
+  border-radius: var(--lx-radius-md);
+  background: var(--lx-danger-soft);
+  color: var(--lx-text);
+  font-size: 0.875rem;
 }
