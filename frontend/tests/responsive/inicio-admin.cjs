@@ -49,7 +49,7 @@ const TAMANOS = [
   { nombre: 'móvil estándar',   width: 390, height: 664, dedo: true,  kpisEsperados: 1 },
   { nombre: 'móvil grande',     width: 430, height: 745, dedo: true,  kpisEsperados: 1 },
   { nombre: 'tablet vertical',  width: 768, height: 1024, dedo: true, kpisEsperados: 2 },
-  { nombre: 'tablet apaisada',  width: 1024, height: 768, dedo: true, kpisEsperados: 4 },
+  { nombre: 'tablet apaisada',  width: 1024, height: 768, dedo: true, kpisEsperados: 2 },
   { nombre: 'laptop',           width: 1280, height: 800, dedo: false, kpisEsperados: 4 },
   { nombre: 'escritorio',       width: 1440, height: 900, dedo: false, kpisEsperados: 4 },
   { nombre: 'escritorio grande',width: 1920, height: 1080, dedo: false, kpisEsperados: 4 },
@@ -119,9 +119,24 @@ async function medir(page, dedo) {
 
     // --- cifras rotas: lo que la §14 prohíbe mostrar ---
     const textoPagina = rec(document.querySelector('main')?.textContent);
-    const rotas = ['undefined', 'null', 'NaN', 'Infinity', '[object Object]'].filter((mala) =>
-      new RegExp(`\\b${mala}\\b`).test(textoPagina),
-    );
+    // No basta con decir QUE hay una cifra rota: hay que decir DÓNDE. «[object Object]» repetido en
+    // ocho tamaños sin más pista obliga a adivinar cuál de veinte campos es, que es el mismo punto
+    // ciego que tenía este arnés cuando decía «0 KPIs» sin decir que la página había reventado.
+    const rotas = [];
+    for (const mala of ['undefined', 'null', 'NaN', 'Infinity', '[object Object]']) {
+      const donde = textoPagina.indexOf(mala);
+      if (donde === -1) continue;
+      const contexto = textoPagina.slice(Math.max(0, donde - 45), donde + mala.length + 25);
+      // Y el elemento más profundo que lo contiene, que es el que hay que ir a arreglar.
+      let culpable = '';
+      for (const el of document.querySelectorAll('main *')) {
+        if (el.children.length === 0 && rec(el.textContent).includes(mala)) {
+          culpable = el.className || el.tagName;
+          break;
+        }
+      }
+      rotas.push(`${mala} — «…${contexto}…»${culpable ? ` en .${culpable}` : ''}`);
+    }
 
     // --- encimados: dos bloques hermanos que se pisan ---
     const encimados = [];

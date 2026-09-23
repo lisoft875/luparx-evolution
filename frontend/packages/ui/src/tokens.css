@@ -3009,8 +3009,28 @@ button.lx-list-row {
    lee mal aunque el layout «funcione». */
 .lx-home-kpis {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  /* Cortes explícitos y no `auto-fit`. La §13 pide 1 por fila en móvil, 2 en tablet y 4 en
+     escritorio, y `auto-fit` no sabe decir «exactamente dos»: con un mínimo de 220px metía TRES en
+     una tablet de 768, que es justo el ancho donde un monto en colones empieza a quedar apretado.
+     Un ancho mínimo produce el número de columnas que quepa; lo que hace falta acá es el número
+     de columnas que se decidió. */
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--lx-space-3);
+}
+
+@media (min-width: 600px) {
+  .lx-home-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* 1100 y no 1024: a 1024 el menú lateral ya se llevó su parte, y cuatro montos en lo que queda se
+   aprietan. El corte es sobre el ancho de la ventana porque es lo único que el CSS puede ver, así
+   que se elige el ancho a partir del cual el CONTENIDO —no la ventana— da abasto. */
+@media (min-width: 1100px) {
+  .lx-home-kpis {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
 }
 
 /* Dos tercios y un tercio, hasta que no caben. El mínimo de 320px es el ancho donde el gráfico de
@@ -3039,11 +3059,20 @@ button.lx-list-row {
 
 .lx-status-strip__item {
   display: inline-flex;
-  align-items: center;
+  align-items: baseline;
   gap: var(--lx-space-2);
+  /* Ancho máximo, no ancho fijo: a 320px «Pasarela de pagos: Sin verificación disponible» no cabe
+     en un renglón y con `nowrap` se salía 17px de la pantalla. El texto quiebra; lo único que no
+     puede quebrarse es el punto, que se queda pegado a la primera línea. */
+  max-width: 100%;
+  min-width: 0;
   color: var(--lx-text-muted);
   font-size: 0.8125rem;
-  white-space: nowrap;
+}
+
+.lx-status-strip__item > span:last-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 /* El punto NUNCA va solo: el estado lo dice la palabra que tiene al lado. Un tablero que informa
