@@ -177,8 +177,10 @@ export function HomePage(): React.JSX.Element {
     const currency = serie.data?.currencyCode ?? 'CRC';
     return days.map((day) => ({
       key: day.date,
-      // Fecha corta bajo la barra: «17 sep». La completa vive en el rótulo y en la tabla.
-      label: formatDate(`${day.date}T12:00:00`, locale, { day: 'numeric', month: 'short' }),
+      // Numérica bajo la barra —«17/9»— porque a 320px cada columna mide unos 30px y «17 sept» se
+      // corta. La completa va al rótulo, al `aria-label` y a la tabla.
+      label: formatDate(`${day.date}T12:00:00`, locale, { day: 'numeric', month: 'numeric' }),
+      labelLong: formatDate(`${day.date}T12:00:00`, locale, { day: 'numeric', month: 'long' }),
       value: day.totalMinor,
       valueLabel: formatCurrencyMinor(day.totalMinor, currency, locale),
       ariaLabel: `${formatDate(`${day.date}T12:00:00`, locale, {

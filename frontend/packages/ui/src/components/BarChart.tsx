@@ -5,8 +5,14 @@ import { useId, useState } from 'react';
 export interface BarChartDatum {
   /** Clave estable. No se muestra. */
   key: string;
-  /** Lo que va debajo de la barra. Corto: «17 sep». */
+  /**
+   * Lo que va debajo de la barra. MUY corto: en un teléfono de 320px cada columna mide unos 30px,
+   * y «17 sept» se corta a la mitad. La fecha completa vive en `labelLong`, en el `ariaLabel` y en
+   * la tabla, así que no se pierde: sólo deja de estorbar donde no cabe.
+   */
   label: string;
+  /** La fecha completa, para el rótulo de arriba. Si falta, se usa `label`. */
+  labelLong?: string;
   /** El valor, para la altura. Cero es un valor, no un hueco. */
   value: number;
   /** El valor ya formateado —con moneda, con separadores— para el rótulo y la tabla. */
@@ -87,7 +93,7 @@ export function BarChart({
       <p className="lx-bars__callout">
         {destacada ? (
           <>
-            <span className="lx-bars__callout-label">{destacada.label}</span>
+            <span className="lx-bars__callout-label">{destacada.labelLong ?? destacada.label}</span>
             <strong className="lx-bars__callout-value">{destacada.valueLabel}</strong>
           </>
         ) : null}

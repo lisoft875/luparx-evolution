@@ -87,7 +87,20 @@ async function medir(page) {
     const desbordes = [];
     const recortados = [];
 
+    /**
+     * Lo que existe para el lector de pantalla y NO se pinta.
+     *
+     * <p>`.lx-visually-hidden` se esconde con `clip: rect(0,0,0,0)`, que borra el dibujo pero deja
+     * la caja de maquetación intacta: `getBoundingClientRect` sobre sus hijos sigue devolviendo
+     * rectángulos de ancho completo. El detector los medía como si estuvieran en pantalla y
+     * reportaba que se pisaban con el contenido real — seis hallazgos inventados el 23-09-2026, de
+     * la tabla accesible del gráfico de barras, que por definición no puede taparle nada a nadie
+     * porque nadie la ve.</p>
+     */
+    const invisible = (el) => el.closest('.lx-visually-hidden') !== null;
+
     for (const el of document.querySelectorAll('body *')) {
+      if (invisible(el)) continue;
       const b = el.getBoundingClientRect();
       if (b.width === 0 && b.height === 0) continue;
 
@@ -146,7 +159,11 @@ async function medir(page) {
       return false;
     };
     const hojas = [...document.querySelectorAll('body *')].filter(
-      (el) => el.children.length === 0 && (el.textContent || '').trim() && !dentroDeFijo(el),
+      (el) =>
+        el.children.length === 0 &&
+        (el.textContent || '').trim() &&
+        !dentroDeFijo(el) &&
+        !invisible(el),
     );
     const solapes = [];
     const aplastados = [];

@@ -277,7 +277,10 @@ export function SettingsInfractionTypesPage(): React.JSX.Element {
         </Card>
       ))}
 
-      <div style={{ display: 'flex', gap: 'var(--lx-space-3)' }}>
+      {/* `flexWrap` y no un ancho: dos botones en una fila sin permiso para quebrar empujan al
+          segundo fuera de la pantalla en cuanto no caben —«Guardar catálogo» se salía 5px a 320px—.
+          Es el mismo defecto que ya había aparecido en la cabecera de consola (ADR 0028). */}
+      <div style={{ display: 'flex', gap: 'var(--lx-space-3)', flexWrap: 'wrap' }}>
         <Button type="button" variant="secondary" onClick={addRow}>
           {t('admin.enforcement.types.add')}
         </Button>

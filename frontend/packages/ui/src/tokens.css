@@ -2990,6 +2990,15 @@ button.lx-list-row {
   white-space: nowrap;
 }
 
+/* Bajo 420px el eje se va. «₡245.650» ocupa unos 60px de los ~250 que hay, y esos 60px valen más
+   repartidos entre siete barras que rotulando una escala que igual se lee en el rótulo de arriba y
+   en la tabla. Esconder la escala es una decisión; cortar las fechas era un defecto. */
+@media (max-width: 420px) {
+  .lx-bars__axis {
+    display: none;
+  }
+}
+
 @media (max-width: 520px) {
   .lx-bars__track,
   .lx-bars__axis {
