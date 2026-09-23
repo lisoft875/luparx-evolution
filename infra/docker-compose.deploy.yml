@@ -63,6 +63,15 @@ services:
       # Aparece en /actuator/info y en el log de arranque. Sirve para contestar sin dudar la única
       # pregunta que importa cuando algo se rompe: "¿esto es staging o producción?".
       LUPARX_ENVIRONMENT: ${LUPARX_ENVIRONMENT:-staging}
+      # El sembrado de demostración. Los dos tienen que estar DECLARADOS acá aunque su valor por
+      # omisión viva en application-demo.yml: Compose sólo le pasa al contenedor las variables que
+      # nombra, así que una variable puesta en `.env` y no declarada acá no llega y no hace nada.
+      # Costó un despliegue entero descubrirlo, con el log en silencio y sin ningún error.
+      LUPARX_DEV_SEED_DEMO_DATA: ${LUPARX_DEV_SEED_DEMO_DATA:-true}
+      # El andamio visual del Inicio: pagos de siete días y ocupación por zona. Apagado salvo que
+      # se encienda a mano para comparar la pantalla contra su referencia. Ver DevDashboardSeeder,
+      # que documenta cómo se borra lo que escribe.
+      LUPARX_DEV_SEED_DASHBOARD_DEMO: ${LUPARX_DEV_SEED_DASHBOARD_DEMO:-false}
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
