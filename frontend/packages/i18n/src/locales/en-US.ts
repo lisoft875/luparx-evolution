@@ -966,6 +966,36 @@ export const enUS: Record<TranslationKey, string> = {
   'citizen.more.language': 'Choose language',
   'citizen.more.notifications': 'Notifications',
   'citizen.more.notifications.meta': 'What happened, and what of it reaches your email.',
+  // --- Citizen "More" menu: what the 24-09-2026 spec added ---------------------------------------
+  'citizen.more.connection': 'Connection',
+  'citizen.more.connection.online': 'Online. Everything is saved right away.',
+  'citizen.more.connection.offline': 'Offline. Try again once you have signal.',
+  'citizen.more.connection.ok': 'Online',
+  'citizen.more.connection.none': 'Offline',
+  'citizen.more.help': 'Help',
+  'citizen.more.help.meta': 'How parking and citations work.',
+  'citizen.more.about': 'About LuParX',
+  'citizen.more.about.meta': 'Opens the official site.',
+  // --- Citizen help ---------------------------------------------------------------------------------
+  'citizen.help.title': 'Help',
+  'citizen.help.park.title': 'How to park',
+  'citizen.help.park.body':
+    'Pick the zone, the plate and how long you want. The charge leaves your wallet when you start, so check the balance first. Time starts then, not when you arrived.',
+  'citizen.help.extend.title': 'If you need more time',
+  'citizen.help.extend.body':
+    'You can extend from Home while the stay is still active. Once it has ended it cannot be extended: you start a new one, and between the two the car is uncovered.',
+  'citizen.help.fine.title': 'If you get a citation',
+  'citizen.help.fine.body':
+    'It appears under "Fines" with the reason, the zone and the time. A citation is an act of the municipality: it does not go away on its own, but it can be appealed.',
+  'citizen.help.appeal.title': 'Appealing a citation',
+  'citizen.help.appeal.body':
+    'From the citation detail, telling them what happened. The municipality reviews it and tells you the outcome; meanwhile the citation stands, so appeal before the deadline passes.',
+  'citizen.help.wallet.title': 'The wallet',
+  'citizen.help.wallet.body':
+    'Top it up at an enabled counter or by card. Every movement is listed under "Movements" with its date and reference, which is what you need if something does not add up.',
+  'citizen.help.plate.title': 'Shared plates',
+  'citizen.help.plate.body':
+    'The same plate can be registered by more than one person. When that happens the citation is visible, payable and appealable from both accounts, and whoever pays first pays for everyone.',
 
   'citizen.reminder.expiring.title': '{{minutes}} min of parking left',
   'citizen.reminder.expiring.body': '{{plate}} in space {{space}}. Extend from the app if you need to.',

@@ -988,6 +988,36 @@ export const esCR = {
   'citizen.more.language': 'Seleccionar idioma',
   'citizen.more.notifications': 'Notificaciones',
   'citizen.more.notifications.meta': 'Lo que pasó, y qué de eso te llega al correo.',
+  // --- Menú «Más» del ciudadano: lo que agregó la especificación del 24-09-2026 -------------------
+  'citizen.more.connection': 'Estado de conexión',
+  'citizen.more.connection.online': 'Con conexión. Todo se guarda al momento.',
+  'citizen.more.connection.offline': 'Sin conexión. Volvé a intentar cuando tengas señal.',
+  'citizen.more.connection.ok': 'En línea',
+  'citizen.more.connection.none': 'Sin conexión',
+  'citizen.more.help': 'Ayuda',
+  'citizen.more.help.meta': 'Cómo funciona el estacionamiento y las boletas.',
+  'citizen.more.about': 'Acerca de LuParX',
+  'citizen.more.about.meta': 'Abre el sitio oficial.',
+  // --- Ayuda del ciudadano -------------------------------------------------------------------------
+  'citizen.help.title': 'Ayuda',
+  'citizen.help.park.title': 'Cómo estacionar',
+  'citizen.help.park.body':
+    'Elegí la zona, la placa y cuánto tiempo querés. El cobro sale de tu billetera al iniciar, así que revisá el saldo antes. El tiempo empieza a correr en ese momento, no cuando llegaste.',
+  'citizen.help.extend.title': 'Si necesitás más tiempo',
+  'citizen.help.extend.body':
+    'Podés extender desde el Inicio mientras la estadía siga activa. Si ya terminó, no se extiende: hay que iniciar una nueva, y entre una y otra el carro está sin cubrir.',
+  'citizen.help.fine.title': 'Si te llega una boleta',
+  'citizen.help.fine.body':
+    'Aparece en «Multas» con el motivo, la zona y la hora. Una boleta es un acto de la municipalidad: no desaparece sola, pero sí se puede apelar.',
+  'citizen.help.appeal.title': 'Apelar una boleta',
+  'citizen.help.appeal.body':
+    'Desde el detalle de la boleta, contando qué pasó. La municipalidad la revisa y te avisa el resultado; mientras tanto la boleta sigue viva, así que apelá sin dejar pasar el plazo.',
+  'citizen.help.wallet.title': 'La billetera',
+  'citizen.help.wallet.body':
+    'Se recarga en los puntos habilitados o con tarjeta. Cada movimiento queda en «Movimientos» con su fecha y su referencia, que es lo que sirve para reclamar si algo no cuadra.',
+  'citizen.help.plate.title': 'Placas compartidas',
+  'citizen.help.plate.body':
+    'Una misma placa puede estar registrada por más de una persona. Si eso pasa, la boleta se ve, se paga y se apela desde las dos cuentas, y quien la pague primero la paga para todos.',
 
   // ---- v0.38 — la campana ---------------------------------------------------------------------
   // El servidor manda un tipo estable y parámetros crudos; la oración se arma acá. Una frase ya

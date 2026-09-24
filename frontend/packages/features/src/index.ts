@@ -18,6 +18,7 @@ export type { ActiveTenantBadgeProps } from './tenant/ActiveTenantBadge';
 export { TenantSwitchControl } from './tenant/TenantSwitchControl';
 export type { TenantSwitchControlProps } from './tenant/TenantSwitchControl';
 export { LUPARX_SITE_URL, ENLACE_EXTERNO } from './luparxSite';
+export { useIsOnline } from './useIsOnline';
 export { LocaleSwitcher, useAvailableLocales } from './locale/LocaleSwitcher';
 export { LocalePreferenceSync } from './locale/LocalePreferenceSync';
 export { ProfileForm } from './profile/ProfileForm';

@@ -216,18 +216,7 @@ export function useCitationQueue(): QueueApi {
 }
 
 /** `navigator.onLine`, watched — the offline state is always visible in the app bar (DESIGN_SYSTEM §5). */
-export function useIsOnline(): boolean {
-  const subscribe = useCallback((listener: () => void) => {
-    window.addEventListener('online', listener);
-    window.addEventListener('offline', listener);
-    return () => {
-      window.removeEventListener('online', listener);
-      window.removeEventListener('offline', listener);
-    };
-  }, []);
-  return useSyncExternalStore(
-    subscribe,
-    () => (typeof navigator === 'undefined' ? true : navigator.onLine),
-    () => true,
-  );
-}
+// `useIsOnline` se mudó a `@luparx/features`: el menú «Más» del ciudadano necesita el mismo dato y
+// las dos especificaciones del 24-09-2026 piden reutilizar la lógica de conectividad existente en
+// vez de copiarla. Se re-exporta desde acá para no tocar los cinco archivos que ya la importaban.
+export { useIsOnline } from '@luparx/features';

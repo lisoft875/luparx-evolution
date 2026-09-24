@@ -12,6 +12,7 @@ import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import { TenantSelectPage } from './pages/TenantSelectPage';
 import { HomePage } from './pages/HomePage';
+import { HelpPage } from './pages/HelpPage';
 import { MorePage } from './pages/MorePage';
 import { ProfilePage } from './pages/ProfilePage';
 import { ParkingPage } from './pages/ParkingPage';
@@ -107,6 +108,16 @@ export function App(): React.JSX.Element {
                 element={
                   <RequireAuth loginPath="/login">
                     <MorePage />
+                  </RequireAuth>
+                }
+              />
+              {/* La ayuda del ciudadano. Bajo RequireAuth como el resto: se llega desde «Más», que
+                  ya exige sesión, y una ruta de ayuda abierta sería la única puerta sin llave. */}
+              <Route
+                path="/help"
+                element={
+                  <RequireAuth loginPath="/login">
+                    <HelpPage />
                   </RequireAuth>
                 }
               />

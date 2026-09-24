@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@luparx/auth';
-import { LocaleSwitcher } from '@luparx/features';
+import { ENLACE_EXTERNO, LUPARX_SITE_URL, LocaleSwitcher, useIsOnline } from '@luparx/features';
 import { useTranslation } from '@luparx/i18n';
 import {
   Button,
@@ -13,7 +13,11 @@ import {
   IconLogout,
   IconUser,
   IconBell,
+  IconOffline,
+  IconShield,
+  IconSystem,
   ListRow,
+  Badge,
 } from '@luparx/ui';
 import { CitizenShell } from '../components/CitizenShell';
 
@@ -34,6 +38,7 @@ export function MorePage(): React.JSX.Element {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { me, logout } = useAuth();
+  const enLinea = useIsOnline();
   const profile = me?.user;
   const fullName = [profile?.givenName, profile?.familyName].filter(Boolean).join(' ');
 
@@ -86,6 +91,45 @@ export function MorePage(): React.JSX.Element {
           <div style={{ marginTop: 'var(--lx-space-3)' }}>
             <LocaleSwitcher />
           </div>
+        </Card>
+
+        {/* --- Lo que la especificación del 24-09-2026 agregó al menú ---------------------------
+            Estado de conexión, Ayuda y Acerca de LuParX. El estado va EN la fila y no detrás de
+            ella por la misma razón que el idioma, que ya estaba escrita arriba: es un hecho, no un
+            destino. Y el hook es el mismo que usa el fiscalizador —se mudó a `@luparx/features`—
+            en vez de una segunda copia que se desincronice. */}
+        <Card>
+          <ListRow
+            icon={enLinea ? <IconSystem size={18} /> : <IconOffline size={18} />}
+            title={t('citizen.more.connection')}
+            meta={enLinea ? t('citizen.more.connection.online') : t('citizen.more.connection.offline')}
+            value={
+              <Badge tone={enLinea ? 'success' : 'warning'}>
+                {enLinea ? t('citizen.more.connection.ok') : t('citizen.more.connection.none')}
+              </Badge>
+            }
+          />
+          <ListRow
+            icon={<IconShield size={18} />}
+            title={t('citizen.more.help')}
+            meta={t('citizen.more.help.meta')}
+            value={<IconChevronRight size={16} />}
+            onClick={() => navigate('/help')}
+          />
+          {/* Un <a> de verdad: abre fuera de la aplicación y la dirección se puede copiar. La URL
+              vive en LUPARX_SITE_URL, el mismo sitio único que usa el portal del fiscalizador. */}
+          <a className="lx-list-row" href={LUPARX_SITE_URL} {...ENLACE_EXTERNO}>
+            <span className="lx-list-row__icon" aria-hidden="true">
+              <IconGlobe size={18} />
+            </span>
+            <span className="lx-list-row__body">
+              <span className="lx-list-row__title">{t('citizen.more.about')}</span>
+              <span className="lx-list-row__meta">{t('citizen.more.about.meta')}</span>
+            </span>
+            <span className="lx-list-row__value" aria-hidden="true">
+              <IconChevronRight size={16} />
+            </span>
+          </a>
         </Card>
       </CardStack>
 
