@@ -54,12 +54,22 @@ function comprobar(ok, mensaje, detalle) {
  *  existe en el DOM y no sirve para nada. */
 async function medirBarra(page) {
   return page.evaluate(() => {
-    const barras = [...document.querySelectorAll('[data-lx-bottom-chrome]')];
+    // `.lx-bottom-tab-bar` y NO `[data-lx-bottom-chrome]`.
+    //
+    // Ese atributo no significa «soy la barra»: significa «tapo el fondo de la pantalla», y lo usa
+    // el desplegable de `Select` para abrirse hacia arriba en vez de quedar debajo. Está puesto dos
+    // veces a propósito —en el contenedor fijo de InspectorShell y en el <nav> de BottomTabBar— así
+    // que contarlo daba 2 en TODAS las pantallas, incluida Consulta, que en la captura de la
+    // especificación se ve perfecta. Diez fallos contra seis pantallas sanas.
+    //
+    // La lección, otra vez: un selector se elige por lo que el marcado PROMETE, no por lo que
+    // parece querer decir su nombre.
+    const barras = [...document.querySelectorAll('.lx-bottom-tab-bar')];
     if (barras.length === 0) return { cuantas: 0 };
     const caja = barras[0].getBoundingClientRect();
     return {
       cuantas: barras.length,
-      destinos: barras[0].querySelectorAll('a, button').length,
+      destinos: barras[0].querySelectorAll('.lx-bottom-tab-bar__tab').length,
       dentroDeLaPantalla: caja.bottom <= window.innerHeight + 1 && caja.top < window.innerHeight,
       alto: Math.round(caja.height),
       ruta: location.pathname,

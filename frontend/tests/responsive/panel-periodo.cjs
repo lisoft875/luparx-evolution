@@ -164,15 +164,27 @@ function comprobar(ok, mensaje, detalle) {
 
   // --- El criterio 6: lo de tiempo real no se ata al período -------------------------------------
   console.log('\n── los indicadores en vivo siguen diciendo que son de ahora ──');
+  // Lo que la §6 pide de verdad es que no se confunda lo de AHORA con lo del PERÍODO. Afirmarlo
+  // como «tiene que aparecer la cadena "En este momento"» fue más estricto que la especificación:
+  // ese texto es el respaldo de la ocupación cuando NO hay datos, y con datos la tarjeta dice
+  // «N sobre M bahías», que es mejor. El rótulo ya decía «Ocupación actual» y eso basta.
+  //
+  // Así que se comprueba la separación, que es el invariante: ningún indicador en vivo rotulado
+  // «del período», y ninguno del período rotulado «actual».
   const enVivo = await page.evaluate(() => {
-    const cuerpo = (document.body.textContent || '').replace(/\s+/g, ' ');
+    const rotulos = [...document.querySelectorAll('.lx-dashboard-kpis .lx-stat-card__label, .lx-stat-card__label')]
+      .map((el) => (el.textContent || '').trim());
     return {
-      ocupacionActual: cuerpo.includes('Ocupación actual'),
-      enEsteMomento: cuerpo.includes('En este momento'),
+      rotulos,
+      ocupacionActual: rotulos.some((r) => /ocupación/i.test(r) && /actual/i.test(r)),
+      ocupacionDelPeriodo: rotulos.some((r) => /ocupación/i.test(r) && /per[íi]odo/i.test(r)),
+      cuantosDelPeriodo: rotulos.filter((r) => /per[íi]odo/i.test(r)).length,
     };
   });
-  comprobar(enVivo.ocupacionActual, 'la ocupación sigue rotulada como «actual», no «del período»');
-  comprobar(enVivo.enEsteMomento, 'hay al menos un indicador marcado «En este momento»');
+  comprobar(enVivo.ocupacionActual, 'la ocupación está rotulada «actual»', `rótulos: ${enVivo.rotulos.join(' | ')}`);
+  comprobar(!enVivo.ocupacionDelPeriodo, 'la ocupación NO está rotulada «del período»');
+  comprobar(enVivo.cuantosDelPeriodo >= 2, `${enVivo.cuantosDelPeriodo} indicadores dicen «del período»`,
+    `rótulos: ${enVivo.rotulos.join(' | ')}`);
 
   // --- Personalizado ------------------------------------------------------------------------------
   console.log('\n── personalizado ──');
