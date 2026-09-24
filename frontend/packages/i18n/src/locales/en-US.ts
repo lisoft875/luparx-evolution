@@ -929,6 +929,37 @@ export const enUS: Record<TranslationKey, string> = {
   'nav.vehicles': 'Vehicles',
   'nav.wallet': 'Wallet',
   'nav.more': 'More',
+  // --- Enforcement "More" menu (24-09-2026) ------------------------------------------------------
+  'inspector.more.profile': 'My profile',
+  'inspector.more.language': 'Language',
+  'inspector.more.connection': 'Connection',
+  'inspector.more.connection.online': 'Online. Citations are sent straight away.',
+  'inspector.more.connection.offline': 'Offline. What you file is saved and sent on its own.',
+  'inspector.more.connection.synced': 'Up to date',
+  'inspector.more.connection.waiting': 'Waiting',
+  'inspector.more.connection.pending.one': '{{count}} pending',
+  'inspector.more.connection.pending.other': '{{count}} pending',
+  'inspector.more.help': 'Help',
+  'inspector.more.help.meta': 'How to work a shift.',
+  'inspector.more.about': 'About LuParX',
+  'inspector.more.about.meta': 'Opens the official site.',
+  // --- Help ---------------------------------------------------------------------------------------
+  'inspector.help.title': 'Help',
+  'inspector.help.offline.title': 'If you lose signal',
+  'inspector.help.offline.body':
+    'Carry on as usual. The citation is stored on the phone and sent on its own once signal returns. The top bar says how many are waiting; while that number is not zero, do not sign out.',
+  'inspector.help.plate.title': 'Checking a plate',
+  'inspector.help.plate.body':
+    'Zone and bay are optional, but they change the answer: without a bay the system never says the bay is covered. The bay is what tells a car that paid from one that did not.',
+  'inspector.help.citation.title': 'Filing a citation',
+  'inspector.help.citation.body':
+    'A citation is an administrative act: once issued it is not deleted, it is annulled, and annulling it is not your permission. Check the plate and the infraction before issuing.',
+  'inspector.help.evidence.title': 'Photos and evidence',
+  'inspector.help.evidence.body':
+    'Add the evidence before issuing. It is what answers for you when somebody appeals weeks later, and it is easier to take now than to go back.',
+  'inspector.help.queue.title': 'Pending',
+  'inspector.help.queue.body':
+    'Those are the citations that have not reached the server yet. If one gets stuck, open it: it says why.',
   'citizen.more.profile': 'My profile',
   'citizen.more.fines': 'Fines',
   'citizen.more.fines.meta': 'Review and appeal your fines.',

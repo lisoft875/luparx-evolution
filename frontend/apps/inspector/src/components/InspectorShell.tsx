@@ -99,7 +99,10 @@ export function InspectorShell({ children, title, subtitle, onBack }: InspectorS
       key: 'more',
       label: t('inspector.nav.more'),
       icon: <IconOffline />,
-      onSelect: () => navigate('/profile'),
+      // «Más» ya no cae en el perfil: ahora es el menú de herramientas del fiscalizador. El
+      // perfil sigue estando, una fila más abajo, que es donde la especificación del 24-09-2026
+      // lo pone.
+      onSelect: () => navigate('/more'),
       current: location.pathname.startsWith('/profile'),
     },
   ];

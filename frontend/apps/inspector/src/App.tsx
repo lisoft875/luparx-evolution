@@ -16,6 +16,8 @@ import { NewCitationPage } from './pages/NewCitationPage';
 import { MyCitationsPage } from './pages/MyCitationsPage';
 import { CitationDetailPage } from './pages/CitationDetailPage';
 import { QueuePage } from './pages/QueuePage';
+import { HelpPage } from './pages/HelpPage';
+import { MorePage } from './pages/MorePage';
 import { ProfilePage } from './pages/ProfilePage';
 
 const queryClient = new QueryClient({
@@ -126,6 +128,28 @@ export function App(): React.JSX.Element {
                 element={
                   <RequireAuth loginPath="/login">
                     <ProfilePage />
+                  </RequireAuth>
+                }
+              />
+              {/* El menú de herramientas. Bajo RequireTenant como el resto del módulo: muestra la
+                  municipalidad activa y el estado de la cola, que no existen sin ella. */}
+              <Route
+                path="/more"
+                element={
+                  <RequireAuth loginPath="/login">
+                    <RequireTenant selectTenantPath="/select-tenant">
+                      <MorePage />
+                    </RequireTenant>
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/help"
+                element={
+                  <RequireAuth loginPath="/login">
+                    <RequireTenant selectTenantPath="/select-tenant">
+                      <HelpPage />
+                    </RequireTenant>
                   </RequireAuth>
                 }
               />

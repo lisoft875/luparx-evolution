@@ -951,6 +951,37 @@ export const esCR = {
   'nav.vehicles': 'Vehículos',
   'nav.wallet': 'Billetera',
   'nav.more': 'Más',
+  // --- Menú «Más» de Fiscalización (24-09-2026) --------------------------------------------------
+  'inspector.more.profile': 'Mi perfil',
+  'inspector.more.language': 'Idioma',
+  'inspector.more.connection': 'Estado de conexión',
+  'inspector.more.connection.online': 'Conectado. Las boletas se envían al momento.',
+  'inspector.more.connection.offline': 'Sin conexión. Lo que levantés se guarda y se envía solo.',
+  'inspector.more.connection.synced': 'Al día',
+  'inspector.more.connection.waiting': 'En espera',
+  'inspector.more.connection.pending.one': '{{count}} pendiente',
+  'inspector.more.connection.pending.other': '{{count}} pendientes',
+  'inspector.more.help': 'Ayuda',
+  'inspector.more.help.meta': 'Cómo trabajar un turno.',
+  'inspector.more.about': 'Acerca de LuParX',
+  'inspector.more.about.meta': 'Abre el sitio oficial.',
+  // --- Ayuda: lo que de verdad pasa en un turno --------------------------------------------------
+  'inspector.help.title': 'Ayuda',
+  'inspector.help.offline.title': 'Si te quedás sin señal',
+  'inspector.help.offline.body':
+    'Seguí trabajando igual. La boleta se guarda en el teléfono y se envía sola cuando vuelve la señal. La barra de arriba dice cuántas están esperando; mientras ese número no sea cero, no cierres sesión.',
+  'inspector.help.plate.title': 'Consultar una placa',
+  'inspector.help.plate.body':
+    'La zona y la bahía son opcionales, pero cambian la respuesta: sin bahía el sistema nunca dice que está cubierta. La bahía es lo que distingue el carro que pagó del que no.',
+  'inspector.help.citation.title': 'Levantar una boleta',
+  'inspector.help.citation.body':
+    'Una boleta es un acto administrativo: una vez emitida no se borra, se anula, y anularla no es tu permiso. Revisá la placa y la infracción antes de emitir.',
+  'inspector.help.evidence.title': 'Fotos y evidencia',
+  'inspector.help.evidence.body':
+    'Agregá la evidencia antes de emitir. Es lo que responde por vos cuando alguien reclama semanas después, y es más fácil sacarla ahora que volver al lugar.',
+  'inspector.help.queue.title': 'Pendientes',
+  'inspector.help.queue.body':
+    'Ahí están las boletas que todavía no llegaron al servidor. Si alguna se queda trabada, abrila: te dice por qué.',
   'citizen.more.profile': 'Mi perfil',
   'citizen.more.fines': 'Multas',
   'citizen.more.fines.meta': 'Consultá tus multas y presentá un reclamo.',

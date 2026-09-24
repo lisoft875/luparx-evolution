@@ -1376,6 +1376,15 @@ button.lx-list-row {
 .lx-list-row:last-child {
   border-bottom: none;
 }
+/* Una fila de lista que además es un enlace externo. Hereda el color y pierde el subrayado: dentro
+   de una lista, un renglón azul y subrayado entre otros que no lo están se lee como un error de
+   maquetación, no como «esto abre fuera». Lo que dice que sale de la aplicación es el icono de
+   globo y el `target`, no el color. */
+a.lx-list-row {
+  color: inherit;
+  text-decoration: none;
+}
+
 .lx-list-row__icon {
   flex-shrink: 0;
   width: var(--lx-icon-box-size);
