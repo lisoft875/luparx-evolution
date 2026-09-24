@@ -91,6 +91,30 @@ async function medirBarra(page) {
 
   console.log(`\n${BASE}/inspector · ${CUENTA}\n`);
 
+  // --- 0. Sin sesión, /inspector manda al login --------------------------------------------------
+  //
+  // La especificación del 24-09-2026 parte de que «/inspector puede abrirse mostrando directamente
+  // Consulta de placa, aparentando que existe una sesión activa». Eso se comprueba, no se supone:
+  // una ventana limpia, sin almacenamiento ni cookies, y se mira dónde cae.
+  console.log('── sin sesión ──');
+  {
+    const limpio = await browser.newContext({ viewport: TELEFONO, locale: 'es-CR', ignoreHTTPSErrors: true });
+    const p0 = await limpio.newPage();
+    await p0.goto(`${BASE}/inspector/`, { waitUntil: 'domcontentloaded' });
+    await p0.waitForTimeout(2200);
+    const donde = await p0.evaluate(() => ({
+      ruta: location.pathname,
+      hayContrasena: Boolean(document.querySelector('input[type="password"]')),
+      hayConsulta: (document.body.textContent || '').includes('Consulta de placa'),
+    }));
+    comprobar(
+      donde.hayContrasena && !donde.hayConsulta,
+      'sin sesión, /inspector muestra el login y no Consulta de placa',
+      `cayó en ${donde.ruta} · campo de contraseña=${donde.hayContrasena} · «Consulta de placa» en pantalla=${donde.hayConsulta}`,
+    );
+    await limpio.close();
+  }
+
   await page.goto(`${BASE}/inspector/login`, { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(600);
   await page.fill('input[type="email"]', CUENTA);
