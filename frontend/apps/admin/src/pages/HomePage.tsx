@@ -55,7 +55,15 @@ const ACTOS: Readonly<Record<string, { key: TranslationKey; icon: React.ReactNod
 };
 
 const EVENTOS_A_PEDIR = 40;
-const EVENTOS_A_MOSTRAR = 5;
+/**
+ * Cuántos eventos entran en la portada.
+ *
+ * <p>Tres y no cinco (v4 §5: «maximo 3-4 filas en Inicio»). Cada fila cuesta ~53px y el Inicio no
+ * es el registro de auditoría: es la señal de que algo se movió, con el enlace a la lista
+ * completa debajo. Con cinco, la tarjeta de actividad medía 434px —más que el gráfico y la
+ * ocupación juntos— y era ella sola la que decidía el alto de la fila inferior.</p>
+ */
+const EVENTOS_A_MOSTRAR = 3;
 const OCUPACION_ALTA = 85;
 const OCUPACION_MEDIA = 70;
 const ZONAS_EN_PORTADA = 6;
@@ -237,23 +245,24 @@ export function HomePage(): React.JSX.Element {
   return (
     <AdminShell footer={pie}>
       <div className="lx-home">
-        {/* --- A. encabezado ------------------------------------------------------------------- */}
-        <header className="lx-shell-header-row" style={{ alignItems: 'flex-start' }}>
-          <div style={{ minWidth: 0 }}>
-            <h1 style={{ margin: 0 }}>{municipalidad}</h1>
-            <p className="lx-text-meta" style={{ margin: '4px 0 0' }}>
-              {t('admin.home.subtitle', { date: formatDate(ahora, locale, { dateStyle: 'full' }) })}
+        {/* --- A. encabezado Y estado del sistema, en un renglón -------------------------------
+            La v4 §1 pide que el contenido operativo entre sin scroll en una laptop. Medido en
+            staging, el encabezado apilado sobre la franja de estado gastaba ~160px antes del
+            primer número: más que la fila entera de KPI. Ninguno de los dos es un dato del
+            negocio —uno dice dónde estás, el otro si los servicios responden—, así que comparten
+            renglón y el alto recuperado se lo queda el gráfico. Nada se eliminó: están los
+            cuatro indicadores, el nombre, la fecha y la hora. */}
+        <header className="lx-home__top">
+          <div className="lx-home__title">
+            <h1>{municipalidad}</h1>
+            <p className="lx-text-meta lx-home__when">
+              {t('admin.home.subtitle', { date: formatDate(ahora, locale, { dateStyle: 'long' }) })}
+              {' · '}
+              {formatTime(ahora, locale)}
             </p>
           </div>
-          <p className="lx-text-meta" style={{ margin: 0, whiteSpace: 'nowrap' }}>
-            {formatTime(ahora, locale)}
-          </p>
-        </header>
-
-        {puedeVerCifras ? (
-          <>
-            {/* --- B. estado del sistema, una sola fila -------------------------------------- */}
-            <div className="lx-status-bar" aria-busy={panel.isLoading}>
+          {puedeVerCifras ? (
+            <div className="lx-home__status" aria-busy={panel.isLoading}>
               {servicios.map((servicio) => (
                 <span key={servicio.clave} className="lx-status-bar__item">
                   <span
@@ -266,7 +275,11 @@ export function HomePage(): React.JSX.Element {
                 </span>
               ))}
             </div>
+          ) : null}
+        </header>
 
+        {puedeVerCifras ? (
+          <>
             {/* --- C. los cuatro KPIs --------------------------------------------------------- */}
             <div className="lx-home-kpis">
               <MetricCard
@@ -290,6 +303,10 @@ export function HomePage(): React.JSX.Element {
                       })
                     : undefined
                 }
+                // v4 §5: sin un ayer contra el cual comparar NO se calcula un porcentaje. Decirlo
+                // cuesta un renglón que igual está reservado; inventarlo cuesta que alguien repita
+                // la cifra en una reunión.
+                hint={recaudacion?.variacion == null ? t('admin.home.kpi.noComparison') : undefined}
                 trend={
                   recaudacion?.variacion == null
                     ? 'flat'
@@ -341,7 +358,7 @@ export function HomePage(): React.JSX.Element {
 
             {/* --- D. analítica: gráfico 65% + ocupación 35% ---------------------------------- */}
             <div className="lx-home-grid">
-              <Card>
+              <Card className="lx-card--dense">
                 <SectionHeader
                   title={t('admin.home.revenue.title')}
                   description={t('admin.home.revenue.description')}
@@ -349,7 +366,7 @@ export function HomePage(): React.JSX.Element {
                 {serie.isLoading ? (
                   // Un bloque del tamaño del gráfico, no la palabra «Cargando»: así la pantalla no
                   // se reacomoda cuando el dato llega.
-                  <Skeleton height={200} shape="block" />
+                  <Skeleton height={176} shape="block" />
                 ) : serie.isError ? (
                   <div className="lx-inline-error">
                     <span>{t('common.error.generic')}</span>
@@ -381,7 +398,7 @@ export function HomePage(): React.JSX.Element {
                 )}
               </Card>
 
-              <Card>
+              <Card className="lx-card--dense">
                 <SectionHeader
                   title={t('admin.home.zones.title')}
                   description={t('admin.home.zones.description')}
@@ -404,7 +421,7 @@ export function HomePage(): React.JSX.Element {
 
             {/* --- E. operación: actividad 60% + accesos 40% ---------------------------------- */}
             <div className="lx-home-grid lx-home-grid--operation">
-              <Card>
+              <Card className="lx-card--dense">
                 <SectionHeader
                   title={t('admin.home.activity.title')}
                   description={t('admin.home.activity.description')}
@@ -454,7 +471,7 @@ export function HomePage(): React.JSX.Element {
                 )}
               </Card>
 
-              <Card>
+              <Card className="lx-card--dense">
                 <SectionHeader title={t('admin.home.quick.title')} />
                 <QuickActions />
               </Card>

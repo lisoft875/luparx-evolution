@@ -1259,6 +1259,30 @@ body {
   padding: var(--lx-card-padding);
   min-width: 0;
 }
+/* Densidad de tablero. En una pantalla de formulario 16px de relleno son aire necesario; en un
+   tablero donde hay que ver cinco bloques de una sola mirada, cada 4px salen del gráfico. No es
+   «más chico»: es la misma tarjeta con el ritmo de una vista operativa. */
+.lx-card--dense {
+  padding: var(--lx-space-3);
+}
+
+/* Dentro de una tarjeta densa el título y su explicación comparten renglón en vez de apilarse.
+   Se gana el alto de una línea POR TARJETA sin borrar la explicación, que es lo que un operador
+   lee una vez y un visitante necesita siempre. */
+@media (min-width: 900px) {
+  .lx-card--dense .lx-section-header > div {
+    display: flex;
+    align-items: baseline;
+    gap: var(--lx-space-2);
+    min-width: 0;
+  }
+  .lx-card--dense .lx-section-header__description {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
 .lx-card--nested {
   /* Inside a card the gradient would be a second, competing sheet of glass; a nested
      card is a tint of its parent, which is why it only takes the flat surface. */
@@ -2893,6 +2917,7 @@ button.lx-list-row {
    codificaría dos veces lo mismo. El acento queda para la barra seleccionada, que es otra cosa —
    dónde está parada la persona— y no un valor. */
 .lx-bars {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--lx-space-2);
@@ -2906,6 +2931,21 @@ button.lx-list-row {
   /* Altura reservada aunque no haya nada seleccionado: si no, el gráfico entero salta hacia
      arriba y hacia abajo cada vez que el mouse entra y sale. */
   min-height: 1.5rem;
+}
+
+/* v4 §5: «evitar que la etiqueta del día actual y el monto superior generen espacio vertical
+   adicional innecesario». A partir de una tarjeta ancha el rótulo sale del flujo y se apoya en el
+   renglón del título de la tarjeta, que está vacío a la derecha. Sigue reservado en el flujo
+   debajo de ese ancho, donde no hay lugar al lado del título. Sacarlo del flujo es lo contrario de
+   ocultarlo: se sigue leyendo, y ya no cuesta 24px de alto. */
+@media (min-width: 900px) {
+  .lx-bars__callout {
+    position: absolute;
+    top: -2.1rem;
+    right: 0;
+    min-height: 0;
+    margin: 0;
+  }
 }
 
 .lx-bars__callout-label {
@@ -2930,7 +2970,7 @@ button.lx-list-row {
   justify-content: space-between;
   /* El alto del área de barras menos el renglón de las fechas, para que las marcas caigan sobre
      las líneas y no entre ellas. */
-  height: 160px;
+  height: 140px;
   color: var(--lx-text-subtle);
   font-size: 0.6875rem;
   font-variant-numeric: tabular-nums;
@@ -2947,7 +2987,10 @@ button.lx-list-row {
   gap: 2px;
   flex: 1;
   min-width: 0;
-  height: 180px;
+  /* 160 y no 180 (v4 §2: reducir el bloque 25-30%). Con el rótulo fuera del flujo y las fechas
+     abajo, el componente entero queda en ~176px, dentro de los 180-210 que la §2 llama «chart
+     útil»; lo que se recortó es el alto de la TARJETA, que es lo que pedía la corrección. */
+  height: 160px;
 }
 
 .lx-bars__grid {
@@ -3027,10 +3070,10 @@ button.lx-list-row {
 @media (max-width: 520px) {
   .lx-bars__track,
   .lx-bars__axis {
-    height: 140px;
+    height: 130px;
   }
   .lx-bars__track {
-    height: 160px;
+    height: 150px;
   }
   /* En un teléfono no caben siete fechas completas; se achican antes que encimarse. */
   .lx-bars__col-label {
@@ -3065,7 +3108,9 @@ button.lx-list-row {
 /* 1100 y no 1024: a 1024 el menú lateral ya se llevó su parte, y cuatro montos en lo que queda se
    aprietan. El corte es sobre el ancho de la ventana porque es lo único que el CSS puede ver, así
    que se elige el ancho a partir del cual el CONTENIDO —no la ventana— da abasto. */
-@media (min-width: 1100px) {
+/* v4 §6: cuatro KPI desde 1200px, dos entre 768 y 1199. Antes el corte estaba en 1100, que metía
+   cuatro montos en un ancho donde la §6 pide dos. */
+@media (min-width: 1200px) {
   .lx-home-kpis {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
@@ -3520,7 +3565,8 @@ button.lx-list-row {
   gap: 0 var(--lx-space-3);
   align-content: center;
   width: 100%;
-  padding: var(--lx-space-4);
+  /* v4 §2: relleno vertical 14-16px, altura objetivo 88-100px. Medido: 93px. */
+  padding: 14px var(--lx-space-4);
   border: 0;
   background: none;
   color: inherit;
@@ -3581,23 +3627,22 @@ button.lx-list-row {
   line-height: 1.2;
 }
 
+/* v4 §5: con la recaudación del día en ₡0, un «-100% contra ayer» en rojo a cuerpo completo
+   domina la tarjeta y tapa el número, que es el dato. La información se queda entera; lo que baja
+   es la jerarquía: el texto va en gris y el color queda SÓLO en la flecha, que es lo que comunica
+   la dirección de un vistazo. Quien no distingue los colores sigue leyendo la flecha y el signo. */
 .lx-metric__hint { color: var(--lx-text-subtle); }
-.lx-metric__delta--up { color: var(--lx-success); }
-.lx-metric__delta--down { color: var(--lx-danger); }
-.lx-metric__delta--flat { color: var(--lx-text-subtle); }
+.lx-metric__delta { color: var(--lx-text-muted); }
+.lx-metric__delta--up > [aria-hidden] { color: var(--lx-success); }
+.lx-metric__delta--down > [aria-hidden] { color: var(--lx-danger); }
+.lx-metric__delta--flat > [aria-hidden] { color: var(--lx-text-subtle); }
 
-/* --- Franja de estado, versión compacta -------------------------------------------------------- */
-.lx-status-bar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--lx-space-2) var(--lx-space-4);
-  padding: var(--lx-space-3) var(--lx-space-4);
-  border: 1px solid var(--lx-border);
-  border-radius: var(--lx-radius-md);
-  background: var(--lx-surface);
-}
-
+/* --- Indicadores de estado del sistema ----------------------------------------------------------
+   Hasta la v4 esto era una franja propia: una tarjeta con borde y fondo, 45px de alto, entre el
+   encabezado y los KPI. En el tablero ya no lo es —los indicadores viven en el renglón del título,
+   en `.lx-home__status`— así que lo que queda es la pieza: el punto de color y su texto. El
+   contenedor con borde se eliminó en vez de dejarlo huérfano; una regla que ya nadie usa es una
+   pista falsa para quien venga a cambiarla. */
 .lx-status-bar__item {
   display: inline-flex;
   align-items: center;
@@ -3623,7 +3668,7 @@ button.lx-list-row {
   grid-template-columns: auto minmax(0, 1fr) auto;
   gap: var(--lx-space-3);
   align-items: center;
-  padding: var(--lx-space-3) 0;
+  padding: var(--lx-space-2) 0;
   border-top: 1px solid var(--lx-border);
 }
 
@@ -3633,8 +3678,8 @@ button.lx-list-row {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   border-radius: var(--lx-radius-sm);
   background: var(--lx-surface-2);
   color: var(--lx-text-muted);
@@ -3667,8 +3712,10 @@ button.lx-list-row {
 }
 
 /* Un vacío de dos líneas, no un párrafo centrado en media pantalla. */
+/* v4 §2: «estado vacio alineado a la izquierda, no reservar espacio». Un vacío no puede costar lo
+   mismo que un listado con datos. */
 .lx-feed__empty {
-  padding: var(--lx-space-4) 0;
+  padding: var(--lx-space-2) 0 0;
 }
 
 .lx-feed__empty-title {
@@ -3704,7 +3751,9 @@ button.lx-list-row {
     'icono texto';
   gap: 0 var(--lx-space-3);
   align-content: center;
-  min-height: 64px;
+  /* v4 §2: 74-88px. El mínimo manda porque el contenido son dos renglones cortos; sin él la
+     tarjeta queda en ~61px y las cuatro se leen como botones apretados. */
+  min-height: 74px;
   padding: var(--lx-space-3);
   border: 1px solid var(--lx-border);
   border-radius: var(--lx-radius-md);
@@ -3735,20 +3784,32 @@ button.lx-list-row {
   font-weight: 600;
 }
 
+/* Un renglón, no dos. «Agregar bahías a una zona» partido en dos líneas estiraba la tarjeta de
+   81px a 101px a 1280 y desalineaba las cuatro del grid (v4 §5). */
 .lx-quick-tile__hint {
   grid-area: texto;
   color: var(--lx-text-muted);
   font-size: 0.75rem;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* El título tampoco se parte: «Registrar espacio» entra en un renglón cuando el ancho da. */
+.lx-quick-tile__title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* --- Ocupación por zona, compacta -------------------------------------------------------------- */
 .lx-zone-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: var(--lx-space-1) var(--lx-space-2);
-  padding: var(--lx-space-2) 0;
+  /* v4 §2: «reducir gaps entre zonas» para que la tarjeta termine a la misma altura que el
+     gráfico. El renglón y la barra no cambian de tamaño; lo que se cierra es el aire entre filas. */
+  gap: 3px var(--lx-space-2);
+  padding: 5px 0;
 }
 
 .lx-zone-row__name {
@@ -3825,8 +3886,64 @@ button.lx-list-row {
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: var(--lx-space-4);
+  /* v4 §2: «ritmo consistente de 12-16px; evitar margenes acumulados». 12 en el tablero, que es
+     donde el alto escasea; 16 sigue siendo el ritmo del resto de las pantallas. */
+  gap: var(--lx-space-3);
   min-height: 0;
+}
+
+/* El relleno del contenido, sólo cuando lo que contiene es el tablero.
+   `:has()` y no una clase nueva en PageLayout: el layout es compartido por los cuatro portales y
+   veintitrés pantallas, y el que necesita otra densidad es el Inicio, no el layout. Si el
+   navegador no soportara `:has()` la regla se ignora entera y queda el relleno de siempre: se
+   pierde densidad, no se rompe nada. */
+.lx-page-layout__content:has(> .lx-home) {
+  padding: var(--lx-space-4);
+  gap: var(--lx-space-3);
+}
+
+/* La cabecera del tablero: el nombre de la municipalidad a la izquierda y el estado del sistema a
+   la derecha, en el MISMO renglón.
+   Antes eran dos bloques apilados —encabezado (~100px) y franja de estado (45px)— separados por su
+   gap: 160px de alto gastados antes del primer dato, el 21% del presupuesto de una laptop. Ninguno
+   de los dos es información densa: uno dice dónde estás y el otro si los servicios responden. En
+   un renglón dicen exactamente lo mismo. */
+.lx-home__top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--lx-space-2) var(--lx-space-4);
+}
+
+.lx-home__top h1 {
+  margin: 0;
+}
+
+/* El nombre de la municipalidad y su fecha comparten línea de base. Apilados eran dos renglones;
+   al lado son uno, y la fecha se lee igual porque va a media luz y pegada al título. */
+.lx-home__title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--lx-space-1) var(--lx-space-3);
+  min-width: 0;
+}
+
+/* La fecha y la hora, a media luz, pegadas al título: contexto, no encabezado. */
+.lx-home__when {
+  margin: 0;
+  white-space: nowrap;
+}
+
+/* Debajo de 900px el estado vuelve a su propio renglón: apretarlo contra el título deja los
+   cuatro indicadores partidos en cuatro líneas, que es más alto que tenerlos aparte. */
+.lx-home__status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--lx-space-2) var(--lx-space-4);
+  min-width: 0;
 }
 
 /* Error compacto con reintento (§5 y §12 de la v3): un renglón y un botón, no una tarjeta roja

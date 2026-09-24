@@ -81,3 +81,6 @@ tmp/
 
 # Secretos de desarrollo generados por scripts/dev-setup.sh
 infra/secrets/
+
+# Capturas de los arneses responsive (evidencia local, no versionada)
+frontend/tests/responsive/capturas/

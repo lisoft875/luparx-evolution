@@ -341,6 +341,7 @@ export const esCR = {
   'admin.home.system.failedPayments': '{{count}} pagos rechazados hoy',
   'admin.home.kpi.revenue': 'Recaudación hoy',
   'admin.home.kpi.vsYesterday': '{{delta}} contra ayer',
+  'admin.home.kpi.noComparison': 'Sin comparación disponible',
   'admin.home.kpi.activeSessions': 'Estadías activas',
   'admin.home.kpi.rightNow': 'En este momento',
   'admin.home.kpi.citations': 'Boletas hoy',

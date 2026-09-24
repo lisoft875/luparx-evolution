@@ -325,6 +325,7 @@ export const enUS: Record<TranslationKey, string> = {
   'admin.home.system.failedPayments': '{{count}} payments declined today',
   'admin.home.kpi.revenue': 'Collected today',
   'admin.home.kpi.vsYesterday': '{{delta}} vs yesterday',
+  'admin.home.kpi.noComparison': 'No comparison available',
   'admin.home.kpi.activeSessions': 'Active stays',
   'admin.home.kpi.rightNow': 'Right now',
   'admin.home.kpi.citations': 'Citations today',
