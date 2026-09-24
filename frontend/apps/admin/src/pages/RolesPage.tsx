@@ -88,15 +88,33 @@ export function RolesPage(): React.JSX.Element {
             ...permisos.map((permiso) => ({
               key: permiso,
               header: t(`admin.roles.permission.${permiso}` as TranslationKey),
+              // El nombre crudo del permiso viaja en la celda (data-permission).
+              //
+              // Sin esto, comprobar la matriz desde fuera obliga a contar columnas —las cabeceras
+              // están traducidas— o a pedir /admin/roles por segunda vez. La primera corrida del
+              // arnés intentó lo segundo con un `fetch` dentro de la página y se llevó un 401: la
+              // sesión vive en un token en memoria, no en una cookie, así que una petición hecha
+              // por fuera del cliente no lleva credenciales. Cinco fallos, todos del arnés.
               render: (fila: (typeof roles)[number]) =>
                 fila.permissions.includes(permiso) ? (
                   // Marca Y texto accesible: una tabla de permisos leída sólo por un símbolo verde
                   // no se puede leer en voz alta ni imprimir en blanco y negro.
-                  <span aria-label={t('admin.roles.granted')} title={t('admin.roles.granted')}>
+                  <span
+                    data-permission={permiso}
+                    data-granted="true"
+                    aria-label={t('admin.roles.granted')}
+                    title={t('admin.roles.granted')}
+                  >
                     ●
                   </span>
                 ) : (
-                  <span className="lx-text-meta" aria-label={t('admin.roles.denied')} title={t('admin.roles.denied')}>
+                  <span
+                    className="lx-text-meta"
+                    data-permission={permiso}
+                    data-granted="false"
+                    aria-label={t('admin.roles.denied')}
+                    title={t('admin.roles.denied')}
+                  >
                     ·
                   </span>
                 ),

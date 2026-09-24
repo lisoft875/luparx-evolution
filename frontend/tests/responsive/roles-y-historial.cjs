@@ -125,36 +125,33 @@ function comprobar(ok, mensaje, detalle) {
   const matriz = await page.evaluate(() => {
     const tabla = document.querySelector('.lx-table');
     if (!tabla) return null;
-    // Las cabeceras traen la etiqueta traducida, no el nombre del permiso, así que el índice de
-    // cada columna se toma del orden y se cruza con el <code> del rol, que sí es el nombre crudo.
-    const encabezados = [...tabla.querySelectorAll('thead th')].map((th) => (th.textContent || '').trim());
+    // Se lee `data-permission` de cada celda, que la pantalla emite justamente para esto.
+    //
+    // La primera versión hacía dos cosas y las dos estaban mal: contaba columnas por su posición
+    // —frágil, porque las cabeceras están traducidas y su orden puede cambiar— y pedía
+    // /admin/roles con un `fetch` dentro de la página para saber qué permiso era cada una. Ese
+    // fetch se llevó un 401, porque la sesión de LuParX vive en un token en memoria y no en una
+    // cookie: una petición hecha por fuera del cliente no lleva credenciales. Resultado: cinco
+    // «ese permiso no existe en la respuesta del servidor» contra una matriz que estaba perfecta,
+    // más un 401 que ensució las comprobaciones de consola y de API. Noveno falso positivo de la
+    // sesión, y esta vez el arnés no midió otra pantalla: se rompió a sí mismo.
     const filas = [...tabla.querySelectorAll('tbody tr')].map((tr) => {
-      const celdas = [...tr.querySelectorAll('td')];
-      const codigo = tr.querySelector('code');
-      return {
-        rol: (codigo?.textContent || '').trim(),
-        celdas: celdas.map((td) => (td.textContent || '').trim()),
-      };
+      const concedidos = {};
+      for (const celda of tr.querySelectorAll('[data-permission]')) {
+        concedidos[celda.getAttribute('data-permission')] = celda.getAttribute('data-granted') === 'true';
+      }
+      return { rol: (tr.querySelector('code')?.textContent || '').trim(), concedidos };
     });
-    return { encabezados, filas };
+    return { filas };
   });
 
   if (matriz === null) {
     comprobar(false, 'la tabla de la matriz no se dibujó', `consola: ${consola.slice(0, 2).join(' | ') || 'limpia'}`);
   } else {
     comprobar(matriz.filas.length > 0, `la matriz tiene ${matriz.filas.length} roles`);
-    // Ningún rol de plataforma debe asomar en el portal de una municipalidad.
     const plataforma = matriz.filas.filter((f) => f.rol.startsWith('PLATFORM_'));
     comprobar(plataforma.length === 0, 'no se listan roles de plataforma',
       plataforma.length ? `aparecieron: ${plataforma.map((f) => f.rol).join(', ')}` : undefined);
-
-    // El permiso de cada columna se resuelve por su posición: las dos primeras son Rol y Portal.
-    const permisos = await page.evaluate(() =>
-      fetch('/api/v1/admin/roles', { headers: { accept: 'application/json' } })
-        .then((r) => (r.ok ? r.json() : []))
-        .then((filas) => [...new Set(filas.flatMap((f) => f.permissions))].sort())
-        .catch(() => []),
-    );
 
     for (const criterio of CRITERIOS) {
       const fila = matriz.filas.find((f) => f.rol === criterio.rol);
@@ -162,17 +159,15 @@ function comprobar(ok, mensaje, detalle) {
         comprobar(false, `${criterio.rol}: no aparece en la matriz`);
         continue;
       }
+      // Que la celda EXISTA es parte de la comprobación: un permiso ausente de la matriz no es lo
+      // mismo que uno negado, y confundirlos fue el error de la primera versión.
       for (const permiso of criterio.debe) {
-        const i = permisos.indexOf(permiso);
-        const concedido = i >= 0 && fila.celdas[i + 2] === '●';
-        comprobar(concedido, `${criterio.rol} → ${permiso}: concedido`,
-          i < 0 ? 'ese permiso no existe en la respuesta del servidor' : `la celda dice «${fila.celdas[i + 2]}»`);
+        comprobar(fila.concedidos[permiso] === true, `${criterio.rol} → ${permiso}: concedido`,
+          permiso in fila.concedidos ? 'la matriz lo muestra NEGADO' : 'no hay columna para ese permiso');
       }
       for (const permiso of criterio.noDebe) {
-        const i = permisos.indexOf(permiso);
-        const negado = i < 0 || fila.celdas[i + 2] !== '●';
-        comprobar(negado, `${criterio.rol} → ${permiso}: NO concedido`,
-          `la celda dice «${fila.celdas[i + 2]}», que es un permiso que este rol no debería tener`);
+        comprobar(fila.concedidos[permiso] === false, `${criterio.rol} → ${permiso}: NO concedido`,
+          permiso in fila.concedidos ? 'la matriz lo muestra CONCEDIDO' : 'no hay columna para ese permiso');
       }
     }
   }
@@ -184,16 +179,23 @@ function comprobar(ok, mensaje, detalle) {
   await page.goto(`${BASE}/admin/audit`, { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(2400);
 
-  const selector = page.locator('select').filter({ hasText: 'Todos los módulos' }).first();
+  // `Select` de @luparx/ui NO es un <select> nativo: es un combobox con listbox (WAI-ARIA APG),
+  // porque el menú del sistema operativo es una hoja blanca sobre un portal oscuro. Así que
+  // `page.locator('select')` no encuentra nada y `selectOption` no existe. La primera versión
+  // buscaba lo nativo y reportó «el desplegable de módulo existe: ✗» contra una pantalla que lo
+  // tenía. Se abre y se elige como lo haría una persona.
+  const selector = page.getByRole('combobox', { name: 'Módulo' }).first();
   const haySelector = await selector.isVisible().catch(() => false);
   comprobar(haySelector, 'el desplegable de módulo existe');
 
   if (haySelector) {
+    await selector.click();
+    const opcion = page.getByRole('option', { name: 'Tarifas', exact: true }).first();
     const [peticion] = await Promise.all([
-      page.waitForRequest((r) => r.url().includes('/admin/audit-events?') || r.url().includes('/admin/audit-events&'), {
-        timeout: 8000,
-      }).catch(() => null),
-      selector.selectOption('parking-rate'),
+      page
+        .waitForRequest((r) => r.url().includes('/admin/audit-events?'), { timeout: 8000 })
+        .catch(() => null),
+      opcion.click(),
     ]);
     comprobar(
       peticion !== null && peticion.url().includes('resourceType=parking-rate'),
@@ -201,8 +203,6 @@ function comprobar(ok, mensaje, detalle) {
       peticion === null ? 'no salió ninguna petición' : `salió: ${peticion.url().split('?')[1]}`,
     );
     await page.waitForTimeout(1600);
-    // Y lo que queda en pantalla es de ese módulo. Con cero filas también pasa —una municipalidad
-    // recién sembrada puede no haber tocado una tarifa— y eso no es un fallo del filtro.
     const ajenas = await page.evaluate(() => {
       const filas = [...document.querySelectorAll('.lx-table tbody tr')];
       return filas.filter((tr) => {
@@ -220,27 +220,31 @@ function comprobar(ok, mensaje, detalle) {
   await page.goto(`${BASE}/admin/tariffs`, { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(2600);
 
-  const zonaSelect = page.locator('select').filter({ hasText: 'Elegí una zona' }).first();
+  const zonaSelect = page.getByRole('combobox', { name: 'Zona' }).first();
   const hayZona = await zonaSelect.isVisible().catch(() => false);
   comprobar(hayZona, 'la tarjeta «Quién cambió esta tarifa» está en la pantalla');
 
   if (hayZona) {
-    const opciones = await zonaSelect.locator('option').count();
-    if (opciones > 1) {
-      await zonaSelect.selectOption({ index: 1 });
-      await page.waitForTimeout(2000);
-      const estado = await page.evaluate(() => {
+    await zonaSelect.click();
+    // La primera opción real, saltándose «Elegí una zona».
+    const opciones = page.getByRole('option');
+    const cuantas = await opciones.count();
+    if (cuantas > 1) {
+      await opciones.nth(1).click();
+      await page.waitForTimeout(2200);
+      const estadoTarifa = await page.evaluate(() => {
         const cuerpo = (document.body.textContent || '').replace(/\s+/g, ' ');
         return {
           cargandoParaSiempre: cuerpo.includes('Cargando…') || cuerpo.includes('Cargando...'),
-          // Vacío es un resultado legítimo: una tarifa recién sembrada no se ha modificado.
           vacio: cuerpo.includes('no se ha modificado desde que se creó'),
           tablas: document.querySelectorAll('.lx-table').length,
         };
       });
-      comprobar(!estado.cargandoParaSiempre, 'el historial terminó de cargar');
-      comprobar(estado.tablas >= 2, `se dibujaron ${estado.tablas} tablas (historial + versiones)`);
-      if (estado.vacio) console.log('        (la tarifa elegida no tiene cambios registrados; es un resultado válido)');
+      comprobar(!estadoTarifa.cargandoParaSiempre, 'el historial terminó de cargar');
+      comprobar(estadoTarifa.tablas >= 2, `se dibujaron ${estadoTarifa.tablas} tablas (historial + versiones)`);
+      if (estadoTarifa.vacio) {
+        console.log('        (la tarifa elegida no tiene cambios registrados; es un resultado válido)');
+      }
     } else {
       console.log('        (ninguna zona tiene tarifa base; no hay historial que pedir)');
     }

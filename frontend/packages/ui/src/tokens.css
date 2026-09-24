@@ -3822,7 +3822,17 @@ button.lx-list-row {
   grid-template-columns: minmax(0, 1fr) minmax(48px, 1.1fr) auto;
   align-items: center;
   gap: 0 var(--lx-space-3);
-  padding: 4px 0;
+  padding: 3px 0;
+}
+
+/* El renglon de una zona es una linea de texto, y `line-height: normal` le regala unos cinco
+   pixeles que multiplicados por seis zonas son treinta. Medido el 24-09-2026: la fila pasa de
+   31px a ~23 y la tarjeta de 268px a ~192, con lo que deja de ser ella la que decide el alto de
+   la fila del grafico — que es exactamente lo que la v4 §2 pide con «misma altura visual que el
+   grafico». Ninguna zona se oculta y ninguna cifra se achica. */
+.lx-zone-row__name,
+.lx-zone-row__value {
+  line-height: 1.25;
 }
 
 .lx-zone-row__name { grid-column: 1; }
