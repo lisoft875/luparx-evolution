@@ -25,6 +25,7 @@ const MODULOS = [
   'settlement',
 ] as const;
 import { AdminShell } from '../components/AdminShell';
+import { startOfDay, startOfNextDay } from '../lib/dateRange';
 
 const PAGE_SIZE = 20;
 
@@ -76,8 +77,8 @@ export function AuditPage(): React.JSX.Element {
         // A date is what the person types; the API takes instants, and its window is half-open
         // (>= from, < to). So the closing day is included by asking for the start of the next one:
         // a "hasta el 9" that excluded everything that happened on the 9th would be a quiet lie.
-        from: from ? startOfDay(from) : undefined,
-        to: to ? startOfNextDay(to) : undefined,
+        from: startOfDay(from),
+        to: startOfNextDay(to),
         page,
         size: PAGE_SIZE,
       }),
@@ -437,24 +438,6 @@ function OriginProbe({ onMatch }: { onMatch: (probe: AuditOriginProbe) => void }
       ) : null}
     </Card>
   );
-}
-
-/**
- * Midnight of a typed date, in the reader's own zone.
- *
- * <p>`new Date('2026-09-07')` is parsed as UTC midnight and `new Date('2026-09-07T00:00:00')` as
- * local midnight. The difference is the six hours that decide whether the first entries of the day
- * appear, so the local form is written out rather than left to look like an accident.</p>
- */
-function startOfDay(date: string): string {
-  return new Date(`${date}T00:00:00`).toISOString();
-}
-
-/** The instant the typed day ends, which is the start of the next one. */
-function startOfNextDay(date: string): string {
-  const next = new Date(`${date}T00:00:00`);
-  next.setDate(next.getDate() + 1);
-  return next.toISOString();
 }
 
 /**

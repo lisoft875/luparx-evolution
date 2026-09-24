@@ -10,6 +10,7 @@
   "scripts": {
     "build": "npm run build --workspace=@luparx/citizen --workspace=@luparx/inspector --workspace=@luparx/admin --workspace=@luparx/platform",
     "typecheck": "npm run typecheck --workspaces --if-present",
+    "checks": "for f in $(find apps packages -path '*/__checks__/*.check.mjs' -not -path '*/node_modules/*' | sort); do echo \"\n### $f\"; node \"$f\" || exit 1; done",
     "lint": "eslint . --ext .ts,.tsx",
     "dev:citizen": "npm run dev --workspace=@luparx/citizen",
     "dev:inspector": "npm run dev --workspace=@luparx/inspector",

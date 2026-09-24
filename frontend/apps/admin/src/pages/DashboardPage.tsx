@@ -13,6 +13,7 @@ import {
 } from '@luparx/i18n';
 import { Alert, Button, Card, FormField, Input, SectionHeader, StatCard, Table } from '@luparx/ui';
 import { AdminShell } from '../components/AdminShell';
+import { startOfDay, startOfNextDay } from '../lib/dateRange';
 
 /**
  * El panel de la municipalidad (CONTRACT.md v0.36; reordenado el 23-09-2026).
@@ -87,8 +88,8 @@ export function DashboardPage(): React.JSX.Element {
     queryKey: ['admin', 'dashboard', { from, to }],
     queryFn: () =>
       apiClient.adminDashboard.get({
-        from: from ? startOfDay(from) : undefined,
-        to: to ? startOfNextDay(to) : undefined,
+        from: startOfDay(from),
+        to: startOfNextDay(to),
       }),
     // Las cifras en vivo se ponen viejas mientras alguien las lee. Treinta segundos es seguido como
     // para que la ocupación sea de ahora y espaciado como para que una municipalidad con conexión
@@ -772,13 +773,3 @@ function Figure({
   );
 }
 
-/** Local midnight, written out for the same reason as on the audit screen (v0.33). */
-function startOfDay(date: string): string {
-  return new Date(`${date}T00:00:00`).toISOString();
-}
-
-function startOfNextDay(date: string): string {
-  const next = new Date(`${date}T00:00:00`);
-  next.setDate(next.getDate() + 1);
-  return next.toISOString();
-}
