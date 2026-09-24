@@ -42,6 +42,16 @@ import { AdminShell } from '../components/AdminShell';
  * cierto y sigue importando— vive en los comentarios de este archivo y del servicio que lo calcula,
  * que es donde lo necesita quien lo va a tocar. Un panel municipal no es el lugar para argumentar.</p>
  */
+/**
+ * Los atajos de período que ofrece el Panel.
+ *
+ * <p>Los siete de la especificación del 24-09-2026. «Personalizado» no es un botón: son los dos
+ * campos de fecha que ya existían, y se marca solo cuando alguien los usa y pulsa «Aplicar».</p>
+ */
+const ATAJOS = ['hoy', 'ayer', 'ultimos7', 'ultimos30', 'esteMes', 'mesAnterior'] as const;
+
+type Atajo = (typeof ATAJOS)[number] | 'personalizado';
+
 export function DashboardPage(): React.JSX.Element {
   const { t, locale } = useTranslation();
   const { apiClient } = useAuth();
@@ -60,6 +70,18 @@ export function DashboardPage(): React.JSX.Element {
   const [to, setTo] = useState('');
   /** Los estados de estadía más allá del principal: plegados salvo que alguien los pida (§6). */
   const [verTodosLosEstados, setVerTodosLosEstados] = useState(false);
+  /**
+   * Cuál de los atajos está aplicado, o 'personalizado' cuando el rango se escribió a mano.
+   *
+   * <p>La especificación del selector (24-09-2026) pide «mostrar siempre el rango activo de forma
+   * clara». El renglón «Del … al …» ya decía las dos fechas; lo que faltaba era decir QUÉ se
+   * eligió: «01/09 al 24/09» no distingue «Este mes» de un rango escrito que casualmente coincide,
+   * y esa diferencia importa el día siguiente, cuando «Este mes» ya no es el mismo rango.</p>
+   *
+   * <p>Arranca en `null` —ningún atajo— porque el Panel carga con la ventana por omisión del
+   * servidor y el criterio 1 pide que siga cargando igual que antes.</p>
+   */
+  const [periodoActivo, setPeriodoActivo] = useState<Atajo | null>(null);
 
   const query = useQuery({
     queryKey: ['admin', 'dashboard', { from, to }],
@@ -93,6 +115,7 @@ export function DashboardPage(): React.JSX.Element {
   function aplicar(): void {
     setFrom(desdeBorrador);
     setTo(hastaBorrador);
+    setPeriodoActivo('personalizado');
   }
 
   /**
@@ -101,17 +124,53 @@ export function DashboardPage(): React.JSX.Element {
    * <p>Se aplican de una vez, sin pasar por «Aplicar»: un atajo ES la decisión tomada, y pedir un
    * segundo clic para confirmar lo que ya se eligió con uno sólo agrega un paso.</p>
    */
-  function preset(dias: number | 'mes'): void {
+  function preset(cual: Atajo): void {
     const hoy = new Date();
-    const fin = iso(hoy);
-    const inicio =
-      dias === 'mes'
-        ? iso(new Date(hoy.getFullYear(), hoy.getMonth(), 1))
-        : iso(new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() - (dias - 1)));
+    const dia = (desplazamiento: number): Date =>
+      new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() + desplazamiento);
+
+    let inicio: string;
+    let fin: string;
+    switch (cual) {
+      case 'hoy':
+        inicio = iso(hoy);
+        fin = iso(hoy);
+        break;
+      case 'ayer':
+        // Un solo día, ayer. No «los últimos dos»: quien pregunta por ayer quiere ayer, y mezclarlo
+        // con hoy —que va a medias— hace que el número cambie cada vez que se mira.
+        inicio = iso(dia(-1));
+        fin = iso(dia(-1));
+        break;
+      case 'ultimos7':
+        inicio = iso(dia(-6));
+        fin = iso(hoy);
+        break;
+      case 'ultimos30':
+        inicio = iso(dia(-29));
+        fin = iso(hoy);
+        break;
+      case 'esteMes':
+        inicio = iso(new Date(hoy.getFullYear(), hoy.getMonth(), 1));
+        fin = iso(hoy);
+        break;
+      case 'mesAnterior': {
+        // El día 0 del mes actual ES el último del anterior, así que el fin de febrero sale bien
+        // sin tabla de días por mes y sin acordarse de los años bisiestos.
+        const primeroDelAnterior = new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1);
+        const ultimoDelAnterior = new Date(hoy.getFullYear(), hoy.getMonth(), 0);
+        inicio = iso(primeroDelAnterior);
+        fin = iso(ultimoDelAnterior);
+        break;
+      }
+      default:
+        return;
+    }
     setDesdeBorrador(inicio);
     setHastaBorrador(fin);
     setFrom(inicio);
     setTo(fin);
+    setPeriodoActivo(cual);
   }
 
   // --- KPIs (§3) ---------------------------------------------------------------------------------
@@ -184,23 +243,29 @@ export function DashboardPage(): React.JSX.Element {
           <Button type="button" onClick={aplicar}>
             {t('admin.dashboard.filters.apply')}
           </Button>
-          <div className="lx-period-filter__presets">
-            <Button type="button" variant="secondary" onClick={() => preset(1)}>
-              {t('admin.dashboard.filters.preset.today')}
-            </Button>
-            <Button type="button" variant="secondary" onClick={() => preset(7)}>
-              {t('admin.dashboard.filters.preset.week')}
-            </Button>
-            <Button type="button" variant="secondary" onClick={() => preset(30)}>
-              {t('admin.dashboard.filters.preset.month')}
-            </Button>
-            <Button type="button" variant="secondary" onClick={() => preset('mes')}>
-              {t('admin.dashboard.filters.preset.thisMonth')}
-            </Button>
+          <div className="lx-period-filter__presets" role="group" aria-label={t('admin.dashboard.filters.presets')}>
+            {ATAJOS.map((cual) => (
+              <Button
+                key={cual}
+                type="button"
+                // El atajo aplicado se distingue del resto. Sin esto, seis botones iguales no dicen
+                // cuál produjo el rango que se está viendo, y «Del 1 al 24» no lo aclara: puede ser
+                // «Este mes» o un rango escrito que hoy coincide y mañana no.
+                variant={periodoActivo === cual ? 'primary' : 'secondary'}
+                aria-pressed={periodoActivo === cual}
+                onClick={() => preset(cual)}
+              >
+                {t(`admin.dashboard.filters.preset.${cual}` as TranslationKey)}
+              </Button>
+            ))}
           </div>
         </div>
         {data ? (
-          <p className="lx-text-meta" style={{ margin: 'var(--lx-space-2) 0 0' }}>
+          <p className="lx-text-meta" style={{ margin: 'var(--lx-space-2) 0 0' }} data-testid="rango-activo">
+            {periodoActivo ? (
+              <strong>{t(`admin.dashboard.filters.preset.${periodoActivo}` as TranslationKey)}</strong>
+            ) : null}
+            {periodoActivo ? ' · ' : null}
             {t('admin.dashboard.window', {
               from: formatDateTime(data.from, locale),
               to: formatDateTime(data.to, locale),
@@ -217,7 +282,9 @@ export function DashboardPage(): React.JSX.Element {
           {/* --- 2. los cuatro KPIs ------------------------------------------------------------ */}
           <div className="lx-dashboard-kpis">
             <StatCard
-              label={t('admin.dashboard.kpi.netRevenue')}
+              // «del período» y no «neta» a secas: con un selector arriba, un rótulo que no dice a
+              // qué rango pertenece el número invita a leerlo como si fuera de hoy.
+              label={t('admin.dashboard.kpi.netRevenueInPeriod')}
               value={
                 <button type="button" className="lx-linklike lx-stat-link" onClick={() => open('/billing')}>
                   {formatCurrencyMinor(data.revenue.capturedNetMinor, currency, locale)}
@@ -226,7 +293,7 @@ export function DashboardPage(): React.JSX.Element {
               hint={t('admin.billing.totals.netHint')}
             />
             <StatCard
-              label={t('admin.dashboard.kpi.paidStays')}
+              label={t('admin.dashboard.kpi.paidStaysInPeriod')}
               value={pagadas ? formatNumber(pagadas.count, locale) : sinDatos}
               hint={
                 pagadas ? formatCurrencyMinor(pagadas.totalMinor, currency, locale) : t('admin.dashboard.kpi.inPeriod')
@@ -245,7 +312,7 @@ export function DashboardPage(): React.JSX.Element {
               }
             />
             <StatCard
-              label={t('admin.dashboard.kpi.citations')}
+              label={t('admin.dashboard.kpi.citationsInPeriod')}
               value={
                 <button
                   type="button"
