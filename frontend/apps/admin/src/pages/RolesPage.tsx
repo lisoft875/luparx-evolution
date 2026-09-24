@@ -55,7 +55,12 @@ export function RolesPage(): React.JSX.Element {
 
       <Card>
         <SectionHeader title={t('admin.roles.matrix.title')} description={t('admin.roles.matrix.description')} />
+        {/* Dieciséis columnas de permiso no entran en ninguna pantalla, y no tienen por qué: el
+            envoltorio ya desplaza en horizontal. Lo que no puede irse es el NOMBRE DEL ROL —una
+            fila de puntos sin saber de quién es no dice nada— así que la primera columna queda
+            fija. El componente ya lo soporta; esto es usarlo, no inventarlo. */}
         <Table
+          stickyFirstColumn
           loading={query.isLoading}
           loadingLabel={t('common.loading')}
           emptyLabel={t('admin.roles.empty')}
