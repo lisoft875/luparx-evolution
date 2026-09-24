@@ -425,6 +425,15 @@ export function HomePage(): React.JSX.Element {
                 <SectionHeader
                   title={t('admin.home.activity.title')}
                   description={t('admin.home.activity.description')}
+                  // El enlace al registro completo va en el renglón del título y no debajo de la
+                  // lista: ahí cuesta 0px de alto en vez de 30, y queda al lado de lo que nombra.
+                  aside={
+                    eventos.length > 0 ? (
+                      <Link to="/audit" className="lx-linklike">
+                        {t('admin.home.activity.seeAll')}
+                      </Link>
+                    ) : undefined
+                  }
                 />
                 {actividad.isLoading ? (
                   <>
@@ -462,11 +471,6 @@ export function HomePage(): React.JSX.Element {
                         );
                       })}
                     </div>
-                    <p style={{ margin: 'var(--lx-space-3) 0 0' }}>
-                      <Link to="/audit" className="lx-linklike">
-                        {t('admin.home.activity.seeAll')}
-                      </Link>
-                    </p>
                   </>
                 )}
               </Card>

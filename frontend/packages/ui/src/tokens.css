@@ -2027,6 +2027,12 @@ button.lx-list-row {
 
 /* ---- Shared link-style action button (SectionHeader, "Ver mapa", etc.) -- */
 
+/* El lugar de la derecha del título de una sección, cuando lo que va ahí no es un botón. */
+.lx-section-header__aside {
+  flex-shrink: 0;
+  font-size: var(--lx-text-meta-size);
+}
+
 .lx-link-button {
   background: none;
   border: none;
@@ -3803,13 +3809,38 @@ button.lx-list-row {
 }
 
 /* --- Ocupación por zona, compacta -------------------------------------------------------------- */
+/* Nombre, barra y porcentaje en UN renglón.
+   Apilados —nombre arriba, barra abajo— cada zona costaba 36px y seis zonas dejaban la tarjeta en
+   298px contra los 219px del gráfico, que es justo lo que la v4 §2 pide igualar. En una línea la
+   fila mide ~28px y la tarjeta cae a ~222px sin perder una sola zona ni una sola cifra. Además es
+   la forma que tiene la referencia visual del PDF, que las muestra en línea.
+   El orden visual (nombre · barra · porcentaje) se arma con columnas explícitas y no reordenando
+   el marcado: en el DOM el porcentaje sigue pegado al nombre, que es como conviene leerlo en voz
+   alta; la barra es la que repite el dato en forma de largo. */
 .lx-zone-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  /* v4 §2: «reducir gaps entre zonas» para que la tarjeta termine a la misma altura que el
-     gráfico. El renglón y la barra no cambian de tamaño; lo que se cierra es el aire entre filas. */
-  gap: 3px var(--lx-space-2);
-  padding: 5px 0;
+  grid-template-columns: minmax(0, 1fr) minmax(48px, 1.1fr) auto;
+  align-items: center;
+  gap: 0 var(--lx-space-3);
+  padding: 4px 0;
+}
+
+.lx-zone-row__name { grid-column: 1; }
+.lx-zone-row__track { grid-column: 2; }
+.lx-zone-row__value { grid-column: 3; text-align: right; }
+
+/* Debajo de 560px el renglón no da para las tres columnas: el nombre queda en dos letras y una
+   elipsis. Ahí sí vuelven a apilarse, que es lo que la §5 llama «reorganizar la grilla
+   progresivamente» en vez de comprimir hasta lo ilegible. */
+@media (max-width: 560px) {
+  .lx-zone-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 3px var(--lx-space-2);
+    padding: 5px 0;
+  }
+  .lx-zone-row__name { grid-column: 1; }
+  .lx-zone-row__value { grid-column: 2; }
+  .lx-zone-row__track { grid-column: 1 / -1; }
 }
 
 .lx-zone-row__name {
@@ -3827,7 +3858,6 @@ button.lx-list-row {
 }
 
 .lx-zone-row__track {
-  grid-column: 1 / -1;
   height: 4px;
   border-radius: 2px;
   background: var(--lx-surface-2);
@@ -3930,10 +3960,13 @@ button.lx-list-row {
   min-width: 0;
 }
 
-/* La fecha y la hora, a media luz, pegadas al título: contexto, no encabezado. */
+/* La fecha y la hora, a media luz, pegadas al título: contexto, no encabezado.
+   SIN `white-space: nowrap`: «Resumen operativo · 24 de septiembre de 2026 · 10:15» no cabe en
+   320px y, al no poder partirse, empujaba la página 29px fuera de la pantalla. Lo detectó
+   mobile-overflow.cjs en la primera corrida después del cambio — una regresión mía, de esta misma
+   tanda. */
 .lx-home__when {
   margin: 0;
-  white-space: nowrap;
 }
 
 /* Debajo de 900px el estado vuelve a su propio renglón: apretarlo contra el título deja los
