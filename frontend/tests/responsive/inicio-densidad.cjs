@@ -151,6 +151,16 @@ async function medir(page) {
         'tarjeta de zonas': alto('.lx-home-grid:not(.lx-home-grid--operation) > .lx-card:nth-child(2)'),
         'tarjeta de actividad': alto('.lx-home-grid--operation > .lx-card'),
         'tarjeta de accesos': alto('.lx-home-grid--operation > .lx-card:nth-child(2)'),
+        // El encabezado de cada tarjeta, medido aparte.
+        //
+        // Quedan 43px por recortar y las dos veces que los busqué por cálculo me equivoqué:
+        // predije que las zonas caerían a ~192px y quedaron en 241. La diferencia está en el
+        // encabezado de la tarjeta, que en `.lx-card--dense` debería poner el título y su
+        // explicación en un renglón y no se sabe si lo está haciendo. Medirlo cuesta dos líneas;
+        // adivinarlo lleva costados dos despliegues.
+        'encab. del gráfico': alto('.lx-home-grid:not(.lx-home-grid--operation) > .lx-card .lx-section-header'),
+        'encab. de zonas': alto('.lx-home-grid:not(.lx-home-grid--operation) > .lx-card:nth-child(2) .lx-section-header'),
+        'encab. de actividad': alto('.lx-home-grid--operation > .lx-card .lx-section-header'),
       },
       cabeceraFija,
       relleno,
