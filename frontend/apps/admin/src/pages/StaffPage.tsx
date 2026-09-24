@@ -1,10 +1,11 @@
 import * as React from 'react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { RequirePermission, useAuth } from '@luparx/auth';
 import { useTranslation, formatDateTime, type TranslationKey } from '@luparx/i18n';
 import {
+  ApiError,
   TENANT_GRANTABLE_ROLES,
   type MembershipStatus,
   type Role,
@@ -51,6 +52,9 @@ export function StaffPage(): React.JSX.Element {
   const [nextRole, setNextRole] = useState<Role | ''>('');
   const [suspending, setSuspending] = useState<StaffMember | null>(null);
   const [suspendReason, setSuspendReason] = useState('');
+  // Revocar no se levanta y hasta hoy se disparaba con un solo clic, sin preguntar, mientras que
+  // Desactivar —que sí se levanta— sí preguntaba. La confirmación estaba en el lado equivocado.
+  const [revoking, setRevoking] = useState<StaffMember | null>(null);
   const [zoning, setZoning] = useState<StaffMember | null>(null);
   const [zoneSelection, setZoneSelection] = useState<string[]>([]);
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -83,9 +87,18 @@ export function StaffPage(): React.JSX.Element {
       void queryClient.invalidateQueries({ queryKey: ['admin', 'staff'] });
     };
   }
-  function onFailure(): void {
+  /**
+   * Un fallo que la persona pueda leer.
+   *
+   * <p>«No se pudo completar la operación» para todo era lo que había, y para el caso que de verdad
+   * ocurrió —intentar terminar el propio puesto— es una respuesta inútil: no dice qué pasó ni qué
+   * hacer. El servidor manda un código estable; se traduce el que tiene traducción y se cae al
+   * genérico para el resto.</p>
+   */
+  function onFailure(causa: unknown): void {
     setFeedback(null);
-    setError(t('admin.staff.error'));
+    const codigo = causa instanceof ApiError ? causa.code : null;
+    setError(codigo === 'MEMBERSHIP_SELF_MODIFICATION_DENIED' ? t('admin.staff.error.self') : t('admin.staff.error'));
   }
 
   const suspendMutation = useMutation({
@@ -105,8 +118,14 @@ export function StaffPage(): React.JSX.Element {
   });
   const revokeMutation = useMutation({
     mutationFn: (member: StaffMember) => apiClient.adminMemberships.remove(member.membershipId),
-    onSuccess: afterChange('admin.staff.revoked'),
-    onError: onFailure,
+    onSuccess: () => {
+      setRevoking(null);
+      afterChange('admin.staff.revoked')();
+    },
+    onError: (causa) => {
+      setRevoking(null);
+      onFailure(causa);
+    },
   });
   const resetMutation = useMutation({
     mutationFn: (member: StaffMember) => apiClient.adminUsers.forcePasswordReset(member.userId),
@@ -150,6 +169,51 @@ export function StaffPage(): React.JSX.Element {
     onError: onFailure,
   });
 
+  /**
+   * Si ESTA fila es la que está esperando respuesta.
+   *
+   * <p>`isPending` a secas es de la mutación, no de la fila: con él, pulsar «Revocar» en una fila
+   * ponía a girar el botón de las veinte. `variables` es el argumento con el que se llamó, así que
+   * comparar la membresía es la pregunta correcta.</p>
+   *
+   * <p>Que un botón diga que está trabajando es la mitad del §2.1 del informe: sin eso, la única
+   * diferencia entre «no pasó nada» y «está pasando» es la paciencia de quien mira.</p>
+   */
+  function enCurso(mutacion: { isPending: boolean; variables?: StaffMember }, member: StaffMember): boolean {
+    return mutacion.isPending && mutacion.variables?.membershipId === member.membershipId;
+  }
+
+  /** Mientras una acción de esta fila está en vuelo, las demás de la misma fila no se pueden pulsar. */
+  function ocupada(member: StaffMember): boolean {
+    return (
+      enCurso(revokeMutation, member)
+      || enCurso(suspendMutation, member)
+      || enCurso(reactivateMutation, member)
+      || enCurso(resetMutation, member)
+    );
+  }
+
+  /**
+   * Los roles a los que ESTE puesto puede cambiar.
+   *
+   * <p>Un rol pertenece a una app y sólo a una, así que la lista se limita a la del puesto — y se
+   * excluye el que ya tiene, porque «cambiar a lo mismo» no es una opción, es ruido que además
+   * dejaba el botón de guardar apagado sin explicar por qué.</p>
+   *
+   * <p>La comparación normaliza mayúsculas por lo mismo que lo hace `belongsToPortal` en la sesión:
+   * es la última línea de defensa si algún día otro camino vuelve a mandar el portal en el formato
+   * del enum. El arreglo de verdad está en el servidor; esto sólo hace que, si vuelve a pasar, no
+   * sea esta pantalla la que mienta.</p>
+   */
+  const rolesDisponibles = useMemo(() => {
+    if (changingRole === null) return [];
+    const appDelPuesto = String(changingRole.portal).toLowerCase();
+    return TENANT_GRANTABLE_ROLES.filter((role) => {
+      const appDelRol = role === 'INSPECTOR' || role === 'INSPECTOR_LEAD' ? 'inspector' : 'admin';
+      return appDelRol === appDelPuesto && role !== changingRole.role;
+    });
+  }, [changingRole]);
+
   const data = query.data;
 
   return (
@@ -170,6 +234,11 @@ export function StaffPage(): React.JSX.Element {
 
       {feedback ? <Alert tone="success">{feedback}</Alert> : null}
       {error ? <Alert tone="danger">{error}</Alert> : null}
+      {/* Una consulta que falla al refrescarse deja en pantalla los datos anteriores: es lo correcto
+          —mejor una lista de hace diez segundos que una pantalla en blanco— pero callado es una
+          trampa. Fue exactamente lo que ocurrió el 24-09-2026: el refresco respondió 403 y la fila
+          siguió diciendo «Activo», así que el clic pareció no hacer nada. */}
+      {query.isError ? <Alert tone="danger">{t('admin.staff.error.stale')}</Alert> : null}
 
       <div style={{ maxWidth: 260, margin: '12px 0' }}>
         <Select
@@ -291,22 +360,45 @@ export function StaffPage(): React.JSX.Element {
                         </Button>
                       ) : null}
                       {member.status === 'SUSPENDED' ? (
-                        <Button type="button" variant="secondary" onClick={() => reactivateMutation.mutate(member)}>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          loading={enCurso(reactivateMutation, member)}
+                          disabled={ocupada(member)}
+                          onClick={() => reactivateMutation.mutate(member)}
+                        >
                           {t('admin.staff.action.reactivate')}
                         </Button>
                       ) : member.status === 'ACTIVE' ? (
-                        <Button type="button" variant="secondary" onClick={() => setSuspending(member)}>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          disabled={ocupada(member)}
+                          onClick={() => setSuspending(member)}
+                        >
                           {t('admin.staff.action.suspend')}
                         </Button>
                       ) : null}
                       {member.status !== 'REVOKED' ? (
-                        <Button type="button" variant="danger" onClick={() => revokeMutation.mutate(member)}>
+                        <Button
+                          type="button"
+                          variant="danger"
+                          loading={enCurso(revokeMutation, member)}
+                          disabled={ocupada(member)}
+                          onClick={() => setRevoking(member)}
+                        >
                           {t('admin.staff.action.revoke')}
                         </Button>
                       ) : null}
                     </RequirePermission>
                     <RequirePermission permission="USER_WRITE">
-                      <Button type="button" variant="ghost" onClick={() => resetMutation.mutate(member)}>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        loading={enCurso(resetMutation, member)}
+                        disabled={ocupada(member)}
+                        onClick={() => resetMutation.mutate(member)}
+                      >
                         {t('admin.staff.action.resetAccess')}
                       </Button>
                     </RequirePermission>
@@ -363,6 +455,39 @@ export function StaffPage(): React.JSX.Element {
               onClick={() => suspending && suspendMutation.mutate(suspending)}
             >
               {t('admin.staff.action.suspend')}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Revocar dice lo que lo separa de desactivar, que es lo único que alguien necesita saber
+          antes de pulsarlo: esto no se levanta. Y dice lo que NO hace, porque «revocar» suena a
+          borrar y no borra una sola boleta. */}
+      <Modal
+        open={revoking !== null}
+        onClose={() => setRevoking(null)}
+        title={t('admin.staff.revoke.title')}
+        closeLabel={t('common.close')}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--lx-space-4)' }}>
+          <p className="lx-text-body" style={{ margin: 0 }}>
+            {t('admin.staff.revoke.body', { name: revoking?.fullName ?? revoking?.email ?? '' })}
+          </p>
+          <p className="lx-text-meta" style={{ margin: 0 }}>
+            {t('admin.staff.revoke.keepsHistory')}
+          </p>
+          <div className="lx-dialog-actions">
+            <Button type="button" variant="secondary" fullWidth onClick={() => setRevoking(null)}>
+              {t('common.cancel')}
+            </Button>
+            <Button
+              type="button"
+              variant="danger"
+              fullWidth
+              loading={revokeMutation.isPending}
+              onClick={() => revoking && revokeMutation.mutate(revoking)}
+            >
+              {t('admin.staff.revoke.confirm')}
             </Button>
           </div>
         </div>
@@ -450,22 +575,28 @@ export function StaffPage(): React.JSX.Element {
               puesto. Decirlo aquí evita que alguien busque «fiscalizador» en un puesto de admin y
               crea que se perdió la opción. */}
           <Alert tone="info">{t('admin.staff.changeRole.sameApp')}</Alert>
-          <Select
-            aria-label={t('admin.users.create.roleLabel')}
-            value={nextRole}
-            onChange={(value) => setNextRole(value as Role)}
-            placeholder={t('common.select.placeholder')}
-            options={TENANT_GRANTABLE_ROLES.filter(
-              (role) =>
-                changingRole !== null
-                && (role === 'INSPECTOR' || role === 'INSPECTOR_LEAD' ? 'inspector' : 'admin')
-                  === changingRole.portal,
-            ).map((role) => ({
-              value: role,
-              label: t(`role.${role}` as TranslationKey),
-              detail: t(`role.${role}.detail` as TranslationKey),
-            }))}
-          />
+          {/* Vacío de verdad se dice; vacío por accidente se arregla.
+              En las pruebas del 24-09-2026 esta lista salía vacía y parecía un puesto sin
+              alternativas. No lo era: la comparación era contra el portal, el servidor lo mandaba en
+              mayúsculas («INSPECTOR») y el cliente lo escribe en minúsculas, así que no coincidía
+              nunca. Eso ya está arreglado en el serializador (JacksonConfiguration). Lo que queda
+              aquí es el caso legítimo —un puesto cuya app tiene un solo rol posible— dicho en
+              palabras, con el botón apagado, en vez de un desplegable mudo. */}
+          {rolesDisponibles.length === 0 ? (
+            <Alert tone="warning">{t('admin.staff.changeRole.noAlternatives')}</Alert>
+          ) : (
+            <Select
+              aria-label={t('admin.users.create.roleLabel')}
+              value={nextRole}
+              onChange={(value) => setNextRole(value as Role)}
+              placeholder={t('common.select.placeholder')}
+              options={rolesDisponibles.map((role) => ({
+                value: role,
+                label: t(`role.${role}` as TranslationKey),
+                detail: t(`role.${role}.detail` as TranslationKey),
+              }))}
+            />
+          )}
           <div className="lx-dialog-actions">
             <Button type="button" variant="secondary" fullWidth onClick={() => setChangingRole(null)}>
               {t('common.cancel')}
@@ -474,7 +605,7 @@ export function StaffPage(): React.JSX.Element {
               type="button"
               fullWidth
               loading={changeRoleMutation.isPending}
-              disabled={nextRole === '' || nextRole === changingRole?.role}
+              disabled={rolesDisponibles.length === 0 || nextRole === '' || nextRole === changingRole?.role}
               onClick={() =>
                 changingRole && nextRole !== '' && changeRoleMutation.mutate({ member: changingRole, role: nextRole })
               }

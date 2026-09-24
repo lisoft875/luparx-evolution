@@ -26,6 +26,7 @@ const MODULOS = [
 ] as const;
 import { AdminShell } from '../components/AdminShell';
 import { startOfDay, startOfNextDay } from '../lib/dateRange';
+import { AUDIT_ACTIONS, auditActionLabel } from '../lib/auditActions';
 
 const PAGE_SIZE = 20;
 
@@ -141,20 +142,26 @@ export function AuditPage(): React.JSX.Element {
       </Card>
 
       {/* --- filters ----------------------------------------------------------------------------- */}
-      <div
-        style={{
-          display: 'flex',
-          gap: 12,
-          flexWrap: 'wrap',
-          alignItems: 'flex-end',
-          margin: '16px 0',
-        }}
-      >
-        <Input
-          placeholder={t('admin.audit.filter.action')}
-          value={action}
-          onChange={(e) => refilter(() => setAction(e.target.value))}
+      {/* Anchos declarados y no heredados del contenido (24-09-2026).
+          Antes era un flex sin medidas, así que cada control se encogía hasta caber en su valor:
+          elegir «Zonas» dejaba el desplegable de módulos en noventa píxeles y, con él, su lista.
+          `minmax(Npx, 1fr)` da una medida estable que no depende de lo que esté seleccionado, y en
+          un teléfono cada control ocupa la fila entera en vez de partirse en cuatro trozos. */}
+      <div className="lx-filter-row">
+        <Select
           aria-label={t('admin.audit.filter.action')}
+          value={action}
+          onChange={(value) => refilter(() => setAction(value))}
+          options={[
+            { value: '', label: t('admin.audit.filter.action.all') },
+            // El código interno va de detalle, no de etiqueta: quien lo conoce lo sigue viendo y
+            // quien no, ya no lo necesita para encontrar nada.
+            ...AUDIT_ACTIONS.map((codigo) => ({
+              value: codigo,
+              label: auditActionLabel(t, codigo),
+              detail: codigo,
+            })),
+          ]}
         />
         <Select
           aria-label={t('admin.audit.filter.module')}
@@ -227,13 +234,25 @@ export function AuditPage(): React.JSX.Element {
               />
             ),
           },
-          { key: 'action', header: t('admin.audit.column.action'), render: (row) => row.action },
+          {
+            key: 'action',
+            header: t('admin.audit.column.action'),
+            // Lo que pasó, y debajo el código con el que soporte lo va a buscar. En ese orden: la
+            // pantalla la lee una persona que administra una municipalidad, no quien escribió el
+            // enum.
+            render: (row) => (
+              <>
+                <div>{auditActionLabel(t, row.action)}</div>
+                <div className="lx-text-meta lx-code">{row.action}</div>
+              </>
+            ),
+          },
           {
             key: 'resource',
             header: t('admin.audit.column.resource'),
             // Not every act is about one identified thing — checking an address is about the trail
             // itself. "audit/" with nothing after the slash reads as a lost identifier.
-            render: (row) => (row.resourceId ? `${row.resourceType}/${row.resourceId}` : row.resourceType),
+            render: (row) => <ResourceCell row={row} label={moduleLabel(t, row.resourceType)} />,
           },
           {
             key: 'changes',
@@ -246,7 +265,13 @@ export function AuditPage(): React.JSX.Element {
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                   {(row.changes ?? []).map((change) => (
-                    <ChangeLine key={change.field} change={change} maskedLabel={t('admin.audit.masked')} />
+                    <ChangeLine
+                      key={change.field}
+                      change={change}
+                      maskedLabel={t('admin.audit.masked')}
+                      fieldLabel={fieldLabelOf(t, change.field)}
+                      allZonesLabel={t('admin.staff.zones.all')}
+                    />
                   ))}
                 </div>
               ),
@@ -441,16 +466,81 @@ function OriginProbe({ onMatch }: { onMatch: (probe: AuditOriginProbe) => void }
 }
 
 /**
+ * El nombre humano de un tipo de recurso, o el tipo crudo si no hay traducción.
+ *
+ * <p>La lista `MODULOS` de arriba es la del desplegable —lo que se puede filtrar—, y la bitácora
+ * registra más tipos que ésos. Un recurso sin etiqueta se muestra como viene: es peor inventarle un
+ * nombre que mostrar el técnico.</p>
+ */
+function moduleLabel(t: (key: TranslationKey) => string, resourceType: string): string {
+  const clave = `admin.audit.module.${resourceType}` as TranslationKey;
+  const texto = t(clave);
+  return texto === clave ? resourceType : texto;
+}
+
+/**
+ * El nombre humano de un campo que cambió, o el campo crudo.
+ *
+ * <p>Mismo criterio que con las acciones y los módulos: traducción si la hay, valor técnico si no.
+ * Nunca un espacio en blanco, que es lo único que no se puede interpretar.</p>
+ */
+function fieldLabelOf(t: (key: TranslationKey) => string, field: string): string {
+  const clave = `admin.audit.field.${field}` as TranslationKey;
+  const texto = t(clave);
+  return texto === clave ? field : texto;
+}
+
+/**
+ * Sobre qué fue la acción.
+ *
+ * <p>Era `membership/01a0a3ac-a7cb-7aa4-a67d-ea708e9ebc3a`, una sola cuerda de cuarenta y cuatro
+ * caracteres de los cuales treinta y seis no le dicen nada a nadie. Ahora el tipo va en palabras y
+ * el identificador debajo, acortado, con el valor entero en el atributo `title` para copiarlo — y
+ * `user-select: all` para que un clic lo seleccione completo, que es lo que hace falta cuando hay
+ * que pegarlo en un correo a soporte.</p>
+ *
+ * <p>El identificador no desaparece: es lo que convierte una entrada de bitácora en una que se puede
+ * cotejar contra la base. Lo que cambia es cuál de los dos datos manda.</p>
+ */
+function ResourceCell({ row, label }: { row: AuditEvent; label: string }): React.JSX.Element {
+  if (!row.resourceId) {
+    return <span>{label}</span>;
+  }
+  return (
+    <>
+      <div>{label}</div>
+      <div className="lx-text-meta lx-code lx-selectable" title={row.resourceId}>
+        {row.resourceId.length > 12 ? `${row.resourceId.slice(0, 8)}…${row.resourceId.slice(-4)}` : row.resourceId}
+      </div>
+    </>
+  );
+}
+
+/**
  * One changed field, as "name: before → after".
  *
  * <p>An empty value is written as an em dash rather than left blank: "→" with nothing after it reads
  * as a rendering failure, and it means the field was cleared — which is often the change that
  * matters.</p>
  */
-function ChangeLine({ change, maskedLabel }: { change: AuditChange; maskedLabel: string }): React.JSX.Element {
+function ChangeLine({
+  change,
+  maskedLabel,
+  fieldLabel,
+  allZonesLabel,
+}: {
+  change: AuditChange;
+  maskedLabel: string;
+  fieldLabel: string;
+  allZonesLabel: string;
+}): React.JSX.Element {
+  // El servidor escribe «*» cuando la asignación de sectores está vacía, que no es «ninguno» sino
+  // «toda la municipalidad». Dejarlo pasar crudo invertiría el sentido del registro.
+  const leer = (valor: string | null | undefined): string =>
+    valor === '*' && change.field === 'zones' ? allZonesLabel : (valor ?? '—');
   return (
     <span style={{ fontVariantNumeric: 'tabular-nums' }}>
-      <strong>{change.field}</strong>: {change.oldValue ?? '—'} → {change.newValue ?? '—'}{' '}
+      <strong>{fieldLabel}</strong>: {leer(change.oldValue)} → {leer(change.newValue)}{' '}
       {/* Without this a reader takes a masked value for the address itself. */}
       {change.masked ? <Badge tone="neutral">{maskedLabel}</Badge> : null}
     </span>

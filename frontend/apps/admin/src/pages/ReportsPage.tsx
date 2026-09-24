@@ -4,7 +4,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { useAuth } from '@luparx/auth';
 import { useTranslation, type TranslationKey } from '@luparx/i18n';
 import type { RegisteredUsersGroupBy } from '@luparx/api-client';
-import { Button, Select, Table } from '@luparx/ui';
+import { Button, FormField, Select, Table } from '@luparx/ui';
 import { AdminShell } from '../components/AdminShell';
 
 const GROUP_BY_OPTIONS: RegisteredUsersGroupBy[] = ['tenant', 'country', 'portal', 'month'];
@@ -35,16 +35,33 @@ export function ReportsPage(): React.JSX.Element {
   return (
     <AdminShell>
       <h1>{t('admin.reports.registeredUsers.title')}</h1>
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 16 }}>
-        <Select
-          aria-label={t('admin.reports.registeredUsers.groupBy')}
-          value={groupBy}
-          onChange={(value) => setGroupBy(value as RegisteredUsersGroupBy)}
-          options={GROUP_BY_OPTIONS.map((option) => ({
-            value: option,
-            label: t(`admin.reports.registeredUsers.groupBy.${option}` as TranslationKey),
-          }))}
-        />
+      {/* El período que el reporte cubre, escrito.
+          Era invisible —`from`/`to` son fijos, los últimos doce meses, y no hay control para
+          cambiarlos— mientras el mensaje de vacío hablaba de «el rango seleccionado». Quien leía eso
+          buscaba un selector de rango que no existe. Se dice el período y se deja de prometer un
+          filtro. */}
+      <p className="lx-text-meta">{t('admin.reports.registeredUsers.period', { from, to })}</p>
+      <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', marginBottom: 16, flexWrap: 'wrap' }}>
+        {/* Con etiqueta visible y no sólo `aria-label`: sin ella, un desplegable que dice
+            «Municipalidad» junto al título «Usuarios registrados» se lee como un selector de
+            reportes, y las cuatro opciones parecen cuatro reportes distintos. Son agrupaciones de
+            este mismo reporte. */}
+        <div style={{ minWidth: 240 }}>
+          <FormField label={t('admin.reports.registeredUsers.groupByLabel')}>
+            {({ inputId }) => (
+              <Select
+                id={inputId}
+                aria-label={t('admin.reports.registeredUsers.groupByLabel')}
+                value={groupBy}
+                onChange={(value) => setGroupBy(value as RegisteredUsersGroupBy)}
+                options={GROUP_BY_OPTIONS.map((option) => ({
+                  value: option,
+                  label: t(`admin.reports.registeredUsers.groupBy.${option}` as TranslationKey),
+                }))}
+              />
+            )}
+          </FormField>
+        </div>
         <Button type="button" variant="secondary" onClick={() => exportMutation.mutate()} loading={exportMutation.isPending}>
           {t('admin.reports.registeredUsers.export')}
         </Button>

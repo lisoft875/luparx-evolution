@@ -87,6 +87,20 @@ public final class ErrorCode {
     public static final String MEMBERSHIP_ALREADY_EXISTS = "MEMBERSHIP_ALREADY_EXISTS";
     public static final String MEMBERSHIP_INVALID_TRANSITION = "MEMBERSHIP_INVALID_TRANSITION";
     public static final String ROLE_NOT_ALLOWED_FOR_PORTAL = "ROLE_NOT_ALLOWED_FOR_PORTAL";
+    /**
+     * Somebody tried to end their own post in this municipality.
+     *
+     * <p>Its own code and not a plain 403 because the caller is not doing something they lack
+     * permission for — they have exactly the permission this needs. The refusal is about the target
+     * being themselves, and the panel has to be able to say that instead of "no tiene permiso",
+     * which would be a lie.</p>
+     *
+     * <p>Why it is refused at all: revoking your own post takes away, in the same request, the
+     * permission needed to undo it. The panel then refreshes a list it may no longer read, keeps
+     * showing the stale row, and the next reload lands on "no municipalities". An administrator
+     * cannot lock themselves out with one click of a button that gives no warning.</p>
+     */
+    public static final String MEMBERSHIP_SELF_MODIFICATION_DENIED = "MEMBERSHIP_SELF_MODIFICATION_DENIED";
 
     // --- staff invitations (CONTRACT.md v0.27) ----------------------------------------------------
     /**

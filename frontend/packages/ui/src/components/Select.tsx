@@ -45,7 +45,17 @@ const VIEWPORT_MARGIN = 8;
 interface PopupBox {
   left: number;
   top: number;
-  width: number;
+  /**
+   * El ancho del campo, que la lista usa como MÍNIMO y no como ancho fijo (24-09-2026).
+   *
+   * Era `width` a secas, y ese era el defecto: el campo se encoge para caber en su contenido, así
+   * que elegir «Zonas» dejaba el botón en noventa píxeles y la lista heredaba esos noventa. Las
+   * opciones pasaban a leerse «Tod...», «Tarif...», «Polít...» — todas truncadas, y sólo después de
+   * abrir una vez, que es por qué parecía que el ancho «cambiaba solo».
+   */
+  minWidth: number;
+  /** Hasta dónde puede crecer sin salirse de la pantalla por la derecha. */
+  maxWidth: number;
   maxHeight: number;
   /** True when the list opens upward — the field then rounds its bottom into the list, not its top. */
   above: boolean;
@@ -140,10 +150,15 @@ export function Select({
     const above = rect.top - Math.max(chromeBottom, viewTop) - VIEWPORT_MARGIN;
     const flip = below < MIN_LIST_HEIGHT && above > below;
     const room = Math.max(MIN_LIST_HEIGHT, Math.floor(flip ? above : below));
+    const viewportWidth = viewport?.width ?? window.innerWidth;
     setBox({
       left: rect.left,
       top: flip ? rect.top : rect.bottom,
-      width: rect.width,
+      minWidth: rect.width,
+      // La lista se ancla al borde izquierdo del campo, así que lo que tiene para crecer es lo que
+      // queda a su derecha. Nunca menos que el campo: si el campo cabe en la pantalla —y cabe, está
+      // dibujado—, su lista también.
+      maxWidth: Math.max(rect.width, viewportWidth - rect.left - VIEWPORT_MARGIN),
       maxHeight: Math.min(MAX_LIST_HEIGHT, room),
       above: flip,
     });
@@ -330,7 +345,13 @@ export function Select({
             className={`lx-listbox${box.above ? ' lx-listbox--above' : ''}`}
             style={{
               left: box.left,
-              width: box.width,
+              // `max-content` mide la opción más larga; el mínimo impide que quede más angosta que
+              // el campo y el máximo, que se salga de la pantalla. Sin `max-width` en el CSS: la
+              // especificación pide explícitamente que una etiqueta normal no se trunque en
+              // escritorio sólo porque el campo es angosto.
+              minWidth: box.minWidth,
+              width: 'max-content',
+              maxWidth: box.maxWidth,
               maxHeight: box.maxHeight,
               ...(box.above ? { bottom: `calc(100% - ${box.top}px)` } : { top: box.top }),
             }}
@@ -384,7 +405,11 @@ export function Select({
                     </span>
                   ) : null}
                   <span className="lx-listbox__text">
-                    <span className="lx-listbox__label">{option.label}</span>
+                    {/* Para la etiqueta excepcionalmente larga que aun así se recorte: el texto
+                        completo queda a un puntero de distancia en vez de perderse. */}
+                    <span className="lx-listbox__label" title={option.label}>
+                      {option.label}
+                    </span>
                     {option.detail ? <span className="lx-listbox__detail">{option.detail}</span> : null}
                   </span>
                 </li>
@@ -426,7 +451,9 @@ export function Select({
             only makes the field taller and, for a zone with a paragraph of description, unreadable
             at 320 px. */}
         <span className={`lx-select__value${selected ? '' : ' lx-select__value--placeholder'}`}>
-          <span className="lx-select__label">{selected ? selected.label : (placeholder ?? '')}</span>
+          <span className="lx-select__label" title={selected ? selected.label : undefined}>
+            {selected ? selected.label : (placeholder ?? '')}
+          </span>
         </span>
         <span className="lx-select__caret" aria-hidden="true">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none" focusable="false">

@@ -182,6 +182,31 @@ public class AdminMembershipController {
         }
     }
 
+    /**
+     * Refuses to let the caller end or pause their own post (24-09-2026).
+     *
+     * <p>Revoking your own membership takes away, in the same request, the permission needed to undo
+     * it. What that looked like in testing: the panel called the endpoint, got its 204, refreshed the
+     * staff list, was answered 403 — and React Query, which keeps the previous page when a refetch
+     * fails, went on showing the row as <em>Activo</em>. The click appeared to do nothing. The next
+     * reload landed on "no municipalities", and the account was locked out of the municipality with
+     * no way back that did not involve somebody else.</p>
+     *
+     * <p>Refused in the server and not only in the panel, because the panel is not the only caller
+     * and a guard that lives in a button is a guard that a second client does not have.</p>
+     *
+     * <p>Note what this does <em>not</em> decide: whether the LAST administrator of a municipality
+     * may be revoked by a different administrator. That is a rule about who is left in charge, it
+     * belongs to the municipality and not to this method, and it is not invented here.</p>
+     */
+    private static void requireNotOwnPost(TenantMembership membership) {
+        UserId caller = TenantContextHolder.require().userId();
+        if (caller != null && membership.getUserId().equals(caller.value())) {
+            throw ForbiddenException.of(ErrorCode.MEMBERSHIP_SELF_MODIFICATION_DENIED,
+                    "error.membership.self.modification");
+        }
+    }
+
     @PutMapping("/{id}")
     @PreAuthorize("hasAuthority('PERM_ROLE_ASSIGN')")
     @Operation(summary = "Change the role or the status of a membership")
@@ -197,6 +222,12 @@ public class AdminMembershipController {
         // service mutates the managed row, so a reference read afterwards yields the NEW values and
         // the trail would report "INSPECTOR → INSPECTOR" for every promotion ever made.
         TenantMembership before = membershipService.requireInScope(id, tenantId);
+        // The same door, through the other handle: PUT with status=REVOKED would otherwise be a way
+        // around the guard below. Changing your own ROLE is left alone — it does not take away the
+        // post, and a demotion you can undo is not a lockout.
+        if (request.status() != null && request.status() != MembershipStatus.ACTIVE) {
+            requireNotOwnPost(before);
+        }
         String previousRole = String.valueOf(before.getRole());
         String previousStatus = String.valueOf(before.getStatus());
         TenantMembership membership = membershipService.update(id, tenantId, request.role(), request.status());
@@ -296,6 +327,9 @@ public class AdminMembershipController {
     public AdminDtos.MembershipResponse suspend(@PathVariable UUID id,
                                                 @Valid @RequestBody AdminDtos.SuspendMembershipRequest request) {
         TenantId tenantId = TenantContextHolder.requireTenantId();
+        // Pausing your own post locks you out just as completely as revoking it, only reversibly by
+        // somebody else. Same guard.
+        requireNotOwnPost(membershipService.requireInScope(id, tenantId));
         TenantMembership membership = membershipService.suspend(id, tenantId, request.reason());
         auditRecorder.record(AuditAction.MEMBERSHIP_SUSPENDED, "membership", id.toString(),
                 Map.of("userId", membership.getUserId().toString(),
@@ -346,10 +380,18 @@ public class AdminMembershipController {
                         "error.parking.zone.notFound");
             }
         }
+        // Leído ANTES de reemplazar: el registro de una asignación cuya única huella es «se
+        // asignaron 3 sectores» obliga a quien audita a adivinar cuáles eran los otros. Con los
+        // nombres a ambos lados, la bitácora contesta la pregunta que se le hace (24-09-2026).
+        String zonesBefore = describeZones(zoneService.zonesOf(List.of(membership.getId()))
+                .getOrDefault(membership.getId(), List.of()), zonesOfTenant);
         List<UUID> assigned = zoneService.replaceZones(membership.getId(), request.zoneIds());
         auditRecorder.record(AuditAction.MEMBERSHIP_ZONES_ASSIGNED, "membership", id.toString(),
                 Map.of("userId", membership.getUserId().toString(),
-                        "zoneCount", String.valueOf(assigned.size())));
+                        "zoneCount", String.valueOf(assigned.size())),
+                AuditChanges.builder()
+                        .compare("zones", zonesBefore, describeZones(assigned, zonesOfTenant))
+                        .build());
         return assigned.stream()
                 .map(zonesOfTenant::get)
                 .map(zone -> new AdminDtos.ZoneAssignmentResponse(zone.getId(), zone.getCode(), zone.getName()))
@@ -383,11 +425,32 @@ public class AdminMembershipController {
         return mapper.toMembership(membership);
     }
 
+    /**
+     * The sectors, written the way the panel writes them.
+     *
+     * <p>An empty assignment is not an empty string: it is the whole municipality, and that is the
+     * one value somebody reading the trail must not mistake for "nothing was recorded". A zone that
+     * was retired since is named by its id rather than dropped — the assignment did happen.</p>
+     */
+    private static String describeZones(List<UUID> zoneIds, Map<UUID, ParkingZone> zonesOfTenant) {
+        if (zoneIds.isEmpty()) {
+            return "*";
+        }
+        return zoneIds.stream()
+                .map(zoneId -> {
+                    ParkingZone zone = zonesOfTenant.get(zoneId);
+                    return zone == null ? zoneId.toString() : zone.getName();
+                })
+                .sorted()
+                .collect(Collectors.joining(", "));
+    }
+
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAuthority('PERM_ROLE_ASSIGN')")
     @Operation(summary = "Revoke a membership (the row is kept for audit, never deleted)")
     public ResponseEntity<Void> revoke(@PathVariable UUID id) {
         TenantId tenantId = TenantContextHolder.requireTenantId();
+        requireNotOwnPost(membershipService.requireInScope(id, tenantId));
         TenantMembership membership = membershipService.revoke(id, tenantId, null);
         auditRecorder.record(AuditAction.MEMBERSHIP_REVOKED, "membership", id.toString(),
                 Map.of("userId", membership.getUserId().toString()));

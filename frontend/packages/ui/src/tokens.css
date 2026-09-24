@@ -4012,3 +4012,33 @@ a.lx-list-row {
   color: var(--lx-text);
   font-size: 0.875rem;
 }
+
+/* ---- Una fila de filtros con medidas propias (24-09-2026) ----
+   Un `display:flex` sin medidas deja que cada control se encoja hasta caber en su valor. En
+   Auditoría eso significaba que elegir «Zonas» dejaba el desplegable de módulos en noventa píxeles
+   —y su lista con él, truncando todas las opciones—, y que la fila se reacomodaba sola cada vez que
+   alguien cambiaba un filtro. Con `minmax()` la medida no depende de lo seleccionado.
+   Por debajo de 640 px cada control ocupa la fila entera: cuatro columnas de ochenta píxeles no son
+   cuatro filtros, son cuatro cosas ilegibles. */
+.lx-filter-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--lx-space-3);
+  align-items: end;
+  margin: var(--lx-space-4) 0;
+}
+@media (max-width: 640px) {
+  .lx-filter-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Un identificador técnico: se lee poco y se copia mucho. */
+.lx-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+}
+.lx-selectable {
+  user-select: all;
+  cursor: text;
+}

@@ -97,7 +97,10 @@ export function UsersListPage(): React.JSX.Element {
             setPortal(value as Portal | '');
           }}
           placeholder={t('admin.users.filter.allPortals')}
-          options={PORTALS_FILTER.map((p) => ({ value: p, label: p }))}
+          // La etiqueta era el slug tal cual: «citizen», «admin», «inspector». El filtro además
+          // respondía 400, porque Spring convierte un enum con `valueOf` y eso distingue mayúsculas
+          // (ver PortalParameterConfiguration). Arreglado el 400, ponerle nombre es lo que faltaba.
+          options={PORTALS_FILTER.map((p) => ({ value: p, label: t(`portal.${p}` as TranslationKey) }))}
         />
       </div>
 
