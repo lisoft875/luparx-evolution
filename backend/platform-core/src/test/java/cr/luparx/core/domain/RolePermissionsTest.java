@@ -41,10 +41,35 @@ class RolePermissionsTest {
         assertThat(permissions).doesNotContain(Permission.PLATFORM_MANAGE);
     }
 
+    /**
+     * Un rol de consulta no escribe.
+     *
+     * <p>Afirmado por lo que NO tiene y no por una lista exacta, que es la corrección del
+     * 24-09-2026. La versión anterior exigía que {@code TENANT_SUPPORT} fuera exactamente
+     * {@code [USER_READ, AUDIT_READ]}, y el 2026-09-09 la entrega {@code d572506} le agregó
+     * {@code CITATION_READ} —deliberadamente: un rol de consulta que no puede leer una boleta no
+     * sirve para atender a quien reclama por una—. La prueba llevaba quince días en rojo y nadie
+     * se enteró, porque el proyecto no tiene integración continua.</p>
+     *
+     * <p>Una lista exacta convierte cada permiso de LECTURA nuevo en un fallo, que es ruido: lo que
+     * esta prueba cuida es que no aparezca uno de ESCRITURA. Escrita así, el próximo permiso de
+     * lectura legítimo pasa y el próximo de escritura, que es el que importaría, no.</p>
+     */
     @Test
     void readOnlyRolesCannotWrite() {
-        assertThat(RolePermissions.of(Role.TENANT_SUPPORT))
-                .containsExactlyInAnyOrder(Permission.USER_READ, Permission.AUDIT_READ);
+        assertThat(RolePermissions.of(Role.TENANT_SUPPORT)).doesNotContain(
+                Permission.USER_WRITE,
+                Permission.USER_BLOCK,
+                Permission.ROLE_ASSIGN,
+                Permission.ZONE_ASSIGN,
+                Permission.MEMBERSHIP_APPROVE,
+                Permission.TENANT_MANAGE,
+                Permission.PLATFORM_MANAGE,
+                Permission.CITATION_ISSUE,
+                Permission.CITATION_VOID,
+                Permission.CITATION_INGEST,
+                Permission.ENFORCEMENT_MANAGE,
+                Permission.WALLET_TOPUP);
         assertThat(RolePermissions.of(Role.PLATFORM_SUPPORT))
                 .doesNotContain(Permission.USER_WRITE, Permission.USER_BLOCK, Permission.PLATFORM_MANAGE);
     }
@@ -57,10 +82,39 @@ class RolePermissionsTest {
         assertThat(combined).doesNotContain(Permission.USER_WRITE);
     }
 
+    /**
+     * El fiscalizador fiscaliza y no administra.
+     *
+     * <p>Se llamaba {@code …NoAdministrativePermissionYet} y exigía que los tres conjuntos fueran
+     * vacíos. Ese «Yet» venció el 2026-09-09, cuando {@code d572506} le dio a INSPECTOR
+     * {@code CITATION_ISSUE}/{@code CITATION_READ} y a INSPECTOR_LEAD además {@code CITATION_VOID},
+     * que es justamente lo que el javadoc de {@link RolePermissions} anunciaba que iba a pasar
+     * «as configuration». La prueba se quedó anclada al estado anterior.</p>
+     *
+     * <p>Lo que de verdad hay que cuidar no es que el conjunto esté vacío —nunca más va a estarlo—
+     * sino que lo que tenga sea de fiscalización y nada de administración.</p>
+     */
     @Test
-    void inspectorAndCitizenCarryNoAdministrativePermissionYet() {
-        assertThat(RolePermissions.of(Role.INSPECTOR)).isEmpty();
-        assertThat(RolePermissions.of(Role.INSPECTOR_LEAD)).isEmpty();
+    void enforcementRolesCarryEnforcementPermissionsAndNothingAdministrative() {
+        assertThat(RolePermissions.of(Role.INSPECTOR))
+                .containsExactlyInAnyOrder(Permission.CITATION_ISSUE, Permission.CITATION_READ);
+        assertThat(RolePermissions.of(Role.INSPECTOR_LEAD)).containsExactlyInAnyOrder(
+                Permission.CITATION_ISSUE, Permission.CITATION_READ, Permission.CITATION_VOID);
+
+        for (Role rol : List.of(Role.INSPECTOR, Role.INSPECTOR_LEAD)) {
+            assertThat(RolePermissions.of(rol)).doesNotContain(
+                    Permission.USER_WRITE,
+                    Permission.USER_BLOCK,
+                    Permission.ROLE_ASSIGN,
+                    Permission.MEMBERSHIP_APPROVE,
+                    Permission.TENANT_MANAGE,
+                    Permission.PLATFORM_MANAGE,
+                    Permission.WALLET_TOPUP,
+                    Permission.EXPORT_RUN,
+                    Permission.AUDIT_READ);
+        }
+
+        // El ciudadano sigue sin permisos administrativos: su portal no los usa.
         assertThat(RolePermissions.of(Role.CITIZEN)).isEmpty();
     }
 
