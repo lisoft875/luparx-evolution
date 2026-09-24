@@ -90,8 +90,35 @@ async function entrar(context) {
   return page;
 }
 
+/**
+ * Los nombres de clase que este arnés busca en el marcado.
+ *
+ * Están acá arriba, en un solo lugar y con nombre, porque un arnés acoplado a nombres de clase se
+ * rompe EN SILENCIO cuando la pantalla se rediseña, y cuando se rompe miente en la dirección más
+ * cara: dice «la página está rota» cuando la rota es la prueba. Pasó el 24-09-2026 con el Inicio
+ * v3: la portada quedó sana —ruta correcta, shell montado, sin errores de consola, sin APIs en
+ * 400— y este arnés reportó 8/8 fallos porque seguía buscando `.lx-stat-card__value` después de
+ * que los KPIs pasaran a `MetricCard` (`.lx-metric__value`). Un ciclo de deploy perseguido detrás
+ * de un defecto inexistente, el séptimo de la sesión.
+ *
+ * La defensa está abajo, en `obsoletos`: si la página se ve sana y aun así un grupo entero
+ * desaparece, la conclusión por omisión es que el selector envejeció, no que la pantalla murió; y
+ * se imprimen las clases que SÍ están en el DOM para poder corregirlo sin adivinar.
+ */
+const SEL = {
+  kpi: '.lx-home-kpis .lx-metric',
+  kpiEtiqueta: '.lx-metric__label',
+  kpiValor: '.lx-metric__value',
+  bloques: '.lx-home-kpis .lx-metric, .lx-home-grid > .lx-card',
+  franja: '.lx-status-bar__item',
+  accesos: '.lx-quick-tile',
+  zonas: '.lx-zone-row',
+  barras: '.lx-bars__col',
+  etiquetaBarra: '.lx-bars__col-label',
+};
+
 async function medir(page, dedo) {
-  return page.evaluate((esDedo) => {
+  return page.evaluate(([esDedo, SEL]) => {
     const rec = (s) => String(s || '').replace(/\s+/g, ' ').trim();
 
     // --- desborde horizontal ---
@@ -106,12 +133,12 @@ async function medir(page, dedo) {
     }
 
     // --- KPIs: cuántos hay y cuántos por fila ---
-    const tarjetas = [...document.querySelectorAll('.lx-home-kpis .lx-card')];
+    const tarjetas = [...document.querySelectorAll(SEL.kpi)];
     const kpis = tarjetas.map((el) => {
       const b = el.getBoundingClientRect();
       return {
-        label: rec(el.querySelector('.lx-stat-card__label')?.textContent),
-        value: rec(el.querySelector('.lx-stat-card__value')?.textContent),
+        label: rec(el.querySelector(SEL.kpiEtiqueta)?.textContent),
+        value: rec(el.querySelector(SEL.kpiValor)?.textContent),
         top: Math.round(b.top),
       };
     });
@@ -147,7 +174,7 @@ async function medir(page, dedo) {
 
     // --- encimados: dos bloques hermanos que se pisan ---
     const encimados = [];
-    const bloques = [...document.querySelectorAll('.lx-home-kpis .lx-card, .lx-home-split > .lx-card')];
+    const bloques = [...document.querySelectorAll(SEL.bloques)];
     for (let i = 0; i < bloques.length; i++) {
       for (let j = i + 1; j < bloques.length; j++) {
         const a = bloques[i].getBoundingClientRect();
@@ -172,14 +199,22 @@ async function medir(page, dedo) {
     }
 
     // --- el gráfico y la franja existen y no están recortados ---
-    const barras = document.querySelectorAll('.lx-bars__col').length;
-    const franja = document.querySelectorAll('.lx-status-strip__item').length;
-    const zonas = document.querySelectorAll('.lx-zone-bar').length;
-    const accesos = document.querySelectorAll('.lx-quick-action').length;
+    const barras = document.querySelectorAll(SEL.barras).length;
+    const franja = document.querySelectorAll(SEL.franja).length;
+    const zonas = document.querySelectorAll(SEL.zonas).length;
+    const accesos = document.querySelectorAll(SEL.accesos).length;
+
+    // Las clases que SÍ existen bajo <main>, para poder decir con qué reemplazar un selector muerto
+    // en vez de dejar al lector con «no encontré .lx-quick-action» y ninguna pista de qué hay.
+    const clasesReales = [...new Set(
+      [...document.querySelectorAll('main [class]')]
+        .flatMap((el) => String(el.className).split(/\s+/))
+        .filter((c) => c.startsWith('lx-') && !c.includes('--')),
+    )].sort();
 
     // Las fechas del eje no pueden encimarse: si la siguiente empieza antes de que termine la
     // anterior, el eje es ilegible aunque el layout "funcione".
-    const etiquetas = [...document.querySelectorAll('.lx-bars__col-label')].map((el) => el.getBoundingClientRect());
+    const etiquetas = [...document.querySelectorAll(SEL.etiquetaBarra)].map((el) => el.getBoundingClientRect());
     let ejesEncimados = 0;
     for (let i = 1; i < etiquetas.length; i++) {
       if (etiquetas[i].left < etiquetas[i - 1].right - 1) ejesEncimados++;
@@ -197,8 +232,8 @@ async function medir(page, dedo) {
       primerTexto: rec(document.body.textContent).slice(0, 120),
     };
 
-    return { desborde, anchos: anchos.slice(0, 4), kpis, primeraFila, rotas, encimados, chicos: chicos.slice(0, 5), barras, franja, zonas, accesos, ejesEncimados, textoPagina, donde };
-  }, dedo);
+    return { desborde, anchos: anchos.slice(0, 4), kpis, primeraFila, rotas, encimados, chicos: chicos.slice(0, 5), barras, franja, zonas, accesos, ejesEncimados, textoPagina, donde, clasesReales };
+  }, [dedo, SEL]);
 }
 
 (async () => {
@@ -241,6 +276,37 @@ async function medir(page, dedo) {
       // El Inicio hace tres consultas; se espera a que las barras o el vacío del gráfico existan.
       await page.waitForTimeout(2600);
       const r = await medir(page, tam.dedo);
+
+      // ---------------------------------------------------------------------------------------
+      // Antes de acusar a la página, preguntarse si la que envejeció es la prueba.
+      //
+      // La página está sana cuando está montada (shell presente, raíz con hijos), la consola no
+      // tiene errores y ninguna llamada a la API devolvió 400 o más. Si con TODO eso a favor un
+      // grupo entero de elementos no aparece, la hipótesis barata —«el Inicio perdió los accesos
+      // rápidos»— es la equivocada: lo que perdió el nombre de clase es el selector de acá.
+      // Distinguir los dos casos es lo único que impide gastar un deploy arreglando lo que no está
+      // roto.
+      // ---------------------------------------------------------------------------------------
+      const sana = r.donde.hayShell && !r.donde.raizVacia && consola.length === 0 && fallidas.length === 0;
+      const obsoletos = [];
+      if (sana) {
+        if (r.kpis.length > 0 && r.kpis.every((k) => !k.value)) {
+          obsoletos.push(`hay ${r.kpis.length} tarjetas en ${SEL.kpi} y NINGUNA tiene ${SEL.kpiValor}`);
+        }
+        if (r.franja === 0) obsoletos.push(`ningún elemento en ${SEL.franja}`);
+        if (r.accesos === 0) obsoletos.push(`ningún elemento en ${SEL.accesos}`);
+        if (r.kpis.length === 0) obsoletos.push(`ningún elemento en ${SEL.kpi}`);
+      }
+      if (obsoletos.length > 0) {
+        fallos++;
+        console.log(`  !   ${tam.nombre.padEnd(18)} ${tam.width}x${tam.height} — ARNÉS DESACTUALIZADO, no defecto de la página`);
+        for (const o of obsoletos) console.log(`        ${o}`);
+        console.log(`        la página se ve sana: ruta=${r.donde.ruta} · h1="${r.donde.titulo}" · shell=true · raízVacía=false · consola limpia · API limpia`);
+        console.log(`        clases que sí están en <main>: ${r.clasesReales.slice(0, 24).join(' ')}`);
+        console.log('        corregir SEL en este archivo antes de tocar el Inicio');
+        await ctx.close();
+        continue;
+      }
 
       const problemas = [];
       if (r.kpis.length !== 4) problemas.push(`hay ${r.kpis.length} KPIs y deberían ser 4`);
