@@ -45,6 +45,16 @@ public class AdminOperationsController {
 
     private static final int DEFAULT_REPORT_WINDOW_DAYS = 365;
 
+    /**
+     * Cuántas entradas trae el historial de un registro.
+     *
+     * <p>Cincuenta y no «todas»: el panel lateral de una tarifa no es el lugar donde se lee una
+     * historia de trescientos cambios, y una consulta sin techo contra la tabla más grande de la
+     * plataforma es la que un día tumba la pantalla. Quien necesite más tiene la auditoría general,
+     * que ahora filtra por módulo y por usuario.</p>
+     */
+    private static final int RESOURCE_HISTORY_LIMIT = 50;
+
     /** How many links of the chain the verification hands back. Enough to keep; not an export. */
     private static final int RECENT_SEALS = 20;
 
@@ -81,6 +91,16 @@ public class AdminOperationsController {
     public PageResponse<AdminDtos.AuditEventResponse> auditEvents(
             @RequestParam(required = false) UUID actor,
             @RequestParam(required = false) String action,
+            /**
+             * The module, which in this trail is the {@code resourceType} already written with every
+             * entry: {@code parking-rate}, {@code parking-zone}, {@code citation}, {@code user}…
+             *
+             * <p>The §4 of the functional guide asks to filter by module. No new concept was needed —
+             * the column has been there since the trail existed, and grouping actions into invented
+             * "modules" on top of it would have produced a second taxonomy that drifts from the one
+             * the writes actually use.</p>
+             */
+            @RequestParam(required = false) String resourceType,
             @RequestParam(required = false) String ipHash,
             @RequestParam(required = false) Instant from,
             @RequestParam(required = false) Instant to,
@@ -92,13 +112,46 @@ public class AdminOperationsController {
         Instant end = to == null ? Instant.now() : to;
         Pageable pageable = org.springframework.data.domain.PageRequest.of(request.page(), request.size());
         Page<cr.luparx.app.audit.AuditEventEntity> result = auditEventRepository.searchInTenant(
-                tenantId.value(), actor, action, blankToNull(ipHash), start, end, pageable);
+                tenantId.value(), actor, action, blankToNull(resourceType), blankToNull(ipHash), start, end, pageable);
         // One lookup for the whole page, before the mapping loop rather than inside it (v0.33).
         Map<UUID, cr.luparx.app.audit.AuditActorResolver.Actor> actors =
                 actorResolver.resolve(result.getContent());
         return PageResponse.of(
                 result.getContent().stream().map(event -> mapper.toAuditEvent(event, actors)).toList(),
                 request.page(), request.size(), result.getTotalElements());
+    }
+
+    /**
+     * The trail of ONE record: who changed it, when, and from what to what.
+     *
+     * <p>Answers the §4 of the functional guide (24-09-2026) from the side a person actually asks it:
+     * standing in front of a tariff, not in front of a date range. Nothing is recorded that was not
+     * recorded before — this reads what the writes in {@code AdminParkingController} and its
+     * neighbours have always written.</p>
+     *
+     * <p>Capped at {@link #RESOURCE_HISTORY_LIMIT} entries. A record with more than fifty changes is
+     * a record whose story is told in the general trail with its filters, not in a side panel.</p>
+     */
+    @GetMapping("/audit-events/by-resource")
+    @PreAuthorize("hasAuthority('PERM_AUDIT_READ')")
+    @Operation(summary = "Audit trail of a single record, newest first")
+    public List<AdminDtos.AuditEventResponse> auditEventsByResource(
+            @RequestParam String resourceType,
+            @RequestParam String resourceId) {
+        TenantId tenantId = TenantContextHolder.requireTenantId();
+        // Spring ya rechaza el parámetro ausente; esto cubre el que llega vacío, que no es lo mismo
+        // y que consultaría la tabla entera de un tipo de recurso.
+        if (blankToNull(resourceType) == null) {
+            throw new ValidationException("resourceType", ErrorCode.VALIDATION_FAILED, "error.audit.resource.required");
+        }
+        if (blankToNull(resourceId) == null) {
+            throw new ValidationException("resourceId", ErrorCode.VALIDATION_FAILED, "error.audit.resource.required");
+        }
+        List<cr.luparx.app.audit.AuditEventEntity> events = auditEventRepository.historyOfResource(
+                tenantId.value(), resourceType, resourceId,
+                org.springframework.data.domain.PageRequest.of(0, RESOURCE_HISTORY_LIMIT));
+        Map<UUID, cr.luparx.app.audit.AuditActorResolver.Actor> actors = actorResolver.resolve(events);
+        return events.stream().map(event -> mapper.toAuditEvent(event, actors)).toList();
     }
 
     /**

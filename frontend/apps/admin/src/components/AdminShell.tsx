@@ -166,6 +166,9 @@ export function AdminShell({ children, footer }: AdminShellProps): React.JSX.Ele
                 son distintas —esa lista es sobre las personas de la municipalidad, esta sobre los
                 cargos que ha otorgado—. */}
             {permissions.has('USER_READ') ? <NavItem to="/staff" icon={<IconBuilding size={18} />}>{t('nav.staff')}</NavItem> : null}
+            {/* Junto a Usuarios y no en Configuración: es lo que explica el rol que se ve al lado
+                de cada nombre en esa lista, y se consulta desde ahí. */}
+            {permissions.has('USER_READ') ? <NavItem to="/roles" icon={<IconSettings size={18} />}>{t('nav.roles')}</NavItem> : null}
             <NavItem to="/audit" icon={<IconAudit size={18} />}>{t('nav.audit')}</NavItem>
             <NavItem to="/reports" icon={<IconReports size={18} />}>{t('nav.reports')}</NavItem>
             {/* Acá y no en Configuración: la conciliación no es algo que una municipalidad

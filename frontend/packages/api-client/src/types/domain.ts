@@ -773,6 +773,15 @@ export type AuditEventsQuery = {
   actor?: string;
   action?: string;
   /**
+   * El módulo, que en esta bitácora es el `resourceType` que ya se escribe con cada entrada:
+   * `parking-rate`, `parking-zone`, `citation`, `user`…
+   *
+   * No hay taxonomía nueva a propósito. Agrupar acciones en «módulos» inventados por encima del
+   * `resourceType` habría creado una segunda clasificación que se desincroniza de la que las
+   * escrituras usan de verdad.
+   */
+  resourceType?: string;
+  /**
    * Restricts to the entries that came from one connection (v0.33).
    *
    * The hash and never an address — it comes from `checkOrigin`, which is the only call that ever
@@ -910,6 +919,15 @@ export interface CreatePlatformMembershipRequest {
   portal: Portal;
   role: Role;
 }
+
+/** Un rol y lo que el servidor le permite. Sólo lectura: la tabla vive en el código. */
+export type RoleMatrixRow = {
+  /** El nombre del enum (`TENANT_FINANCE`), no una etiqueta traducida. */
+  role: string;
+  portal: Portal;
+  /** Los permisos que la tabla del servidor le concede, ordenados. */
+  permissions: string[];
+};
 
 export type PlatformAuditEventsQuery = {
   tenantId?: string;

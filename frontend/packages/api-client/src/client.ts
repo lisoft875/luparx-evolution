@@ -112,6 +112,7 @@ import type {
   AdminLevelCatalogEntry,
   AuditEvent,
   AuditEventsQuery,
+  RoleMatrixRow,
   AuditChain,
   AuditOriginProbe,
   Dashboard,
@@ -555,6 +556,27 @@ export class ApiClient {
      */
     checkOrigin: (payload: AuditOriginProbeRequest): Promise<AuditOriginProbe> =>
       this.http.request('POST', '/api/v1/admin/audit-events/ip-fingerprint', { body: payload }),
+    /**
+     * Todo lo que la bitácora registró sobre UN registro, lo más reciente primero.
+     *
+     * La misma información que `list`, preguntada por el lado en que una persona la pregunta de
+     * verdad: parada frente a una tarifa, no frente a un rango de fechas. No está paginado; el
+     * servidor lo corta en 50 entradas.
+     */
+    byResource: (resourceType: string, resourceId: string): Promise<AuditEvent[]> =>
+      this.http.request('GET', '/api/v1/admin/audit-events/by-resource', {
+        query: { resourceType, resourceId },
+      }),
+  };
+
+  /**
+   * La matriz de roles y permisos tal como el servidor la aplica.
+   *
+   * Sólo lectura. La tabla vive en el código, versionada y revisable en un diff; una pantalla que la
+   * editara la movería a una fila de base de datos que nadie audita.
+   */
+  readonly adminRoles = {
+    list: (): Promise<RoleMatrixRow[]> => this.http.request('GET', '/api/v1/admin/roles'),
   };
 
   /**

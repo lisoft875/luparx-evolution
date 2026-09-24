@@ -17,6 +17,7 @@ import { SettingsLocalesPage } from './pages/SettingsLocalesPage';
 import { SettingsSpaceFormatPage } from './pages/SettingsSpaceFormatPage';
 import { SettingsSchedulePage } from './pages/SettingsSchedulePage';
 import { UsersListPage } from './pages/UsersListPage';
+import { RolesPage } from './pages/RolesPage';
 import { UserCreatePage } from './pages/UserCreatePage';
 import { StaffPage } from './pages/StaffPage';
 import { ZonesPage } from './pages/ZonesPage';
@@ -166,6 +167,18 @@ export function App(): React.JSX.Element {
                   <RequireAuth loginPath="/login">
                     <RequireTenant selectTenantPath="/select-tenant">
                       <StaffPage />
+                    </RequireTenant>
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/roles"
+                element={
+                  <RequireAuth loginPath="/login">
+                    <RequireTenant selectTenantPath="/select-tenant">
+                      <RequirePermission permission="USER_READ" fallback={<Navigate to="/" replace />}>
+                        <RolesPage />
+                      </RequirePermission>
                     </RequireTenant>
                   </RequireAuth>
                 }

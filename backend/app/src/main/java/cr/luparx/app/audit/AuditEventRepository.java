@@ -28,6 +28,7 @@ public interface AuditEventRepository extends JpaRepository<AuditEventEntity, UU
             where a.tenantId = :tenantId
               and (:actor is null or a.actorUserId = :actor)
               and (:action is null or a.action = :action)
+              and (:resourceType is null or a.resourceType = :resourceType)
               and (:ipHash is null or a.ipHash = :ipHash)
               and a.occurredAt >= :from and a.occurredAt < :to
             order by a.occurredAt desc
@@ -35,10 +36,37 @@ public interface AuditEventRepository extends JpaRepository<AuditEventEntity, UU
     Page<AuditEventEntity> searchInTenant(@Param("tenantId") UUID tenantId,
                                           @Param("actor") UUID actor,
                                           @Param("action") String action,
+                                          @Param("resourceType") String resourceType,
                                           @Param("ipHash") String ipHash,
                                           @Param("from") Instant from,
                                           @Param("to") Instant to,
                                           Pageable pageable);
+
+    /**
+     * Everything this municipality's trail recorded about ONE record.
+     *
+     * <p>The §4 of the functional guide (24-09-2026) asks that from a modified tariff one can see who
+     * changed it, when, and from what to what. The trail already stored all of it — every write in
+     * {@code AdminParkingController} records {@code resourceType} and {@code resourceId}, and
+     * {@code changes} carries the field-by-field before and after. What was missing was a way to ask
+     * the question by record instead of by date, which is the only way somebody standing in front of
+     * a tariff asks it.</p>
+     *
+     * <p>Not paginated and bounded by {@code Pageable} at the call site rather than by a date window:
+     * a single record's history is short by nature, and the interesting entry is often the oldest
+     * one — the change that started the argument — which a date window would be the first to hide.</p>
+     */
+    @Query("""
+            select a from AuditEventEntity a
+            where a.tenantId = :tenantId
+              and a.resourceType = :resourceType
+              and a.resourceId = :resourceId
+            order by a.occurredAt desc
+            """)
+    List<AuditEventEntity> historyOfResource(@Param("tenantId") UUID tenantId,
+                                             @Param("resourceType") String resourceType,
+                                             @Param("resourceId") String resourceId,
+                                             Pageable pageable);
 
     /**
      * How many entries of this municipality came from one connection inside a window.

@@ -15,10 +15,12 @@ import {
   Input,
   Modal,
   SectionHeader,
+  Select,
   Table,
 } from '@luparx/ui';
 import type { ConfirmChange } from '@luparx/ui';
 import { AdminShell } from '../components/AdminShell';
+import { RecordHistory } from '../components/RecordHistory';
 import { useParkingPolicy, useUpdateParkingPolicy } from '../lib/queries';
 
 /** What is being priced: a zone's linear base, or one duration of its ladder. */
@@ -74,6 +76,8 @@ export function TariffsPage(): React.JSX.Element {
    * obligar a teclear todo de nuevo.</p>
    */
   const [confirmando, setConfirmando] = useState<Target | null>(null);
+  /** De qué zona se está mirando quién cambió la tarifa. Vacío = ninguna, y no se consulta nada. */
+  const [zonaDelHistorial, setZonaDelHistorial] = useState('');
 
   const zonesQuery = useQuery({ queryKey: ['admin', 'zones'], queryFn: () => apiClient.adminParking.zones() });
   const ratesQuery = useQuery({ queryKey: ['admin', 'rates'], queryFn: () => apiClient.adminParking.rates() });
@@ -421,6 +425,35 @@ export function TariffsPage(): React.JSX.Element {
         {durations.length === 0 && !loading ? (
           <Alert tone="info">{t('admin.tariffs.noDurations')}</Alert>
         ) : null}
+      </Card>
+
+      {/* --- Quién la cambió (§4 de la guía funcional, 24-09-2026) ----------------------------
+          Distinto de la tarjeta de abajo, y conviene no confundirlas: aquélla lista las versiones
+          de tarifa vencidas —qué se cobraba antes—; ésta dice QUIÉN cambió la vigente, cuándo y de
+          qué valor a qué valor. La segunda pregunta es la que aparece cuando alguien reclama. */}
+      <Card>
+        <SectionHeader
+          title={t('admin.tariffs.who.title')}
+          description={t('admin.tariffs.who.description')}
+        />
+        <Select
+          aria-label={t('admin.tariffs.who.zone')}
+          value={zonaDelHistorial}
+          onChange={setZonaDelHistorial}
+          options={[
+            { value: '', label: t('admin.tariffs.who.pickZone') },
+            ...zones
+              .filter((zona) => baseByZone.has(zona.id))
+              .map((zona) => ({ value: zona.id, label: `${zona.code} — ${zona.name}` })),
+          ]}
+        />
+        <div style={{ marginTop: 'var(--lx-space-3)' }}>
+          <RecordHistory
+            resourceType="parking-rate"
+            resourceId={zonaDelHistorial ? (baseByZone.get(zonaDelHistorial)?.id ?? null) : null}
+            emptyLabel={t('admin.tariffs.who.empty')}
+          />
+        </div>
       </Card>
 
       <Card>

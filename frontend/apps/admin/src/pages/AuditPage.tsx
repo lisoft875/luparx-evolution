@@ -4,7 +4,26 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { useAuth } from '@luparx/auth';
 import { useTranslation, formatDateTime, type TranslationKey } from '@luparx/i18n';
 import type { AuditChange, AuditEvent, AuditOriginProbe } from '@luparx/api-client';
-import { Alert, Badge, Button, Card, Input, Pagination, SectionHeader, Table } from '@luparx/ui';
+import { Alert, Badge, Button, Card, Input, Pagination, SectionHeader, Select, Table } from '@luparx/ui';
+
+/**
+ * Los tipos de recurso que las escrituras de esta plataforma registran hoy.
+ *
+ * Escritos a mano y no derivados de la página cargada: un desplegable cuyas opciones salen de lo
+ * que ya se ve sólo permite filtrar por lo que ya se ve, que es el filtro que nadie necesita.
+ */
+const MODULOS = [
+  'parking-rate',
+  'parking-zone',
+  'parking-policy',
+  'parking-space',
+  'parking-space-format',
+  'citation',
+  'exemption',
+  'user',
+  'membership',
+  'settlement',
+] as const;
 import { AdminShell } from '../components/AdminShell';
 
 const PAGE_SIZE = 20;
@@ -29,6 +48,14 @@ export function AuditPage(): React.JSX.Element {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [actor, setActor] = useState<{ id: string; name: string } | null>(null);
+  /**
+   * El módulo, que en esta bitácora es el `resourceType` que cada escritura ya guarda.
+   *
+   * No hay taxonomía nueva: la §4 de la guía funcional pide filtrar por módulo y la columna existe
+   * desde el primer día. Agrupar acciones en «módulos» inventados por encima habría creado una
+   * segunda clasificación que se desincroniza de la que las escrituras usan de verdad.
+   */
+  const [modulo, setModulo] = useState('');
   const [origin, setOrigin] = useState<{ ipHash: string; fingerprint: string } | null>(null);
   const [page, setPage] = useState(0);
 
@@ -39,10 +66,11 @@ export function AuditPage(): React.JSX.Element {
   }
 
   const query = useQuery({
-    queryKey: ['admin', 'audit-events', { action, from, to, actor: actor?.id, ip: origin?.ipHash, page }],
+    queryKey: ['admin', 'audit-events', { action, modulo, from, to, actor: actor?.id, ip: origin?.ipHash, page }],
     queryFn: () =>
       apiClient.adminAudit.list({
         action: action || undefined,
+        resourceType: modulo || undefined,
         actor: actor?.id,
         ipHash: origin?.ipHash,
         // A date is what the person types; the API takes instants, and its window is half-open
@@ -126,6 +154,15 @@ export function AuditPage(): React.JSX.Element {
           value={action}
           onChange={(e) => refilter(() => setAction(e.target.value))}
           aria-label={t('admin.audit.filter.action')}
+        />
+        <Select
+          aria-label={t('admin.audit.filter.module')}
+          value={modulo}
+          onChange={(value) => refilter(() => setModulo(value))}
+          options={[
+            { value: '', label: t('admin.audit.filter.module.all') },
+            ...MODULOS.map((tipo) => ({ value: tipo, label: t(`admin.audit.module.${tipo}` as TranslationKey) })),
+          ]}
         />
         <Input
           type="date"
