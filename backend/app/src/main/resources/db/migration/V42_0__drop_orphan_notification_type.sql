@@ -1,0 +1,43 @@
+-- =================================================================================================
+-- La migración que le faltó a c4e7927.
+--
+-- QUÉ PASÓ, en orden y en un solo día:
+--
+--   * 7ab2094 (2026-09-19) agregó `CITATION_PLATE_UNCLAIMED` a `NotificationType` y empezó a
+--     emitirlo desde `CitizenNotifier`: el aviso de una boleta contra una placa que nadie había
+--     reclamado.
+--   * c4e7927 (2026-09-19, el mismo día) rehízo el modelo de placa compartida —«la boleta de un
+--     carro compartido se ve, se paga y se apela desde las dos cuentas»— y **quitó la constante**
+--     del enum, porque el concepto «placa no reclamada» dejó de existir.
+--   * Las filas escritas entre los dos commits se quedaron en la base.
+--
+-- Desde entonces, CADA carga de /api/v1/citizen/notifications de ese usuario devuelve 500. No es
+-- un fallo del mapeo ni de la consulta: Hibernate revienta al materializar la fila, en
+-- `EnumJavaType.fromName`, antes de que ningún código de la aplicación la toque:
+--
+--     java.lang.IllegalArgumentException:
+--       No enum constant cr.luparx.notification.model.NotificationType.CITATION_PLATE_UNCLAIMED
+--
+-- Y revienta la LISTA ENTERA: dos filas huérfanas dejaron al ciudadano sin ver ninguna de sus
+-- notificaciones, ni las seis que estaban perfectas.
+--
+-- POR QUÉ SE BORRAN Y NO SE REMAPEAN
+--
+-- Porque no hay a qué remapearlas. `CITATION_PLATE_UNCLAIMED` avisaba de un estado que el producto
+-- ya no modela; convertirlas en `CITATION_ISSUED` sería inventarle a alguien un aviso que nunca se
+-- le mandó, y dejarlas con su tipo original sería dejar la pantalla rota. Tampoco quedan textos
+-- para dibujarlas: c4e7927 se llevó también sus claves de traducción.
+--
+-- Se borra el tipo exacto y no «todo lo que no esté en el enum». Una lista de tipos válidos escrita
+-- acá sería un segundo lugar donde la misma verdad se desincroniza, que es precisamente el defecto
+-- que esta migración viene a reparar.
+--
+-- LA REGLA QUE ESTO DEJA
+--
+-- ADR 0010 (expand/contract) ya la dice, y acá está el precio de no aplicarla: **quitar una
+-- constante de un enum persistido es una contracción, y toda contracción necesita su migración en
+-- el mismo commit**. Agregar es gratis; quitar, no.
+-- =================================================================================================
+
+delete from notifications
+where type = 'CITATION_PLATE_UNCLAIMED';
