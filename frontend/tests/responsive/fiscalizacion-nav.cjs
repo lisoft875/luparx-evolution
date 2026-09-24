@@ -34,7 +34,9 @@ const RUTAS = [
   { nombre: 'Boleta', ruta: '/inspector/cite' },
   { nombre: 'Mis boletas', ruta: '/inspector/citations' },
   { nombre: 'Pendientes', ruta: '/inspector/queue' },
-  { nombre: 'Mi perfil (Más)', ruta: '/inspector/profile' },
+  { nombre: 'Más (menú)', ruta: '/inspector/more' },
+  { nombre: 'Mi perfil', ruta: '/inspector/profile' },
+  { nombre: 'Ayuda', ruta: '/inspector/help' },
 ];
 
 /** Un teléfono, que es como se usa esta aplicación: de pie, al sol, a veces con guantes. */
@@ -163,6 +165,42 @@ async function medirBarra(page) {
         `tiene ${barra.destinos} y las otras ${destinosDeReferencia}`);
     }
   }
+
+  // --- 1.5 El menú «Más» ofrece lo que la especificación enumera --------------------------------
+  //
+  // Se comprueba por TEXTO y no por una lista de rutas: lo que la especificación promete es que la
+  // persona encuentre esas opciones, no que existan ciertos componentes. Y «Cerrar sesión» aparte,
+  // porque era el hueco real del portal: existía escrito en una página que ninguna ruta renderiza.
+  console.log('\n── el menú «Más» ──');
+  await page.goto(`${BASE}/inspector/more`, { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(2000);
+  const menu = await page.evaluate(() => {
+    const cuerpo = (document.body.textContent || '').replace(/\s+/g, ' ');
+    const enlaceExterno = [...document.querySelectorAll('a[target="_blank"]')].map((a) => ({
+      href: a.getAttribute('href'),
+      rel: a.getAttribute('rel') || '',
+    }));
+    return { cuerpo, enlaceExterno };
+  });
+  for (const [etiqueta, texto] of [
+    ['Mi perfil', 'Mi perfil'],
+    ['Idioma', 'Idioma'],
+    ['Estado de conexión', 'Estado de conexión'],
+    ['Ayuda', 'Ayuda'],
+    ['Acerca de LuParX', 'Acerca de LuParX'],
+    ['Cerrar sesión', 'Cerrar sesión'],
+  ]) {
+    comprobar(menu.cuerpo.includes(texto), `«${etiqueta}» está en el menú`);
+  }
+  // La §2 lo prohíbe expresamente.
+  comprobar(!menu.cuerpo.includes('Cambiar municipalidad'),
+    'el menú NO ofrece cambiar de municipalidad');
+  // Un enlace externo sin `noopener` le entrega a la pestaña que abre una referencia a la nuestra.
+  comprobar(
+    menu.enlaceExterno.length === 1 && menu.enlaceExterno[0].rel.includes('noopener'),
+    '«Acerca de LuParX» abre fuera y con rel=noopener',
+    JSON.stringify(menu.enlaceExterno),
+  );
 
   // --- 2. Navegando en cadena, sin recargar ------------------------------------------------------
   console.log('\n── navegando varias veces seguidas, sin recargar ──');
