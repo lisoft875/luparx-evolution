@@ -29,6 +29,7 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
@@ -127,9 +128,20 @@ public class AdminOperationsController {
         Instant start = from == null ? Instant.now().minus(DEFAULT_REPORT_WINDOW_DAYS, ChronoUnit.DAYS) : from;
         Instant end = to == null ? Instant.now() : to;
         Pageable pageable = org.springframework.data.domain.PageRequest.of(request.page(), request.size());
-        Page<cr.luparx.app.audit.AuditEventEntity> result = auditEventRepository.searchInTenant(
-                tenantId.value(), actor, action, blankToNull(resourceType), blankToNull(ipHash), start, end,
-                blankToNull(q), pageable);
+        // Dos caminos, y el de siempre no toca nada nuevo.
+        //
+        // La primera versión metía `q` como parámetro opcional en la consulta única y eso tiró la
+        // pantalla: sin búsqueda, `:q` llegaba nulo dentro de un `concat` y el 99% de las cargas
+        // —las que no buscan nada— pasaban a depender de que Hibernate acertara su tipo SQL. No
+        // acertó. Una función nueva no puede romper el camino que no usa.
+        String texto = blankToNull(q);
+        Page<cr.luparx.app.audit.AuditEventEntity> result = texto == null
+                ? auditEventRepository.searchInTenant(
+                        tenantId.value(), actor, action, blankToNull(resourceType), blankToNull(ipHash),
+                        start, end, pageable)
+                : auditEventRepository.searchInTenantMatching(
+                        tenantId.value(), actor, action, blankToNull(resourceType), blankToNull(ipHash),
+                        start, end, likePrefix(texto), likeContains(texto), pageable);
         // One lookup for the whole page, before the mapping loop rather than inside it (v0.33).
         Map<UUID, cr.luparx.app.audit.AuditActorResolver.Actor> actors =
                 actorResolver.resolve(result.getContent());
@@ -227,6 +239,29 @@ public class AdminOperationsController {
     /** A filter that was typed and then cleared is no filter; "" must not mean "entries with no origin". */
     private static String blankToNull(String value) {
         return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    /**
+     * Escapa lo que en un LIKE de SQL es un comodín.
+     *
+     * <p>Sin esto, escribir {@code %} en el buscador trae la bitácora entera y un {@code _} trae
+     * cualquier cosa de un carácter: quien busca no sabe que está escribiendo un patrón, y una
+     * pantalla que se comporta distinto según un carácter invisible para quien la usa es una
+     * pantalla en la que no se confía. La barra invertida se escapa primero, o escaparía a las
+     * escapadas.</p>
+     */
+    private static String escapeLike(String value) {
+        return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
+    }
+
+    /** {@code "<texto>%"} en minúsculas: el identificador de recurso se busca por prefijo. */
+    private static String likePrefix(String value) {
+        return escapeLike(value.toLowerCase(Locale.ROOT)) + "%";
+    }
+
+    /** {@code "%<texto>%"} en minúsculas: el código de acción se busca por contenido. */
+    private static String likeContains(String value) {
+        return "%" + escapeLike(value.toLowerCase(Locale.ROOT)) + "%";
     }
 
     /**

@@ -30,9 +30,6 @@ public interface AuditEventRepository extends JpaRepository<AuditEventEntity, UU
               and (:action is null or a.action = :action)
               and (:resourceType is null or a.resourceType = :resourceType)
               and (:ipHash is null or a.ipHash = :ipHash)
-              and (:q is null
-                   or lower(a.resourceId) like lower(concat(:q, '%'))
-                   or lower(a.action) like lower(concat('%', :q, '%')))
               and a.occurredAt >= :from and a.occurredAt < :to
             order by a.occurredAt desc
             """)
@@ -43,8 +40,52 @@ public interface AuditEventRepository extends JpaRepository<AuditEventEntity, UU
                                           @Param("ipHash") String ipHash,
                                           @Param("from") Instant from,
                                           @Param("to") Instant to,
-                                          @Param("q") String q,
                                           Pageable pageable);
+
+    /**
+     * Lo mismo, y además acotado por un texto que quien consulta escribió.
+     *
+     * <h2>Por qué es una consulta APARTE y no un parámetro opcional de la de arriba</h2>
+     *
+     * <p>Porque lo fue durante unas horas del 25-09-2026 y tiró la pantalla entera. Con un
+     * {@code (:q is null or …)} dentro de la consulta única, el caso «sin búsqueda» —que es el 99%
+     * de las cargas— pasaba a depender de que Hibernate acertara el tipo SQL de un parámetro nulo
+     * que sólo aparece dentro de un {@code concat}. No acertó: 500 en cada llamada, en las dos
+     * municipalidades, y una bitácora vacía donde antes había ciento cincuenta entradas.</p>
+     *
+     * <p>Separarlas cuesta un método y compra dos cosas: el camino sin búsqueda vuelve a ser
+     * exactamente la consulta que funcionó durante meses —una función nueva no puede romper lo que
+     * no toca— y acá {@code :q} nunca es nulo, así que no hay nada que inferir.</p>
+     *
+     * @param prefijo  patrón ya armado para el identificador de recurso: {@code "<texto>%"}. Por
+     *                 prefijo y no por contenido para que el índice sirva; un UUID pegado entero
+     *                 —el caso real— acierta igual
+     * @param contiene patrón para el código de acción: {@code "%<texto>%"}. Ahí sí por contenido,
+     *                 porque la columna es corta y nadie se acuerda de si la acción empieza por
+     *                 {@code MEMBERSHIP} o por {@code STAFF}
+     */
+    @Query("""
+            select a from AuditEventEntity a
+            where a.tenantId = :tenantId
+              and (:actor is null or a.actorUserId = :actor)
+              and (:action is null or a.action = :action)
+              and (:resourceType is null or a.resourceType = :resourceType)
+              and (:ipHash is null or a.ipHash = :ipHash)
+              and a.occurredAt >= :from and a.occurredAt < :to
+              and (lower(coalesce(a.resourceId, '')) like :prefijo
+                   or lower(a.action) like :contiene)
+            order by a.occurredAt desc
+            """)
+    Page<AuditEventEntity> searchInTenantMatching(@Param("tenantId") UUID tenantId,
+                                                  @Param("actor") UUID actor,
+                                                  @Param("action") String action,
+                                                  @Param("resourceType") String resourceType,
+                                                  @Param("ipHash") String ipHash,
+                                                  @Param("from") Instant from,
+                                                  @Param("to") Instant to,
+                                                  @Param("prefijo") String prefijo,
+                                                  @Param("contiene") String contiene,
+                                                  Pageable pageable);
 
     /**
      * Everything this municipality's trail recorded about ONE record.

@@ -187,6 +187,18 @@ async function detalleDeLaPrimeraFila(page) {
   const page = await context.newPage();
   const errores = [];
   page.on('pageerror', (err) => errores.push(String(err.message).slice(0, 200)));
+  // Un 5xx se dice apenas ocurre.
+  //
+  // El 25-09 el endpoint de la bitácora respondió 500 en TODAS las llamadas y este arnés no lo
+  // miraba: reportó ocho fallos de interfaz —chips, etiquetas, valores— por una caída del
+  // servidor. Una pantalla vacía porque el servidor falla y una pantalla vacía porque la interfaz
+  // está mal se ven igual, y son problemas de dos personas distintas.
+  const caidas = [];
+  page.on('response', (res) => {
+    if (res.status() >= 500 && res.url().includes('/api/')) {
+      caidas.push(`${res.status()} ${res.url().replace(BASE, '').split('?')[0]}`);
+    }
+  });
 
   if (!SOLO_LECTURA) {
     // =============================================================================================
@@ -646,6 +658,11 @@ async function detalleDeLaPrimeraFila(page) {
   }
 
   comprobar(errores.length === 0, 'ninguna excepción de render', errores.join(' | '));
+  comprobar(
+    caidas.length === 0,
+    'ninguna llamada al servidor respondió 5xx',
+    `${caidas.length} respuesta(s): ${[...new Set(caidas)].join(' · ')}`,
+  );
 
   await browser.close();
   console.log(`\n===== ${fallos} comprobaciones fallidas =====`);
