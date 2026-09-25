@@ -1,6 +1,19 @@
 import * as React from 'react';
 
-export type BadgeTone = 'neutral' | 'success' | 'warning' | 'danger' | 'info';
+/**
+ * `neutral`/`success`/`warning`/`danger`/`info` dicen cómo va algo. `violet`/`amber`/`teal` dicen
+ * de qué TIPO es algo — son categorías, no estados, y por eso no se mezclan con los anteriores:
+ * pintar un cambio de tarifa con `warning` haría que cada precio nuevo pareciera una advertencia.
+ */
+export type BadgeTone =
+  | 'neutral'
+  | 'success'
+  | 'warning'
+  | 'danger'
+  | 'info'
+  | 'violet'
+  | 'amber'
+  | 'teal';
 
 export interface BadgeProps {
   tone?: BadgeTone;

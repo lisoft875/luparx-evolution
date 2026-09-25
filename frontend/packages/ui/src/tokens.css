@@ -89,6 +89,25 @@
   --lx-danger-soft: color-mix(in srgb, var(--lx-danger) 16%, transparent);
   --lx-info-soft: color-mix(in srgb, var(--lx-info) 14%, transparent);
 
+  /* ---- Acentos de CATEGORÍA (25-09-2026) ----
+     Tres colores que NO son estados. `success`, `warning` y `danger` dicen «esto salió bien / mirá
+     esto / esto salió mal»; éstos dicen «esto es de qué tipo». Usar `warning` para un cambio de
+     tarifa habría hecho que cada precio nuevo pareciera una advertencia.
+
+     Se AGREGAN. Ninguno de los 34 valores del paquete 360 se toca: la regla de arriba lo prohíbe y
+     sigue en pie.
+
+     El violeta es `#A78BFA` y no el `#8B5CF6` de la guía visual, por una razón medible: sobre su
+     propio fondo suave (14% sobre la superficie) `#8B5CF6` da **3.55:1**, por debajo del 4.5 que
+     pide un texto de 12 px. `#A78BFA` da 5.16:1 con el mismo tono. El ámbar `#D99A24` (5.80) y el
+     verde azulado `#23A6A8` (4.79) sí pasan y quedan como los dio la guía. */
+  --lx-accent-violet: #A78BFA;
+  --lx-accent-violet-soft: color-mix(in srgb, var(--lx-accent-violet) 14%, transparent);
+  --lx-accent-amber: #D99A24;
+  --lx-accent-amber-soft: color-mix(in srgb, var(--lx-accent-amber) 14%, transparent);
+  --lx-accent-teal: #23A6A8;
+  --lx-accent-teal-soft: color-mix(in srgb, var(--lx-accent-teal) 16%, transparent);
+
   /* Superficies que la guía no nombra pero el sistema necesita. Sólidas, como las suyas. */
   --lx-surface-raised: #0C2444;
   --lx-surface-active: #143257;
@@ -194,6 +213,13 @@
   --lx-danger-soft: rgba(192, 41, 47, 0.1);
   --lx-info: #0b7fa8;
   --lx-info-soft: rgba(11, 127, 168, 0.1);
+  /* Los mismos tres acentos, oscurecidos para leerse sobre blanco. */
+  --lx-accent-violet: #6d28d9;
+  --lx-accent-violet-soft: rgba(109, 40, 217, 0.1);
+  --lx-accent-amber: #92600b;
+  --lx-accent-amber-soft: rgba(146, 96, 11, 0.12);
+  --lx-accent-teal: #0f6f70;
+  --lx-accent-teal-soft: rgba(15, 111, 112, 0.1);
 
   --lx-focus-ring: #0a4dff;
 
@@ -1548,6 +1574,19 @@ a.lx-list-row {
 .lx-badge--info {
   background: var(--lx-info-soft);
   color: var(--lx-info);
+}
+/* Categoría, no estado. Ver el comentario de los tokens `--lx-accent-*`. */
+.lx-badge--violet {
+  background: var(--lx-accent-violet-soft);
+  color: var(--lx-accent-violet);
+}
+.lx-badge--amber {
+  background: var(--lx-accent-amber-soft);
+  color: var(--lx-accent-amber);
+}
+.lx-badge--teal {
+  background: var(--lx-accent-teal-soft);
+  color: var(--lx-accent-teal);
 }
 
 /* ---- StepList (numbered flow, e.g. parking in 4 steps) -------------------- */

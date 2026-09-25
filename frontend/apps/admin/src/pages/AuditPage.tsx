@@ -4,6 +4,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { useAuth } from '@luparx/auth';
 import { useTranslation, formatDateTime, type TranslationKey } from '@luparx/i18n';
 import type { AuditChange, AuditEvent, AuditOriginProbe } from '@luparx/api-client';
+import type { BadgeTone } from '@luparx/ui';
 import {
   Alert,
   Badge,
@@ -670,11 +671,65 @@ function ChangeLine({
   const hasta = valorLegible(t, change.field, change.newValue);
   return (
     <span style={{ fontVariantNumeric: 'tabular-nums' }}>
-      <strong>{fieldLabel}</strong>: {desde} → {hasta}{' '}
+      {/* El nombre del campo es un chip de color por TIPO de cambio, no un `<strong>`.
+          El color acá es información: deja recorrer veinte filas y ver de un vistazo cuáles tocaron
+          dinero y cuáles sólo un nombre, sin leer ninguna. El texto dice lo mismo que el color, así
+          que quien no distingue los tonos no pierde nada. */}
+      <Badge tone={tonoDelCampo(change)}>{fieldLabel}</Badge> {desde} → {hasta}{' '}
       {/* Without this a reader takes a masked value for the address itself. */}
       {change.masked ? <Badge tone="neutral">{maskedLabel}</Badge> : null}
     </span>
   );
+}
+
+/**
+ * De qué tipo es un cambio, en un color.
+ *
+ * <h2>Por qué una tabla explícita y no una regla</h2>
+ *
+ * <p>Porque los nombres de campo vienen del servidor y no siguen ninguna convención que se pueda
+ * deducir: `amountMinor` es dinero, `chargesAllDay` es horario, `active` es un estado. Una
+ * heurística sobre el nombre acertaría hoy y se equivocaría en silencio con el primer campo nuevo
+ * — y equivocarse en silencio, acá, es pintar un cambio de tarifa como si fuera otra cosa.</p>
+ *
+ * <p>Lo que no está en la tabla sale neutro, que es la respuesta correcta para «no sé de qué tipo
+ * es esto»: el chip sigue diciendo el nombre del campo.</p>
+ */
+const TONO_POR_CAMPO: Record<string, BadgeTone> = {
+  // Identidad
+  name: 'info',
+  code: 'info',
+  // Dinero
+  amountMinor: 'amber',
+  // Tiempo y horario
+  minutes: 'teal',
+  week: 'teal',
+  chargesAllDay: 'teal',
+  exceptions: 'teal',
+  sessionMinMinutes: 'teal',
+  sessionMaxMinutes: 'teal',
+  sessionIncrementsMinutes: 'teal',
+  extensionMaxTotalMinutes: 'teal',
+  // Texto largo
+  description: 'violet',
+};
+
+/**
+ * El tono del chip. Un estado es el único caso donde el color depende del VALOR y no del campo:
+ * pasar a activo es verde y dejar de estarlo es rojo, que es justamente lo que alguien busca
+ * cuando recorre la bitácora.
+ */
+function tonoDelCampo(change: AuditChange): BadgeTone {
+  if (change.field === 'active' || change.field === 'status') {
+    const hacia = String(change.newValue ?? '').toUpperCase();
+    const encendido = hacia === 'TRUE' || hacia === 'ACTIVE' || hacia === 'ACTIVA';
+    const apagado =
+      hacia === 'FALSE' || hacia === 'INACTIVE' || hacia === 'REVOKED' || hacia === 'SUSPENDED';
+    if (encendido) return 'success';
+    if (apagado) return 'danger';
+    return 'neutral';
+  }
+  return TONO_POR_CAMPO[change.field] ?? 'neutral';
 }
 
 /**

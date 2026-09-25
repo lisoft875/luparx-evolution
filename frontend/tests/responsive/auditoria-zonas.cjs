@@ -108,10 +108,18 @@ async function bitacoraDe(page, codigoZona) {
     return [...document.querySelectorAll('tbody tr')].map((tr) => {
       const celdas = [...tr.querySelectorAll('td')].map((td) => (td.textContent ?? '').trim());
       const cambios = tr.querySelector('.lx-table-cell-clamp');
+      // El tono del chip: es información, así que se comprueba igual que el texto.
+      const chips = cambios
+        ? [...cambios.querySelectorAll('.lx-badge')].map((b) => ({
+            texto: (b.textContent ?? '').trim(),
+            tono: (b.className.match(/lx-badge--(\w+)/) ?? [])[1] ?? '',
+          }))
+        : [];
       return {
         accion: celdas[columna('Acci')] ?? '',
         cambios: celdas[columna('cambi')] ?? '',
         cambiosCompletos: cambios ? (cambios.getAttribute('title') ?? '') : '',
+        chips,
         cabeceras,
       };
     });
@@ -259,6 +267,11 @@ async function detalleDeLaPrimeraFila(page) {
       'y no arrastra campos que no se tocaron',
       (cambioNombre.cambios || '(vacío)').slice(0, 140),
     );
+    comprobar(
+      (cambioNombre.chips ?? []).some((c) => c.texto === 'Nombre' && c.tono === 'info'),
+      'guía de color · «Nombre» viene en un chip azul',
+      JSON.stringify(cambioNombre.chips ?? []),
+    );
 
     // --- §4: desactivar, en palabras ----------------------------------------------------------
     console.log('── §4 · desactivar se entiende sin saber qué es `active: false` ──');
@@ -283,6 +296,20 @@ async function detalleDeLaPrimeraFila(page) {
       /Activa|Inactiva/.test(cambioEstado.cambios) && !/true|false/.test(cambioEstado.cambios),
       'y el valor dice Activa / Inactiva, no true / false',
       (cambioEstado.cambios || '(vacío)').slice(0, 140),
+    );
+    // El único chip cuyo color depende del VALOR y no del campo: verde al encender, rojo al apagar.
+    const chipEstado = (cambioEstado.chips ?? []).find((c) => c.texto === 'Estado');
+    const apagando = /→\s*Inactiva/.test(cambioEstado.cambios);
+    comprobar(
+      Boolean(chipEstado) && chipEstado.tono === (apagando ? 'danger' : 'success'),
+      `guía de color · «Estado» viene ${apagando ? 'en rojo al desactivar' : 'en verde al activar'}`,
+      JSON.stringify(cambioEstado.chips ?? []),
+    );
+    // El color acompaña al texto, nunca lo reemplaza: quien no distingue los tonos lee lo mismo.
+    comprobar(
+      (cambioEstado.chips ?? []).every((c) => c.texto.length > 0),
+      'guía de color · ningún chip depende sólo del color: todos llevan su texto',
+      JSON.stringify(cambioEstado.chips ?? []),
     );
 
     // Se deja desactivada: es lo más cerca de borrarla que el modelo permite.
