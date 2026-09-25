@@ -180,8 +180,20 @@ public class AdminParkingController {
         TenantId tenantId = TenantContextHolder.requireTenantId();
         ParkingZone zone = catalogService.createZone(tenantId, request.code(), request.name(),
                 request.description(), request.divisionId());
-        auditRecorder.record(AuditAction.PARKING_ZONE_UPDATED, "parking-zone", zone.getId().toString(),
-                Map.of("code", zone.getCode(), "created", "true"));
+        // Acción propia, y con los valores con los que nació (25-09-2026).
+        //
+        // Registrarlo como PARKING_ZONE_UPDATED con un `created=true` en los metadatos escondía el
+        // dato en el único lugar que la pantalla de auditoría no muestra: en la bitácora, una zona
+        // recién creada era indistinguible de un guardado que no cambió nada. Y sin los valores
+        // iniciales, la primera modificación de esa zona registra un «antes» que nunca se registró.
+        auditRecorder.record(AuditAction.PARKING_ZONE_CREATED, "parking-zone", zone.getId().toString(),
+                Map.of("code", zone.getCode()),
+                AuditChanges.builder()
+                        .set("code", zone.getCode())
+                        .set("name", zone.getName())
+                        .set("description", zone.getDescription())
+                        .set("active", Boolean.valueOf(zone.isActive()))
+                        .build());
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(mapper.toZone(zone, 0L));
     }
@@ -200,14 +212,24 @@ public class AdminParkingController {
         UUID previousDivision = before.getDivisionId();
         ParkingZone zone = catalogService.updateZone(tenantId, id, request.name(), request.description(),
                 request.divisionId(), request.active().booleanValue());
-        auditRecorder.record(AuditAction.PARKING_ZONE_UPDATED, "parking-zone", id.toString(),
-                Map.of("code", zone.getCode()),
-                AuditChanges.builder()
-                        .compare("name", previousName, zone.getName())
-                        .compare("description", previousDescription, zone.getDescription())
-                        .compare("divisionId", previousDivision, zone.getDivisionId())
-                        .compare("active", Boolean.valueOf(previousActive), Boolean.valueOf(zone.isActive()))
-                        .build());
+        AuditChanges cambios = AuditChanges.builder()
+                .compare("name", previousName, zone.getName())
+                .compare("description", previousDescription, zone.getDescription())
+                .compare("divisionId", previousDivision, zone.getDivisionId())
+                .compare("active", Boolean.valueOf(previousActive), Boolean.valueOf(zone.isActive()));
+        // Abrir el formulario y guardarlo sin tocar nada no es una modificación, y hasta hoy
+        // escribía igual un «Zona actualizada» con un guion en «Qué cambió» (25-09-2026). En una
+        // bitácora que nadie puede borrar, una fila que afirma un cambio que no ocurrió es peor que
+        // una fila de menos: obliga a quien investiga a descartarla una por una.
+        //
+        // El PUT se ejecuta igual. El servicio llama a `touch()` siempre, así que la fila mueve su
+        // `updated_at` aunque no haya cambiado ningún valor; eso se deja como está a propósito,
+        // porque tocar ahí mueve el bloqueo optimista y las invalidaciones de caché por un problema
+        // que no es ése. Lo que no se escribe es el EVENTO, que es lo que alguien lee.
+        if (!cambios.isEmpty()) {
+            auditRecorder.record(AuditAction.PARKING_ZONE_UPDATED, "parking-zone", id.toString(),
+                    Map.of("code", zone.getCode()), cambios.build());
+        }
         return mapper.toZone(zone, catalogService.countSpaces(tenantId, zone.getId()));
     }
 

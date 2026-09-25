@@ -80,6 +80,24 @@ public final class AuditChanges {
         return compare(field, null, after);
     }
 
+    /**
+     * Si no cambió ni un campo.
+     *
+     * <p>Existe para que quien llama pueda decidir <b>no registrar nada</b>. Guardar un formulario
+     * sin tocarlo produce una comparación vacía, y hasta el 25-09-2026 eso igual escribía un evento
+     * «actualizado» con un guion en «Qué cambió». Una bitácora es evidencia: una fila que afirma una
+     * modificación que no ocurrió no es un detalle cosmético, es ruido en el único lugar donde el
+     * ruido no se puede borrar después.</p>
+     *
+     * <p>No se resuelve dentro de {@code AuditRecorder} porque no toda acción sin cambios sobra: una
+     * consulta, una aprobación o una exportación no cambian ningún campo y sí deben quedar
+     * registradas. Sólo quien escribe la acción sabe si «sin diferencias» significa «no pasó
+     * nada».</p>
+     */
+    public boolean isEmpty() {
+        return changes.isEmpty();
+    }
+
     public List<AuditChange> build() {
         return List.copyOf(changes);
     }

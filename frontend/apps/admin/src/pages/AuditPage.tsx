@@ -218,6 +218,11 @@ export function AuditPage(): React.JSX.Element {
         emptyLabel={t('admin.audit.empty')}
         rows={data?.items ?? []}
         rowKey={(row) => row.id}
+        // Si en una pantalla angosta hay que desplazarse, que al menos el actor no se vaya: una
+        // fila cuyo «quién» quedó fuera de la vista es una acción sin dueño, y reconstruirla
+        // obliga a ir y volver. En escritorio no debería hacer falta —las columnas ya caben— y
+        // esto no estorba.
+        stickyFirstColumn
         columns={[
           {
             key: 'actor',
@@ -263,14 +268,22 @@ export function AuditPage(): React.JSX.Element {
               (row.changes ?? []).length === 0 ? (
                 <span className="lx-text-meta">—</span>
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                // `lx-table-cell-clamp` porque esta celda es la única con prosa: una descripción de
+                // zona son dos renglones de texto y, con el `white-space: nowrap` que la tabla pone
+                // por omisión, una sola línea de cuatrocientos píxeles que empuja Origen y Fecha
+                // fuera de la pantalla. Recortada a dos líneas, la fila se lee entera sin
+                // desplazarse; el valor completo queda en el `title`.
+                // Sin `display: flex` encima: `-webkit-line-clamp` sólo funciona sobre
+                // `-webkit-box`, que es lo que la clase pone y que ya apila a sus hijos en
+                // vertical. Ponerle flex por costumbre habría dejado la clase de adorno.
+                <div className="lx-table-cell-clamp" title={cambiosEnTexto(t, row.changes ?? [])}>
                   {(row.changes ?? []).map((change) => (
                     <ChangeLine
                       key={change.field}
                       change={change}
                       maskedLabel={t('admin.audit.masked')}
                       fieldLabel={fieldLabelOf(t, change.field)}
-                      allZonesLabel={t('admin.staff.zones.all')}
+                      t={t}
                     />
                   ))}
                 </div>
@@ -527,22 +540,62 @@ function ChangeLine({
   change,
   maskedLabel,
   fieldLabel,
-  allZonesLabel,
+  t,
 }: {
   change: AuditChange;
   maskedLabel: string;
   fieldLabel: string;
-  allZonesLabel: string;
+  t: (key: TranslationKey) => string;
 }): React.JSX.Element {
-  // El servidor escribe «*» cuando la asignación de sectores está vacía, que no es «ninguno» sino
-  // «toda la municipalidad». Dejarlo pasar crudo invertiría el sentido del registro.
-  const leer = (valor: string | null | undefined): string =>
-    valor === '*' && change.field === 'zones' ? allZonesLabel : (valor ?? '—');
+  const desde = valorLegible(t, change.field, change.oldValue);
+  const hasta = valorLegible(t, change.field, change.newValue);
   return (
     <span style={{ fontVariantNumeric: 'tabular-nums' }}>
-      <strong>{fieldLabel}</strong>: {leer(change.oldValue)} → {leer(change.newValue)}{' '}
+      <strong>{fieldLabel}</strong>: {desde} → {hasta}{' '}
       {/* Without this a reader takes a masked value for the address itself. */}
       {change.masked ? <Badge tone="neutral">{maskedLabel}</Badge> : null}
     </span>
   );
+}
+
+/**
+ * El valor de un campo, en el idioma de quien lo lee.
+ *
+ * <p>«active: true → false» es correcto y es ilegible para quien administra una municipalidad: hay
+ * que saber que el campo se llama `active` y que `false` quiere decir que la zona dejó de operar.
+ * Son dos traducciones mentales para un dato que la pantalla ya podía dar hecho.</p>
+ *
+ * <p>Sólo se traduce lo que es un ENUMERADO: un booleano, un estado, un centinela. Un nombre o una
+ * descripción se muestran tal cual, porque son lo que alguien escribió y cambiarlos sería
+ * falsificar la evidencia. El código técnico no se pierde: la fila entera sigue disponible en el
+ * `title` de la celda.</p>
+ */
+function valorLegible(
+  t: (key: TranslationKey) => string,
+  field: string,
+  value: string | null | undefined,
+): string {
+  if (field === 'active' && (value === 'true' || value === 'false')) {
+    return t(`admin.audit.value.active.${value}` as TranslationKey);
+  }
+  // El servidor escribe «*» cuando la asignación de sectores está vacía, que no es «ninguno» sino
+  // «toda la municipalidad». Dejarlo pasar crudo invertiría el sentido del registro.
+  if (field === 'zones' && value === '*') {
+    return t('admin.staff.zones.all');
+  }
+  return value ?? '—';
+}
+
+/** La fila de cambios en una sola cadena, para el `title` de la celda. */
+function cambiosEnTexto(
+  t: (key: TranslationKey) => string,
+  changes: readonly AuditChange[],
+): string {
+  return changes
+    .map(
+      (change) =>
+        `${fieldLabelOf(t, change.field)}: ${valorLegible(t, change.field, change.oldValue)}`
+        + ` → ${valorLegible(t, change.field, change.newValue)}`,
+    )
+    .join('\n');
 }

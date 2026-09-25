@@ -70,6 +70,17 @@ public final class AuditAction {
     public static final String PARKING_SESSION_EXTENDED = "PARKING_SESSION_EXTENDED";
     public static final String PARKING_SESSION_FINISHED = "PARKING_SESSION_FINISHED";
     public static final String PARKING_POLICY_UPDATED = "PARKING_POLICY_UPDATED";
+    /**
+     * Se abrió un sector nuevo (25-09-2026).
+     *
+     * <p>Antes la creación se registraba como {@link #PARKING_ZONE_UPDATED} con un {@code
+     * created=true} en los metadatos, que la pantalla de auditoría no muestra. En la bitácora, una
+     * zona recién creada y un guardado que no cambió nada se veían idénticos: la misma acción y un
+     * guion en «Qué cambió». Quien audita no podía distinguir el nacimiento de un recurso de un
+     * clic sin consecuencias, y ése es exactamente el tipo de pregunta para la que existe la
+     * bitácora.</p>
+     */
+    public static final String PARKING_ZONE_CREATED = "PARKING_ZONE_CREATED";
     public static final String PARKING_ZONE_UPDATED = "PARKING_ZONE_UPDATED";
     /**
      * The perimeter of a zone was drawn or redrawn (CONTRACT.md v0.40).
