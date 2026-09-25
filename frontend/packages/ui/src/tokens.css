@@ -15,37 +15,70 @@
 
 :root {
   /* ==============================================================================================
-     REDISEÑO 360° (paquete LUPARX_UI_UX_360, 2026-09-18).
-     Fuente visual de verdad: 00_REFERENCIAS/REFERENCIA_MAESTRA_LUPARX_360.png
+     PALETA OSCURA — GUÍA VISUAL DE COLOR Y JERARQUÍA (Javier, 2026-09-25).
 
-     ESTOS 34 VALORES SON LOS DE `02_DESIGN_SYSTEM/tokens.css`, VERBATIM. No se reinterpretan, no
-     se ajustan "a ojo" y no se mezclan con los anteriores: la regla 1 del paquete dice que la
-     referencia gobierna cualquier ambigüedad, y la del master prompt prohíbe cambiar la paleta por
-     gusto propio. Si un valor de acá no coincide con el archivo de la guía, es un error.
+     ESTA GUÍA SUSTITUYE AL PAQUETE LUPARX_UI_UX_360 COMO FUENTE DE VERDAD DEL COLOR.
 
-     Lo que cambió respecto de la paleta anterior (LuParx Neon):
-     - `--lx-surface` y `--lx-surface-2` pasan de rgba() translúcido a HEX SÓLIDO. Ese es el
-       cambio de fondo del rediseño y es deliberado: la regla 2 pide "no glassmorphism excesivo".
-     - Los radios bajan un escalón (sm 10→8, md 16→12, lg 20→16) y entra `xl: 20px`.
-     - Entran `primary-2`, `primary-hover`, `shadow-focus`, `sidebar`, `content-max`, `transition`,
-       `space-8` y `space-10`.
+     Hasta hoy acá vivía esta regla: «estos 34 valores son los de `02_DESIGN_SYSTEM/tokens.css`,
+     VERBATIM; no se reinterpretan, no se ajustan a ojo». Se cumplió, y se deja escrito qué la
+     reemplazó en vez de borrarla: una regla que desaparece sin dejar rastro es la que alguien
+     vuelve a romper sin saber que existía. El paquete 360 sigue gobernando radios, sombras,
+     espaciado y tipografía; el COLOR de esta sección ya no.
+
+     Ese archivo NO está en este repositorio —venía en el paquete entregado— así que no se puede
+     sincronizar desde acá. Si se vuelve a abrir, sus colores y éstos van a discrepar, y los que
+     mandan son éstos.
+
+     ── De dónde sale cada valor ──────────────────────────────────────────────────────────────────
+
+     DE LA GUÍA, literales:
+       bg #06111F · bg-elevated/surface #0B1B2D · surface-2 #102844 · primary #0A84FF
+       primary-2 #19C6FF · text-muted #93A4B8 · success #12B981 · danger #E94B5F
+
+     DERIVADOS, porque la guía no los da y hay que mantener la escalera:
+       surface-hover #17365A  (un escalón por encima de surface-2, como lo era antes)
+       primary-hover #3398FF  (un escalón por encima del primario)
+       border / border-strong: se BAJÓ su presencia. La guía pide líneas divisorias «discretas, no
+         protagonistas» y no usar azul intenso en todos los bordes; el alfa baja de 0.20 a 0.14 y
+         de 0.42 a 0.30.
+
+     SIN CAMBIO, porque la guía no los menciona:
+       text #F7FAFF (ya era el «blanco roto» que pide) · text-subtle · warning · info
+
+     ── Lo que esto sí arregla, medido ────────────────────────────────────────────────────────────
+
+     El problema reportado —«toda la interfaz se ve como un solo bloque azul»— NO venía de los
+     tonos, que apenas cambian: ΔE76 de 3.1 en el fondo, 3.8 en el panel y 2.6 en el texto
+     secundario, todo por debajo del umbral de «apenas visible». Venía del ESCALONADO entre capas,
+     que era casi nulo:
+
+       antes:    bg → panel 1.084   panel → superficie 1.048   superficie → elevada 1.084
+       ahora:    bg → panel 1.091                              panel → elevada   1.166
+                 elevada → hover 1.215 (antes 1.118)
+
+     `bg-elevated` pasa a valer lo mismo que `surface` a propósito: su único uso es el fondo de la
+     primera columna fija de una tabla, que tiene que ser opaco y coincidir con el de la fila. Que
+     fuera más oscuro hacía que esa columna se leyera como una banda aparte.
+
+     Contraste verificado sobre las tres capas: texto 18.1/16.6/14.3, secundario 7.4/6.8/5.9,
+     éxito 7.5/6.9/5.9, primario 5.2/4.8/4.1. Todo lo que es texto corrido pasa 4.5.
      ============================================================================================== */
-  --lx-bg: #020A18;
-  --lx-bg-elevated: #06152A;
-  --lx-surface: #081A32;
-  --lx-surface-2: #0B2140;
-  --lx-surface-hover: #102A4D;
-  --lx-border: rgba(117, 170, 235, 0.2);
-  --lx-border-strong: rgba(69, 151, 255, 0.42);
-  --lx-primary: #087BFF;
-  --lx-primary-2: #08B7FF;
-  --lx-primary-hover: #2490FF;
+  --lx-bg: #06111F;
+  --lx-bg-elevated: #0B1B2D;
+  --lx-surface: #0B1B2D;
+  --lx-surface-2: #102844;
+  --lx-surface-hover: #17365A;
+  --lx-border: rgba(117, 170, 235, 0.14);
+  --lx-border-strong: rgba(69, 151, 255, 0.3);
+  --lx-primary: #0A84FF;
+  --lx-primary-2: #19C6FF;
+  --lx-primary-hover: #3398FF;
   --lx-text: #F7FAFF;
-  --lx-text-muted: #9AAAC0;
+  --lx-text-muted: #93A4B8;
   --lx-text-subtle: #6F829B;
-  --lx-success: #22D39A;
+  --lx-success: #12B981;
   --lx-warning: #F4C95D;
-  --lx-danger: #FF5E73;
+  --lx-danger: #E94B5F;
   --lx-info: #43A5FF;
   --lx-radius-sm: 8px;
   --lx-radius-md: 12px;
@@ -4170,4 +4203,16 @@ a.lx-list-row {
 .lx-row-detail:focus-visible {
   outline: 2px solid var(--lx-focus-ring);
   outline-offset: 2px;
+}
+
+/* La fila de herramientas sobre los filtros: buscar ocupa lo que haya, el tamaño de página pide lo
+   justo. No es una rejilla de columnas iguales como `.lx-filter-row`, porque una caja de búsqueda
+   del mismo ancho que un selector de tres opciones desperdicia la mitad de la fila. */
+.lx-filter-row--tools {
+  grid-template-columns: minmax(240px, 1fr) minmax(160px, 200px);
+}
+@media (max-width: 640px) {
+  .lx-filter-row--tools {
+    grid-template-columns: 1fr;
+  }
 }

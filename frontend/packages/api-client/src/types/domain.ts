@@ -773,6 +773,14 @@ export type AuditEventsQuery = {
   actor?: string;
   action?: string;
   /**
+   * Texto libre: identificador de recurso (por prefijo) o código de acción (por contenido).
+   *
+   * No busca por nombre de persona — ese dato no vive en la bitácora, se resuelve al leer para que
+   * un nombre que cambia no quede congelado en un registro que no se puede corregir. Para eso está
+   * `actor`, al que se llega desde «Ver sólo lo de esta persona».
+   */
+  q?: string;
+  /**
    * El módulo, que en esta bitácora es el `resourceType` que ya se escribe con cada entrada:
    * `parking-rate`, `parking-zone`, `citation`, `user`…
    *

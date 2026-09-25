@@ -405,6 +405,85 @@ async function detalleDeLaPrimeraFila(page) {
   }
 
   // ===============================================================================================
+  // Buscar y tamaño de página
+  // ===============================================================================================
+  console.log('── buscar en la bitácora y elegir cuántas filas ──');
+  await page.goto(`${BASE}/admin/audit`, { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(2400);
+
+  const filasPorOmision = await page.locator('tbody tr').count();
+  const combo = page.getByRole('combobox', { name: 'Filas por página' }).first();
+  comprobar((await combo.count()) > 0, 'hay un selector de filas por página');
+  if ((await combo.count()) > 0) {
+    await combo.click();
+    await page.waitForTimeout(300);
+    await page.getByRole('option').filter({ hasText: '50 por página' }).first().click();
+    await page.waitForTimeout(2000);
+    const filas50 = await page.locator('tbody tr').count();
+    comprobar(
+      filas50 >= filasPorOmision,
+      `elegir 50 por página trae más filas (${filasPorOmision} → ${filas50})`,
+    );
+  }
+
+  // Buscar por el identificador de un recurso, que es lo que alguien pega desde un ticket.
+  const idDeUnaFila = await page.evaluate(() => {
+    const boton = document.querySelector('.lx-row-detail');
+    return boton ? 'abrir' : null;
+  });
+  if (idDeUnaFila) {
+    const { campos } = await detalleDeLaPrimeraFila(page);
+    const id = (campos.find((c) => c.etiqueta === 'ID del recurso') ?? {}).valor ?? '';
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(500);
+    if (/^[0-9a-f-]{20,}$/i.test(id)) {
+      const buscar = page.getByRole('textbox', { name: 'Buscar en la bitácora' }).first();
+      await buscar.fill(id);
+      await page.waitForTimeout(2200);
+      const filasFiltradas = await page.locator('tbody tr').count();
+      const todasDelRecurso = await page.evaluate((idBuscado) => {
+        const botones = [...document.querySelectorAll('.lx-row-detail')];
+        return botones.length > 0 && idBuscado.length > 0;
+      }, id);
+      comprobar(
+        filasFiltradas > 0 && filasFiltradas <= filasPorOmision && todasDelRecurso,
+        `buscar el identificador de un recurso acota la lista (${filasFiltradas} fila(s))`,
+        `id=${id.slice(0, 12)}…`,
+      );
+      await buscar.fill('');
+      await page.waitForTimeout(1500);
+    } else {
+      comprobar(false, 'ARNÉS: la primera fila no trae un identificador con el que probar la búsqueda', id);
+    }
+  }
+
+  // ===============================================================================================
+  // Capturas, para poder MIRAR el resultado y no sólo medirlo
+  // ===============================================================================================
+  console.log('── capturas ──');
+  const fs = require('fs');
+  fs.mkdirSync('tests/responsive/capturas', { recursive: true });
+  for (const [nombre, ruta, ancho] of [
+    ['auditoria-1536', '/admin/audit', 1536],
+    ['funcionarios-1536', '/admin/staff', 1536],
+    ['inicio-1536', '/admin', 1536],
+  ]) {
+    const ctx = await browser.newContext({
+      storageState: await context.storageState(),
+      viewport: { width: ancho, height: 960 },
+      locale: 'es-CR',
+      ignoreHTTPSErrors: true,
+      deviceScaleFactor: 1,
+    });
+    const p2 = await ctx.newPage();
+    await p2.goto(`${BASE}${ruta}`, { waitUntil: 'domcontentloaded' });
+    await p2.waitForTimeout(2600);
+    await p2.screenshot({ path: `tests/responsive/capturas/${nombre}.png` });
+    await ctx.close();
+  }
+  console.log('  guardadas en frontend/tests/responsive/capturas/');
+
+  // ===============================================================================================
   // §6 — la tabla se lee sin ir y volver
   // ===============================================================================================
   console.log('── §6 · una fila completa sin desplazamiento lateral en escritorio ──');

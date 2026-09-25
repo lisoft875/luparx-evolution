@@ -102,6 +102,22 @@ public class AdminOperationsController {
              */
             @RequestParam(required = false) String resourceType,
             @RequestParam(required = false) String ipHash,
+            /**
+             * Texto libre sobre la bitácora (25-09-2026).
+             *
+             * <p>Busca por el IDENTIFICADOR DEL RECURSO y por el código de la acción, que son las
+             * dos cosas que alguien tiene en la mano cuando llega acá desde un ticket de soporte:
+             * un UUID pegado del correo, o el nombre del evento. El identificador se busca por
+             * prefijo y no por contenido, para que el índice sirva y para que un UUID completo —el
+             * caso real— siga acertando.</p>
+             *
+             * <p>NO busca por nombre de la persona. El nombre no está en esta tabla: se resuelve
+             * contra `users` al leer, precisamente para que la bitácora no guarde una copia del
+             * nombre que después no se pueda corregir. Buscarlo exigiría un join a `users` dentro
+             * de esta consulta, y eso es una decisión de rendimiento que no se toma de paso. El
+             * filtro por actor ya existe y se llega a él con «Ver sólo lo de esta persona».</p>
+             */
+            @RequestParam(required = false) String q,
             @RequestParam(required = false) Instant from,
             @RequestParam(required = false) Instant to,
             @RequestParam(required = false) Integer page,
@@ -112,7 +128,8 @@ public class AdminOperationsController {
         Instant end = to == null ? Instant.now() : to;
         Pageable pageable = org.springframework.data.domain.PageRequest.of(request.page(), request.size());
         Page<cr.luparx.app.audit.AuditEventEntity> result = auditEventRepository.searchInTenant(
-                tenantId.value(), actor, action, blankToNull(resourceType), blankToNull(ipHash), start, end, pageable);
+                tenantId.value(), actor, action, blankToNull(resourceType), blankToNull(ipHash), start, end,
+                blankToNull(q), pageable);
         // One lookup for the whole page, before the mapping loop rather than inside it (v0.33).
         Map<UUID, cr.luparx.app.audit.AuditActorResolver.Actor> actors =
                 actorResolver.resolve(result.getContent());

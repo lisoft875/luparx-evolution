@@ -43,7 +43,8 @@ import { startOfDay, startOfNextDay } from '../lib/dateRange';
 import { AUDIT_ACTIONS, auditActionLabel } from '../lib/auditActions';
 import { useMediaQuery } from '@luparx/features';
 
-const PAGE_SIZE = 20;
+/** Los tamaños de página que ofrece el selector. El servidor recorta cualquier cosa por encima de 100. */
+const TAMANOS_DE_PAGINA = [20, 50, 100] as const;
 
 /**
  * The audit trail (CONTRACT.md §7, v0.32 and v0.33).
@@ -75,6 +76,8 @@ export function AuditPage(): React.JSX.Element {
   const [modulo, setModulo] = useState('');
   const [origin, setOrigin] = useState<{ ipHash: string; fingerprint: string } | null>(null);
   const [page, setPage] = useState(0);
+  const [busqueda, setBusqueda] = useState('');
+  const [tamano, setTamano] = useState<number>(TAMANOS_DE_PAGINA[0]);
   /** La fila que el panel lateral está mostrando, o `null` si está cerrado. */
   const [detalle, setDetalle] = useState<AuditEvent | null>(null);
   /**
@@ -93,7 +96,7 @@ export function AuditPage(): React.JSX.Element {
   }
 
   const query = useQuery({
-    queryKey: ['admin', 'audit-events', { action, modulo, from, to, actor: actor?.id, ip: origin?.ipHash, page }],
+    queryKey: ['admin', 'audit-events', { action, modulo, from, to, actor: actor?.id, ip: origin?.ipHash, q: busqueda, page, tamano }],
     queryFn: () =>
       apiClient.adminAudit.list({
         action: action || undefined,
@@ -105,8 +108,11 @@ export function AuditPage(): React.JSX.Element {
         // a "hasta el 9" that excluded everything that happened on the 9th would be a quiet lie.
         from: startOfDay(from),
         to: startOfNextDay(to),
+        // La búsqueda sale sólo cuando hay algo escrito: una cadena vacía es «sin filtro» y no
+        // «recursos cuyo id empieza con nada», que es lo mismo pero le cuesta a la base.
+        q: busqueda.trim() || undefined,
         page,
-        size: PAGE_SIZE,
+        size: tamano,
       }),
   });
   const chainQuery = useQuery({
@@ -172,6 +178,26 @@ export function AuditPage(): React.JSX.Element {
           elegir «Zonas» dejaba el desplegable de módulos en noventa píxeles y, con él, su lista.
           `minmax(Npx, 1fr)` da una medida estable que no depende de lo que esté seleccionado, y en
           un teléfono cada control ocupa la fila entera en vez de partirse en cuatro trozos. */}
+      {/* Buscar y cuántas filas por página: la fila de arriba de los filtros, porque no son
+          filtros del mismo tipo. Los de abajo acotan QUÉ se busca; éstos, cómo se recorre. */}
+      <div className="lx-filter-row lx-filter-row--tools">
+        <Input
+          placeholder={t('admin.audit.search.placeholder')}
+          aria-label={t('admin.audit.search.label')}
+          value={busqueda}
+          onChange={(e) => refilter(() => setBusqueda(e.target.value))}
+        />
+        <Select
+          aria-label={t('admin.audit.pageSize.label')}
+          value={String(tamano)}
+          onChange={(value) => refilter(() => setTamano(Number(value)))}
+          options={TAMANOS_DE_PAGINA.map((n) => ({
+            value: String(n),
+            label: t('admin.audit.pageSize.option', { count: n }),
+          }))}
+        />
+      </div>
+
       <div className="lx-filter-row">
         <Select
           aria-label={t('admin.audit.filter.action')}

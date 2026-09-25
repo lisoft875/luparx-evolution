@@ -30,6 +30,9 @@ public interface AuditEventRepository extends JpaRepository<AuditEventEntity, UU
               and (:action is null or a.action = :action)
               and (:resourceType is null or a.resourceType = :resourceType)
               and (:ipHash is null or a.ipHash = :ipHash)
+              and (:q is null
+                   or lower(a.resourceId) like lower(concat(:q, '%'))
+                   or lower(a.action) like lower(concat('%', :q, '%')))
               and a.occurredAt >= :from and a.occurredAt < :to
             order by a.occurredAt desc
             """)
@@ -40,6 +43,7 @@ public interface AuditEventRepository extends JpaRepository<AuditEventEntity, UU
                                           @Param("ipHash") String ipHash,
                                           @Param("from") Instant from,
                                           @Param("to") Instant to,
+                                          @Param("q") String q,
                                           Pageable pageable);
 
     /**
