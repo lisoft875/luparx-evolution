@@ -783,6 +783,7 @@ export const enUS: Record<TranslationKey, string> = {
   'admin.audit.field.divisionId': 'District',
   'admin.audit.value.active.true': 'Active',
   'admin.audit.value.active.false': 'Inactive',
+  'admin.audit.changes.none': 'No data was changed',
   'admin.audit.changes.full': 'See the full value',
   'admin.audit.field.role': 'Role',
   'admin.audit.field.status': 'Status',

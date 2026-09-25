@@ -800,6 +800,7 @@ export const esCR = {
   'admin.audit.field.divisionId': 'Distrito',
   'admin.audit.value.active.true': 'Activa',
   'admin.audit.value.active.false': 'Inactiva',
+  'admin.audit.changes.none': 'Sin cambios en los datos',
   'admin.audit.changes.full': 'Ver el valor completo',
   'admin.audit.field.role': 'Rol',
   'admin.audit.field.status': 'Estado',

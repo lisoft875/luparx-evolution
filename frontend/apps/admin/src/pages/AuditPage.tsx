@@ -404,7 +404,7 @@ export function AuditPage(): React.JSX.Element {
               // valor completo tiene que estar.
               value={
                 (detalle.changes ?? []).length === 0 ? (
-                  <span className="lx-text-meta">—</span>
+                  <span className="lx-text-meta">{t('admin.audit.changes.none')}</span>
                 ) : (
                   <span style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                     {(detalle.changes ?? []).map((change) => (
@@ -478,9 +478,13 @@ function ChangesCell({
 }): React.JSX.Element {
   const changes = row.changes ?? [];
   if (changes.length === 0) {
-    // Una acción sin cambios no es un hueco: la mayoría de los actos auditados crean o consultan
-    // algo en vez de alterar un valor.
-    return <span className="lx-text-meta">—</span>;
+    // «Sin cambios en los datos» y no un guion (cierre del 25-09).
+    //
+    // El guion se lee como información que falta o como un error de carga, y no es ninguna de las
+    // dos cosas: la mayoría de los actos auditados —un ingreso, una consulta, una aprobación,
+    // una exportación— no alteran ningún valor, y eso es un hecho del registro, no un hueco en él.
+    // Decirlo con palabras cuesta cinco caracteres más y ahorra la pregunta.
+    return <span className="lx-text-meta">{t('admin.audit.changes.none')}</span>;
   }
   return (
     <div className="lx-table-cell-clamp" title={cambiosEnTexto(t, changes)}>

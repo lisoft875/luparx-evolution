@@ -204,8 +204,10 @@ async function detalleDeLaPrimeraFila(page) {
       await page.waitForTimeout(2200);
     }
 
-    const fila = page.locator('tbody tr').filter({ hasText: CODIGO }).first();
-    comprobar((await fila.count()) > 0, `la fila de ${CODIGO} está en la lista de zonas`);
+    comprobar(
+      (await page.locator('tbody tr').filter({ hasText: CODIGO }).count()) > 0,
+      `la fila de ${CODIGO} está en la lista de zonas`,
+    );
 
     // --- §2: guardar sin tocar nada ---------------------------------------------------------
     console.log('── §2 · guardar sin cambiar nada no debe registrar nada ──');
@@ -238,9 +240,22 @@ async function detalleDeLaPrimeraFila(page) {
 
     // --- §7: cambiar un solo campo ------------------------------------------------------------
     console.log('── §7 · cambiar el nombre registra ese campo y sólo ése ──');
-    const nombreNuevo = (await fila.textContent())?.includes('editada') ? NOMBRE_BASE : NOMBRE_EDITADO;
+    // El nombre actual se lee ESTANDO en la pantalla de zonas.
+    //
+    // Acá había un defecto del arnés, y del mismo tipo que ya me costó una vuelta: `fila` se había
+    // localizado páginas atrás y para cuando se leía, el navegador estaba en /admin/audit. Ahí
+    // `tbody tr` son filas de bitácora, y una de ellas contiene «ZZ-QA» —el evento de creación
+    // registra `Código: ZZ-QA`—, así que el filtro acertaba con la fila equivocada. El nombre que
+    // salía era el que la zona YA tenía, el guardado no cambiaba nada y, correctamente, no se
+    // registraba ningún evento: la comprobación leía entonces el evento anterior.
+    //
+    // Lo irónico es que el falso fallo demostró el arreglo de §2 por segunda vez. Pero un arnés que
+    // falla por su propia causa gasta una vuelta de despliegue, que es justo lo que no debe hacer.
     await page.goto(`${BASE}/admin/zones`, { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(2200);
+    const nombreActual =
+      (await page.locator('tbody tr').filter({ hasText: CODIGO }).first().textContent()) ?? '';
+    const nombreNuevo = nombreActual.includes('editada') ? NOMBRE_BASE : NOMBRE_EDITADO;
     await page.locator('tbody tr').filter({ hasText: CODIGO }).first()
       .getByRole('button', { name: /^Editar zona$/ }).click();
     await page.waitForTimeout(700);
@@ -256,6 +271,13 @@ async function detalleDeLaPrimeraFila(page) {
       /Zona actualizada/i.test(cambioNombre.accion),
       'se registra como «Zona actualizada»',
       (cambioNombre.accion || '(vacío)').slice(0, 90),
+    );
+    // Sin esto, leer el evento EQUIVOCADO se veía como un fallo del producto. Que la fila de arriba
+    // sea la del nombre es una precondición de las tres comprobaciones que siguen, no una de ellas.
+    comprobar(
+      /Nombre/.test(cambioNombre.cambios),
+      `ARNÉS · el evento más reciente es el del nombre (se cambió a «${nombreNuevo}»)`,
+      (cambioNombre.cambios || '(vacío)').slice(0, 140),
     );
     comprobar(
       cambioNombre.cambios.includes('Nombre') && !cambioNombre.cambios.includes('name:'),
@@ -401,6 +423,28 @@ async function detalleDeLaPrimeraFila(page) {
       largo.titulo.length > 0,
       'criterio 8 · y su valor completo queda accesible',
       `title de ${largo.titulo.length} caracteres`,
+    );
+  }
+
+  console.log('── cierre del 25-09 · un guion no explica nada ──');
+  const guiones = await page.evaluate(() => {
+    const cabeceras = [...document.querySelectorAll('thead th')].map((th) => (th.textContent ?? '').trim());
+    const i = cabeceras.findIndex((c) => /cambi/i.test(c));
+    if (i < 0) return null;
+    const celdas = [...document.querySelectorAll('tbody tr')].map(
+      (tr) => ([...tr.querySelectorAll('td')][i]?.textContent ?? '').trim(),
+    );
+    return {
+      total: celdas.length,
+      conGuion: celdas.filter((c) => c === '—' || c === '-').length,
+      conTexto: celdas.filter((c) => /Sin cambios en los datos/i.test(c)).length,
+    };
+  });
+  if (guiones) {
+    comprobar(
+      guiones.conGuion === 0,
+      `ninguna fila deja «Qué cambió» en un guion (${guiones.total} filas, ${guiones.conTexto} dicen «Sin cambios en los datos»)`,
+      `con guion: ${guiones.conGuion}`,
     );
   }
 
