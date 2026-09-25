@@ -4,7 +4,20 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { useAuth } from '@luparx/auth';
 import { useTranslation, formatDateTime, type TranslationKey } from '@luparx/i18n';
 import type { AuditChange, AuditEvent, AuditOriginProbe } from '@luparx/api-client';
-import { Alert, Badge, Button, Card, Input, Pagination, SectionHeader, Select, Table } from '@luparx/ui';
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  Input,
+  Modal,
+  Pagination,
+  SectionHeader,
+  Select,
+  SummaryList,
+  SummaryRow,
+  Table,
+} from '@luparx/ui';
 
 /**
  * Los tipos de recurso que las escrituras de esta plataforma registran hoy.
@@ -27,6 +40,7 @@ const MODULOS = [
 import { AdminShell } from '../components/AdminShell';
 import { startOfDay, startOfNextDay } from '../lib/dateRange';
 import { AUDIT_ACTIONS, auditActionLabel } from '../lib/auditActions';
+import { useMediaQuery } from '@luparx/features';
 
 const PAGE_SIZE = 20;
 
@@ -60,6 +74,16 @@ export function AuditPage(): React.JSX.Element {
   const [modulo, setModulo] = useState('');
   const [origin, setOrigin] = useState<{ ipHash: string; fingerprint: string } | null>(null);
   const [page, setPage] = useState(0);
+  /** La fila que el panel lateral está mostrando, o `null` si está cerrado. */
+  const [detalle, setDetalle] = useState<AuditEvent | null>(null);
+  /**
+   * Por debajo de este ancho la columna Origen no se dibuja.
+   *
+   * <p>No es `display:none`: la columna no se construye. Ocultarla con CSS la deja en el DOM, así
+   * que un lector de pantalla sigue anunciando una cabecera que nadie ve y la tabla sigue
+   * declarando seis columnas mientras muestra cinco.</p>
+   */
+  const angosto = useMediaQuery('(max-width: 1100px)');
 
   /** Any filter change puts the reader back on the first page; page 4 of a new filter is nobody's intent. */
   function refilter(change: () => void): void {
@@ -230,6 +254,7 @@ export function AuditPage(): React.JSX.Element {
           {
             key: 'actor',
             header: t('admin.audit.column.actor'),
+            width: '190px',
             // "Quién realizó cada acción." A UUID is not an answer to that question, and this is the
             // screen a municipality shows an auditor.
             render: (row) => (
@@ -245,68 +270,68 @@ export function AuditPage(): React.JSX.Element {
           {
             key: 'action',
             header: t('admin.audit.column.action'),
-            // Lo que pasó, y debajo el código con el que soporte lo va a buscar. En ese orden: la
-            // pantalla la lee una persona que administra una municipalidad, no quien escribió el
-            // enum.
-            render: (row) => (
-              <>
-                <div>{auditActionLabel(t, row.action)}</div>
-                <div className="lx-text-meta lx-code">{row.action}</div>
-              </>
-            ),
-          },
-          {
-            key: 'resource',
-            header: t('admin.audit.column.resource'),
-            // Not every act is about one identified thing — checking an address is about the trail
-            // itself. "audit/" with nothing after the slash reads as a lost identifier.
-            render: (row) => <ResourceCell row={row} label={moduleLabel(t, row.resourceType)} />,
+            width: '170px',
+            // Sólo el texto amigable. El código técnico estuvo acá debajo desde el 24-09 y era
+            // información duplicada: quien administra una municipalidad no lo necesita para
+            // entender la fila, y quien sí lo necesita —soporte— lo tiene en Ver detalle. Dos
+            // renglones por fila multiplicados por veinte filas son cuarenta renglones de ruido.
+            render: (row) => auditActionLabel(t, row.action),
           },
           {
             key: 'changes',
             header: t('admin.audit.column.changes'),
-            // An action with nothing in it is not a gap: most audited acts create or read something
-            // rather than altering a value.
-            render: (row) =>
-              (row.changes ?? []).length === 0 ? (
-                <span className="lx-text-meta">—</span>
-              ) : (
-                // `lx-table-cell-clamp` porque esta celda es la única con prosa: una descripción de
-                // zona son dos renglones de texto y, con el `white-space: nowrap` que la tabla pone
-                // por omisión, una sola línea de cuatrocientos píxeles que empuja Origen y Fecha
-                // fuera de la pantalla. Recortada a dos líneas, la fila se lee entera sin
-                // desplazarse; el valor completo queda en el `title`.
-                // Sin `display: flex` encima: `-webkit-line-clamp` sólo funciona sobre
-                // `-webkit-box`, que es lo que la clase pone y que ya apila a sus hijos en
-                // vertical. Ponerle flex por costumbre habría dejado la clase de adorno.
-                <div className="lx-table-cell-clamp" title={cambiosEnTexto(t, row.changes ?? [])}>
-                  {(row.changes ?? []).map((change) => (
-                    <ChangeLine
-                      key={change.field}
-                      change={change}
-                      maskedLabel={t('admin.audit.masked')}
-                      fieldLabel={fieldLabelOf(t, change.field)}
-                      t={t}
+            // SIN ancho declarado a propósito: es la única columna elástica, así que se queda con
+            // todo el espacio que las demás no piden. Es la que contiene lo que el funcionario de
+            // verdad tiene que interpretar.
+            render: (row) => <ChangesCell row={row} t={t} />,
+          },
+          // Origen es lo primero que se va cuando no hay ancho. No se pierde: está en Ver detalle.
+          // Antes que degradar «Qué cambió», que es la columna por la que alguien entra a esta
+          // pantalla.
+          ...(angosto
+            ? []
+            : [
+                {
+                  key: 'origin',
+                  header: t('admin.audit.column.origin'),
+                  width: '170px',
+                  render: (row: AuditEvent) => (
+                    <OriginCell
+                      row={row}
+                      systemLabel={t('admin.audit.origin.system')}
+                      fingerprintLabel={t('admin.audit.origin.fingerprint')}
                     />
-                  ))}
-                </div>
-              ),
-          },
-          {
-            key: 'origin',
-            header: t('admin.audit.column.origin'),
-            render: (row) => (
-              <OriginCell
-                row={row}
-                systemLabel={t('admin.audit.origin.system')}
-                fingerprintLabel={t('admin.audit.origin.fingerprint')}
-              />
-            ),
-          },
+                  ),
+                },
+              ]),
           {
             key: 'occurredAt',
             header: t('admin.audit.column.occurredAt'),
+            width: '150px',
             render: (row) => formatDateTime(row.occurredAt, locale),
+          },
+          {
+            key: 'detalle',
+            header: '',
+            width: '52px',
+            // Un botón de verdad y no una fila clickeable: una `<tr>` con `onClick` no la alcanza
+            // el teclado, no se anuncia como acción y compite con los botones que ya viven dentro
+            // de la celda de Actor. La especificación admite las dos formas; ésta es la que
+            // funciona sin ratón.
+            //
+            // Y un botón y no un menú «•••» con una sola opción: el menú es un clic de más para
+            // llegar al mismo lugar.
+            render: (row) => (
+              <button
+                type="button"
+                className="lx-row-detail"
+                aria-label={t('admin.audit.detail.open')}
+                title={t('admin.audit.detail.open')}
+                onClick={() => setDetalle(row)}
+              >
+                <span aria-hidden="true">···</span>
+              </button>
+            ),
           },
         ]}
       />
@@ -324,7 +349,124 @@ export function AuditPage(): React.JSX.Element {
           resultCountLabel={t('pagination.resultCount.other', { count: data.totalElements })}
         />
       ) : null}
+
+      {/* El detalle de UNA fila, al lado y no encima: un modal centrado tapa la lista, que es
+          justamente el contexto que hace útil al detalle. Acá está todo lo que la tabla dejó de
+          mostrar — y nada de eso se dejó de registrar: sigue entero en la base. */}
+      <Modal
+        open={detalle !== null}
+        onClose={() => setDetalle(null)}
+        variant="drawer"
+        title={t('admin.audit.detail.title')}
+        closeLabel={t('common.close')}
+      >
+        {detalle ? (
+          <SummaryList>
+            <SummaryRow
+              label={t('admin.audit.detail.actor')}
+              value={detalle.actorName ?? detalle.actorUserId ?? t('admin.audit.actor.system')}
+            />
+            <SummaryRow label={t('admin.audit.detail.action')} value={auditActionLabel(t, detalle.action)} />
+            <SummaryRow
+              label={t('admin.audit.detail.module')}
+              value={moduleLabel(t, detalle.resourceType)}
+            />
+            <SummaryRow
+              label={t('admin.audit.detail.changes')}
+              // Entero, sin recortar: la tabla recorta a dos líneas y éste es el lugar donde el
+              // valor completo tiene que estar.
+              value={
+                (detalle.changes ?? []).length === 0 ? (
+                  <span className="lx-text-meta">—</span>
+                ) : (
+                  <span style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    {(detalle.changes ?? []).map((change) => (
+                      <ChangeLine
+                        key={change.field}
+                        change={change}
+                        maskedLabel={t('admin.audit.masked')}
+                        fieldLabel={fieldLabelOf(t, change.field)}
+                        t={t}
+                      />
+                    ))}
+                  </span>
+                )
+              }
+            />
+            <SummaryRow
+              label={t('admin.audit.detail.occurredAt')}
+              value={formatDateTime(detalle.occurredAt, locale)}
+            />
+            <SummaryRow
+              label={t('admin.audit.detail.origin')}
+              value={detalle.device ?? detalle.userAgent ?? t('admin.audit.origin.system')}
+            />
+            {/* Lo técnico, junto y al final. Sigue estando; sólo dejó de competir por el ancho de
+                la tabla con lo que alguien lee de corrido. */}
+            <SummaryRow
+              label={t('admin.audit.detail.resourceId')}
+              value={
+                detalle.resourceId ? (
+                  <span className="lx-code lx-selectable">{detalle.resourceId}</span>
+                ) : (
+                  <span className="lx-text-meta">—</span>
+                )
+              }
+            />
+            <SummaryRow
+              label={t('admin.audit.detail.technicalEvent')}
+              value={<span className="lx-code lx-selectable">{detalle.action}</span>}
+            />
+            <SummaryRow
+              label={t('admin.audit.detail.fingerprint')}
+              value={
+                detalle.ipFingerprint ? (
+                  <span className="lx-code lx-selectable">{detalle.ipFingerprint}</span>
+                ) : (
+                  <span className="lx-text-meta">—</span>
+                )
+              }
+            />
+          </SummaryList>
+        ) : null}
+      </Modal>
     </AdminShell>
+  );
+}
+
+/**
+ * Lo que cambió, recortado a dos líneas.
+ *
+ * <p>Dos y no más porque una descripción de zona son dos renglones de prosa y la tabla pone
+ * `white-space: nowrap`: sin recortar, una sola celda mide cuatrocientos píxeles y empuja lo que
+ * viene después fuera de la pantalla. El valor entero está en el `title` y, completo y sin
+ * recortar, en Ver detalle.</p>
+ */
+function ChangesCell({
+  row,
+  t,
+}: {
+  row: AuditEvent;
+  t: (key: TranslationKey, params?: Record<string, string | number>) => string;
+}): React.JSX.Element {
+  const changes = row.changes ?? [];
+  if (changes.length === 0) {
+    // Una acción sin cambios no es un hueco: la mayoría de los actos auditados crean o consultan
+    // algo en vez de alterar un valor.
+    return <span className="lx-text-meta">—</span>;
+  }
+  return (
+    <div className="lx-table-cell-clamp" title={cambiosEnTexto(t, changes)}>
+      {changes.map((change) => (
+        <ChangeLine
+          key={change.field}
+          change={change}
+          maskedLabel={t('admin.audit.masked')}
+          fieldLabel={fieldLabelOf(t, change.field)}
+          t={t}
+        />
+      ))}
+    </div>
   );
 }
 
@@ -504,32 +646,6 @@ function fieldLabelOf(t: (key: TranslationKey) => string, field: string): string
   const clave = `admin.audit.field.${field}` as TranslationKey;
   const texto = t(clave);
   return texto === clave ? field : texto;
-}
-
-/**
- * Sobre qué fue la acción.
- *
- * <p>Era `membership/01a0a3ac-a7cb-7aa4-a67d-ea708e9ebc3a`, una sola cuerda de cuarenta y cuatro
- * caracteres de los cuales treinta y seis no le dicen nada a nadie. Ahora el tipo va en palabras y
- * el identificador debajo, acortado, con el valor entero en el atributo `title` para copiarlo — y
- * `user-select: all` para que un clic lo seleccione completo, que es lo que hace falta cuando hay
- * que pegarlo en un correo a soporte.</p>
- *
- * <p>El identificador no desaparece: es lo que convierte una entrada de bitácora en una que se puede
- * cotejar contra la base. Lo que cambia es cuál de los dos datos manda.</p>
- */
-function ResourceCell({ row, label }: { row: AuditEvent; label: string }): React.JSX.Element {
-  if (!row.resourceId) {
-    return <span>{label}</span>;
-  }
-  return (
-    <>
-      <div>{label}</div>
-      <div className="lx-text-meta lx-code lx-selectable" title={row.resourceId}>
-        {row.resourceId.length > 12 ? `${row.resourceId.slice(0, 8)}…${row.resourceId.slice(-4)}` : row.resourceId}
-      </div>
-    </>
-  );
 }
 
 /**

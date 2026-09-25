@@ -98,18 +98,39 @@ async function bitacoraDe(page, codigoZona) {
   await page.waitForTimeout(300);
   await page.getByRole('option').filter({ hasText: /^Zonas$/ }).first().click();
   await page.waitForTimeout(1800);
-  return page.evaluate(() =>
-    [...document.querySelectorAll('tbody tr')].map((tr) => {
+  // Las columnas se leen por su CABECERA y no por su posición: desde la especificación del 25-09
+  // la tabla perdió «Recurso», gana un botón de detalle al final y esconde «Origen» cuando no hay
+  // ancho. Un arnés anclado a `celdas[2]` se rompe con cada una de esas tres cosas, y peor: sigue
+  // pasando midiendo la columna equivocada.
+  return page.evaluate(() => {
+    const cabeceras = [...document.querySelectorAll('thead th')].map((th) => (th.textContent ?? '').trim());
+    const columna = (nombre) => cabeceras.findIndex((c) => new RegExp(nombre, 'i').test(c));
+    return [...document.querySelectorAll('tbody tr')].map((tr) => {
       const celdas = [...tr.querySelectorAll('td')].map((td) => (td.textContent ?? '').trim());
       const cambios = tr.querySelector('.lx-table-cell-clamp');
       return {
-        accion: celdas[1] ?? '',
-        recurso: celdas[2] ?? '',
-        cambios: celdas[3] ?? '',
+        accion: celdas[columna('Acci')] ?? '',
+        cambios: celdas[columna('cambi')] ?? '',
         cambiosCompletos: cambios ? (cambios.getAttribute('title') ?? '') : '',
+        cabeceras,
       };
-    }),
+    });
+  });
+}
+
+/** Abre «Ver detalle» de la primera fila y devuelve el panel como pares etiqueta → valor. */
+async function detalleDeLaPrimeraFila(page) {
+  await page.locator('tbody tr').first().getByRole('button', { name: /Ver detalle/i }).click();
+  await page.waitForTimeout(700);
+  const panel = page.getByRole('dialog');
+  const campos = await panel.evaluate((nodo) =>
+    [...nodo.querySelectorAll('.lx-summary__row')].map((fila) => ({
+      etiqueta: (fila.querySelector('.lx-summary__label')?.textContent ?? '').trim(),
+      valor: (fila.querySelector('.lx-summary__value')?.textContent ?? '').trim(),
+    })),
   );
+  const ancho = await panel.evaluate((nodo) => Math.round(nodo.getBoundingClientRect().width));
+  return { campos, ancho, panel };
 }
 
 (async () => {
@@ -154,8 +175,13 @@ async function bitacoraDe(page, codigoZona) {
       const trasCrear = await bitacoraDe(page, CODIGO);
       const creacion = trasCrear[0] ?? {};
       comprobar(
-        /Zona creada/i.test(creacion.accion) && /PARKING_ZONE_CREATED/.test(creacion.accion),
+        /Zona creada/i.test(creacion.accion),
         'crear una zona registra una acción propia, no «Zona actualizada»',
+        `acción=${(creacion.accion || '(vacío)').slice(0, 90)}`,
+      );
+      comprobar(
+        !/PARKING_ZONE/.test(creacion.accion),
+        'y el código técnico ya no se repite bajo la acción',
         `acción=${(creacion.accion || '(vacío)').slice(0, 90)}`,
       );
       comprobar(
@@ -276,6 +302,82 @@ async function bitacoraDe(page, codigoZona) {
   }
 
   // ===============================================================================================
+  // Criterios 6 y 7 de la especificación del 25-09: la tabla se simplifica sin perder el dato
+  // ===============================================================================================
+  console.log('── la tabla se simplificó y nada se perdió ──');
+  await page.goto(`${BASE}/admin/audit`, { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(2400);
+
+  const cabeceras = await page.locator('thead th').allTextContents();
+  comprobar(
+    !cabeceras.some((c) => /Recurso/i.test(c)),
+    'criterio 7 · la columna Recurso no está en la tabla principal',
+    cabeceras.map((c) => c.trim() || '(sin título)').join(' | '),
+  );
+  const primeraAccion = (await page.locator('tbody tr').first().locator('td').nth(1).textContent()) ?? '';
+  comprobar(
+    !/[A-Z]{4,}_[A-Z]/.test(primeraAccion),
+    'criterio 7 · ni el código técnico debajo de Acción',
+    primeraAccion.trim().slice(0, 90),
+  );
+
+  const { campos, ancho } = await detalleDeLaPrimeraFila(page);
+  const etiquetas = campos.map((c) => c.etiqueta).join(' | ');
+  for (const esperada of [
+    'Actor',
+    'Acción',
+    'Módulo / recurso',
+    'Qué cambió',
+    'Fecha y hora',
+    'Origen',
+    'ID del recurso',
+    'Evento técnico',
+    'Huella',
+  ]) {
+    comprobar(
+      campos.some((c) => c.etiqueta.startsWith(esperada)),
+      `criterio 6 · «Ver detalle» trae ${esperada}`,
+      etiquetas,
+    );
+  }
+  const evento = campos.find((c) => c.etiqueta === 'Evento técnico');
+  comprobar(
+    Boolean(evento) && /[A-Z]{4,}_[A-Z]/.test(evento.valor),
+    'criterio 6 · y el evento técnico es el código completo, no un resumen',
+    evento ? evento.valor.slice(0, 80) : '(ausente)',
+  );
+  // El panel es un cajón lateral en escritorio: deja la tabla a la vista, que es el contexto.
+  comprobar(
+    ancho > 0 && ancho <= 560,
+    `criterio 6 · el detalle es un panel lateral (${ancho}px), no una capa que tape la lista`,
+  );
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(500);
+  comprobar(
+    (await page.getByRole('dialog').count()) === 0,
+    'y se cierra con Escape',
+  );
+
+  // Criterio 8: un cambio largo no ensancha la tabla y su valor completo sigue alcanzable.
+  const largo = await page.evaluate(() => {
+    const celda = [...document.querySelectorAll('.lx-table-cell-clamp')]
+      .map((n) => ({ alto: n.getBoundingClientRect().height, titulo: n.getAttribute('title') ?? '', texto: (n.textContent ?? '').length }))
+      .sort((a, b) => b.texto - a.texto)[0];
+    return celda ?? null;
+  });
+  if (largo) {
+    comprobar(
+      largo.alto <= 60,
+      `criterio 8 · el cambio más largo se recorta (${Math.round(largo.alto)}px de alto)`,
+    );
+    comprobar(
+      largo.titulo.length > 0,
+      'criterio 8 · y su valor completo queda accesible',
+      `title de ${largo.titulo.length} caracteres`,
+    );
+  }
+
+  // ===============================================================================================
   // §6 — la tabla se lee sin ir y volver
   // ===============================================================================================
   console.log('── §6 · una fila completa sin desplazamiento lateral en escritorio ──');
@@ -333,16 +435,28 @@ async function bitacoraDe(page, codigoZona) {
     const medida = await p.evaluate(() => {
       const doc = document.documentElement;
       const primera = document.querySelector('.lx-table td:first-child');
+      const cabeceras = [...document.querySelectorAll('thead th')].map((th) => (th.textContent ?? '').trim());
       return {
         paginaDesborda: doc.scrollWidth > doc.clientWidth + 1,
         actorFijo: primera ? getComputedStyle(primera).position === 'sticky' : false,
         envoltorioDesplaza: Boolean(document.querySelector('.lx-table-wrapper')),
+        cabeceras,
+        hayOrigen: cabeceras.some((c) => /Origen/i.test(c)),
+        hayCambios: cabeceras.some((c) => /cambi/i.test(c)),
+        hayDetalle: document.querySelectorAll('.lx-row-detail').length > 0,
       };
     });
     comprobar(
       !medida.paginaDesborda && medida.envoltorioDesplaza && medida.actorFijo,
       `${tam.nombre.padEnd(18)} ${tam.width}x${tam.height} · la página no desborda y el actor queda fijo`,
       `desborda=${medida.paginaDesborda} actorFijo=${medida.actorFijo}`,
+    );
+    // Criterio 9 + §7: lo primero que se va es Origen, nunca «Qué cambió», y el detalle sigue a
+    // un clic — que es donde Origen se conserva.
+    comprobar(
+      !medida.hayOrigen && medida.hayCambios && medida.hayDetalle,
+      `${' '.repeat(18)} ${tam.width}px · se va Origen, se queda «Qué cambió» y «Ver detalle»`,
+      `columnas: ${medida.cabeceras.map((c) => c || '(sin título)').join(' | ')}`,
     );
     await ctx.close();
   }

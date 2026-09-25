@@ -4056,3 +4056,79 @@ a.lx-list-row {
 .lx-table--compact .lx-table-cell-clamp {
   max-width: 34ch;
 }
+
+/* ---- La variante «drawer»: el detalle de algo que sigue en pantalla ----
+   Para el detalle de UNA FILA de una tabla. Un modal centrado tapa la lista, que es justamente el
+   contexto que hace útil al detalle: se pierde de vista cuál de las veinte filas se está mirando.
+   El panel entra por el borde y deja la tabla visible al lado.
+
+   En un teléfono no hay «al lado», así que ocupa la pantalla — que es lo mismo que hace `sheet`.
+   `100dvh` y no `100vh` por la misma razón que allá: con la barra del navegador retraída, `vh` es
+   el viewport MÁS GRANDE y el pie del panel queda debajo del pliegue en el primer pintado. */
+.lx-modal-backdrop--drawer {
+  padding: 0;
+  align-items: stretch;
+  justify-content: flex-end;
+}
+.lx-modal--drawer {
+  max-width: none;
+  width: 100%;
+  max-height: none;
+  height: 100dvh;
+  border: none;
+  border-radius: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.lx-modal--drawer .lx-modal__header {
+  padding-top: max(var(--lx-space-4), env(safe-area-inset-top));
+}
+/* Sólo el cuerpo se desplaza: el título y la equis se quedan quietos mientras el detalle se
+   recorre. */
+.lx-modal--drawer .lx-modal__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+@media (min-width: 700px) {
+  .lx-modal--drawer {
+    width: min(520px, 100%);
+    border-left: 1px solid var(--lx-border-strong);
+  }
+}
+
+/* Un valor técnico dentro del detalle: se lee poco, se copia entero, y no puede empujar el ancho
+   del panel. */
+.lx-summary__value .lx-code {
+  overflow-wrap: anywhere;
+}
+
+/* El botón que abre el detalle de una fila. Ocupa la última columna, que mide 52 px: un glifo y
+   un área de toque que un dedo alcanza, sin nombre visible —la cabecera de esa columna está
+   vacía a propósito— y con `aria-label` para quien no ve el glifo. */
+.lx-row-detail {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--lx-radius-md);
+  background: none;
+  color: var(--lx-text-muted);
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+}
+.lx-row-detail:hover {
+  border-color: var(--lx-border);
+  color: var(--lx-text);
+  background: var(--lx-surface-2);
+}
+.lx-row-detail:focus-visible {
+  outline: 2px solid var(--lx-focus-ring);
+  outline-offset: 2px;
+}

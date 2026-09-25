@@ -2,7 +2,7 @@ import * as React from 'react';
 import { useCallback, useEffect, useId, useRef } from 'react';
 import { createPortal } from 'react-dom';
 
-export type ModalVariant = 'dialog' | 'sheet';
+export type ModalVariant = 'dialog' | 'sheet' | 'drawer';
 
 export interface ModalProps {
   open: boolean;
@@ -22,6 +22,17 @@ export interface ModalProps {
    * `sheet` is the full-height panel the municipality picker uses: it fills the screen on a phone
    * so the grid it carries is the whole context, and settles into a centred panel once there is
    * room for one. `dialog` is the small centred box every confirm/extend dialog already uses.
+   *
+   * `drawer` slides in from the edge and leaves the page visible beside it. It is for the detail
+   * OF something on screen — a row of a table — where covering the list would take away the thing
+   * the detail is about. On a phone it falls back to filling the screen, because there is no
+   * "beside" on a phone.
+   *
+   * <p>Es una variante de este componente y no un componente nuevo a propósito: la trampa de foco,
+   * el portal, el Escape, el bloqueo del scroll y la devolución del foco al cerrar ya están
+   * resueltos acá, con comentarios que explican por qué cada uno es como es. Un `Drawer` aparte
+   * habría sido una segunda copia de todo eso, y la copia es la que se queda sin el arreglo la
+   * próxima vez.</p>
    */
   variant?: ModalVariant;
   /** Supporting line under the title, inside the header. */
@@ -165,12 +176,12 @@ export function Modal({
   // paints over it instead of being dimmed underneath.
   return createPortal(
     <div
-      className={`lx-modal-backdrop${variant === 'sheet' ? ' lx-modal-backdrop--sheet' : ''}`}
+      className={`lx-modal-backdrop${variant === 'dialog' ? '' : ` lx-modal-backdrop--${variant}`}`}
       onClick={requestClose}
     >
       <div
         ref={dialogRef}
-        className={`lx-modal${variant === 'sheet' ? ' lx-modal--sheet' : ''}`}
+        className={`lx-modal${variant === 'dialog' ? '' : ` lx-modal--${variant}`}`}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}

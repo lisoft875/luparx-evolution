@@ -4,6 +4,18 @@ export interface TableColumn<T> {
   key: string;
   header: string;
   render: (row: T) => React.ReactNode;
+  /**
+   * Ancho declarado de la columna, como valor CSS (`'160px'`, `'12%'`, `'auto'`).
+   *
+   * <p>Sin esto, el navegador reparte el ancho según lo que cada celda mida, así que la columna
+   * que manda es la que trae el dato más largo — un UUID, típicamente — y la que contiene lo que
+   * alguien de verdad quiere leer queda estrujada. Declarar los anchos de las columnas
+   * previsibles y dejar una en `auto` hace que el espacio sobrante caiga donde debe.</p>
+   *
+   * <p>Se emite como `<colgroup>`, que es la forma en que una tabla HTML acepta anchos sin que
+   * cada celda tenga que repetirlos.</p>
+   */
+  width?: string;
 }
 
 export interface TableProps<T> {
@@ -49,6 +61,13 @@ export function Table<T>({
           .filter(Boolean)
           .join(' ')}
       >
+        {columns.some((column) => column.width) ? (
+          <colgroup>
+            {columns.map((column) => (
+              <col key={column.key} style={column.width ? { width: column.width } : undefined} />
+            ))}
+          </colgroup>
+        ) : null}
         <thead>
           <tr>
             {columns.map((column) => (

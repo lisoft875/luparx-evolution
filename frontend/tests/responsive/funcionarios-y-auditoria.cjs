@@ -334,18 +334,20 @@ async function abrir(page, etiqueta) {
   await page.waitForTimeout(2400);
   const primeraFila = page.locator('tbody tr').first();
   if ((await primeraFila.count()) > 0) {
+    const cabeceras = await page.locator('thead th').allTextContents();
     const celdas = await primeraFila.locator('td').allTextContents();
     const accion = celdas[1] ?? '';
-    const recurso = celdas[2] ?? '';
+    // Desde la especificación del 25-09 la columna Recurso salió de la tabla principal (sigue en
+    // Ver detalle) y Acción muestra sólo el texto amigable, sin el código debajo.
     comprobar(
-      /[a-záéíóúñ]/.test(accion.replace(/[A-Z_]{4,}/g, '')),
-      'la columna Acción trae un nombre en palabras además del código',
-      accion.slice(0, 80),
+      !cabeceras.some((c) => /Recurso/i.test(c)),
+      'la columna Recurso ya no está en la tabla principal',
+      cabeceras.join(' | '),
     );
     comprobar(
-      !/^[a-z-]+\/[0-9a-f-]{20,}$/i.test(recurso.trim()),
-      'la columna Recurso ya no es «tipo/uuid» a secas',
-      recurso.slice(0, 80),
+      /[a-záéíóúñ]/.test(accion) && !/[A-Z]{4,}_[A-Z]/.test(accion),
+      'la columna Acción muestra sólo el nombre en palabras, sin el código',
+      accion.slice(0, 80),
     );
   }
 
