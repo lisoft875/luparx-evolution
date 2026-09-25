@@ -104,6 +104,17 @@ async function bitacoraDe(page, codigoZona) {
   // pasando midiendo la columna equivocada.
   return page.evaluate(() => {
     const cabeceras = [...document.querySelectorAll('thead th')].map((th) => (th.textContent ?? '').trim());
+    // Una tabla vacía tiene UNA fila con UNA celda que ocupa todo el ancho (el mensaje de vacío).
+    // Sin esta comprobación, cada lectura devolvía cadenas vacías y el arnés reportaba ocho fallos
+    // distintos —«el campo se llama Nombre», «viene en un chip azul»…— para una sola causa, y
+    // después se caía con un timeout de treinta segundos buscando una celda que no existe.
+    // Un arnés que no sabe distinguir «esto está mal» de «no hay nada que mirar» hace perder el
+    // tiempo en la dirección equivocada.
+    const filas = [...document.querySelectorAll('tbody tr')];
+    const vacia = filas.length === 0 || filas.every((tr) => tr.querySelectorAll('td').length <= 1);
+    if (vacia) {
+      return { vacia: true, mensaje: (filas[0]?.textContent ?? '(sin filas)').trim(), cabeceras };
+    }
     const columna = (nombre) => cabeceras.findIndex((c) => new RegExp(nombre, 'i').test(c));
     return [...document.querySelectorAll('tbody tr')].map((tr) => {
       const celdas = [...tr.querySelectorAll('td')].map((td) => (td.textContent ?? '').trim());
@@ -116,6 +127,7 @@ async function bitacoraDe(page, codigoZona) {
           }))
         : [];
       return {
+        vacia: false,
         accion: celdas[columna('Acci')] ?? '',
         cambios: celdas[columna('cambi')] ?? '',
         cambiosCompletos: cambios ? (cambios.getAttribute('title') ?? '') : '',
@@ -124,6 +136,25 @@ async function bitacoraDe(page, codigoZona) {
       };
     });
   });
+}
+
+/**
+ * Las filas, o un corte en seco si la bitácora no trajo ninguna.
+ *
+ * <p>Que la tabla esté vacía no es «una comprobación falló»: es que no hay nada que comprobar, y
+ * seguir adelante produce una lista de fallos que apuntan a ocho sitios distintos cuando la causa
+ * es una sola. Se dice una vez, fuerte, y se para.</p>
+ */
+function exigirFilas(resultado, donde) {
+  if (!Array.isArray(resultado) && resultado && resultado.vacia) {
+    fallos++;
+    console.log(`  ✗   LA BITÁCORA NO DEVOLVIÓ NINGUNA FILA (${donde})`);
+    console.log(`        la tabla dice: ${resultado.mensaje.slice(0, 160)}`);
+    console.log('        Todo lo que sigue dependía de esas filas. Revisar el log del backend:');
+    console.log("        ssh luparx-staging 'docker logs --since 20m luparx-staging-backend-1 2>&1 | grep -iE \"audit|error\" | tail -30'");
+    return null;
+  }
+  return resultado;
 }
 
 /** Abre «Ver detalle» de la primera fila y devuelve el panel como pares etiqueta → valor. */
@@ -180,7 +211,8 @@ async function detalleDeLaPrimeraFila(page) {
       await dialogo.getByRole('button', { name: /^Guardar$/ }).click();
       await page.waitForTimeout(2200);
 
-      const trasCrear = await bitacoraDe(page, CODIGO);
+      const trasCrear = exigirFilas(await bitacoraDe(page, CODIGO), 'tras crear la zona');
+      if (trasCrear === null) { await browser.close(); process.exit(1); }
       const creacion = trasCrear[0] ?? {};
       comprobar(
         /Zona creada/i.test(creacion.accion),
@@ -232,7 +264,7 @@ async function detalleDeLaPrimeraFila(page) {
     );
     const despues = await bitacoraDe(page, CODIGO);
     comprobar(
-      despues.length === antes.length,
+      Array.isArray(antes) && Array.isArray(despues) && despues.length === antes.length,
       'y NO agrega una fila a la bitácora',
       `antes=${antes.length} después=${despues.length}` +
         (despues.length > antes.length ? ` · nueva: ${despues[0].accion} / ${despues[0].cambios}` : ''),
@@ -265,7 +297,8 @@ async function detalleDeLaPrimeraFila(page) {
     await edicion2.getByRole('button', { name: /Guardar/i }).click();
     await page.waitForTimeout(2200);
 
-    const trasNombre = await bitacoraDe(page, CODIGO);
+    const trasNombre = exigirFilas(await bitacoraDe(page, CODIGO), 'tras cambiar el nombre');
+    if (trasNombre === null) { await browser.close(); process.exit(1); }
     const cambioNombre = trasNombre[0] ?? {};
     comprobar(
       /Zona actualizada/i.test(cambioNombre.accion),
@@ -307,7 +340,8 @@ async function detalleDeLaPrimeraFila(page) {
     await confirmar.getByRole('button', { name: /zona$/i }).click();
     await page.waitForTimeout(2200);
 
-    const trasEstado = await bitacoraDe(page, CODIGO);
+    const trasEstado = exigirFilas(await bitacoraDe(page, CODIGO), 'tras cambiar el estado');
+    if (trasEstado === null) { await browser.close(); process.exit(1); }
     const cambioEstado = trasEstado[0] ?? {};
     comprobar(
       /Estado:/.test(cambioEstado.cambios),
