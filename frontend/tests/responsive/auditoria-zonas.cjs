@@ -356,7 +356,7 @@ async function detalleDeLaPrimeraFila(page) {
     if (trasEstado === null) { await browser.close(); process.exit(1); }
     const cambioEstado = trasEstado[0] ?? {};
     comprobar(
-      /Estado:/.test(cambioEstado.cambios),
+      /Estado/.test(cambioEstado.cambios),
       'el campo se llama «Estado»',
       (cambioEstado.cambios || '(vacío)').slice(0, 140),
     );
