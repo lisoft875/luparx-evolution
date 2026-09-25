@@ -4042,3 +4042,17 @@ a.lx-list-row {
   user-select: all;
   cursor: text;
 }
+
+/* ---- Una tabla que necesita todas sus columnas a la vez (25-09-2026) ----
+   Seis columnas con 16 px de relleno a cada lado son 192 px de aire. En la bitácora de auditoría,
+   en un portátil de 1280, eso eran 58 px de más: había que arrastrar la tabla para leer una sola
+   fila, y una fila de auditoría que se lee en dos viajes es una fila que se interpreta mal.
+   8 px devuelven 96 px, que alcanzan con margen. Sigue siendo una opción y no el valor por
+   omisión: en una tabla de tres columnas ese aire es lo que la hace legible. */
+.lx-table--compact th,
+.lx-table--compact td {
+  padding: var(--lx-space-3) var(--lx-space-2);
+}
+.lx-table--compact .lx-table-cell-clamp {
+  max-width: 34ch;
+}

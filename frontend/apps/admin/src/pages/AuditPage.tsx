@@ -223,6 +223,9 @@ export function AuditPage(): React.JSX.Element {
         // obliga a ir y volver. En escritorio no debería hacer falta —las columnas ya caben— y
         // esto no estorba.
         stickyFirstColumn
+        // Seis columnas que hay que leer juntas: el aire de una tabla ancha es lo que obligaba a
+        // arrastrarla en un portátil.
+        compact
         columns={[
           {
             key: 'actor',

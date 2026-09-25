@@ -292,16 +292,29 @@ async function bitacoraDe(page, codigoZona) {
     const medida = await p.evaluate(() => {
       const envoltorio = document.querySelector('.lx-table-wrapper');
       const doc = document.documentElement;
+      // El ancho de cada columna, para que un fallo diga QUÉ sobra y no sólo cuánto.
+      //
+      // La primera versión de esta comprobación reportaba «se pasa 58px» y nada más, y con eso lo
+      // único que se puede hacer es apretar algo al azar y volver a medir. Medir la causa cuesta
+      // seis líneas.
+      const anchos = [...document.querySelectorAll('thead th')].map((th, i) => {
+        const celda = document.querySelector(`tbody tr:first-child td:nth-child(${i + 1})`);
+        return `${(th.textContent ?? '').trim()}=${Math.round((celda ?? th).getBoundingClientRect().width)}px`;
+      });
       return {
         exceso: envoltorio ? envoltorio.scrollWidth - envoltorio.clientWidth : -1,
         paginaDesborda: doc.scrollWidth > doc.clientWidth + 1,
         columnas: document.querySelectorAll('thead th').length,
+        disponible: envoltorio ? Math.round(envoltorio.clientWidth) : -1,
+        anchos,
       };
     });
     comprobar(
       medida.exceso <= 1 && !medida.paginaDesborda,
       `${tam.nombre.padEnd(18)} ${tam.width}x${tam.height} · las ${medida.columnas} columnas caben`,
-      `la tabla se pasa ${medida.exceso}px · la página desborda=${medida.paginaDesborda}`,
+      `la tabla se pasa ${medida.exceso}px en ${medida.disponible}px disponibles`
+        + ` · la página desborda=${medida.paginaDesborda}`
+        + `\n        ${medida.anchos.join('  ')}`,
     );
     await ctx.close();
   }

@@ -19,6 +19,17 @@ export interface TableProps<T> {
    * to nobody.
    */
   stickyFirstColumn?: boolean;
+  /**
+   * Aprieta el relleno horizontal de las celdas (25-09-2026).
+   *
+   * <p>Para la tabla que tiene muchas columnas y las necesita todas a la vista a la vez. Con seis
+   * columnas, los 16 px de cada lado son 192 px de aire: en un portátil de 1280 la bitácora de
+   * auditoría se pasaba 58 px y había que arrastrarla para leer una sola fila.</p>
+   *
+   * <p>Es una opción y no el valor por omisión porque en una tabla de tres columnas ese aire es lo
+   * que la hace legible. Lo compacto se pide donde se necesita.</p>
+   */
+  compact?: boolean;
 }
 
 export function Table<T>({
@@ -29,10 +40,15 @@ export function Table<T>({
   loadingLabel,
   emptyLabel,
   stickyFirstColumn,
+  compact,
 }: TableProps<T>): React.JSX.Element {
   return (
     <div className="lx-table-wrapper">
-      <table className={stickyFirstColumn ? 'lx-table lx-table-sticky-first' : 'lx-table'}>
+      <table
+        className={['lx-table', stickyFirstColumn ? 'lx-table-sticky-first' : '', compact ? 'lx-table--compact' : '']
+          .filter(Boolean)
+          .join(' ')}
+      >
         <thead>
           <tr>
             {columns.map((column) => (
