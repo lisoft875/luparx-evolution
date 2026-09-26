@@ -1105,6 +1105,12 @@ export const esCR = {
   'inspector.more.about': 'Acerca de LuParX',
   'inspector.more.about.meta': 'Abre el sitio oficial.',
   // --- Ayuda: lo que de verdad pasa en un turno --------------------------------------------------
+  'inspector.help.offline.action': 'Ver el estado de la conexión',
+  'inspector.help.offline.nothingPending': 'No hay nada esperando a sincronizarse.',
+  'inspector.help.plate.action': 'Ir a consultar una placa',
+  'inspector.help.citation.action': 'Ir a levantar una boleta',
+  'inspector.help.evidence.action': 'Ir al flujo de boleta',
+  'inspector.help.queue.action': 'Ver los pendientes',
   'inspector.help.title': 'Ayuda',
   'inspector.help.offline.title': 'Si te quedás sin señal',
   'inspector.help.offline.body':

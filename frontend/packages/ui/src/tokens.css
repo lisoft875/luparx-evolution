@@ -4216,3 +4216,70 @@ a.lx-list-row {
     grid-template-columns: 1fr;
   }
 }
+
+/* La cabecera que se queda (26-09-2026).
+   `sticky` y no `fixed`: la barra conserva su lugar en el flujo, así que no hay que compensar su
+   altura con relleno, no aparece una segunda barra de desplazamiento y el contenido no salta al
+   activarse. El fondo es opaco porque lo que se desplaza tiene que pasar por DEBAJO y no verse a
+   través. El z-index queda por debajo del 20 de la barra inferior y del 1000 de los diálogos: es
+   cromo de pantalla, no una capa flotante. */
+.lx-app-bar--sticky {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+/* La tarjeta de Ayuda que ES la acción (26-09-2026).
+   Un `<button>` que ocupa la tarjeta entera: esto se pulsa de pie, con una mano, a veces con
+   guantes, así que el objetivo táctil es todo el recuadro y no un enlace de doce píxeles. Hereda
+   la tipografía en vez de traer la del navegador, y se alinea a la izquierda porque es una lista
+   de opciones y no un botón centrado. */
+.lx-help-card {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--lx-space-3);
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.lx-help-card:focus-visible {
+  outline: 2px solid var(--lx-focus-ring);
+  outline-offset: 4px;
+  border-radius: var(--lx-radius-sm);
+}
+.lx-help-card__icon {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--lx-radius-md);
+  background: var(--lx-primary-soft);
+  color: var(--lx-primary);
+}
+.lx-help-card__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.lx-help-card__title {
+  font-weight: 600;
+}
+/* La acción, en el color de lo que se puede pulsar: la tarjeta lleva a algún lado y eso tiene que
+   leerse antes de tocarla, no descubrirse después. */
+.lx-help-card__action {
+  margin-top: var(--lx-space-1);
+  color: var(--lx-primary);
+  font-size: var(--lx-text-meta-size);
+  font-weight: 600;
+}
+.lx-help-card:hover .lx-help-card__action {
+  color: var(--lx-primary-hover);
+}

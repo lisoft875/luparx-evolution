@@ -1083,6 +1083,12 @@ export const enUS: Record<TranslationKey, string> = {
   'inspector.more.about': 'About LuParX',
   'inspector.more.about.meta': 'Opens the official site.',
   // --- Help ---------------------------------------------------------------------------------------
+  'inspector.help.offline.action': 'See the connection state',
+  'inspector.help.offline.nothingPending': 'Nothing is waiting to sync.',
+  'inspector.help.plate.action': 'Go and check a plate',
+  'inspector.help.citation.action': 'Go and issue a citation',
+  'inspector.help.evidence.action': 'Go to the citation flow',
+  'inspector.help.queue.action': 'See what is pending',
   'inspector.help.title': 'Help',
   'inspector.help.offline.title': 'If you lose signal',
   'inspector.help.offline.body':

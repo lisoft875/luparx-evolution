@@ -23,6 +23,13 @@ export interface InspectorShellProps {
   title?: React.ReactNode;
   subtitle?: React.ReactNode;
   onBack?: () => void;
+  /**
+   * Mantiene la cabecera —y con ella el título de la pantalla— visible durante el desplazamiento.
+   *
+   * <p>Para una pantalla larga donde ese título es la única señal de dónde está uno. No se activa
+   * en todas por omisión: sería un cambio en pantallas que nadie pidió tocar.</p>
+   */
+  stickyHeader?: boolean;
 }
 
 /**
@@ -38,7 +45,13 @@ export interface InspectorShellProps {
  * spot: "sin conexión · 2 pendientes" is one fact about the shift, and two separate indicators for
  * it would compete for the same glance.
  */
-export function InspectorShell({ children, title, subtitle, onBack }: InspectorShellProps): React.JSX.Element {
+export function InspectorShell({
+  children,
+  title,
+  subtitle,
+  onBack,
+  stickyHeader,
+}: InspectorShellProps): React.JSX.Element {
   const { t, tPlural } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
@@ -119,6 +132,7 @@ export function InspectorShell({ children, title, subtitle, onBack }: InspectorS
           ) : undefined
         }
         onBack={onBack}
+        sticky={stickyHeader}
         backLabel={t('common.back')}
         title={onBack ? title : undefined}
         subtitle={onBack ? subtitle : undefined}
