@@ -213,18 +213,18 @@ async function abrir(page, etiqueta) {
   // ===============================================================================================
   // «Restablecer acceso» — el P1 del 02-10-2026
   // ===============================================================================================
-  console.log('── «Restablecer acceso» pregunta, y no se puede uno expulsar a sí mismo ──');
+  console.log('── forzar un cambio de contraseña pregunta, y no se lo puede uno hacer a sí mismo ──');
   await page.goto(`${BASE}/admin/staff`, { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(2400);
 
   const propiaFila = page.locator('tbody tr').filter({ hasText: CUENTA }).first();
-  const botonReset = propiaFila.getByRole('button', { name: /Restablecer acceso/i });
+  const botonReset = propiaFila.getByRole('button', { name: /Forzar cambio de contraseña/i });
   if ((await botonReset.count()) > 0) {
     await botonReset.click();
     await page.waitForTimeout(600);
     const dialogo = page.getByRole('dialog');
     const abierto = await dialogo.isVisible().catch(() => false);
-    comprobar(abierto, 'pulsar «Restablecer acceso» pregunta antes de ejecutar');
+    comprobar(abierto, 'pulsar «Forzar cambio de contraseña» pregunta antes de ejecutar');
     if (abierto) {
       const texto = (await dialogo.textContent()) ?? '';
       // Lo que de verdad hace, dicho antes de hacerlo: ni el nombre del botón ni la intuición lo
@@ -275,7 +275,7 @@ async function abrir(page, etiqueta) {
       );
     }
   } else {
-    comprobar(false, 'ARNÉS: la fila propia no ofrece «Restablecer acceso»');
+    comprobar(false, 'ARNÉS: la fila propia no ofrece «Forzar cambio de contraseña»');
   }
 
   // ===============================================================================================
