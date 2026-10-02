@@ -55,6 +55,10 @@ export function StaffPage(): React.JSX.Element {
   // Revocar no se levanta y hasta hoy se disparaba con un solo clic, sin preguntar, mientras que
   // Desactivar —que sí se levanta— sí preguntaba. La confirmación estaba en el lado equivocado.
   const [revoking, setRevoking] = useState<StaffMember | null>(null);
+  // «Restablecer acceso» se disparaba con un solo clic, sin preguntar, mientras que Desactivar y
+  // Revocar —menos destructivas para la persona que las recibe— sí preguntaban. Y lo que hace es
+  // cerrarle la sesión a alguien y obligarlo a cambiar la contraseña: eso se confirma.
+  const [resetting, setResetting] = useState<StaffMember | null>(null);
   const [zoning, setZoning] = useState<StaffMember | null>(null);
   const [zoneSelection, setZoneSelection] = useState<string[]>([]);
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -98,7 +102,12 @@ export function StaffPage(): React.JSX.Element {
   function onFailure(causa: unknown): void {
     setFeedback(null);
     const codigo = causa instanceof ApiError ? causa.code : null;
-    setError(codigo === 'MEMBERSHIP_SELF_MODIFICATION_DENIED' ? t('admin.staff.error.self') : t('admin.staff.error'));
+    const propios: Record<string, TranslationKey> = {
+      MEMBERSHIP_SELF_MODIFICATION_DENIED: 'admin.staff.error.self',
+      SELF_ACTION_DENIED: 'admin.staff.error.selfAccount',
+    };
+    const propia = codigo ? propios[codigo] : undefined;
+    setError(propia ? t(propia) : t('admin.staff.error'));
   }
 
   const suspendMutation = useMutation({
@@ -129,8 +138,14 @@ export function StaffPage(): React.JSX.Element {
   });
   const resetMutation = useMutation({
     mutationFn: (member: StaffMember) => apiClient.adminUsers.forcePasswordReset(member.userId),
-    onSuccess: afterChange('admin.staff.resetSent'),
-    onError: onFailure,
+    onSuccess: () => {
+      setResetting(null);
+      afterChange('admin.staff.resetSent')();
+    },
+    onError: (causa) => {
+      setResetting(null);
+      onFailure(causa);
+    },
   });
   const changeRoleMutation = useMutation({
     mutationFn: ({ member, role }: { member: StaffMember; role: Role }) =>
@@ -397,7 +412,7 @@ export function StaffPage(): React.JSX.Element {
                         variant="ghost"
                         loading={enCurso(resetMutation, member)}
                         disabled={ocupada(member)}
-                        onClick={() => resetMutation.mutate(member)}
+                        onClick={() => setResetting(member)}
                       >
                         {t('admin.staff.action.resetAccess')}
                       </Button>
@@ -488,6 +503,38 @@ export function StaffPage(): React.JSX.Element {
               onClick={() => revoking && revokeMutation.mutate(revoking)}
             >
               {t('admin.staff.revoke.confirm')}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Restablecer acceso dice lo que de verdad hace, que no es lo que su nombre sugiere: no
+          reactiva un puesto —eso es «Reactivar»— sino que le fuerza a la persona un cambio de
+          contraseña y le cierra todas las sesiones. Quien lo pulsa tiene que saberlo antes. */}
+      <Modal
+        open={resetting !== null}
+        onClose={() => setResetting(null)}
+        title={t('admin.staff.reset.title')}
+        closeLabel={t('common.close')}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--lx-space-4)' }}>
+          <p className="lx-text-body" style={{ margin: 0 }}>
+            {t('admin.staff.reset.body', { name: resetting?.fullName ?? resetting?.email ?? '' })}
+          </p>
+          <p className="lx-text-meta" style={{ margin: 0 }}>
+            {t('admin.staff.reset.closesSessions')}
+          </p>
+          <div className="lx-dialog-actions">
+            <Button type="button" variant="secondary" fullWidth onClick={() => setResetting(null)}>
+              {t('common.cancel')}
+            </Button>
+            <Button
+              type="button"
+              fullWidth
+              loading={resetMutation.isPending}
+              onClick={() => resetting && resetMutation.mutate(resetting)}
+            >
+              {t('admin.staff.reset.confirm')}
             </Button>
           </div>
         </div>

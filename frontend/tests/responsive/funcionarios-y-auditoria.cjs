@@ -211,6 +211,74 @@ async function abrir(page, etiqueta) {
   }
 
   // ===============================================================================================
+  // «Restablecer acceso» — el P1 del 02-10-2026
+  // ===============================================================================================
+  console.log('── «Restablecer acceso» pregunta, y no se puede uno expulsar a sí mismo ──');
+  await page.goto(`${BASE}/admin/staff`, { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(2400);
+
+  const propiaFila = page.locator('tbody tr').filter({ hasText: CUENTA }).first();
+  const botonReset = propiaFila.getByRole('button', { name: /Restablecer acceso/i });
+  if ((await botonReset.count()) > 0) {
+    await botonReset.click();
+    await page.waitForTimeout(600);
+    const dialogo = page.getByRole('dialog');
+    const abierto = await dialogo.isVisible().catch(() => false);
+    comprobar(abierto, 'pulsar «Restablecer acceso» pregunta antes de ejecutar');
+    if (abierto) {
+      const texto = (await dialogo.textContent()) ?? '';
+      // Lo que de verdad hace, dicho antes de hacerlo: ni el nombre del botón ni la intuición lo
+      // dicen, y es lo que provocó el incidente.
+      comprobar(
+        /contraseña/i.test(texto),
+        '  y dice que fuerza un cambio de contraseña, no una reactivación',
+        texto.slice(0, 160),
+      );
+      comprobar(
+        /sesion|sesión/i.test(texto),
+        '  y avisa que cierra las sesiones abiertas',
+        texto.slice(0, 160),
+      );
+      comprobar(
+        /Reactivar/i.test(texto),
+        '  y señala cuál es la acción para devolver un acceso quitado',
+        texto.slice(0, 160),
+      );
+
+      // El punto crítico del informe: hacérselo a uno mismo no puede expulsar al operador.
+      const [respuesta] = await Promise.all([
+        page
+          .waitForResponse((r) => /\/password-reset/.test(r.url()) && r.request().method() === 'POST', {
+            timeout: 15000,
+          })
+          .catch(() => null),
+        dialogo.getByRole('button', { name: /Enviar el enlace/i }).click(),
+      ]);
+      await page.waitForTimeout(2000);
+
+      comprobar(
+        respuesta !== null && respuesta.status() === 403,
+        'el servidor rechaza forzárselo a uno mismo (403)',
+        `status=${respuesta ? respuesta.status() : 'sin respuesta'}`,
+      );
+      const aviso = (await page.locator('.lx-alert, [role="alert"]').allTextContents()).join(' | ');
+      comprobar(
+        /propia cuenta/i.test(aviso),
+        'y la pantalla lo explica en vez de dejarlo en silencio',
+        aviso.slice(0, 200) || '(ninguna alerta)',
+      );
+      // La condición de aceptación obligatoria del §4.
+      comprobar(
+        !/login|select-tenant/.test(page.url()) && /\/admin\/staff/.test(page.url()),
+        'LA SESIÓN DEL OPERADOR SIGUE EN PIE y seguimos en Funcionarios',
+        `url=${page.url().replace(BASE, '')}`,
+      );
+    }
+  } else {
+    comprobar(false, 'ARNÉS: la fila propia no ofrece «Restablecer acceso»');
+  }
+
+  // ===============================================================================================
   // §2.3 — Cambiar rol
   // ===============================================================================================
   console.log('── §2.3 · Cambiar rol ofrece los roles que existen ──');

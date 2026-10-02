@@ -802,6 +802,14 @@ export const enUS: Record<TranslationKey, string> = {
   'admin.staff.revoke.confirm': 'Revoke',
   'admin.staff.error.stale':
     'This list could not be refreshed, so it may be showing old data. Reload the screen.',
+  'admin.staff.reset.title': 'Force a password change?',
+  'admin.staff.reset.body':
+    '{{name}} gets a link to set a new password. It does not change their post, role or sectors: to give back access that was taken away, use "Reactivate".',
+  'admin.staff.reset.closesSessions':
+    'All their open sessions are closed, on every device. If they are working, they will have to sign in again.',
+  'admin.staff.reset.confirm': 'Send the link',
+  'admin.staff.error.selfAccount':
+    'You cannot run this on your own account: it would sign you out immediately. Ask another administrator.',
   'admin.staff.error.self':
     'You cannot end or pause your own post. Ask another administrator of this municipality.',
   'admin.staff.changeRole.noAlternatives':

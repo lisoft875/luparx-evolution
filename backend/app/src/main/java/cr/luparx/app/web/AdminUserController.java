@@ -10,6 +10,7 @@ import cr.luparx.core.audit.AuditAction;
 import cr.luparx.core.domain.Portal;
 import cr.luparx.core.domain.Role;
 import cr.luparx.core.error.ErrorCode;
+import cr.luparx.core.error.ForbiddenException;
 import cr.luparx.core.error.NotFoundException;
 import cr.luparx.core.error.ValidationException;
 import cr.luparx.core.i18n.Locales;
@@ -373,6 +374,7 @@ public class AdminUserController {
     @PreAuthorize("hasAuthority('PERM_USER_BLOCK')")
     @Operation(summary = "Block a user; every session is revoked immediately")
     public ResponseEntity<Void> block(@PathVariable UUID id, @Valid @RequestBody AdminDtos.BlockUserRequest request) {
+        requireNotSelf(id);
         TenantId tenantId = TenantContextHolder.requireTenantId();
         requireMemberOfTenant(tenantId, id);
         userDirectoryService.block(UserId.of(id), request.reason());
@@ -398,6 +400,7 @@ public class AdminUserController {
     @Operation(summary = "Force a password reset and email the link to the user")
     public ResponseEntity<Void> forcePasswordReset(@PathVariable UUID id) {
         TenantId tenantId = TenantContextHolder.requireTenantId();
+        requireNotSelf(id);
         requireMemberOfTenant(tenantId, id);
         PasswordResetService.Issued issued = passwordResetService.forceReset(UserId.of(id));
         notificationSender.send(issued.user().getEmail(),
@@ -412,6 +415,33 @@ public class AdminUserController {
     }
 
     // --- helpers ---------------------------------------------------------------------------------
+
+    /**
+     * Rechaza una acción administrativa que quien la pide se estaría haciendo a sí mismo
+     * (02-10-2026).
+     *
+     * <h2>Qué pasó para que esto exista</h2>
+     *
+     * <p>En staging, una persona administradora pulsó «Restablecer acceso» en la fila de
+     * <em>Admin Escazú</em>, que era su propia cuenta, y quedó fuera del portal en el acto. No fue
+     * una sesión equivocada ni un identificador reutilizado: fue la acción correcta, sobre el
+     * destinatario correcto, que resultaba ser uno mismo.</p>
+     *
+     * <p>Y es inevitable que expulse, porque forzar un restablecimiento hace exactamente lo que
+     * debe hacer: {@code bumpCredentialsVersion} invalida los tokens de acceso ya emitidos y
+     * {@code revokeAllForUser} revoca los de refresco. Una contraseña comprometida no se arregla
+     * dejando viva la sesión que la usaba. Lo que faltaba no era suavizar eso, era impedir
+     * apuntárselo a uno mismo.</p>
+     *
+     * <p>Se aplica también a bloquear, que es la misma forma del mismo error y peor: deja la cuenta
+     * sin acceso hasta que otra persona la desbloquee.</p>
+     */
+    private static void requireNotSelf(UUID targetUserId) {
+        UserId caller = TenantContextHolder.require().userId();
+        if (caller != null && caller.value().equals(targetUserId)) {
+            throw ForbiddenException.of(ErrorCode.SELF_ACTION_DENIED, "error.user.self.action");
+        }
+    }
 
     /**
      * Which app's reset page the emailed link should point at.

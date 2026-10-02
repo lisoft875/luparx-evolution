@@ -102,6 +102,21 @@ public final class ErrorCode {
      */
     public static final String MEMBERSHIP_SELF_MODIFICATION_DENIED = "MEMBERSHIP_SELF_MODIFICATION_DENIED";
 
+    /**
+     * Alguien intentó ejecutar sobre su PROPIA CUENTA una acción administrativa que la deja
+     * inutilizable (02-10-2026).
+     *
+     * <p>Hermano de {@link #MEMBERSHIP_SELF_MODIFICATION_DENIED} y distinto a propósito: aquél es
+     * sobre un puesto en una municipalidad, éste sobre la cuenta entera. Bloquearse a uno mismo o
+     * forzarse un restablecimiento de contraseña revoca los tokens propios en el acto, y quien lo
+     * hizo queda fuera del portal a mitad de una operación — sin haber pedido nada parecido.</p>
+     *
+     * <p>No es falta de permiso: quien llama tiene exactamente el permiso que hace falta. Lo que se
+     * rechaza es el destinatario. Por eso tiene código propio, para que la pantalla pueda decir qué
+     * pasó en vez de un «no tiene permiso» que sería mentira.</p>
+     */
+    public static final String SELF_ACTION_DENIED = "SELF_ACTION_DENIED";
+
     // --- staff invitations (CONTRACT.md v0.27) ----------------------------------------------------
     /**
      * No usable invitation behind that link. Deliberately also the answer for a <em>revoked</em>

@@ -819,6 +819,14 @@ export const esCR = {
   'admin.staff.revoke.confirm': 'Revocar',
   'admin.staff.error.stale':
     'Esta lista no se pudo actualizar, así que puede estar mostrando datos viejos. Recargue la pantalla.',
+  'admin.staff.reset.title': '¿Forzar un cambio de contraseña?',
+  'admin.staff.reset.body':
+    'A {{name}} se le envía un enlace para poner una contraseña nueva. No cambia su puesto, su rol ni sus sectores: para devolverle un acceso quitado, use «Reactivar».',
+  'admin.staff.reset.closesSessions':
+    'Se le cierran todas las sesiones abiertas, en todos sus dispositivos. Si está trabajando, va a tener que volver a entrar.',
+  'admin.staff.reset.confirm': 'Enviar el enlace',
+  'admin.staff.error.selfAccount':
+    'No puede ejecutar esto sobre su propia cuenta: le cerraría la sesión en el acto. Pídaselo a otra persona administradora.',
   'admin.staff.error.self':
     'No puede terminar ni pausar su propio puesto. Pídaselo a otra persona administradora de esta municipalidad.',
   'admin.staff.changeRole.noAlternatives':
