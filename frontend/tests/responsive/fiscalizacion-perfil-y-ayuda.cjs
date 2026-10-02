@@ -250,10 +250,19 @@ async function estadoDeLaCabecera(page) {
         `  lleva a la ruta que ya existía (${page.url().replace(BASE, '')})`,
       );
       const contenido = await page.evaluate(() => ({
+        titulo: (document.querySelector('h1')?.textContent ?? '').trim(),
         largo: (document.body.textContent ?? '').trim().length,
         barra: document.querySelectorAll('.lx-bottom-tab-bar').length,
       }));
-      comprobar(contenido.largo > 200, '  y la pantalla de destino no está vacía', `${contenido.largo} caracteres`);
+      // Contar caracteres era el criterio equivocado, y el 02-10-2026 lo demostró: «Pendientes»
+      // con la cola al día son 116 caracteres —el título y «no hay nada esperando»— y eso NO es
+      // una pantalla vacía, es la buena noticia. Lo que de verdad hay que comprobar es que la
+      // ruta pintó su propia pantalla y no un hueco: que tiene su título.
+      comprobar(
+        contenido.titulo.length > 0,
+        `  y la pantalla de destino es la suya («${contenido.titulo}»)`,
+        `sin <h1>; ${contenido.largo} caracteres en total`,
+      );
       comprobar(contenido.barra === 1, '  con la navegación inferior intacta', `${contenido.barra} barra(s)`);
     }
   }

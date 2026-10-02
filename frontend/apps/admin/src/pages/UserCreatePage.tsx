@@ -16,7 +16,17 @@ import {
   type PersonalDataValues,
 } from '@luparx/features';
 import { useTranslation, type TranslationKey } from '@luparx/i18n';
-import { Alert, Button, Card, FormField, Input, SectionHeader, Select, isValidPhoneInput } from '@luparx/ui';
+import {
+  Alert,
+  Button,
+  Card,
+  FormField,
+  Input,
+  SectionHeader,
+  Select,
+  focusFirstFieldError,
+  isValidPhoneInput,
+} from '@luparx/ui';
 import { AdminShell } from '../components/AdminShell';
 
 /** The form is the personal data of §2 plus the two things only an administrator supplies. */
@@ -50,6 +60,7 @@ export function UserCreatePage(): React.JSX.Element {
   const [params] = useSearchParams();
   const queryClient = useQueryClient();
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [missingFields, setMissingFields] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const documentTypesRef = React.useRef<ReturnType<typeof useDocumentTypes>['data']>(undefined);
@@ -97,6 +108,7 @@ export function UserCreatePage(): React.JSX.Element {
 
   async function onSubmit(values: StaffValues): Promise<void> {
     setSubmitError(null);
+    setMissingFields(null);
     setSubmitting(true);
     try {
       const role = values.role as Role;
@@ -153,13 +165,44 @@ export function UserCreatePage(): React.JSX.Element {
     }
   }
 
+  /**
+   * Lo que pasa cuando se pulsa «Crear y enviar el correo» con algo sin llenar.
+   *
+   * <p>Hasta hoy, nada visible: `handleSubmit` recibía un solo argumento, así que un envío
+   * inválido marcaba los campos y terminaba ahí. El arnés lo midió el 02-10-2026 con el
+   * formulario vacío —diez campos marcados, cuatro a la vista, la página sin moverse— y eso,
+   * desde la silla de quien administra, es exactamente el «pulsé y no pasó nada» del informe.</p>
+   *
+   * <p>Ahora el formulario hace las tres cosas que pide la §2: nombra el campo que impide
+   * continuar, lo pone a la vista y le deja el foco encima. El aviso de arriba no sustituye a las
+   * marcas de cada campo; dice cuántas faltan, que es lo que no se puede saber mirando una.</p>
+   */
+  async function onInvalid(): Promise<void> {
+    setSubmitError(null);
+    const primero = await focusFirstFieldError();
+    if (!primero) {
+      setMissingFields(null);
+      return;
+    }
+    setMissingFields(
+      primero.count === 1
+        ? t('validation.form.incomplete.one', { field: primero.label })
+        : t('validation.form.incomplete.many', { count: primero.count, field: primero.label }),
+    );
+  }
+
   return (
     <AdminShell>
       <h1>{t('admin.users.create.title')}</h1>
       <p className="lx-text-meta">{t('admin.users.create.description')}</p>
 
-      <form onSubmit={handleSubmit(onSubmit)} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <form
+        noValidate
+        onSubmit={handleSubmit(onSubmit, onInvalid)}
+        style={{ display: 'flex', flexDirection: 'column', gap: 16 }}
+      >
         {submitError ? <Alert tone="danger">{submitError}</Alert> : null}
+        {missingFields ? <Alert tone="warning">{missingFields}</Alert> : null}
 
         <Card>
           <SectionHeader

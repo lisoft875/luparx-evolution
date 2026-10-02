@@ -144,6 +144,9 @@ export const enUS: Record<TranslationKey, string> = {
   'validation.terms.required': 'You must accept the terms and conditions.',
   'validation.code.length': 'The code must be {{length}} digits long.',
   'validation.generic': 'The value entered is not valid.',
+  'validation.form.incomplete.one': 'One field is missing: “{{field}}”. We took you to it.',
+  'validation.form.incomplete.many':
+    '{{count}} fields are missing. The first one is “{{field}}”: we took you to it.',
 
   'pagination.of': 'of',
   'pagination.itemsPerPage': 'Rows per page',

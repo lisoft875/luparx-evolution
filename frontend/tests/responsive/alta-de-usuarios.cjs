@@ -81,15 +81,67 @@ async function entrar(context) {
 }
 
 /**
- * Elige una opción de un desplegable por su etiqueta. Devuelve lo elegido, o null.
+ * Resuelve el control de un campo a partir del TEXTO EXACTO de su etiqueta.
  *
- * <p>`exacto` no es un adorno: Playwright empareja el nombre accesible por SUBCADENA, así que
- * «País» también encuentra «País emisor del documento» — y como esa tarjeta va primero en el
- * documento, `.first()` habría elegido siempre la equivocada. Un arnés que llena el campo de al
- * lado pasa o falla por la razón que no es.</p>
+ * <p>La corrida del 02-10-2026 enseñó por qué hace falta esto. Emparejar por nombre accesible
+ * tiene dos filos y los dos cortan: por subcadena, «País» encuentra también «País emisor del
+ * documento» y, como esa tarjeta va primero, `.first()` elige siempre la equivocada; con
+ * `exact: true`, «País» no encontró NADA y la fase 2 se cayó treinta segundos después, en un
+ * campo que nunca llegó a existir, diciendo una mentira sobre la dirección.</p>
+ *
+ * <p>El documento sí tiene una respuesta sin ambigüedad. `FormField` pinta siempre
+ * `<label for={id}>` y le pasa ese mismo `id` al control, así que la etiqueta es una clave
+ * exacta y el `for` lleva al nodo. No depende de cómo el navegador calcule un nombre accesible
+ * para un `<button role="combobox">`, que es justo la parte que resultó no ser lo que yo creía.</p>
+ *
+ * <p>El `<span>` del «(Opcional)» no cuenta como parte de la etiqueta: se compara contra el
+ * primer nodo de texto, que es lo que la persona lee como nombre del campo.</p>
  */
-async function elegirPrimera(page, etiqueta, preferida, exacto = false) {
-  const combo = page.getByRole('combobox', { name: etiqueta, exact: exacto }).first();
+async function idDeCampo(page, etiqueta) {
+  return page.evaluate((buscada) => {
+    const etiquetas = [...document.querySelectorAll('label.lx-field__label')];
+    const encontrada = etiquetas.find(
+      (n) => (n.firstChild?.textContent ?? n.textContent ?? '').trim() === buscada,
+    );
+    return encontrada ? encontrada.getAttribute('for') : null;
+  }, etiqueta);
+}
+
+/** Todas las etiquetas que hay ahora en pantalla — para que un fallo diga por qué, no sólo que. */
+async function etiquetasEnPantalla(page) {
+  return page.evaluate(() =>
+    [...document.querySelectorAll('label.lx-field__label')].map((n) =>
+      (n.firstChild?.textContent ?? n.textContent ?? '').trim(),
+    ),
+  );
+}
+
+function porId(page, id) {
+  return page.locator(`[id="${id}"]`);
+}
+
+/** Escribe en el campo cuya etiqueta es exactamente ésta. */
+async function escribir(page, etiqueta, valor) {
+  const id = await idDeCampo(page, etiqueta);
+  if (!id) {
+    comprobar(false, `existe el campo «${etiqueta}»`, `etiquetas presentes: ${(await etiquetasEnPantalla(page)).join(' · ')}`);
+    return false;
+  }
+  await porId(page, id).fill(valor);
+  return true;
+}
+
+/**
+ * Elige una opción del desplegable cuya etiqueta es exactamente ésta. Devuelve lo elegido, o null.
+ *
+ * <p>El texto de una opción trae la etiqueta y su detalle pegados —«Fiscalizador» seguido de
+ * «Verifica placas y levanta boletas en campo»—, así que la preferencia se busca como subcadena
+ * y lo devuelto se recorta a la primera línea, que es lo que de verdad identifica la opción.</p>
+ */
+async function elegirPrimera(page, etiqueta, preferida) {
+  const id = await idDeCampo(page, etiqueta);
+  if (!id) return null;
+  const combo = porId(page, id);
   if ((await combo.count()) === 0) return null;
   await combo.click();
   await page.waitForTimeout(400);
@@ -102,7 +154,13 @@ async function elegirPrimera(page, etiqueta, preferida, exacto = false) {
     ? opciones.filter({ hasText: new RegExp(preferida, 'i') }).first()
     : opciones.first();
   const objetivo = (await elegida.count()) > 0 ? elegida : opciones.first();
-  const texto = (await objetivo.textContent())?.trim() ?? '';
+  // `textContent` pega la etiqueta y el detalle sin separador —«FiscalizadorVerifica placas y
+  // levanta boletas en campo»—, así que se lee el `<span>` de la etiqueta, que es el nombre.
+  const etiquetaOpcion = objetivo.locator('.lx-listbox__label').first();
+  const texto =
+    ((await etiquetaOpcion.count()) > 0
+      ? await etiquetaOpcion.textContent()
+      : await objetivo.textContent())?.trim() ?? '';
   await objetivo.click();
   await page.waitForTimeout(700);
   return texto;
@@ -122,6 +180,28 @@ async function loQueDice(page) {
     botonDeshabilitado: (() => {
       const b = [...document.querySelectorAll('button[type="submit"]')].pop();
       return b ? b.disabled : null;
+    })(),
+    // §2 del informe: no basta con marcar, hay que SEÑALAR. Esto mide las tres partes de eso.
+    primerError: (() => {
+      const e = document.querySelector('.lx-field__error');
+      if (!e) return null;
+      const campo = e.closest('.lx-field');
+      const caja = (campo ?? e).getBoundingClientRect();
+      const etiqueta = campo?.querySelector('.lx-field__label');
+      return {
+        campo: (etiqueta?.firstChild?.textContent ?? etiqueta?.textContent ?? '').trim(),
+        aLaVista: caja.top >= 0 && caja.bottom <= window.innerHeight,
+      };
+    })(),
+    campoConFoco: (() => {
+      const a = document.activeElement;
+      if (!a || a === document.body) return null;
+      const etiqueta = a.closest('.lx-field')?.querySelector('.lx-field__label');
+      return (etiqueta?.firstChild?.textContent ?? etiqueta?.textContent ?? '').trim() || null;
+    })(),
+    avisoResumen: (() => {
+      const a = [...document.querySelectorAll('.lx-alert')].map((n) => (n.textContent ?? '').trim());
+      return a.find((t) => /falta/i.test(t)) ?? null;
     })(),
   }));
 }
@@ -208,6 +288,30 @@ async function loQueDice(page) {
       + ' desde la silla de quien pulsa, el botón no hizo nada',
   );
 
+  // Las tres cosas que la §2 pide por su nombre: decir cuál, mostrarlo, y dejar el cursor ahí.
+  dato(`aviso de resumen: ${trasClicVacio.avisoResumen ?? '(ninguno)'}`);
+  dato(`primer campo marcado: ${trasClicVacio.primerError?.campo ?? '(ninguno)'}`);
+  dato(`campo con el foco: ${trasClicVacio.campoConFoco ?? '(ninguno)'}`);
+
+  comprobar(
+    trasClicVacio.avisoResumen !== null
+      && trasClicVacio.primerError !== null
+      && trasClicVacio.avisoResumen.includes(trasClicVacio.primerError.campo),
+    '§2 · un aviso arriba NOMBRA el campo que impide continuar',
+    `aviso=${trasClicVacio.avisoResumen ?? 'ninguno'} · campo=${trasClicVacio.primerError?.campo ?? 'ninguno'}`,
+  );
+  comprobar(
+    trasClicVacio.primerError?.aLaVista === true,
+    '§2 · y ese campo queda A LA VISTA sin que la persona lo busque',
+    'el primero de los campos marcados quedó fuera de la pantalla',
+  );
+  comprobar(
+    trasClicVacio.campoConFoco !== null
+      && trasClicVacio.campoConFoco === trasClicVacio.primerError?.campo,
+    '§2 · con el foco puesto encima, que es lo que anuncia un lector de pantalla',
+    `foco en «${trasClicVacio.campoConFoco ?? 'ninguno'}», primer error en «${trasClicVacio.primerError?.campo ?? 'ninguno'}»`,
+  );
+
   // ===============================================================================================
   // FASE 2 · Llenar el formulario entero
   // ===============================================================================================
@@ -224,19 +328,30 @@ async function loQueDice(page) {
   await page.goto(`${BASE}/admin/users/new`, { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(2600);
 
-  const rol = await elegirPrimera(page, 'Rol', 'Fiscalizador', true);
+  const rol = await elegirPrimera(page, 'Rol', 'Fiscalizador');
   comprobar(rol !== null, `se puede elegir un rol (${rol ?? 'ninguno'})`);
-  await page.getByLabel('Correo electrónico').fill(CORREO);
-  await page.getByLabel('Nombre', { exact: true }).fill(PERSONA.nombre);
-  await page.getByLabel('Primer apellido').fill(PERSONA.apellido);
+  await escribir(page, 'Correo electrónico', CORREO);
+  await escribir(page, 'Nombre', PERSONA.nombre);
+  await escribir(page, 'Primer apellido', PERSONA.apellido);
 
   const paisDoc = await elegirPrimera(page, 'País emisor del documento', 'Costa Rica');
   const tipoDoc = await elegirPrimera(page, 'Tipo de documento');
   comprobar(paisDoc !== null && tipoDoc !== null, `documento: ${paisDoc} / ${tipoDoc}`);
-  await page.getByLabel('Número de documento').fill(PERSONA.documento);
+  await escribir(page, 'Número de documento', PERSONA.documento);
 
-  const paisDir = await elegirPrimera(page, 'País', 'Costa Rica', true);
-  comprobar(paisDir !== null, `país de la dirección: ${paisDir}`);
+  const paisDir = await elegirPrimera(page, 'País', 'Costa Rica');
+  comprobar(
+    paisDir !== null,
+    `país de la dirección: ${paisDir}`,
+    `etiquetas presentes: ${(await etiquetasEnPantalla(page)).join(' · ')}`,
+  );
+  if (paisDir === null) {
+    // Sin país no hay provincia, ni cantón, ni línea 1: seguir sería esperar treinta segundos a
+    // campos que nunca van a existir y culpar al que no es.
+    console.log('\n  La dirección no se pudo empezar; el resto de la fase 2 no diría nada cierto.\n');
+    await browser.close();
+    process.exit(1);
+  }
   // Los niveles dependen del país: en Costa Rica son Provincia, Cantón y Distrito, y cada uno se
   // carga cuando el anterior tiene valor. Se recorren en orden y se toma la primera opción.
   const niveles = [];
@@ -245,11 +360,11 @@ async function loQueDice(page) {
     if (elegido) niveles.push(`${nivel}=${elegido}`);
   }
   dato(`niveles de dirección: ${niveles.join(' · ') || '(ninguno)'}`);
-  await page.getByLabel('Dirección (línea 1)').fill(PERSONA.direccion);
-  await page.getByLabel('Número de teléfono').fill(PERSONA.telefono);
+  await escribir(page, 'Dirección (línea 1)', PERSONA.direccion);
+  await escribir(page, 'Número de teléfono', PERSONA.telefono);
   const nacionalidad = await elegirPrimera(page, 'Nacionalidad', 'Costa Rica');
   dato(`nacionalidad: ${nacionalidad ?? '(no se pudo elegir)'}`);
-  await page.getByLabel('Fecha de nacimiento').fill(PERSONA.nacimiento);
+  await escribir(page, 'Fecha de nacimiento', PERSONA.nacimiento);
   await page.waitForTimeout(600);
 
   altas.length = 0;

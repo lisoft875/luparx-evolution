@@ -10,6 +10,8 @@ export { Select } from './components/Select';
 export type { SelectProps, SelectOption } from './components/Select';
 export { FormField } from './components/FormField';
 export type { FormFieldProps } from './components/FormField';
+export { focusFirstFieldError } from './fieldErrors';
+export type { PrimerCampoConError } from './fieldErrors';
 export { Alert } from './components/Alert';
 export type { AlertProps, AlertTone } from './components/Alert';
 export { DateField } from './components/DateField';

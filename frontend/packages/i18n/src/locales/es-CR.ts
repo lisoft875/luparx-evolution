@@ -148,6 +148,9 @@ export const esCR = {
   'validation.terms.required': 'Debes aceptar los términos y condiciones.',
   'validation.code.length': 'El código debe tener {{length}} dígitos.',
   'validation.generic': 'El valor ingresado no es válido.',
+  'validation.form.incomplete.one': 'Falta un dato para continuar: «{{field}}». Te llevamos a ese campo.',
+  'validation.form.incomplete.many':
+    'Faltan {{count}} datos para continuar. El primero es «{{field}}»: te llevamos a ese campo.',
 
   'pagination.of': 'de',
   'pagination.itemsPerPage': 'Filas por página',
