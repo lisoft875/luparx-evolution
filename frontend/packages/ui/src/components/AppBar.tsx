@@ -16,20 +16,15 @@ export interface AppBarProps {
   subtitle?: React.ReactNode;
   actions?: AppBarAction[];
   className?: string;
-  /**
-   * Deja la cabecera pegada al borde superior mientras la pantalla se desplaza (26-09-2026).
-   *
-   * <p>Es una opción y no el valor por omisión porque la barra ya está en producción en todas las
-   * pantallas del fiscalizador y del ciudadano, y hacerla fija en todas sería un cambio que nadie
-   * pidió. Se activa donde hace falta: una pantalla larga cuyo título es la única señal de dónde
-   * está uno.</p>
-   *
-   * <p>`position: sticky` y no `fixed`: la barra sigue ocupando su lugar en el flujo, así que no
-   * hay que compensar su altura con relleno ni aparece una segunda barra de desplazamiento. El
-   * contenedor que se desplaza es el documento, que es lo que ya hacía esta aplicación.</p>
-   */
-  sticky?: boolean;
 }
+
+/*
+ * Hubo una prop `sticky` acá, del 26-09-2026 al 05-10-2026, que hacía fija esta barra sola y por
+ * pantalla. Se fue cuando el fiscalizador adoptó `.lx-top-chrome` —el bloque que el ciudadano ya
+ * usaba— porque dejaba DOS formas de resolver lo mismo, y la cabecera del fiscalizador son dos
+ * filas: la barra y la insignia de conexión. Fija la barra sola, la insignia se iba igual.
+ * Para dejar cromo fijo arriba, envolverlo en `.lx-top-chrome`.
+ */
 
 /** Top bar: brand (home) or back+title (detail), plus icon actions with badge counts (DESIGN_SYSTEM.md §3). */
 export function AppBar({
@@ -40,10 +35,9 @@ export function AppBar({
   subtitle,
   actions = [],
   className,
-  sticky,
 }: AppBarProps): React.JSX.Element {
   return (
-    <header className={['lx-app-bar', sticky ? 'lx-app-bar--sticky' : '', className].filter(Boolean).join(' ')}>
+    <header className={['lx-app-bar', className].filter(Boolean).join(' ')}>
       <div className="lx-app-bar__start">
         {onBack ? (
           <button type="button" className="lx-app-bar__back" onClick={onBack} aria-label={backLabel ?? 'Back'}>

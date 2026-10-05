@@ -71,7 +71,11 @@ const PREFIJO = { citizen: '', admin: '/admin', inspector: '/inspector' };
 
 const RUTAS = {
   citizen: ['/', '/vehicles', '/wallet', '/movements', '/fines', '/notifications', '/more', '/profile'],
-  inspector: ['/', '/queue', '/citations', '/plate-lookup', '/profile'],
+  // `/plate-lookup` NO existe en el enrutador del fiscalizador: el comodín la mandaba a `/`, así
+  // que el arnés medía la Consulta dos veces y firmaba una de ellas con el nombre de una
+  // pantalla imaginaria. Es el incidente 5 del registro, otra vez. Corregido contra App.tsx el
+  // 05-10-2026, con las rutas que sí existen.
+  inspector: ['/', '/cite', '/citations', '/queue', '/more', '/profile', '/help'],
   admin: ['/', '/zones', '/users', '/audit'],
 };
 

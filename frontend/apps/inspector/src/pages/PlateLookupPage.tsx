@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   formatCurrencyMinor,
@@ -11,7 +11,21 @@ import {
 } from '@luparx/i18n';
 import { plateVerdictKey } from '@luparx/features';
 import type { PlateVerdict } from '@luparx/api-client';
-import { Alert, Button, Card, FormField, Input, ListRow, SectionHeader, Select, type CardTone } from '@luparx/ui';
+import {
+  Alert,
+  Button,
+  Card,
+  FormField,
+  IconCheck,
+  IconEye,
+  IconFine,
+  IconSearch,
+  Input,
+  ListRow,
+  SectionHeader,
+  Select,
+  type CardTone,
+} from '@luparx/ui';
 import { InspectorShell } from '../components/InspectorShell';
 import { VerdictMark, verdictTone } from '../components/VerdictMark';
 import { useKnownZones, usePlateLookup } from '../lib/queries';
@@ -40,6 +54,10 @@ export function PlateLookupPage(): React.JSX.Element {
   const navigate = useNavigate();
   const zones = useKnownZones();
   const lookup = usePlateLookup();
+
+  // El acceso «Consultar placa» del lanzador no navega a ningún lado: ya estamos en su pantalla,
+  // así que lleva el cursor al campo —que es la acción— y abre el teclado.
+  const plateRef = useRef<HTMLInputElement>(null);
 
   const [plate, setPlate] = useState('');
   const [zoneId, setZoneId] = useState('');
@@ -87,6 +105,50 @@ export function PlateLookupPage(): React.JSX.Element {
   return (
     <InspectorShell>
       <h1 className="lx-text-screen-title">{t('inspector.lookup.title')}</h1>
+
+      {/*
+        Las cuatro acciones del turno (05-10-2026), como pide el PDF de visualización del inspector.
+
+        SÓLO mientras no hay veredicto en pantalla, y eso no es un descuido. El veredicto se puso
+        ARRIBA del formulario a propósito —es la razón por la que alguien tiene el teléfono en la
+        mano— y meter un lanzador de 88px por encima lo empujaría fuera de la vista en un teléfono
+        de 844px de alto, deshaciendo esa decisión. Cuando hay respuesta, la pantalla tiene una sola
+        acción principal: decidir si se levanta la boleta. Y las cuatro siguen a un toque en la
+        barra inferior, que nunca se va.
+
+        No se crea ninguna ruta: `/cite` y `/queue` ya existen, y la consulta es esta misma
+        pantalla.
+      */}
+      {!result ? (
+        <nav className="lx-quick-grid lx-quick-grid--touch" aria-label={t('inspector.home.quick.label')}>
+          {[
+            {
+              clave: 'lookup' as const,
+              icono: <IconSearch />,
+              onClick: () => plateRef.current?.focus(),
+            },
+            { clave: 'cite' as const, icono: <IconFine />, onClick: () => navigate('/cite') },
+            // La evidencia se agrega DENTRO de una boleta: llevar al flujo de boleta es el punto
+            // correcto del flujo que ya existe, no un descuido ni una galería nueva.
+            { clave: 'evidence' as const, icono: <IconEye />, onClick: () => navigate('/cite') },
+            { clave: 'queue' as const, icono: <IconCheck />, onClick: () => navigate('/queue') },
+          ].map((acceso) => (
+            <button
+              key={acceso.clave}
+              type="button"
+              className="lx-quick-tile lx-quick-tile--touch"
+              onClick={acceso.onClick}
+            >
+              <span className="lx-quick-tile__icon" aria-hidden="true">
+                {acceso.icono}
+              </span>
+              <span className="lx-quick-tile__title">
+                {t(`inspector.home.quick.${acceso.clave}` as TranslationKey)}
+              </span>
+            </button>
+          ))}
+        </nav>
+      ) : null}
 
       {result ? (
         <>
@@ -280,6 +342,7 @@ export function PlateLookupPage(): React.JSX.Element {
           <FormField label={t('inspector.lookup.plateLabel')}>
             {({ inputId, describedBy }) => (
               <Input
+                ref={plateRef}
                 id={inputId}
                 aria-describedby={describedBy}
                 name="plate"

@@ -31,10 +31,9 @@ export function ProfilePage(): React.JSX.Element {
   return (
     // El botón de regreso lleva a Consulta, que es la raíz del módulo: quien entró acá desde «Más»
     // quiere salir de la configuración, no volver a la lista de la que vino.
-    // `stickyHeader`: «Mi perfil» es una pantalla larga —datos personales, correo, contraseña,
-    // idioma— y su título es la única señal de dónde está uno. Al desplazarse hasta la contraseña,
-    // la cabecera se iba y con ella el botón de volver.
-    <InspectorShell title={t('profile.title')} onBack={() => navigate('/')} stickyHeader>
+    // La cabecera fija ya no se pide por pantalla: desde el 05-10-2026 `InspectorShell` la deja
+    // fija en todas, que es lo que el PDF de barras fijas exige como arquitectura y no como parche.
+    <InspectorShell title={t('profile.title')} onBack={() => navigate('/')}>
       {me?.user ? (
         <CardStack>
           <Card>

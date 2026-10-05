@@ -1138,6 +1138,25 @@ export const esCR = {
   'inspector.help.queue.title': 'Pendientes',
   'inspector.help.queue.body':
     'Ahí están las boletas que todavía no llegaron al servidor. Si alguna se queda trabada, abrila: te dice por qué.',
+  /* --- Sexta opción: el triaje (05-10-2026) ---------------------------------------------------
+     No es un manual ni una sexta explicación: es la lista de los siete problemas del turno, cada
+     uno con la salida que YA existe. Se entra acá cuando no se sabe cuál de las otras cinco
+     tarjetas aplica. */
+  'inspector.help.triage.title': 'Resolver un problema',
+  'inspector.help.triage.body':
+    'Elegí lo que te está pasando y te llevamos directo a donde se resuelve. Nada de esto crea un trámite nuevo.',
+  'inspector.help.triage.action': 'Ver la lista de problemas',
+  'inspector.help.triage.intro': '¿Qué te está pasando?',
+  'inspector.help.error.title': 'La aplicación presenta un error',
+  'inspector.help.error.action': 'Ver qué hacer',
+  'inspector.help.error.body':
+    'Recargar la aplicación la vuelve a montar desde cero y resuelve casi todos los errores de pantalla. Si al recargar sigue igual, decile a la municipalidad lo que dice la pantalla de error tal cual: es lo único que distingue un fallo del siguiente.',
+  'inspector.help.error.reload': 'Recargar la aplicación',
+  'inspector.help.error.safe':
+    'Lo que está esperando a sincronizarse queda guardado en este teléfono. Recargar no lo borra ni lo duplica.',
+  'inspector.help.error.state': 'Estado ahora mismo',
+  'inspector.help.back.title': 'Necesito volver',
+  'inspector.help.back.action': 'Volver a la pantalla anterior',
   'citizen.more.profile': 'Mi perfil',
   'citizen.more.fines': 'Multas',
   'citizen.more.fines.meta': 'Consultá tus multas y presentá un reclamo.',
@@ -1441,6 +1460,11 @@ export const esCR = {
 
   'inspector.home.offline': 'Sin conexión — datos guardados localmente',
   'inspector.home.online': 'En línea',
+  'inspector.home.quick.lookup': 'Consultar placa',
+  'inspector.home.quick.cite': 'Levantar boleta',
+  'inspector.home.quick.evidence': 'Evidencia',
+  'inspector.home.quick.queue': 'Pendientes',
+  'inspector.home.quick.label': 'Acciones del turno',
   // Cuatro claves que la pantalla de inicio del inspector ya usaba sin que existieran: el tipo
   // `TranslationKey` se genera desde este archivo, así que su ausencia rompía `typecheck` en toda
   // la app. Se agregan tal cual las pide la pantalla en vez de renombrarlas ahí, porque la deuda

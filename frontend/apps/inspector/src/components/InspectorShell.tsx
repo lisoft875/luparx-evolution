@@ -23,13 +23,6 @@ export interface InspectorShellProps {
   title?: React.ReactNode;
   subtitle?: React.ReactNode;
   onBack?: () => void;
-  /**
-   * Mantiene la cabecera —y con ella el título de la pantalla— visible durante el desplazamiento.
-   *
-   * <p>Para una pantalla larga donde ese título es la única señal de dónde está uno. No se activa
-   * en todas por omisión: sería un cambio en pantallas que nadie pidió tocar.</p>
-   */
-  stickyHeader?: boolean;
 }
 
 /**
@@ -50,7 +43,6 @@ export function InspectorShell({
   title,
   subtitle,
   onBack,
-  stickyHeader,
 }: InspectorShellProps): React.JSX.Element {
   const { t, tPlural } = useTranslation();
   const navigate = useNavigate();
@@ -70,7 +62,20 @@ export function InspectorShell({
     if (!node) return;
     const observer = new ResizeObserver((entries) => {
       const entry = entries[0];
-      if (entry) setFooterHeight(entry.contentRect.height);
+      if (!entry) return;
+      /*
+        `borderBoxSize` y NO `contentRect` (05-10-2026). `contentRect` devuelve la caja de
+        CONTENIDO, sin el padding, y `.lx-bottom-tab-bar` paga `padding-bottom:
+        env(safe-area-inset-bottom)` — la franja del gesto del iPhone. En un 14 Pro Max son 34px
+        que la barra OCUPA y que `contentRect` no informa, así que `main` reservaba 34px de menos y
+        lo último de cada lista quedaba debajo de la barra: justo lo que el PDF de barras fijas pide
+        que no pase («el último elemento de una lista debe poder verse completo»).
+
+        El Ciudadano ya tenía este arreglo desde el 19-09-2026, encontrado por
+        tests/responsive/sobre-el-pliegue.cjs. El fiscalizador se había quedado con la versión
+        vieja. `getBoundingClientRect()` de respaldo para Safari < 15.4, que devuelve lo mismo.
+      */
+      setFooterHeight(entry.borderBoxSize?.[0]?.blockSize ?? node.getBoundingClientRect().height);
     });
     observer.observe(node);
     return () => observer.disconnect();
@@ -116,45 +121,82 @@ export function InspectorShell({
       // perfil sigue estando, una fila más abajo, que es donde la especificación del 24-09-2026
       // lo pone.
       onSelect: () => navigate('/more'),
-      current: location.pathname.startsWith('/profile'),
+      // `/more` Y `/profile`: el perfil se abre DESDE Más y es su pantalla hija, así que la
+      // pestaña se queda iluminada. Antes decía sólo `/profile`, con lo cual estando en Más no se
+      // iluminaba ninguna pestaña —la pantalla no decía en qué sección estabas— y estando en el
+      // perfil se iluminaba una que no era la que habías tocado. Ayuda cuelga del mismo sitio.
+      current:
+        location.pathname.startsWith('/more')
+        || location.pathname.startsWith('/profile')
+        || location.pathname.startsWith('/help'),
     },
   ];
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100dvh', background: 'transparent' }}>
-      <AppBar
-        start={
-          !onBack ? (
-            <>
-              <Brand name={t('app.name')} />
-              <ActiveTenantBadge onOpenSelector={() => navigate('/select-tenant')} />
-            </>
-          ) : undefined
-        }
-        onBack={onBack}
-        sticky={stickyHeader}
-        backLabel={t('common.back')}
-        title={onBack ? title : undefined}
-        subtitle={onBack ? subtitle : undefined}
-      />
-      <div
-        style={{
-          padding: '0 var(--lx-space-4)',
-          maxWidth: 640,
-          width: '100%',
-          margin: '0 auto',
-        }}
-      >
-        {/* Never colour alone: the badge always carries the word as well as the tone. */}
-        <Badge tone={online ? 'success' : 'warning'} icon={<IconOffline size={16} />}>
-          {online
-            ? pending > 0
-              ? tPlural('inspector.queue.count', pending)
-              : t('inspector.home.online')
-            : pending > 0
-              ? tPlural('inspector.offline.queued', pending)
-              : t('inspector.offline.badge')}
-        </Badge>
+    <div
+      // La altura REAL de la barra inferior, medida arriba y publicada como variable para que
+      // cualquier acción fija pueda apoyarse en ella sin volver a medirla ni codificar un número:
+      // la barra cambia de alto con la safe-area del aparato.
+      style={
+        {
+          display: 'flex',
+          flexDirection: 'column',
+          minHeight: '100dvh',
+          background: 'transparent',
+          '--lx-bottom-nav-height': `${footerHeight}px`,
+        } as React.CSSProperties
+      }
+    >
+      {/*
+        El cromo de arriba, como un solo bloque que se queda (05-10-2026).
+
+        Antes la barra era fija sólo donde una pantalla pedía `stickyHeader` —dos de nueve— y la
+        insignia de conexión no lo era en ninguna: vivía debajo de la cabecera, en flujo normal, así
+        que al desplazar «Mis boletas» se iba de la pantalla junto con el logo y la municipalidad.
+        Eso es lo que reporta el PDF de barras fijas, y lo que pide es exactamente esto: que el
+        header conserve «logo, municipalidad, estado En línea».
+
+        `.lx-top-chrome` no es nuevo: es el mismo bloque que el Ciudadano usa desde el contrato
+        v0.10 para agrupar su barra y el cronómetro de estadía. Agruparlos es lo que hace que la
+        safe-area del notch se pague UNA vez —la paga la barra, que va primero— y que las dos filas
+        se queden o se vayan juntas en vez de cada una por su cuenta.
+
+        `sticky` y no `fixed`: el bloque conserva su lugar en el flujo, así que no hay que compensar
+        su altura con relleno, no aparece una segunda barra de desplazamiento y el contenido no
+        salta al activarse.
+      */}
+      <div className="lx-top-chrome">
+        <AppBar
+          start={
+            !onBack ? (
+              <>
+                <Brand name={t('app.name')} />
+                <ActiveTenantBadge onOpenSelector={() => navigate('/select-tenant')} />
+              </>
+            ) : undefined
+          }
+          onBack={onBack}
+          backLabel={t('common.back')}
+          title={onBack ? title : undefined}
+          subtitle={onBack ? subtitle : undefined}
+        />
+        {/* Franja propia y a todo el ancho, con fondo opaco: lo que se desplaza tiene que pasar por
+            DEBAJO y no verse a través. El recuadro interior comparte la caja de `main` para que la
+            insignia quede alineada con el contenido y no pegada al borde de la pantalla. */}
+        <div className="lx-inspector-status-bar">
+          <div className="lx-inspector-status-bar__inner">
+            {/* Never colour alone: the badge always carries the word as well as the tone. */}
+            <Badge tone={online ? 'success' : 'warning'} icon={<IconOffline size={16} />}>
+              {online
+                ? pending > 0
+                  ? tPlural('inspector.queue.count', pending)
+                  : t('inspector.home.online')
+                : pending > 0
+                  ? tPlural('inspector.offline.queued', pending)
+                  : t('inspector.offline.badge')}
+            </Badge>
+          </div>
+        </div>
       </div>
       <main
         style={{

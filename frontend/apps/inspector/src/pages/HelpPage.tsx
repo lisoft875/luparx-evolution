@@ -4,14 +4,21 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation, type TranslationKey } from '@luparx/i18n';
 import {
   Badge,
+  Button,
   Card,
   CardStack,
+  IconArrowLeft,
   IconCheck,
+  IconEye,
   IconFine,
   IconOffline,
-  IconPin,
   IconSearch,
+  IconShield,
+  IconSystem,
+  ListRow,
   Modal,
+  SummaryList,
+  SummaryRow,
 } from '@luparx/ui';
 import { InspectorShell } from '../components/InspectorShell';
 import { useCitationQueue, useIsOnline } from '../lib/queries';
@@ -40,20 +47,54 @@ import { useCitationQueue, useIsOnline } from '../lib/queries';
  *   <li><b>Ninguna ruta nueva.</b> `/`, `/cite` y `/queue` ya estaban.</li>
  * </ul>
  */
+type ClaveEventualidad = 'offline' | 'plate' | 'citation' | 'evidence' | 'queue';
+type ClaveProblema = ClaveEventualidad | 'error' | 'back';
+
 interface Entrada {
-  clave: 'offline' | 'plate' | 'citation' | 'evidence' | 'queue';
+  clave: ClaveEventualidad | 'triage';
   icono: React.ReactNode;
-  /** Adónde lleva. `null` = abre el panel de conexión, que no es una pantalla. */
+  /**
+   * Adónde lleva. `null` = abre un panel, no una pantalla: la conexión para `offline`, la lista de
+   * problemas para `triage`.
+   */
   ruta: string | null;
 }
 
-const ENTRADAS: Entrada[] = [
+/** Las cinco eventualidades, en el orden en que se leen. */
+const EVENTUALIDADES: { clave: ClaveEventualidad; icono: React.ReactNode; ruta: string | null }[] = [
   { clave: 'offline', icono: <IconOffline />, ruta: null },
   { clave: 'plate', icono: <IconSearch />, ruta: '/' },
   { clave: 'citation', icono: <IconFine />, ruta: '/cite' },
   // La evidencia vive dentro de la boleta: llevar al mismo sitio es lo correcto, no un descuido.
-  { clave: 'evidence', icono: <IconPin />, ruta: '/cite' },
+  { clave: 'evidence', icono: <IconEye />, ruta: '/cite' },
   { clave: 'queue', icono: <IconCheck />, ruta: '/queue' },
+];
+
+/**
+ * Las seis tarjetas: las cinco de siempre y el triaje, que es la sexta (05-10-2026).
+ *
+ * <p>La sexta no es una explicación más. Las otras cinco suponen que uno ya sabe cuál de las cinco
+ * aplica; ésta es para cuando no se sabe, y por eso va al final y abre una lista en vez de llevar
+ * a una ruta.</p>
+ */
+const ENTRADAS: Entrada[] = [
+  ...EVENTUALIDADES,
+  { clave: 'triage', icono: <IconShield />, ruta: null },
+];
+
+/**
+ * Los siete problemas del triaje, y por qué esta tabla se DERIVA de la de arriba.
+ *
+ * <p>Cinco de los siete son las mismas cinco eventualidades, con el mismo destino. Escribirlos otra
+ * vez habría dejado dos listas que pueden discrepar: cambiar la ruta de la evidencia en una y
+ * olvidarla en la otra es el error que se comete a los tres meses, y el síntoma —una ayuda que
+ * lleva a un sitio y otra ayuda que lleva a otro— no se parece a su causa. Así que las cinco se
+ * toman de {@link EVENTUALIDADES} y sólo se agregan los dos que el PDF trae nuevos.</p>
+ */
+const PROBLEMAS: { clave: ClaveProblema; icono: React.ReactNode }[] = [
+  ...EVENTUALIDADES.map(({ clave, icono }) => ({ clave: clave as ClaveProblema, icono })),
+  { clave: 'error', icono: <IconSystem /> },
+  { clave: 'back', icono: <IconArrowLeft /> },
 ];
 
 export function HelpPage(): React.JSX.Element {
@@ -62,9 +103,40 @@ export function HelpPage(): React.JSX.Element {
   const online = useIsOnline();
   const { pending } = useCitationQueue();
   const [verConexion, setVerConexion] = useState(false);
+  const [verProblemas, setVerProblemas] = useState(false);
+  const [verError, setVerError] = useState(false);
+
+  /** Abre lo que esa tarjeta abre: la conexión, o la lista de problemas. */
+  function abrirPanel(clave: Entrada['clave']): void {
+    if (clave === 'triage') setVerProblemas(true);
+    else setVerConexion(true);
+  }
+
+  /**
+   * Resuelve un problema del triaje con lo que ya existe. Ninguna rama crea un proceso paralelo.
+   */
+  function resolver(clave: ClaveProblema): void {
+    setVerProblemas(false);
+    if (clave === 'error') {
+      setVerError(true);
+      return;
+    }
+    if (clave === 'back') {
+      // La navegación que ya hay, no una nueva: el historial del navegador, que es el mismo que
+      // mueve la flecha de la cabecera. Sin historial —una pestaña abierta directo en /help— no
+      // hay «anterior», así que se va a la raíz del módulo, que es la Consulta.
+      if (typeof window !== 'undefined' && window.history.length > 1) navigate(-1);
+      else navigate('/');
+      return;
+    }
+    const eventualidad = EVENTUALIDADES.find((e) => e.clave === clave);
+    if (!eventualidad) return;
+    if (eventualidad.ruta === null) setVerConexion(true);
+    else navigate(eventualidad.ruta);
+  }
 
   return (
-    <InspectorShell title={t('inspector.help.title')} onBack={() => navigate('/more')} stickyHeader>
+    <InspectorShell title={t('inspector.help.title')} onBack={() => navigate('/more')}>
       <CardStack>
         {ENTRADAS.map((entrada) => (
           <Card key={entrada.clave}>
@@ -75,7 +147,7 @@ export function HelpPage(): React.JSX.Element {
             <button
               type="button"
               className="lx-help-card"
-              onClick={() => (entrada.ruta === null ? setVerConexion(true) : navigate(entrada.ruta))}
+              onClick={() => (entrada.ruta === null ? abrirPanel(entrada.clave) : navigate(entrada.ruta))}
             >
               <span className="lx-help-card__icon" aria-hidden="true">
                 {entrada.icono}
@@ -119,6 +191,67 @@ export function HelpPage(): React.JSX.Element {
               ? tPlural('inspector.offline.queued', pending)
               : t('inspector.help.offline.nothingPending')}
           </p>
+        </div>
+      </Modal>
+
+      {/* La sexta opción: un triaje, no un manual. Siete filas, cada una con su salida ya
+          construida, y la fila se cierra en el acto —la lista no es un sitio donde quedarse. */}
+      <Modal
+        open={verProblemas}
+        onClose={() => setVerProblemas(false)}
+        title={t('inspector.help.triage.title')}
+        closeLabel={t('common.close')}
+      >
+        <p className="lx-text-meta" style={{ marginTop: 0 }}>
+          {t('inspector.help.triage.intro')}
+        </p>
+        <div>
+          {PROBLEMAS.map((problema) => (
+            <ListRow
+              key={problema.clave}
+              icon={problema.icono}
+              title={t(`inspector.help.${problema.clave}.title` as TranslationKey)}
+              meta={t(`inspector.help.${problema.clave}.action` as TranslationKey)}
+              onClick={() => resolver(problema.clave)}
+            />
+          ))}
+        </div>
+      </Modal>
+
+      {/* «La aplicación presenta un error»: información útil y la recuperación que ya existe.
+          Lo útil es lo que la aplicación de verdad sabe —conexión, cuánto está esperando— y no una
+          lista de causas posibles; la recuperación es volver a montarla, que es exactamente lo que
+          hace el botón de reintentar de la pantalla de error. */}
+      <Modal
+        open={verError}
+        onClose={() => setVerError(false)}
+        title={t('inspector.help.error.title')}
+        closeLabel={t('common.close')}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--lx-space-4)' }}>
+          <SummaryList>
+            <SummaryRow
+              label={t('inspector.help.error.state')}
+              value={online ? t('inspector.home.online') : t('inspector.offline.badge')}
+            />
+            <SummaryRow
+              label={t('inspector.help.queue.title')}
+              value={
+                pending > 0
+                  ? tPlural('inspector.offline.queued', pending)
+                  : t('inspector.help.offline.nothingPending')
+              }
+            />
+          </SummaryList>
+          <p className="lx-text-body" style={{ margin: 0 }}>
+            {t('inspector.help.error.body')}
+          </p>
+          <p className="lx-text-meta" style={{ margin: 0 }}>
+            {t('inspector.help.error.safe')}
+          </p>
+          <Button type="button" fullWidth onClick={() => window.location.reload()}>
+            {t('inspector.help.error.reload')}
+          </Button>
         </div>
       </Modal>
     </InspectorShell>

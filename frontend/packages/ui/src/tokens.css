@@ -2460,6 +2460,7 @@ a.lx-list-row {
 .lx-app-bar,
 .lx-bottom-tab-bar,
 .lx-sticky-timer-bar,
+.lx-inspector-status-bar,
 .lx-centered-layout__card {
   -webkit-backdrop-filter: blur(var(--lx-blur-1));
   backdrop-filter: blur(var(--lx-blur-1));
@@ -2522,6 +2523,7 @@ a.lx-list-row {
   .lx-app-bar,
   .lx-bottom-tab-bar,
   .lx-sticky-timer-bar,
+  .lx-inspector-status-bar,
   .lx-centered-layout__card,
   .lx-modal,
   .lx-language-pill {
@@ -3889,6 +3891,45 @@ a.lx-list-row {
   white-space: nowrap;
 }
 
+/* --- Variante táctil de los accesos rápidos: el fiscalizador (05-10-2026) ----------------------
+   Las mismas tarjetas del Inicio administrativo, con el tamaño que pide un teléfono usado de pie y
+   con una mano: el icono arriba y el nombre debajo, 88px de alto y nada más —ni pista ni segundo
+   renglón—, porque el PDF pide «botones grandes y fáciles de tocar» y «poco texto».
+
+   Y DOS columnas siempre, incluso bajo 380px, donde la cuadrícula normal pasa a una: cuatro
+   tarjetas en columna son 352px de lanzador antes de llegar al campo de la placa, que es la acción
+   principal de la pantalla. En un teléfono de 320px dos columnas dan 140px por tarjeta, de sobra
+   para que el nombre entre en dos renglones. */
+.lx-quick-grid--touch {
+  gap: var(--lx-space-3);
+}
+@media (max-width: 380px) {
+  .lx-quick-grid--touch {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.lx-quick-tile--touch {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas:
+    'icono'
+    'titulo';
+  justify-items: center;
+  gap: var(--lx-space-2) 0;
+  min-height: 88px;
+  text-align: center;
+}
+.lx-quick-tile--touch .lx-quick-tile__icon {
+  width: 40px;
+  height: 40px;
+}
+/* El nombre SÍ se parte acá: «Levantar boleta» en 140px de ancho necesita dos renglones, y
+   recortarlo con puntos suspensivos dejaría un botón que no dice qué hace. */
+.lx-quick-tile--touch .lx-quick-tile__title {
+  font-size: 0.9375rem;
+  white-space: normal;
+  overflow: visible;
+}
+
 /* --- Ocupación por zona, compacta -------------------------------------------------------------- */
 /* Nombre, barra y porcentaje en UN renglón.
    Apilados —nombre arriba, barra abajo— cada zona costaba 36px y seis zonas dejaban la tarjeta en
@@ -4217,16 +4258,23 @@ a.lx-list-row {
   }
 }
 
-/* La cabecera que se queda (26-09-2026).
-   `sticky` y no `fixed`: la barra conserva su lugar en el flujo, así que no hay que compensar su
-   altura con relleno, no aparece una segunda barra de desplazamiento y el contenido no salta al
-   activarse. El fondo es opaco porque lo que se desplaza tiene que pasar por DEBAJO y no verse a
-   través. El z-index queda por debajo del 20 de la barra inferior y del 1000 de los diálogos: es
-   cromo de pantalla, no una capa flotante. */
-.lx-app-bar--sticky {
-  position: sticky;
-  top: 0;
-  z-index: 10;
+/* La franja de estado del fiscalizador (05-10-2026).
+   Segunda fila de la cabecera, dentro de `.lx-top-chrome`: lleva la insignia de «En línea / Sin
+   conexión · N pendientes». A todo el ancho y con fondo OPACO porque lo que se desplaza pasa por
+   debajo y no debe verse a través; el recuadro interior comparte la caja de `main` para que la
+   insignia quede alineada con el contenido.
+
+   Reemplaza a la prop `sticky` de AppBar (26-09-2026 – 05-10-2026): fijar la barra sola dejaba esta
+   insignia desplazándose, que es la mitad de lo que el PDF de barras fijas pide conservar. */
+.lx-inspector-status-bar {
+  background: var(--lx-surface);
+  border-bottom: 1px solid var(--lx-border);
+}
+.lx-inspector-status-bar__inner {
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+  padding: var(--lx-space-2) var(--lx-space-4);
 }
 
 /* La tarjeta de Ayuda que ES la acción (26-09-2026).

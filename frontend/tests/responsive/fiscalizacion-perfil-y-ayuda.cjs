@@ -214,6 +214,8 @@ async function estadoDeLaCabecera(page) {
     { titulo: 'Levantar una boleta', destino: /\/cite/ },
     { titulo: 'Fotos y evidencia', destino: /\/cite/ },
     { titulo: 'Pendientes', destino: /\/queue/ },
+    // La sexta, del 05-10-2026: no lleva a una ruta, abre la lista de problemas.
+    { titulo: 'Resolver un problema', destino: null, triaje: true },
   ];
 
   for (const opcion of OPCIONES) {
@@ -234,7 +236,64 @@ async function estadoDeLaCabecera(page) {
       const dialogo = page.getByRole('dialog');
       const abierto = await dialogo.isVisible().catch(() => false);
       comprobar(abierto, '  abre un panel corto y no una pantalla nueva');
-      if (abierto) {
+      if (abierto && opcion.triaje) {
+        /*
+          La sexta opción es un TRIAJE: los siete problemas del PDF, cada uno con su salida. Se
+          comprueban los siete por nombre —no un conteo, que no distingue «faltan dos» de «hay dos
+          repetidos»— y después que uno de los dos nuevos de verdad resuelva: el de volver tiene
+          que sacarte de Ayuda usando la navegación que ya existe.
+        */
+        const PROBLEMAS = [
+          'Si te quedás sin señal',
+          'Consultar una placa',
+          'Levantar una boleta',
+          'Fotos y evidencia',
+          'Pendientes',
+          'La aplicación presenta un error',
+          'Necesito volver',
+        ];
+        for (const problema of PROBLEMAS) {
+          const fila = dialogo.getByText(problema, { exact: true }).first();
+          comprobar((await fila.count()) > 0, `    «${problema}» está en la lista`);
+        }
+
+        // El de error: información útil y la recuperación que ya existe, no una lista de causas.
+        await dialogo.getByText('La aplicación presenta un error', { exact: true }).first().click();
+        await page.waitForTimeout(1200);
+        const panelError = page.getByRole('dialog');
+        const textoError = (await panelError.textContent().catch(() => '')) ?? '';
+        comprobar(
+          /recargar/i.test(textoError),
+          '    el problema de error ofrece recargar la aplicación',
+          textoError.slice(0, 160),
+        );
+        comprobar(
+          /en línea|sin conexión/i.test(textoError) && /esperando|sincroniz/i.test(textoError),
+          '    y antes de eso dice el estado real: conexión y qué está esperando',
+          textoError.slice(0, 200),
+        );
+        await page.keyboard.press('Escape');
+        await page.waitForTimeout(500);
+
+        // El de volver: tiene que SALIR de Ayuda, con el historial que ya hay.
+        await page.goto(`${BASE}/inspector/more`, { waitUntil: 'domcontentloaded' });
+        await page.waitForTimeout(1600);
+        await page.getByRole('button').filter({ hasText: 'Ayuda' }).first().click().catch(() => {});
+        await page.waitForTimeout(1600);
+        if (/\/help/.test(page.url())) {
+          await page.getByRole('button').filter({ hasText: 'Resolver un problema' }).first().click();
+          await page.waitForTimeout(1000);
+          await page.getByRole('dialog').getByText('Necesito volver', { exact: true }).first().click();
+          await page.waitForTimeout(1800);
+          comprobar(
+            !/\/help/.test(page.url()),
+            '    el problema de volver saca de Ayuda con la navegación existente',
+            `seguimos en ${page.url().replace(BASE, '')}`,
+          );
+        } else {
+          console.log(`  ·       no se pudo entrar a Ayuda desde Más para probar «Necesito volver» (${page.url().replace(BASE, '')})`);
+        }
+      } else if (abierto) {
         const texto = (await dialogo.textContent()) ?? '';
         comprobar(
           /conexión|sin conexión|sincroniz/i.test(texto),

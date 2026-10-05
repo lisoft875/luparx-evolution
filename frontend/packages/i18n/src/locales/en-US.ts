@@ -1116,6 +1116,21 @@ export const enUS: Record<TranslationKey, string> = {
   'inspector.help.queue.title': 'Pending',
   'inspector.help.queue.body':
     'Those are the citations that have not reached the server yet. If one gets stuck, open it: it says why.',
+  'inspector.help.triage.title': 'Solve a problem',
+  'inspector.help.triage.body':
+    'Pick what is happening and we take you straight to where it is solved. None of this creates a new process.',
+  'inspector.help.triage.action': 'See the list of problems',
+  'inspector.help.triage.intro': 'What is happening?',
+  'inspector.help.error.title': 'The app shows an error',
+  'inspector.help.error.action': 'See what to do',
+  'inspector.help.error.body':
+    'Reloading the app mounts it again from scratch and clears almost every screen error. If it persists after a reload, tell the municipality exactly what the error screen says: it is the only thing that tells one failure from another.',
+  'inspector.help.error.reload': 'Reload the app',
+  'inspector.help.error.safe':
+    'Whatever is waiting to sync stays stored on this phone. Reloading neither deletes nor duplicates it.',
+  'inspector.help.error.state': 'Right now',
+  'inspector.help.back.title': 'I need to go back',
+  'inspector.help.back.action': 'Go back to the previous screen',
   'citizen.more.profile': 'My profile',
   'citizen.more.fines': 'Fines',
   'citizen.more.fines.meta': 'Review and appeal your fines.',
@@ -1413,6 +1428,11 @@ export const enUS: Record<TranslationKey, string> = {
 
   'inspector.home.offline': 'Offline — data saved locally',
   'inspector.home.online': 'Online',
+  'inspector.home.quick.lookup': 'Check a plate',
+  'inspector.home.quick.cite': 'Write a citation',
+  'inspector.home.quick.evidence': 'Evidence',
+  'inspector.home.quick.queue': 'Pending',
+  'inspector.home.quick.label': 'Shift actions',
   'home.inspector.title': 'Patrol',
   'inspector.home.patrol.title': "Today's round",
   'home.inspector.patrolStub.title': 'No round yet',
