@@ -188,7 +188,7 @@ import type {
   RegisterRequest,
   RegisterResponse,
   RegisteredUsersReportQuery,
-  RegisteredUsersReportRow,
+  RegisteredUsersReportResponse,
   RejectMembershipRequest,
   ResetPasswordRequest,
   SessionTenantRequest,
@@ -659,7 +659,7 @@ export class ApiClient {
   };
 
   readonly adminReports = {
-    registeredUsers: (query: RegisteredUsersReportQuery): Promise<RegisteredUsersReportRow[]> =>
+    registeredUsers: (query: RegisteredUsersReportQuery): Promise<RegisteredUsersReportResponse> =>
       this.http.request('GET', '/api/v1/admin/reports/registered-users', { query }),
   };
 
@@ -937,7 +937,7 @@ export class ApiClient {
   };
 
   readonly platformReports = {
-    registeredUsers: (query: PlatformRegisteredUsersReportQuery): Promise<RegisteredUsersReportRow[]> =>
+    registeredUsers: (query: PlatformRegisteredUsersReportQuery): Promise<RegisteredUsersReportResponse> =>
       this.http.request('GET', '/api/v1/platform/reports/registered-users', { query }),
   };
 

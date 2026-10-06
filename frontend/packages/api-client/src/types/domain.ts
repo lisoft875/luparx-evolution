@@ -823,9 +823,20 @@ export interface AuditOriginProbe {
   matches: number;
 }
 
-export type RegisteredUsersGroupBy = 'tenant' | 'country' | 'portal' | 'month';
+/**
+ * Cómo se puede agrupar el informe de personas registradas.
+ *
+ * <p>Los dos portales implementan agrupaciones DISTINTAS, y es deliberado: una municipalidad no
+ * puede agrupar por municipalidad —sólo ve la suya— y la plataforma no agrupa por portal. Mezclarlas
+ * en un solo tipo es lo que hacía que cada pantalla ofreciera tres opciones que su propio servidor
+ * rechaza. Encontrado el 06-10-2026: el admin pedía `tenant` por omisión y recibía 400 en silencio;
+ * la plataforma ofrecía `portal` y recibía 501.</p>
+ */
+export type RegisteredUsersGroupBy = 'portal';
+export type PlatformRegisteredUsersGroupBy = 'tenant' | 'country' | 'month';
 
 export type RegisteredUsersReportQuery = {
+  /** Instante ISO-8601 completo. El servidor lo lee como `Instant`: `2026-10-06` no le sirve. */
   from: string;
   to: string;
   groupBy: RegisteredUsersGroupBy;
@@ -834,6 +845,19 @@ export type RegisteredUsersReportQuery = {
 export interface RegisteredUsersReportRow {
   group: string;
   count: number;
+}
+
+/**
+ * Lo que el servidor devuelve de verdad: un objeto con sus filas dentro, no una lista.
+ *
+ * <p>El cliente lo declaraba como `RegisteredUsersReportRow[]`, y el tipo era una afirmación falsa
+ * que nadie podía contradecir —TypeScript cree lo que se le dice del otro lado de la red. La
+ * consecuencia: `rows={query.data ?? []}` le pasaba un OBJETO a la tabla, que hace `.map` sobre él,
+ * y la pantalla de informes de la plataforma reventaba entera. Llevaba así desde que existe.</p>
+ */
+export interface RegisteredUsersReportResponse {
+  groupBy: string;
+  rows: RegisteredUsersReportRow[];
 }
 
 export interface CreateExportRequest {
@@ -946,7 +970,7 @@ export type PlatformAuditEventsQuery = {
 };
 
 export type PlatformRegisteredUsersReportQuery = {
-  groupBy: RegisteredUsersGroupBy;
+  groupBy: PlatformRegisteredUsersGroupBy;
 };
 
 // ---- Platform catalogs (countries / admin levels / divisions / document types) -------------

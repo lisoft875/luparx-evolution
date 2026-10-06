@@ -30,19 +30,43 @@ if (/^<.*>$/.test(PASS) || PASS.trim() === '') {
   process.exit(2);
 }
 
-/** Los once valores de la guía, en el formato en que los devuelve `getComputedStyle`. */
+/**
+ * Los once valores de la guía.
+ *
+ * <p>Se comparan NORMALIZADOS a `r,g,b` y no como texto. La primera versión los esperaba en
+ * `rgb(...)` y falló 44 veces seguidas contra una paleta que estaba perfecta: `getPropertyValue`
+ * sobre una propiedad personalizada devuelve el texto DECLARADO —`#070b14`— y no el color
+ * resuelto, porque una variable CSS no tiene tipo hasta que se usa en una propiedad que sí lo
+ * tiene. Un hallazgo idéntico en los cuatro portales es sospechoso de ser del arnés, y lo era.</p>
+ */
 const PALETA = {
-  '--lx-bg': 'rgb(7, 11, 20)',
-  '--lx-surface': 'rgb(15, 23, 36)',
-  '--lx-surface-2': 'rgb(17, 29, 43)',
-  '--lx-border': 'rgb(31, 45, 61)',
-  '--lx-text': 'rgb(248, 250, 252)',
-  '--lx-text-muted': 'rgb(148, 163, 184)',
-  '--lx-primary': 'rgb(59, 130, 246)',
-  '--lx-success': 'rgb(34, 197, 94)',
-  '--lx-warning': 'rgb(245, 158, 11)',
-  '--lx-danger': 'rgb(239, 68, 68)',
-  '--lx-info': 'rgb(163, 179, 199)',
+  '--lx-bg': '#070B14',
+  '--lx-surface': '#0F1724',
+  '--lx-surface-2': '#111D2B',
+  '--lx-border': '#1F2D3D',
+  '--lx-text': '#F8FAFC',
+  '--lx-text-muted': '#94A3B8',
+  '--lx-primary': '#3B82F6',
+  '--lx-success': '#22C55E',
+  '--lx-warning': '#F59E0B',
+  '--lx-danger': '#EF4444',
+  '--lx-info': '#A3B3C7',
+};
+
+/**
+ * Tokens que un portal redefine A PROPÓSITO, con la razón al lado.
+ *
+ * <p>Sin esta tabla el arnés tendría dos salidas malas: o acusa a un override legítimo, o se le
+ * quita la comprobación al portal entero y deja de mirar los otros diez valores.</p>
+ */
+const EXCEPCIONES = {
+  platform: {
+    '--lx-primary': 'la plataforma usa el acento claro para distinguirse del admin municipal',
+  },
+  inspector: {
+    '--lx-border':
+      'densidad `outdoor`: el borde sube a blanco al 16% para leerse bajo el sol, decisión anterior a esta paleta',
+  },
 };
 
 /**
@@ -100,6 +124,30 @@ const TAMANOS = [
   { nombre: 'escritorio grande', width: 1920, height: 1080, movil: false },
 ];
 
+/**
+ * `#070b14`, `rgb(7, 11, 20)` y `rgba(7,11,20,1)` son el mismo color. Devuelve `7,11,20` para los
+ * tres, y `null` si trae transparencia o no se reconoce.
+ */
+function aRgb(valor) {
+  const v = String(valor || '').trim();
+  const hex = v.match(/^#([0-9a-f]{3,8})$/i);
+  if (hex) {
+    let h = hex[1];
+    if (h.length === 3) h = h.split('').map((c) => c + c).join('');
+    if (h.length === 8) return `${parseInt(h.slice(0, 2), 16)},${parseInt(h.slice(2, 4), 16)},${parseInt(h.slice(4, 6), 16)},${h.slice(6)}`;
+    if (h.length !== 6) return null;
+    return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16)).join(',');
+  }
+  const rgb = v.match(/^rgba?\(([^)]+)\)$/i);
+  if (rgb) {
+    const p = rgb[1].split(/[\s,/]+/).filter(Boolean).map(Number);
+    if (p.length < 3) return null;
+    const alfa = p.length > 3 ? p[3] : 1;
+    return alfa === 1 ? p.slice(0, 3).join(',') : `${p.slice(0, 3).join(',')},${alfa}`;
+  }
+  return null;
+}
+
 let fallos = 0;
 function comprobar(ok, mensaje, detalle) {
   if (ok) {
@@ -153,10 +201,11 @@ async function medir(page, paleta, vieja) {
   return page.evaluate(
     ({ paleta, vieja }) => {
       const raiz = getComputedStyle(document.documentElement);
+      // Sólo se LEE acá; la comparación se hace en Node, donde se puede normalizar. Dentro de la
+      // página, `getPropertyValue` de una propiedad personalizada devuelve el texto declarado.
       const tokens = {};
-      for (const [nombre, esperado] of Object.entries(paleta)) {
-        const valor = raiz.getPropertyValue(nombre).trim();
-        tokens[nombre] = { valor, ok: valor.toLowerCase() === esperado.toLowerCase() };
+      for (const nombre of Object.keys(paleta)) {
+        tokens[nombre] = { valor: raiz.getPropertyValue(nombre).trim() };
       }
 
       /*
@@ -189,7 +238,29 @@ async function medir(page, paleta, vieja) {
         viejos,
         // Una pantalla que no se construyó: el síntoma más caro de un cambio «sólo visual».
         raizVacia: (document.getElementById('root')?.childElementCount ?? 0) === 0,
-        enLogin: Boolean(document.querySelector('input[type="password"]')),
+        /*
+          Reventada, que NO es lo mismo que vacía.
+
+          `ErrorBoundary` existe justamente para que un fallo de render no deje la pantalla en
+          blanco, y lo consigue: pone una tarjeta con el mensaje del error. El efecto secundario es
+          que un arnés que sólo pregunta «¿hay contenido?» ve una pantalla sana. La primera corrida
+          dio por buena `/platform/reports` con el título «Algo se rompió en esta pantalla», que es
+          literalmente el texto de la tarjeta de error.
+        */
+        reventada: Boolean(document.querySelector('.lx-error-boundary')),
+        mensajeDelFallo: (document.querySelector('.lx-error-boundary__detail')?.textContent ?? '').trim().slice(0, 120),
+        /*
+          En el login, no «hay un campo de contraseña».
+
+          «Mi perfil» tiene uno —el de cambiar la contraseña— y es la pantalla más legítima del
+          mundo. La primera corrida reportó «/profile devolvió el login» en el fiscalizador y en el
+          ciudadano por eso, y las dos veces la sesión estaba perfecta: la pantalla siguiente cargó
+          sin problema. Lo que distingue al login es la RUTA, más el campo de contraseña.
+        */
+        enLogin: location.pathname.endsWith('/login')
+          || (Boolean(document.querySelector('input[type="password"]'))
+              && Boolean(document.querySelector('input[type="email"]'))
+              && document.querySelectorAll('nav, .lx-page-layout__sidebar, .lx-bottom-tab-bar').length === 0),
         h1: (document.querySelector('h1')?.textContent ?? '').trim().slice(0, 40),
         textoDeLaPantalla: (main.textContent ?? '').trim().length,
         desbordaLaPagina: doc.scrollWidth > doc.clientWidth + 1,
@@ -255,19 +326,38 @@ async function medir(page, paleta, vieja) {
     page.on('console', (m) => {
       if (m.type() === 'error') erroresJs.push(m.text().slice(0, 160));
     });
+    /*
+      Las peticiones que el servidor rechaza, CON SU URL.
+
+      «Failed to load resource: the server responded with a status of 400» es lo que la consola
+      imprime, y no dice cuál recurso: con eso en la mano hay que abrir el portal a mano y mirar la
+      pestaña de red. La URL y el método los tiene el arnés delante, así que los anota.
+    */
+    const peticionesFallidas = [];
+    page.on('response', (res) => {
+      if (res.status() >= 400) {
+        peticionesFallidas.push(`${res.status()} ${res.request().method()} ${res.url().replace(BASE, '')}`);
+      }
+    });
 
     await page.goto(`${BASE}${cfg.prefijo}/`, { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(2600);
     const primera = await medir(page, PALETA, PALETA_VIEJA);
 
     console.log('\n-- los once valores de la guía, leídos del navegador --');
-    for (const [nombre, { valor, ok }] of Object.entries(primera.tokens)) {
-      // La plataforma redefine su acento a propósito: no es una deriva, es su override.
-      if (portal === 'platform' && nombre === '--lx-primary') {
-        dato(`${nombre.padEnd(18)} ${valor}  (la plataforma usa su propio acento)`);
+    const excepciones = EXCEPCIONES[portal] ?? {};
+    for (const [nombre, { valor }] of Object.entries(primera.tokens)) {
+      if (excepciones[nombre]) {
+        dato(`${nombre.padEnd(18)} ${valor.padEnd(10)} override: ${excepciones[nombre]}`);
         continue;
       }
-      comprobar(ok, `${nombre.padEnd(18)} ${valor}`, `esperaba ${PALETA[nombre]}`);
+      const leido = aRgb(valor);
+      const esperado = aRgb(PALETA[nombre]);
+      comprobar(
+        leido !== null && leido === esperado,
+        `${nombre.padEnd(18)} ${valor}`,
+        `esperaba ${PALETA[nombre]} (${esperado}) y leí ${leido ?? 'algo que no es un color'}`,
+      );
     }
     comprobar(
       primera.fondoDelCuerpo !== 'rgba(0, 0, 0, 0)',
@@ -292,9 +382,11 @@ async function medir(page, paleta, vieja) {
       // cero sin contexto no distingue «no se construyó» de «la aplicación reventó», así que el
       // fallo imprime dónde estaba parado.
       comprobar(
-        !m.raizVacia && m.textoDeLaPantalla > 40,
+        !m.raizVacia && !m.reventada && m.textoDeLaPantalla > 40,
         `${ruta.padEnd(16)} · la pantalla se construyó («${m.h1}»)`,
-        `raízVacía=${m.raizVacia} caracteres=${m.textoDeLaPantalla} consola=${erroresJs.slice(0, 2).join(' | ') || 'limpia'}`,
+        m.reventada
+          ? `la pantalla REVENTÓ y el ErrorBoundary la reemplazó: ${m.mensajeDelFallo}`
+          : `raízVacía=${m.raizVacia} caracteres=${m.textoDeLaPantalla} consola=${erroresJs.slice(0, 2).join(' | ') || 'limpia'}`,
       );
       comprobar(!m.desbordaLaPagina, `${ruta.padEnd(16)} · sin desborde horizontal`);
       comprobar(
@@ -338,6 +430,11 @@ async function medir(page, paleta, vieja) {
       erroresJs.length === 0,
       `${cfg.nombre} · ni un error nuevo en consola`,
       erroresJs.slice(0, 3).join(' | '),
+    );
+    comprobar(
+      peticionesFallidas.length === 0,
+      `${cfg.nombre} · ninguna petición rechazada por el servidor`,
+      [...new Set(peticionesFallidas)].slice(0, 6).join('\n        '),
     );
     await ctx.close();
   }
