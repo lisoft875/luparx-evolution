@@ -84,3 +84,6 @@ infra/secrets/
 
 # Capturas de los arneses responsive (evidencia local, no versionada)
 frontend/tests/responsive/capturas/
+
+# Las capturas que dejan los arneses de UI: son evidencia de una corrida, no código.
+frontend/tests/responsive/capturas/

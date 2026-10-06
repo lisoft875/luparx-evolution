@@ -4,7 +4,7 @@ export { usePermissions } from './usePermissions';
 export type { PermissionsApi } from './usePermissions';
 export { RequireAuth, RequirePermission, RequireTenant } from './guards';
 export type { RequireAuthProps, RequirePermissionProps, RequireTenantProps } from './guards';
-export { ROLE_PERMISSIONS, permissionsForRoles } from './permissions';
+export { ROLE_PERMISSIONS, ROLES, permissionsForRoles } from './permissions';
 export { createTenantPreferenceStorage, createTokenStorage } from './storage';
 export type { TenantPreferenceStorage, TokenStorage, StoredTokens } from './storage';
 export { decodeAccessTokenClaims, isTokenExpired } from './claims';

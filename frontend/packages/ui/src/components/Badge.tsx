@@ -19,13 +19,22 @@ export interface BadgeProps {
   tone?: BadgeTone;
   children: React.ReactNode;
   icon?: React.ReactNode;
+  /**
+   * Un punto del color del tono, antes del texto.
+   *
+   * <p>Para una columna de estados en una tabla, donde un icono por fila es demasiado dibujo y el
+   * texto solo no se distingue de los datos de al lado. El punto es decoración —`aria-hidden`—
+   * porque la palabra ya dice el estado: el color nunca viaja solo.</p>
+   */
+  dot?: boolean;
   className?: string;
 }
 
 /** Status pill (DESIGN_SYSTEM.md §3 "Verificado" badges). Tone is always paired with text, never color-only. */
-export function Badge({ tone = 'neutral', children, icon, className }: BadgeProps): React.JSX.Element {
+export function Badge({ tone = 'neutral', children, icon, dot, className }: BadgeProps): React.JSX.Element {
   return (
     <span className={['lx-badge', `lx-badge--${tone}`, className].filter(Boolean).join(' ')}>
+      {dot ? <span className="lx-badge__dot" aria-hidden="true" /> : null}
       {icon}
       {children}
     </span>

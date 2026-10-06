@@ -192,6 +192,9 @@ export const enUS: Record<TranslationKey, string> = {
   'admin.search.empty': 'Nothing matches that.',
   'admin.header.account': 'Your account',
   'admin.users.title': 'Users',
+  'admin.users.subtitle': 'Registered people and their access to LuParX.',
+  'admin.users.column.accountStatus': 'Account status',
+  'admin.users.noRole': 'No role assigned',
 
   'admin.zones.title': 'Zones',
   'admin.zones.description':
@@ -607,7 +610,7 @@ export const enUS: Record<TranslationKey, string> = {
   'role.TENANT_ADMIN': 'Municipal administrator',
   'role.TENANT_FINANCE': 'Finance',
   'role.TENANT_FINANCE.detail': "Top-ups and the municipality's financial reports",
-  'role.TENANT_SUPPORT': 'Support',
+  'role.TENANT_SUPPORT': 'Municipal support',
   'role.TENANT_SUPPORT.detail': 'Reads users, fines and the audit log; changes nothing',
   'role.TENANT_INTEGRATION': 'Integration',
   'role.TENANT_INTEGRATION.detail': 'Credentials for systems that connect to the municipality',

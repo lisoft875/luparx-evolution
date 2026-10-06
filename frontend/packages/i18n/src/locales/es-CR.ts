@@ -204,6 +204,9 @@ export const esCR = {
   'admin.search.empty': 'Nada coincide con eso.',
   'admin.header.account': 'Tu cuenta',
   'admin.users.title': 'Usuarios',
+  'admin.users.subtitle': 'Personas registradas y sus accesos a LuParX.',
+  'admin.users.column.accountStatus': 'Estado de cuenta',
+  'admin.users.noRole': 'Sin rol asignado',
 
   'admin.zones.title': 'Zonas',
   'admin.zones.description':
@@ -625,7 +628,7 @@ export const esCR = {
   'role.TENANT_ADMIN': 'Administrador municipal',
   'role.TENANT_FINANCE': 'Finanzas',
   'role.TENANT_FINANCE.detail': 'Recargas y reportes financieros de la municipalidad',
-  'role.TENANT_SUPPORT': 'Soporte',
+  'role.TENANT_SUPPORT': 'Soporte municipal',
   'role.TENANT_SUPPORT.detail': 'Consulta de usuarios, multas y bitácora, sin poder modificar',
   'role.TENANT_INTEGRATION': 'Integración',
   'role.TENANT_INTEGRATION.detail': 'Credenciales de sistemas que se conectan con la municipalidad',

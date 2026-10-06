@@ -2104,6 +2104,17 @@ a.lx-list-row {
   font-weight: 600;
   line-height: 1.6;
 }
+/* El punto del tono, para una columna de estados. 8px y `currentColor`: hereda el color del texto
+   de la insignia, así que no hay que declararlo ocho veces —una por tono— ni acordarse de añadir el
+   noveno el día que haya un tono nuevo. */
+.lx-badge__dot {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--lx-radius-pill);
+  background: currentColor;
+}
+
 .lx-badge--neutral {
   background: var(--lx-surface-2);
   color: var(--lx-text-muted);
@@ -3080,7 +3091,30 @@ a.lx-list-row {
   white-space: nowrap;
   flex: 0 1 auto;
 }
-.lx-page-header > .lx-button {
+/* Título y su línea de apoyo, como un bloque. El título conserva su `nowrap`; el subtítulo no lo
+   lleva —es una frase, y una frase que no quiebra empuja el botón fuera de la fila—. */
+.lx-page-header__group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.lx-page-header__group > h1 {
+  margin: 0;
+}
+.lx-page-header__subtitle {
+  margin: 0;
+  font-size: var(--lx-text-meta-size);
+  color: var(--lx-text-muted);
+  max-width: 72ch;
+}
+/* `.lx-btn`, no `.lx-button` (06-10-2026). Este selector no había coincidido con nada desde que se
+   escribió: el componente `Button` dibuja `lx-btn`. No se notó porque `.lx-btn` ya trae
+   `flex-shrink: 0` por su cuenta, o sea que la intención se cumplía por otro lado y la regla sólo
+   estaba acá dando la impresión de hacer algo. Corregido y conservado: el día que `.lx-btn` deje de
+   traer ese `flex-shrink`, esto es lo que impide que el botón de la cabecera se achique. */
+.lx-page-header > .lx-btn {
   flex: 0 0 auto;
 }
 
@@ -4788,6 +4822,26 @@ a.lx-list-row {
 }
 @media (max-width: 640px) {
   .lx-filter-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* La misma fila, pero cuando el primer control es una búsqueda (06-10-2026).
+
+   `.lx-filter-row` reparte columnas iguales, que es lo correcto para tres o cuatro desplegables. Con
+   una caja de búsqueda entre ellos no: en una columna de 220px no cabe un nombre completo y menos un
+   correo, y la Fase 1 pide que búsqueda y filtros se lean como un bloque coherente y no como cuatro
+   cosas del mismo tamaño. La búsqueda se lleva vez y media, los filtros se reparten el resto.
+
+   `auto-fit` después de una pista explícita es legal —sólo puede haber un `repeat` automático— y es
+   lo que deja que tres filtros o cinco se acomoden sin volver a tocar esto. */
+.lx-filter-row--search {
+  grid-template-columns: minmax(240px, 1.5fr) repeat(auto-fit, minmax(170px, 1fr));
+  align-items: center;
+  margin: 0;
+}
+@media (max-width: 720px) {
+  .lx-filter-row--search {
     grid-template-columns: 1fr;
   }
 }

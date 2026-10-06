@@ -69,3 +69,23 @@ export function permissionsForRoles(roles: readonly Role[]): Set<Permission> {
   }
   return permissions;
 }
+
+/**
+ * Todos los roles que el cliente conoce, en el orden en que una municipalidad los piensa.
+ *
+ * <h2>Por qué sale de la tabla de permisos y no es una lista aparte</h2>
+ *
+ * <p>Porque una lista aparte se queda vieja en silencio, y ya se había quedado: el filtro de
+ * `/admin/users` traía siete roles escritos a mano y el tipo `Role` tiene nueve. `PLATFORM_SUPPORT`
+ * y `TENANT_INTEGRATION` existían en el servidor, existían en el tipo, y no se podía filtrar por
+ * ellos — sin que nada fallara, que es lo peor de este tipo de defecto.</p>
+ *
+ * <p>`ROLE_PERMISSIONS` es un `Record<Role, …>`, así que el compilador EXIGE una entrada por rol:
+ * añadir un rol al tipo obliga a darle permisos, y con eso aparece solo en cualquier lista que
+ * salga de acá. Es la misma razón por la que esa tabla existe en vez de un `if (role == ADMIN)`.</p>
+ *
+ * <p>El orden es el de la declaración del objeto, que es el orden del trabajo: la plataforma, la
+ * municipalidad, el campo y el ciudadano. No alfabético — alfabético pone «CITIZEN» primero y
+ * separa a los dos fiscalizadores.</p>
+ */
+export const ROLES: readonly Role[] = Object.keys(ROLE_PERMISSIONS) as Role[];

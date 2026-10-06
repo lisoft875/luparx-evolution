@@ -28,3 +28,4 @@ export { currencyDisplayFractionDigits, applyNumberSymbolOverrides, localeHourCy
 export { minorUnitExponent, minorToMajor, majorToMinor } from './currency';
 export { I18nProvider, useI18n, useTranslation } from './context';
 export type { I18nContextValue, TranslationParams } from './context';
+export { roleLabel } from './roles';
