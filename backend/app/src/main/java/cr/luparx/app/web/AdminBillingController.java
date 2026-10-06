@@ -90,10 +90,21 @@ public class AdminBillingController {
         Instant start = from == null ? Instant.now().minus(DEFAULT_WINDOW_DAYS, ChronoUnit.DAYS) : from;
         Instant end = to == null ? Instant.now() : to;
         PaymentService.Totals totals = paymentService.totals(tenantId, start, end, tenant.getCurrencyCode());
+        /*
+          Cuántos cortes cubren este período (06-10-2026).
+
+          Sin este dato la pantalla no puede distinguir «todo lo cobrado está confirmado» de «no ha
+          llegado nada contra qué confirmarlo», porque la señal que usaba —que la lista de pagos sin
+          confirmar esté vacía— es cierta en los dos casos. En Escazú el período entero era efectivo
+          de caja y ningún corte importado, y la pantalla lo anunciaba en verde como una
+          confirmación del proveedor.
+        */
+        long settlements = settlementService.countCoveringPeriod(tenantId, start, end);
         return new BillingDtos.BillingTotalsResponse(
                 money(totals.capturedGross()), money(totals.capturedNet()),
                 money(totals.settledGross()), money(totals.unsettledGross()),
-                totals.capturedCount(), totals.failedCount(), start, end);
+                money(totals.notApplicableGross()),
+                totals.capturedCount(), totals.failedCount(), settlements, start, end);
     }
 
     @GetMapping("/payments")

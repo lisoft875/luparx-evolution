@@ -24,35 +24,63 @@ export function SettingsSpaceFormatPage(): React.JSX.Element {
   const updateMutation = useUpdateSpaceFormat();
 
   const [prefix, setPrefix] = useState('');
-  const [digits, setDigits] = useState(4);
+  // Texto y no número: `Number('')` es 0, así que un campo vacío a medio escribir se convertía en
+  // un cero que dispara el error de rango antes de que la persona termine de teclear.
+  const [digitsText, setDigitsText] = useState('4');
   const [allowLetters, setAllowLetters] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+
+  const digits = Number(digitsText);
+
+  /*
+    El error de rango se calcula, no se guarda (06-10-2026).
+
+    Antes vivía en un `useState` que sólo se escribía al pulsar Guardar y sólo se limpiaba al pulsar
+    Guardar otra vez: se escribía 13, salía el error, se corregía a 4 y el mensaje rojo seguía ahí
+    contradiciendo lo que el campo mostraba. El informe lo pide explícitamente: «al volver a un valor
+    válido o guardar correctamente, el error debe desaparecer».
+
+    Derivado del valor actual, eso no puede pasar: el mensaje existe exactamente mientras el valor
+    sea inválido. Lo que sí sigue en estado es el error del SERVIDOR, que no se puede derivar de
+    nada que esté en pantalla.
+  */
+  const rangoInvalido = digitsText.trim() === '' || !Number.isInteger(digits) || digits < MIN_DIGITS || digits > MAX_DIGITS;
+  const errorDeRango = rangoInvalido
+    ? t('admin.settings.spaceFormat.error.digitsRange', { min: MIN_DIGITS, max: MAX_DIGITS })
+    : null;
 
   useEffect(() => {
     const stored = formatQuery.data;
     if (!stored) return;
     setPrefix(stored.prefix ?? '');
-    setDigits(stored.digits);
+    setDigitsText(String(stored.digits));
     setAllowLetters(stored.allowLetters);
   }, [formatQuery.data]);
 
-  // Illustration only: the authoritative pattern comes back from the server on save.
-  const previewExample = `${prefix}${'0'.repeat(Math.max(0, digits - 1))}1`;
-  const previewPattern = `^${prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}${allowLetters ? '[0-9A-Z]' : '[0-9]'}{${digits}}$`;
+  /*
+    Sólo ilustración: el patrón que de verdad valida vuelve del servidor al guardar.
+
+    Con un valor fuera de rango no se dibuja nada en vez de dibujar un ejemplo imposible: `'0'.repeat`
+    de un número negativo lanza, y con 13 caracteres el ejemplo sugiere que algo que el servidor va a
+    rechazar es válido.
+  */
+  const previewExample = rangoInvalido ? null : `${prefix}${'0'.repeat(Math.max(0, digits - 1))}1`;
+  const previewPattern = rangoInvalido
+    ? null
+    : `^${prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}${allowLetters ? '[0-9A-Z]' : '[0-9]'}{${digits}}$`;
 
   async function handleSave(): Promise<void> {
-    setError(null);
+    setSaveError(null);
     setSaved(false);
-    if (digits < MIN_DIGITS || digits > MAX_DIGITS) {
-      setError(t('admin.settings.spaceFormat.error.digitsRange', { min: MIN_DIGITS, max: MAX_DIGITS }));
-      return;
-    }
+    // El botón ya está deshabilitado en este caso; la guarda queda igual, porque un botón
+    // deshabilitado no es una validación, es una comodidad.
+    if (rangoInvalido) return;
     try {
       await updateMutation.mutateAsync({ prefix: prefix.trim(), digits, allowLetters });
       setSaved(true);
     } catch {
-      setError(t('common.error.generic'));
+      setSaveError(t('common.error.generic'));
     }
   }
 
@@ -64,7 +92,9 @@ export function SettingsSpaceFormatPage(): React.JSX.Element {
           title={t('admin.settings.spaceFormat.title')}
           description={t('admin.settings.spaceFormat.description')}
         />
-        {error ? <Alert tone="danger">{error}</Alert> : null}
+        {saveError ? <Alert tone="danger">{saveError}</Alert> : null}
+        {/* El éxito desaparece en cuanto se vuelve a tocar un campo: «Cambios guardados» sobre un
+            formulario que ya no coincide con lo guardado es una afirmación falsa. */}
         {saved ? <Alert tone="success">{t('admin.settings.saved')}</Alert> : null}
         {formatQuery.isLoading ? (
           <p>{t('common.loading')}</p>
@@ -90,18 +120,21 @@ export function SettingsSpaceFormatPage(): React.JSX.Element {
             <FormField
               label={t('admin.settings.spaceFormat.digitsLabel')}
               hint={t('admin.settings.spaceFormat.digitsHint')}
+              error={errorDeRango ?? undefined}
             >
-              {({ inputId }) => (
+              {({ inputId, describedBy }) => (
                 <Input
                   id={inputId}
+                  aria-describedby={describedBy}
                   type="number"
                   inputMode="numeric"
                   min={MIN_DIGITS}
                   max={MAX_DIGITS}
-                  value={String(digits)}
+                  invalid={rangoInvalido}
+                  value={digitsText}
                   onChange={(event) => {
                     setSaved(false);
-                    setDigits(Number(event.target.value));
+                    setDigitsText(event.target.value);
                   }}
                 />
               )}
@@ -119,12 +152,17 @@ export function SettingsSpaceFormatPage(): React.JSX.Element {
               <p className="lx-text-card-title" style={{ margin: 0 }}>
                 {t('admin.settings.spaceFormat.previewLabel')}
               </p>
-              <p style={{ fontSize: 24, fontWeight: 700, margin: 'var(--lx-space-2) 0', letterSpacing: '0.08em' }}>
-                {previewExample}
+              <p
+                data-testid="space-format-preview"
+                style={{ fontSize: 24, fontWeight: 700, margin: 'var(--lx-space-2) 0', letterSpacing: '0.08em' }}
+              >
+                {previewExample ?? '—'}
               </p>
-              <p className="lx-text-meta" style={{ wordBreak: 'break-all' }}>
-                {previewPattern}
-              </p>
+              {previewPattern ? (
+                <p className="lx-text-meta" style={{ wordBreak: 'break-all' }}>
+                  {previewPattern}
+                </p>
+              ) : null}
               {formatQuery.data ? (
                 <p className="lx-text-meta">
                   {t('admin.settings.spaceFormat.stored', {
@@ -134,7 +172,7 @@ export function SettingsSpaceFormatPage(): React.JSX.Element {
                 </p>
               ) : null}
             </div>
-            <Button type="button" onClick={handleSave} loading={updateMutation.isPending}>
+            <Button type="button" onClick={handleSave} loading={updateMutation.isPending} disabled={rangoInvalido}>
               {t('common.save')}
             </Button>
           </>

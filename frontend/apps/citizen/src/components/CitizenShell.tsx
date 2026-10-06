@@ -15,20 +15,24 @@ export interface CitizenShellProps {
   subtitle?: React.ReactNode;
   onBack?: () => void;
   /**
-   * A bottom-tab root screen (Vehículos, Multas, Billetera, Mi cuenta):
-   * suppresses the app bar entirely — the screen's own "Título de pantalla"
-   * (28/700) heading takes its place, matching the reference mockup's plain
-   * content heading for these screens.
+   * Una pantalla raíz de pestaña SIN barra superior: su propio título de pantalla ocupa el lugar.
+   *
+   * <p>Era lo que usaban Vehículos, Billetera y Más hasta el 06-10-2026, cuando se reportó que esas
+   * tres no mostraban la cabecera que el resto de la experiencia sí tiene. Las tres pasaron a
+   * llevarla; `bare` se conserva porque Multas y Mi cuenta siguen usándolo y porque la decisión de
+   * qué pantallas la llevan es de quien diseña, no de este componente.</p>
    */
   bare?: boolean;
   /**
-   * That heading, for a `bare` screen — the `<h1>` and anything that belongs on its line, such as
-   * Vehículos' "Agregar" button.
+   * El título de la pantalla y lo que va en su línea, como el botón «Agregar» de Vehículos.
    *
-   * <p>It is a prop rather than the first child because the running-stay bar goes <em>between</em>
-   * the heading and the content: on a screen with no app bar the title is what says where you are,
-   * and pushing it below a bar that is only sometimes there made the screen look like it belonged
-   * to the timer. Passing it up here is what lets the shell put the bar in the middle.</p>
+   * <p>Es una prop y no el primer hijo porque en una pantalla `bare` la barra de estadía en curso va
+   * ENTRE el título y el contenido: ahí el título es lo que dice dónde estás, y empujarlo debajo de
+   * una barra que sólo está a veces hacía que la pantalla pareciera pertenecer al cronómetro.</p>
+   *
+   * <p>Con barra superior el orden es el natural —cromo fijo, después el título, después el
+   * contenido— y el título se desplaza con el contenido, que es donde pertenece: lo que se queda
+   * arriba es la barra.</p>
    */
   heading?: React.ReactNode;
 }
@@ -205,6 +209,11 @@ export function CitizenShell({
         )}
         <ActiveSessionsBar />
       </div>
+      {/* Con barra superior el título va DEBAJO del cromo fijo, no encima: encima quedaría tapado
+          por la barra en cuanto se desplace, que es el defecto que esto viene a no introducir. */}
+      {!bare && heading ? (
+        <div className="lx-screen-heading lx-screen-heading--under-bar">{heading}</div>
+      ) : null}
       <main
         style={{
           flex: 1,

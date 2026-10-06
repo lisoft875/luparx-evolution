@@ -2014,6 +2014,11 @@ a.lx-list-row {
   margin: 0 auto;
   padding: max(var(--lx-space-4), env(safe-area-inset-top)) var(--lx-space-4) var(--lx-space-4);
 }
+/* El mismo título, pero debajo de la barra superior: la barra ya pagó la franja del notch, y
+   pagarla otra vez abriría un hueco justo en los teléfonos para los que está pensada. */
+.lx-screen-heading--under-bar {
+  padding-top: var(--lx-space-4);
+}
 
 .lx-sticky-timer-bar {
   display: flex;

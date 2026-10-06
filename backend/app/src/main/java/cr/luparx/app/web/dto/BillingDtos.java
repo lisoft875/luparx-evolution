@@ -68,12 +68,23 @@ public final class BillingDtos {
      * @param unsettledGross of what was charged, what no statement has confirmed yet. The figure a
      *                       treasurer opens this screen for
      */
+    /**
+     * @param notApplicableGross lo cobrado que ningún corte va a cubrir nunca: efectivo de caja,
+     *                           ajustes y las recargas anteriores a este módulo. Se informa en vez
+     *                           de descartarse porque sin él `captured` no es la suma de los otros
+     *                           dos y la pantalla parece no saber sumar (06-10-2026).
+     * @param settlementsInPeriod cuántos cortes del proveedor se han recibido para este período.
+     *                           Cero es la diferencia entre «todo conciliado» y «no hay nada contra
+     *                           qué conciliar», que es exactamente lo que la pantalla confundía.
+     */
     public record BillingTotalsResponse(ParkingDtos.MoneyDto capturedGross,
                                         ParkingDtos.MoneyDto capturedNet,
                                         ParkingDtos.MoneyDto settledGross,
                                         ParkingDtos.MoneyDto unsettledGross,
+                                        ParkingDtos.MoneyDto notApplicableGross,
                                         long capturedCount,
                                         long failedCount,
+                                        long settlementsInPeriod,
                                         Instant from,
                                         Instant to) {
     }

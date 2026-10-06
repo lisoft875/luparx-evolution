@@ -842,6 +842,14 @@ export const esCR = {
   'admin.audit.field.role': 'Rol',
   'admin.audit.field.status': 'Estado',
   'admin.audit.field.zones': 'Sectores',
+  /* El formato del código de espacio, que ahora deja su antes/después (06-10-2026). */
+  'admin.audit.field.prefix': 'Prefijo',
+  'admin.audit.field.digits': 'Cantidad de caracteres',
+  'admin.audit.field.allowLetters': 'Permitir letras',
+  'admin.audit.field.pattern': 'Patrón que se valida',
+  'admin.audit.value.allowLetters.true': 'Sí',
+  'admin.audit.value.allowLetters.false': 'No',
+  'admin.audit.value.empty': '(vacío)',
   'admin.audit.module.staff-invitation': 'Invitaciones',
   'admin.audit.module.wallet': 'Billeteras',
   'admin.audit.module.parking-session': 'Estadías',
@@ -876,6 +884,18 @@ export const esCR = {
   'admin.audit.empty': 'No hay eventos de auditoría con esos criterios.',
 
   'admin.reports.registeredUsers.title': 'Usuarios registrados',
+  /* --- El módulo de reportes, preparado para crecer (06-10-2026) ------------------------------
+     Un selector de tipo con un solo tipo parece una promesa incumplida, y con tipos que el
+     servidor no implementa es peor: una opción que no responde. Se listan los que existen. */
+  'admin.reports.title': 'Reportes',
+  'admin.reports.subtitle': 'Los reportes de esta municipalidad, por período.',
+  'admin.reports.typeLabel': 'Tipo de reporte',
+  'admin.reports.type.registered-users': 'Usuarios registrados',
+  'admin.reports.fromLabel': 'Desde',
+  'admin.reports.toLabel': 'Hasta',
+  'admin.reports.rangeInvalid': 'La fecha de inicio tiene que ser anterior a la de fin.',
+  'admin.reports.comingSoon':
+    'Los demás reportes municipales —recaudación, ocupación por zona, boletas, exoneraciones y conciliación— se agregarán acá cuando el servidor los exponga. Esta pantalla ya está lista para recibirlos.',
   'admin.reports.registeredUsers.groupBy': 'Agrupar por',
   'admin.reports.registeredUsers.groupBy.tenant': 'Municipalidad',
   'admin.reports.registeredUsers.groupBy.country': 'País',
@@ -1083,6 +1103,21 @@ export const esCR = {
   'admin.billing.unsettled.description':
     'Plata que la municipalidad cobró y que ningún corte de proveedor ha confirmado todavía. El efectivo de caja y los ajustes no aparecen aquí: nadie los va a reportar en un corte, y tenerlos en esta lista sería una alarma permanente por algo que no es un problema.',
   'admin.billing.unsettled.none': 'Todo lo cobrado está confirmado por su proveedor.',
+  /* --- Los tres estados de la conciliación (06-10-2026) ---------------------------------------
+     El verde de arriba decía «todo confirmado» cuando no había NADA que confirmar, porque su
+     única señal era que la lista de pagos sin confirmar estuviera vacía — y lo está en los dos
+     casos. Ahora cada estado tiene su frase y ninguna afirma más de lo que los datos dicen. */
+  'admin.billing.state.nothingToReconcile':
+    'No hay nada que conciliar en este período: lo cobrado no pasa por ningún corte del proveedor.',
+  'admin.billing.state.noSettlements':
+    'Aún no hay cortes del proveedor para conciliar este período. Hay {{amount}} cobrados esperando el primero.',
+  'admin.billing.state.pending':
+    '{{amount}} cobrados que ningún corte confirma todavía.',
+  'admin.billing.state.reconciled':
+    'Todo lo que puede conciliarse en este período está confirmado: {{amount}}.',
+  'admin.billing.totals.notApplicable': 'Fuera de corte',
+  'admin.billing.totals.notApplicableHint': 'Efectivo de caja y ajustes: ningún proveedor los reporta',
+  'admin.billing.totals.settlementsInPeriod': '{{count}} corte(s) del proveedor cubren este período.',
   'admin.billing.settlements.title': 'Cortes recibidos',
   'admin.billing.settlements.description':
     'Lo que cada proveedor dice que liquidó. Se guardan como llegaron: si los totales del encabezado no cuadran con sus propias líneas, eso es un hallazgo y no algo que se corrija aquí.',

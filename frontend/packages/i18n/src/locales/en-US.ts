@@ -824,6 +824,13 @@ export const enUS: Record<TranslationKey, string> = {
   'admin.audit.field.role': 'Role',
   'admin.audit.field.status': 'Status',
   'admin.audit.field.zones': 'Sectors',
+  'admin.audit.field.prefix': 'Prefix',
+  'admin.audit.field.digits': 'Character count',
+  'admin.audit.field.allowLetters': 'Allow letters',
+  'admin.audit.field.pattern': 'Validated pattern',
+  'admin.audit.value.allowLetters.true': 'Yes',
+  'admin.audit.value.allowLetters.false': 'No',
+  'admin.audit.value.empty': '(empty)',
   'admin.audit.module.staff-invitation': 'Invitations',
   'admin.audit.module.wallet': 'Wallets',
   'admin.audit.module.parking-session': 'Stays',
@@ -858,6 +865,15 @@ export const enUS: Record<TranslationKey, string> = {
   'admin.audit.empty': 'No audit events matched those criteria.',
 
   'admin.reports.registeredUsers.title': 'Registered users',
+  'admin.reports.title': 'Reports',
+  'admin.reports.subtitle': "This municipality's reports, by period.",
+  'admin.reports.typeLabel': 'Report type',
+  'admin.reports.type.registered-users': 'Registered users',
+  'admin.reports.fromLabel': 'From',
+  'admin.reports.toLabel': 'To',
+  'admin.reports.rangeInvalid': 'The start date must come before the end date.',
+  'admin.reports.comingSoon':
+    'The other municipal reports — revenue, occupancy by zone, citations, exemptions and reconciliation — will appear here once the server exposes them. This screen is ready for them.',
   'admin.reports.registeredUsers.groupBy': 'Group by',
   'admin.reports.registeredUsers.groupBy.tenant': 'Municipality',
   'admin.reports.registeredUsers.groupBy.country': 'Country',
@@ -1060,6 +1076,16 @@ export const enUS: Record<TranslationKey, string> = {
   'admin.billing.unsettled.description':
     'Money the municipality charged that no provider statement has confirmed yet. Counter cash and adjustments are not here: nobody is going to report them in a statement, and listing them would be a permanent alarm about something that is not a problem.',
   'admin.billing.unsettled.none': 'Everything charged has been confirmed by its provider.',
+  'admin.billing.state.nothingToReconcile':
+    'Nothing to reconcile in this period: what was charged goes through no provider statement.',
+  'admin.billing.state.noSettlements':
+    'No provider statement has arrived for this period yet. {{amount}} charged are waiting for the first one.',
+  'admin.billing.state.pending': '{{amount}} charged that no statement confirms yet.',
+  'admin.billing.state.reconciled':
+    'Everything reconcilable in this period is confirmed: {{amount}}.',
+  'admin.billing.totals.notApplicable': 'Outside any statement',
+  'admin.billing.totals.notApplicableHint': 'Counter cash and adjustments: no provider reports them',
+  'admin.billing.totals.settlementsInPeriod': '{{count}} provider statement(s) cover this period.',
   'admin.billing.settlements.title': 'Statements received',
   'admin.billing.settlements.description':
     'What each provider says it settled. Stored as they arrived: if the header totals do not match their own lines, that is a finding and not something to fix here.',

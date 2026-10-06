@@ -214,6 +214,17 @@ public class SettlementService {
                         "error.settlement.notFound"));
     }
 
+    /**
+     * Cuántos cortes del proveedor cubren este período, aunque sea en parte.
+     *
+     * <p>Cero no es «todo conciliado»: es «no hay nada contra qué conciliar». La pantalla de
+     * conciliación confundía las dos cosas y lo anunciaba en verde (06-10-2026).</p>
+     */
+    @Transactional(readOnly = true)
+    public long countCoveringPeriod(TenantId tenantId, Instant from, Instant to) {
+        return settlementRepository.countCoveringPeriod(tenantId.value(), from, to);
+    }
+
     @Transactional(readOnly = true)
     public List<Settlement> recent(TenantId tenantId, int limit) {
         return settlementRepository.findByTenantIdOrderByPeriodEndDesc(tenantId.value(),

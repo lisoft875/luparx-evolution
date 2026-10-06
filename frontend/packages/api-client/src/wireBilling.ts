@@ -49,8 +49,10 @@ export interface WireBillingTotals {
   capturedNet: WireMoney;
   settledGross: WireMoney;
   unsettledGross: WireMoney;
+  notApplicableGross: WireMoney;
   capturedCount: number;
   failedCount: number;
+  settlementsInPeriod: number;
   from: string;
   to: string;
 }
@@ -135,9 +137,11 @@ export function toBillingTotals(wire: WireBillingTotals): BillingTotals {
     capturedNetMinor: wire.capturedNet.amountMinor,
     settledGrossMinor: wire.settledGross.amountMinor,
     unsettledGrossMinor: wire.unsettledGross.amountMinor,
+    notApplicableGrossMinor: wire.notApplicableGross?.amountMinor ?? 0,
     currencyCode: wire.capturedGross.currencyCode,
     capturedCount: wire.capturedCount,
     failedCount: wire.failedCount,
+    settlementsInPeriod: wire.settlementsInPeriod ?? 0,
     from: wire.from,
     to: wire.to,
   };

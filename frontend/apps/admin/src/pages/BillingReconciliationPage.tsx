@@ -38,6 +38,38 @@ export function BillingReconciliationPage(): React.JSX.Element {
   const currency = totals.data?.currencyCode ?? 'CRC';
   const owed = totals.data?.unsettledGrossMinor ?? 0;
 
+  /*
+    El estado de la conciliación, que son TRES y no dos (06-10-2026).
+
+    La pantalla tenía una sola señal —que la lista de pagos sin confirmar estuviera vacía— y la
+    pintaba en verde con la frase «Todo lo cobrado está confirmado por su proveedor». Esa lista está
+    vacía en dos situaciones que no se parecen en nada: cuando todo se confirmó, y cuando no hay
+    NADA que confirmar. En Escazú el período entero era efectivo de caja y ningún corte importado,
+    así que la pantalla anunciaba una confirmación del proveedor que no existía.
+
+    Lo que decide ahora es el total CONCILIABLE —lo confirmado más lo pendiente—, que es la única
+    cifra que distingue los tres casos. El efectivo y los ajustes quedan fuera de esa cuenta a
+    propósito: nadie va a reportar en un corte lo que cobró un cajero, y contarlo como pendiente
+    convertiría la pantalla en una alarma permanente sobre algo que no es un problema.
+  */
+  const conciliable = (totals.data?.settledGrossMinor ?? 0) + owed;
+  const cortes = totals.data?.settlementsInPeriod ?? 0;
+  const estado: 'nada' | 'sinCortes' | 'pendiente' | 'conciliado' =
+    conciliable === 0 ? 'nada'
+      : owed === 0 ? 'conciliado'
+        : cortes === 0 ? 'sinCortes'
+          : 'pendiente';
+  const TONO = { nada: 'info', sinCortes: 'info', pendiente: 'warning', conciliado: 'success' } as const;
+  const FRASE = {
+    nada: 'admin.billing.state.nothingToReconcile',
+    sinCortes: 'admin.billing.state.noSettlements',
+    pendiente: 'admin.billing.state.pending',
+    conciliado: 'admin.billing.state.reconciled',
+  } as const;
+  /* Qué monto nombra cada frase. Explícito por estado y no una expresión con `||`: «lo pendiente, o
+     si no lo conciliable» es la clase de atajo que escribe un número correcto por casualidad. */
+  const MONTO = { nada: 0, sinCortes: owed, pendiente: owed, conciliado: conciliable };
+
   return (
     <AdminShell>
       <h1>{t('admin.billing.title')}</h1>
@@ -74,6 +106,15 @@ export function BillingReconciliationPage(): React.JSX.Element {
                 // colour. Everything green would make it as easy to skim past as the rest.
                 tone={owed > 0 ? 'danger' : 'success'}
               />
+              {/* Sin esta cifra, «Cobrado» no es la suma de «Confirmado» y «Sin confirmar», y las
+                  tres juntas parecen un error de cuentas aunque las tres sean ciertas. */}
+              {totals.data.notApplicableGrossMinor > 0 ? (
+                <Figure
+                  label={t('admin.billing.totals.notApplicable')}
+                  value={formatCurrencyMinor(totals.data.notApplicableGrossMinor, currency, locale)}
+                  meta={t('admin.billing.totals.notApplicableHint')}
+                />
+              ) : null}
               <Figure
                 label={t('admin.billing.totals.net')}
                 value={formatCurrencyMinor(totals.data.capturedNetMinor, currency, locale)}
@@ -84,7 +125,8 @@ export function BillingReconciliationPage(): React.JSX.Element {
               {t('admin.billing.totals.window', {
                 from: formatDateTime(totals.data.from, locale),
                 to: formatDateTime(totals.data.to, locale),
-              })}
+              })}{' '}
+              {t('admin.billing.totals.settlementsInPeriod', { count: cortes })}
             </p>
             {totals.data.failedCount > 0 ? (
               // Failed attempts are shown rather than hidden: they are what answers "I paid and my
@@ -105,9 +147,15 @@ export function BillingReconciliationPage(): React.JSX.Element {
           title={t('admin.billing.unsettled.title')}
           description={t('admin.billing.unsettled.description')}
         />
-        {unsettled.data && unsettled.data.length === 0 ? (
-          <Alert tone="success">{t('admin.billing.unsettled.none')}</Alert>
-        ) : (
+        {/* El estado va SIEMPRE, no sólo cuando la lista está vacía. Con cobros esperando su
+            primer corte la lista tiene filas, y es justo el caso donde hace falta explicar que no
+            es un atraso del proveedor sino que todavía no llegó nada. */}
+        {totals.data ? (
+          <Alert tone={TONO[estado]} data-testid="billing-state">
+            {t(FRASE[estado], { amount: formatCurrencyMinor(MONTO[estado], currency, locale) })}
+          </Alert>
+        ) : null}
+        {unsettled.data && unsettled.data.length > 0 ? (
           <Table
             loading={unsettled.isLoading}
             loadingLabel={t('common.loading')}
@@ -146,7 +194,7 @@ export function BillingReconciliationPage(): React.JSX.Element {
               },
             ]}
           />
-        )}
+        ) : null}
       </Card>
 
       {/* --- what the providers said ---------------------------------------------------------- */}

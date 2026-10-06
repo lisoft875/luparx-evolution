@@ -2585,9 +2585,25 @@ export interface BillingTotals {
   settledGrossMinor: number;
   /** Of what was charged, what no statement has confirmed. The figure that matters. */
   unsettledGrossMinor: number;
+  /**
+   * Of what was charged, what no statement will ever cover: cash at the counter, adjustments, and
+   * top-ups recorded before this module existed.
+   *
+   * <p>Sin esta cifra, `captured` no es la suma de las otras dos y la pantalla parece no saber
+   * sumar: en Escazú el período entero era efectivo, así que mostraba «Cobrado ₡1.009.550 ·
+   * Confirmado ₡0 · Sin confirmar ₡0», tres cifras ciertas que juntas parecían un error.</p>
+   */
+  notApplicableGrossMinor: number;
   currencyCode: string;
   capturedCount: number;
   failedCount: number;
+  /**
+   * Cuántos cortes del proveedor cubren este período.
+   *
+   * <p>Cero es la diferencia entre «todo lo cobrado está confirmado» y «no ha llegado nada contra
+   * qué confirmarlo». La pantalla decía lo primero cuando lo cierto era lo segundo.</p>
+   */
+  settlementsInPeriod: number;
   from: string;
   to: string;
 }

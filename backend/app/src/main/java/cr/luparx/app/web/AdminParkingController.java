@@ -412,11 +412,40 @@ public class AdminParkingController {
     public ParkingDtos.ParkingSpaceFormatResponse updateSpaceFormat(
             @Valid @RequestBody ParkingDtos.UpdateParkingSpaceFormatRequest request) {
         TenantId tenantId = TenantContextHolder.requireTenantId();
+
+        /*
+          El ANTES, leído y copiado a escalares antes de tocar nada (06-10-2026).
+
+          La bitácora registraba este evento con metadatos —`pattern` y `example`— y ningún cambio
+          campo por campo, así que el detalle decía «Sin cambios en los datos» después de una
+          modificación real. Un evento de auditoría que no dice qué cambió contesta «alguien tocó
+          esto» y deja sin contestar la única pregunta que se le hace meses después, que es qué
+          había antes.
+
+          A escalares y no guardando la entidad: `replace` la muta en su sitio, así que una
+          referencia guardada antes mostraría los valores NUEVOS y el diff saldría vacío — que es
+          exactamente el síntoma que se viene a arreglar.
+        */
+        ParkingSpaceFormat anterior = spaceFormatService.require(tenantId);
+        String prefijoAntes = anterior.getPrefix();
+        int digitosAntes = anterior.getDigits();
+        boolean letrasAntes = anterior.isAllowLetters();
+        String patronAntes = anterior.getPattern();
+
         ParkingSpaceFormat format = spaceFormatService.replace(tenantId, request.prefix(),
                 request.digits().intValue(), request.allowLetters().booleanValue(), request.pattern(),
                 request.example());
         auditRecorder.record(AuditAction.PARKING_SPACE_FORMAT_UPDATED, "parking-space-format",
-                tenantId.toString(), Map.of("pattern", format.getPattern(), "example", format.getExample()));
+                tenantId.toString(), Map.of("pattern", format.getPattern(), "example", format.getExample()),
+                AuditChanges.builder()
+                        .compare("prefix", prefijoAntes, format.getPrefix())
+                        .compare("digits", digitosAntes, format.getDigits())
+                        .compare("allowLetters", letrasAntes, format.isAllowLetters())
+                        // El patrón es lo único contra lo que el servidor valida de verdad, así que
+                        // va al diff aunque se derive de los tres de arriba: es la respuesta a «¿qué
+                        // se aceptaba como código el martes pasado?».
+                        .compare("pattern", patronAntes, format.getPattern())
+                        .build());
         return mapper.toSpaceFormat(format);
     }
 

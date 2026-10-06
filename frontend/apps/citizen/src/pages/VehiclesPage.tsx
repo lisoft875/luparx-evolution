@@ -201,7 +201,6 @@ export function VehiclesPage(): React.JSX.Element {
 
   return (
     <CitizenShell
-      bare
       heading={
         <div className="lx-page-header">
           {/* El titulo se queda en una linea: partido en dos ("Mis / vehiculos") se lee como un error. */}

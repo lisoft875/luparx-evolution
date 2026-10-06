@@ -829,6 +829,14 @@ function valorLegible(
   if (field === 'active' && (value === 'true' || value === 'false')) {
     return t(`admin.audit.value.active.${value}` as TranslationKey);
   }
+  if (field === 'allowLetters' && (value === 'true' || value === 'false')) {
+    return t(`admin.audit.value.allowLetters.${value}` as TranslationKey);
+  }
+  /* Un prefijo vacío es un dato, no un hueco. «Prefijo: — → E-» se lee como «no había nada y ahora
+     hay E-», que es justo lo que pasó; dejarlo en blanco haría pensar que no se registró. */
+  if (field === 'prefix' && value === '') {
+    return t('admin.audit.value.empty');
+  }
   // El servidor escribe «*» cuando la asignación de sectores está vacía, que no es «ninguno» sino
   // «toda la municipalidad». Dejarlo pasar crudo invertiría el sentido del registro.
   if (field === 'zones' && value === '*') {

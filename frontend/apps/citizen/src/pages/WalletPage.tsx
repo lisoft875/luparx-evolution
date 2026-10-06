@@ -19,7 +19,7 @@ export function WalletPage(): React.JSX.Element {
   const recentMovements = (wallet?.transactions ?? []).slice(0, 2);
 
   return (
-    <CitizenShell bare heading={<h1 className="lx-text-screen-title">{t('citizen.wallet.title')}</h1>}>
+    <CitizenShell heading={<h1 className="lx-text-screen-title">{t('citizen.wallet.title')}</h1>}>
 
       {wallet ? (
         <BalanceRow

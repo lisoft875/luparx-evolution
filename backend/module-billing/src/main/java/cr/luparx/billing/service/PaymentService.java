@@ -161,6 +161,7 @@ public class PaymentService {
         long failedCount = 0L;
         long settledGross = 0L;
         long unsettledGross = 0L;
+        long notApplicableGross = 0L;
 
         for (Object[] row : paymentRepository.summarise(tenantId.value(), from, to)) {
             PaymentState state = (PaymentState) row[0];
@@ -186,7 +187,17 @@ public class PaymentService {
                 // cashier took. Counting it as outstanding would make the figure that matters — what
                 // a provider still owes — permanently wrong by the size of the counter's day.
                 case PENDING, MISSING_IN_SETTLEMENT -> unsettledGross += gross;
-                case NOT_APPLICABLE -> { }
+                /*
+                  Y ya no se descarta en silencio (06-10-2026).
+
+                  Era correcto no sumarlo a ninguno de los dos, y seguía siéndolo. Lo que estaba mal
+                  era no decirlo: en Escazú el período entero era efectivo de caja, así que la
+                  pantalla mostraba «Cobrado ₡1.009.550 · Confirmado ₡0 · Sin confirmar ₡0» y las
+                  tres cifras eran ciertas y juntas parecían un error de cuentas. Sumado acá, la
+                  pantalla puede decir a cuánto asciende lo que no pasa por ningún corte, y las
+                  cuatro cifras cierran.
+                */
+                case NOT_APPLICABLE -> notApplicableGross += gross;
             }
         }
         return new Totals(
@@ -194,6 +205,7 @@ public class PaymentService {
                 Money.ofMinor(capturedNet, currencyCode),
                 Money.ofMinor(settledGross, currencyCode),
                 Money.ofMinor(unsettledGross, currencyCode),
+                Money.ofMinor(notApplicableGross, currencyCode),
                 capturedCount, failedCount);
     }
 
@@ -235,8 +247,23 @@ public class PaymentService {
      * @param settledGross  of the captured, what a statement has confirmed
      * @param unsettledGross of the captured, what is still owed to the municipality. The number the
      *                       whole module exists to be able to state
+     * @param notApplicableGross of the captured, what no statement will ever cover: cash at the
+     *                       counter, adjustments, and every top-up recorded before this module
+     *                       existed. Neither settled nor owed, and stated rather than dropped —
+     *                       without it `captured` does not equal the sum of the other two and the
+     *                       screen looks like it cannot add up
      */
     public record Totals(Money capturedGross, Money capturedNet, Money settledGross, Money unsettledGross,
-                         long capturedCount, long failedCount) {
+                         Money notApplicableGross, long capturedCount, long failedCount) {
+
+        /**
+         * Lo que de verdad puede conciliarse en este período: lo confirmado más lo que falta.
+         *
+         * <p>Cero significa que no hay nada que conciliar —no que todo esté conciliado—, y
+         * distinguir esas dos cosas es el defecto que este campo existe para cerrar.</p>
+         */
+        public long reconcilableMinor() {
+            return settledGross.minorUnits() + unsettledGross.minorUnits();
+        }
     }
 }
