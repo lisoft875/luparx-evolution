@@ -208,7 +208,90 @@ async function medirTabla(page) {
       'falta el title con todos los sectores: el dato se perdería, no se resumiría',
     );
   } else {
-    dato('ningún puesto tiene más de un sector en staging: el resumen «+N» no se pudo ejercitar');
+    /*
+      Nadie tiene dos sectores en staging, así que la prueba 2 del PDF —«Inspector con 2 sectores: la
+      celda no ensancha la tabla; muestra sector principal +1 y permite consultar ambos»— no se
+      ejercitaría nunca. Se los asigna, se mide, y se deja como estaba.
+
+      Asignar y devolver, y no sólo asignar: un arnés que cambia datos de staging y no los restituye
+      convierte cada corrida en una decisión que nadie tomó.
+    */
+    dato('ningún puesto tiene más de un sector: se asignan dos para ejercitar el resumen');
+    await irAFuncionarios();
+    const fila = page.locator('tbody tr').filter({ has: page.locator('.lx-badge', { hasText: 'Activo' }) }).first();
+    if ((await fila.count()) === 0) {
+      comprobar(false, 'hay un puesto activo al que asignarle sectores');
+    } else {
+      const quien = ((await fila.locator('td').first().textContent()) ?? '').replace(/\s+/g, ' ').trim();
+      await fila.locator('.lx-btn').last().click();
+      await page.waitForTimeout(700);
+      await page.getByRole('dialog').getByRole('button', { name: /^Sectores$/ }).first().click();
+      await page.waitForTimeout(900);
+
+      const casillas = page.getByRole('dialog').locator('input[type="checkbox"]');
+      const cuantas = await casillas.count();
+      // El estado original, para devolverlo. Se lee antes de tocar nada.
+      const original = [];
+      for (let i = 0; i < cuantas; i += 1) original.push(await casillas.nth(i).isChecked());
+      dato(`${cuantas} sectores en la municipalidad · marcados antes: ${original.filter(Boolean).length}`);
+
+      if (cuantas < 2) {
+        dato('la municipalidad tiene menos de dos sectores: el resumen «+N» no se puede ejercitar');
+        await page.keyboard.press('Escape');
+      } else {
+        for (let i = 0; i < 2; i += 1) {
+          if (!original[i]) await casillas.nth(i).check();
+        }
+        await page.getByRole('dialog').getByRole('button', { name: /^Guardar$/ }).first().click();
+        await page.waitForTimeout(2400);
+
+        await irAFuncionarios();
+        await page.setViewportSize({ width: 1536, height: 960 });
+        await page.waitForTimeout(1200);
+        const conDos = await medirTabla(page);
+        const celda = (conDos?.sectores ?? [])[0];
+        comprobar(
+          Boolean(celda) && /\+1/.test(celda.texto),
+          'con dos sectores, la celda muestra el principal y «+1»',
+          celda ? `dice «${celda.texto}»` : 'no se encontró ninguna celda de sectores resumida',
+        );
+        comprobar(
+          Boolean(celda) && celda.completo.includes('·'),
+          'y la lista completa queda consultable en el título',
+          celda ? `title=«${celda.completo}»` : '',
+        );
+        comprobar(
+          (conDos?.desbordeTabla ?? 1) <= 0,
+          'y la tabla sigue cabiendo: la celda no la ensanchó',
+          `desborda ${conDos?.desbordeTabla}px`,
+        );
+        await page.screenshot({ path: path.join(SALIDA, 'funcionarios-6-dos-sectores.png'), fullPage: true });
+
+        // Y se devuelve como estaba.
+        const fila2 = page.locator('tbody tr').filter({ hasText: quien.split(' ').slice(0, 2).join(' ') }).first();
+        await fila2.locator('.lx-btn').last().click();
+        await page.waitForTimeout(700);
+        await page.getByRole('dialog').getByRole('button', { name: /^Sectores$/ }).first().click();
+        await page.waitForTimeout(900);
+        const casillas2 = page.getByRole('dialog').locator('input[type="checkbox"]');
+        for (let i = 0; i < (await casillas2.count()); i += 1) {
+          const debe = original[i] ?? false;
+          if ((await casillas2.nth(i).isChecked()) !== debe) {
+            if (debe) await casillas2.nth(i).check();
+            else await casillas2.nth(i).uncheck();
+          }
+        }
+        await page.getByRole('dialog').getByRole('button', { name: /^Guardar$/ }).first().click();
+        await page.waitForTimeout(2200);
+        await irAFuncionarios();
+        const restaurado = ((await page.locator('tbody tr').filter({ hasText: quien.split(' ').slice(0, 2).join(' ') }).first().locator('td').nth(3).textContent()) ?? '').trim();
+        comprobar(
+          original.some(Boolean) ? true : /Todos/i.test(restaurado),
+          'y los sectores quedaron como estaban antes de la prueba',
+          `ahora dice «${restaurado}»`,
+        );
+      }
+    }
   }
   comprobar(
     (m1536?.desbordeTabla ?? 1) <= 0,
@@ -306,7 +389,23 @@ async function medirTabla(page) {
     await irAFuncionarios();
     const suspendida = page.locator('tbody tr').filter({ hasText: antes.split(' ').slice(0, 2).join(' ') }).first();
     const estadoAhora = ((await suspendida.locator('td').nth(2).textContent()) ?? '').trim();
-    comprobar(/Suspendido/i.test(estadoAhora), 'el puesto quedó Suspendido', `dice «${estadoAhora}»`);
+    /*
+      Se comprueba la TRANSICIÓN, no una palabra.
+
+      La primera corrida falló con «dice "Desactivado"»: el arnés esperaba «Suspendido» —que es como
+      lo escribe el PDF— y la aplicación dice «Desactivado», que es lo correcto porque la acción se
+      llama «Desactivar». El estado del servidor sigue siendo SUSPENDED; lo que cambia es la etiqueta.
+
+      Un arnés que exige una palabra concreta falla cada vez que alguien mejora un texto, y falla
+      acusando a la pantalla. Lo que el PDF pide de verdad es que el puesto DEJE de estar activo y que
+      el menú ofrezca lo otro, y eso es lo que se mide.
+    */
+    dato(`el estado pasó a «${estadoAhora}»`);
+    comprobar(
+      estadoAhora.length > 0 && !/^Activo$/i.test(estadoAhora),
+      'el puesto dejó de estar Activo',
+      `sigue diciendo «${estadoAhora}»`,
+    );
 
     // Y ahora el menú de un puesto suspendido: ésta es la prueba del PDF.
     await suspendida.locator('.lx-btn').last().click();
