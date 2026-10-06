@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { RequirePermission, useAuth } from '@luparx/auth';
 import { useTranslation, type TranslationKey } from '@luparx/i18n';
@@ -26,7 +26,19 @@ export function UsersListPage(): React.JSX.Element {
   const { apiClient } = useAuth();
   const navigate = useNavigate();
 
-  const [q, setQ] = useState('');
+  /*
+    El texto de búsqueda arranca de la URL (06-10-2026).
+
+    El buscador de la cabecera ofrece «Buscar «x» en Usuarios» y navega a `/users?q=x`. Sin esto esa
+    fila habría abierto la lista completa con el campo vacío: una acción que dice que busca y no
+    busca. `useState` con valor inicial y no un `useEffect` que sincroniza: la lista tiene que salir
+    ya filtrada en su PRIMERA consulta, no pedir todo y volver a pedir filtrado.
+
+    Sigue siendo estado local después: quien escribe en el campo está refinando lo que ve, y meter
+    cada letra en la URL llenaría el historial del navegador de pasos intermedios.
+  */
+  const [params] = useSearchParams();
+  const [q, setQ] = useState(params.get('q') ?? '');
   const [role, setRole] = useState<Role | ''>('');
   const [status, setStatus] = useState<UserStatus | ''>('');
   const [portal, setPortal] = useState<Portal | ''>('');

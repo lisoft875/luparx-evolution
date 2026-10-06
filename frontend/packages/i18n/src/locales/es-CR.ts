@@ -198,6 +198,11 @@ export const esCR = {
   'tenant.membership.status.REJECTED': 'Rechazado',
   'tenant.membership.status.REVOKED': 'Revocado',
 
+  'admin.search.placeholder': 'Buscar…',
+  'admin.search.destinations': 'Ir a',
+  'admin.search.inUsers': 'Buscar en Usuarios',
+  'admin.search.empty': 'Nada coincide con eso.',
+  'admin.header.account': 'Tu cuenta',
   'admin.users.title': 'Usuarios',
 
   'admin.zones.title': 'Zonas',

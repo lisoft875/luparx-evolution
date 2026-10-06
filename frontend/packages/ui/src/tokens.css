@@ -25,7 +25,12 @@
      gobernando radios, sombras, espaciado y tipografía; el COLOR ya no, desde el 25-09. Y la paleta
      del 25-09 la reemplaza ésta.
 
-     ── Los once valores de la guía, literales ────────────────────────────────────────────────────
+     ACTUALIZADA POR LA «ESPECIFICACIÓN DE ACABADO VISUAL PREMIUM v1.1» (Javier, 2026-10-06), que
+     no reemplaza la guía del 05-10 sino que la profundiza: mismo modo oscuro, mismas familias de
+     color, superficies y bordes un paso más separados. Lo que cambió y por qué está más abajo, en
+     «lo que la v1.1 corrige y las tres cosas que no se tomaron literales».
+
+     ── Los once valores de la guía del 05-10, literales ──────────────────────────────────────────
 
        Nivel 0 · fondo global          #070B14
        Nivel 1 · barra lateral, cabecera, contenedores de primer nivel   #0F1724
@@ -71,38 +76,83 @@
      `packages/ui/src/__checks__/paleta.check.mjs`, que lee ESTE archivo —no una copia de los
      valores— resuelve los `var()` y los `color-mix`, y falla si alguna combinación baja del mínimo.
      Corre con `npm run checks`. Si cambiás un tono acá, el número lo dice antes de desplegar.
+
+     ── LO QUE LA v1.1 CORRIGE, Y LAS TRES COSAS QUE NO SE TOMARON LITERALES (06-10-2026) ─────────
+
+     La queja de la v1.1 es concreta: «sidebar, fondo, tarjetas y contenedores tienen tonos
+     demasiado parecidos; los bordes son discretos; los componentes se perciben planos; el header
+     tiene poca presencia». Medido, tenía razón y era peor de lo que decía: en la paleta del 05-10
+     la barra lateral y las TARJETAS eran literalmente el mismo valor (#0F1724), y la cabecera era
+     literalmente el mismo valor que el lienzo (`--lx-bg`). O sea que de los cuatro planos que el
+     ojo debería distinguir —lienzo, cabecera, barra lateral, tarjeta— sólo había DOS colores.
+
+     Se toman sus valores de superficie y de borde tal cual, que es donde la mejora es real y
+     medible: lienzo #07111F, tarjeta #102033, tarjeta alta #14263A, borde #263A4F. Sobre la
+     tarjeta nueva: borde 1.41 contra 1.28 de antes, y lienzo→tarjeta 1.15 contra 1.09. Eso es
+     exactamente «las cards se distinguen claramente del fondo».
+
+     Tres cosas NO se tomaron literales, y las tres por una medición:
+
+       1. EL CROMO, al revés de lo que la v1.1 propone. Pide una cabecera y una barra lateral «más
+          profundas» que el contenido y da #06101C. Contra su propio lienzo #07111F eso da 1.01:
+          invisible, y empeora el 1.09 que ya había. El problema no es el valor elegido sino la
+          dirección: en un tema oscuro, oscurecer por debajo de #07111F no tiene recorrido —ni el
+          negro puro llega a 1.08—. Así que el cromo va hacia ARRIBA: `--lx-chrome` #0B182A, 1.06
+          sobre el lienzo y 1.08 por debajo de la tarjeta. Cuatro planos, tres escalones, cada uno
+          medible: lienzo < cabecera y barra lateral < tarjeta < tarjeta alta.
+
+       2. EL AZUL SIGUE SIENDO DOS TOKENS, no uno. La v1.1 da #1597FF para «selección, CTA, iconos
+          activos». Como acento y como texto sobre la tarjeta es excelente —5.41—, pero con TEXTO
+          BLANCO ENCIMA da 3.04, muy por debajo de 4.5: un botón primario ilegible. Y no hay un
+          único azul que sirva para las dos cosas: el cruce está en #0B78D4, que con blanco da 4.51
+          y como texto sobre tarjeta cae a 3.64. Son dos trabajos distintos y por eso son dos
+          tokens, igual que el 05-10: `--lx-primary` #1597FF para acento, texto, iconos y foco;
+          `--lx-primary-fill` #0B78D4 para el relleno de un control con texto blanco.
+
+       3. EL AZUL LUMINOSO #58B9FF nunca lleva texto blanco: encima da 2.14. La v1.1 ya lo reserva
+          para «gráficas, detalles, hover», que es lo correcto; queda escrito acá para que nadie lo
+          use como relleno de un botón más adelante.
+
+     El rojo, el violeta, el ámbar y el teal no los toca la v1.1 y no se tocan. `--lx-info-strong`
+     sí: era el literal del acento viejo (#3B82F6) escrito a mano, y seguir al acento es su trabajo.
      ============================================================================================== */
-  --lx-bg: #070B14;
+  /* ── Nivel 0 · el lienzo ──────────────────────────────────────────────────────────────────── */
+  --lx-bg: #07111F;
+  /* ── Nivel 1 · el cromo: cabecera y barra lateral ─────────────────────────────────────────────
+     Un plano propio, que es lo que la v1.1 pide y lo que no existía: la cabecera usaba
+     `--lx-bg` (el mismo color que el contenido, o sea ninguna presencia) y la barra lateral usaba
+     `--lx-surface` (el mismo color que las tarjetas, o sea una tarjeta gigante). */
+  --lx-chrome: #0B182A;
   /* Mismo valor que `surface` a propósito: su único uso es el fondo de la primera columna fija de
      una tabla, que tiene que ser opaco y coincidir con el de la fila. Que fuera más oscuro hacía
      que esa columna se leyera como una banda aparte. */
-  --lx-bg-elevated: #0F1724;
-  --lx-surface: #0F1724;
-  --lx-surface-2: #111D2B;
-  --lx-surface-hover: #1A2C40;
+  --lx-bg-elevated: #102033;
+  --lx-surface: #102033;
+  --lx-surface-2: #14263A;
+  --lx-surface-hover: #1A3047;
   /* La guía da el borde como un color sólido y no como un alfa. Es mejor: un alfa se ve distinto
      según lo que tenga debajo, y estos bordes separan tanto una tarjeta del fondo como una fila de
      la siguiente dentro de la tarjeta. */
-  --lx-border: #1F2D3D;
-  --lx-border-strong: #2B3C50;
-  --lx-primary: #3B82F6;
-  --lx-primary-2: #60A5FA;
+  --lx-border: #263A4F;
+  --lx-border-strong: #34506B;
+  --lx-primary: #1597FF;
+  --lx-primary-2: #58B9FF;
   /* El relleno de un control, donde hay texto blanco encima. Ver el punto 1 de arriba. */
-  --lx-primary-fill: #2563EB;
-  --lx-primary-fill-hover: #1D4ED8;
-  --lx-primary-hover: #60A5FA;
-  --lx-text: #F8FAFC;
-  --lx-text-muted: #94A3B8;
-  --lx-text-subtle: #7C8CA3;
-  --lx-success: #22C55E;
-  --lx-warning: #F59E0B;
+  --lx-primary-fill: #0B78D4;
+  --lx-primary-fill-hover: #0A6FC4;
+  --lx-primary-hover: #58B9FF;
+  --lx-text: #F4F8FC;
+  --lx-text-muted: #94A8BC;
+  --lx-text-subtle: #7F93A8;
+  --lx-success: #25D17D;
+  --lx-warning: #F4AE3D;
   --lx-danger: #EF4444;
   /* El rojo cuando es TEXTO sobre un fondo rojo suave. Ver el punto 2 de arriba. */
   --lx-danger-text: #F87171;
   /* Y el azul, por lo mismo: #3B82F6 sobre su propio fondo al 14% da 3.88. El acento claro da
      5.33. El relleno, el acento y el texto-sobre-suave son tres trabajos distintos del mismo azul,
      y por eso son tres tokens y no uno. */
-  --lx-primary-text: #60A5FA;
+  --lx-primary-text: #58B9FF;
   /* La tinta de un botón destructivo: oscura, porque blanco sobre este rojo da 3.76 y oscuro da
      4.98. Nunca azul — una acción destructiva no se puede confundir con el acento de marca. */
   --lx-danger-ink: #2A0409;
@@ -149,7 +199,7 @@
   --lx-success-soft: color-mix(in srgb, var(--lx-success) 14%, transparent);
   --lx-warning-soft: color-mix(in srgb, var(--lx-warning) 14%, transparent);
   --lx-danger-soft: color-mix(in srgb, var(--lx-danger) 16%, transparent);
-  --lx-info-strong: #3B82F6;
+  --lx-info-strong: var(--lx-primary);
   --lx-info-soft: color-mix(in srgb, var(--lx-info) 14%, transparent);
 
   /* ---- Acentos de CATEGORÍA (25-09-2026) ----
@@ -168,15 +218,21 @@
   --lx-accent-violet-soft: color-mix(in srgb, var(--lx-accent-violet) 14%, transparent);
   --lx-accent-amber: #D99A24;
   --lx-accent-amber-soft: color-mix(in srgb, var(--lx-accent-amber) 14%, transparent);
-  --lx-accent-teal: #23A6A8;
+  /* Un paso más claro desde el 06-10-2026, y no por gusto: el teal NO cambió, cambió el suelo. Su
+     fondo suave es `color-mix(teal 16%, transparent)` encima de la tarjeta, y la tarjeta nueva
+     (#102033) es más clara que la vieja (#0F1724), así que el fondo de la insignia subió y el texto
+     encima cayó a 4.07. Lo encontró `paleta.check.mjs` al correr con los tokens nuevos, que es
+     exactamente para lo que existe: un color que nadie tocó puede dejar de pasar porque se movió
+     otro. Éste vuelve a pasar con margen. */
+  --lx-accent-teal: #2DC5C7;
   --lx-accent-teal-soft: color-mix(in srgb, var(--lx-accent-teal) 16%, transparent);
 
   /* Superficies que la guía no nombra pero el sistema necesita. Sólidas, como las suyas.
      `raised` es lo que flota —modales y desplegables—, un escalón sobre la tarjeta. `input` va al
      revés: un campo se HUNDE respecto de la tarjeta que lo contiene, no se eleva. */
-  --lx-surface-raised: #172636;
-  --lx-surface-active: #203550;
-  --lx-surface-input: #0B1320;
+  --lx-surface-raised: #182D44;
+  --lx-surface-active: #22405C;
+  --lx-surface-input: #0A1626;
 
   /* El foco: la guía lo define como sombra (`--lx-shadow-focus`). `--lx-focus-ring` es el color
      del `outline` que usan 105 lugares; se alinea con el primary nuevo. */
@@ -257,6 +313,10 @@
 /* ---- Light variant (secondary, DESIGN_SYSTEM §1) ------------------------ */
 :root[data-theme='light'] {
   --lx-bg: #f4f6fb;
+  /* En claro la relación se invierte y ya funcionaba así: el lienzo es el gris y el cromo es
+     blanco, que es el plano más alto. Queda escrito como token para que la cabecera y la barra
+     lateral no tengan que nombrar `--lx-surface` —el color de las tarjetas— para conseguirlo. */
+  --lx-chrome: #ffffff;
   --lx-bg-elevated: #ffffff;
   --lx-surface: #ffffff;
   --lx-surface-2: #eef1f8;
@@ -1125,16 +1185,23 @@ body {
    drift the moment the bar's padding changed — leaving either a sliver of content showing
    through on scroll, or a gap. */
 .lx-page-layout {
-  --lx-topbar-height: 60px;
+  /* 72px, la franja baja del rango que pide la v1.1 (72–76). Eran 60: con un buscador y un menú de
+     perfil adentro, 60 dejaba los controles de 44px pegados a los dos bordes. */
+  --lx-topbar-height: 72px;
 }
 .lx-page-layout__header {
   /* The brand band, not glass: it is the one strip that says which product and which
-     municipality you are in, and it reads as chrome only if it is opaque. */
+     municipality you are in, and it reads as chrome only if it is opaque.
+
+     `--lx-chrome` y no `--lx-bg` (06-10-2026). Usaba el color del lienzo, o sea que la cabecera no
+     se distinguía del contenido más que por su línea de 1px: exactamente el «header con poca
+     presencia» que reporta la especificación de acabado. Ahora es un plano propio, un escalón por
+     encima del lienzo y uno por debajo de la tarjeta. */
   display: flex;
   align-items: center;
   min-height: var(--lx-topbar-height);
   border-bottom: 1px solid var(--lx-border);
-  background: var(--lx-bg);
+  background: var(--lx-chrome);
   padding: 0 var(--lx-space-5);
   position: sticky;
   top: 0;
@@ -1151,11 +1218,18 @@ body {
 }
 .lx-page-layout__sidebar {
   /* Fixed rather than fluid: a width that tracked its content would jump every time the
-     active language changed the longest label. */
-  width: 248px;
-  flex: 0 0 248px;
+     active language changed the longest label.
+
+     264px, el centro del rango de la v1.1 (260–275). Eran 248, y con filas de 44px y un icono de
+     20 las etiquetas largas del admin en español se recortaban con puntos suspensivos.
+
+     `--lx-chrome` y no `--lx-surface` (06-10-2026): usaba el MISMO color que las tarjetas, así que
+     la columna entera se leía como una tarjeta gigante y no como navegación. Es la mitad de la
+     queja «sidebar, fondo, tarjetas y contenedores tienen tonos demasiado parecidos». */
+  width: 264px;
+  flex: 0 0 264px;
   border-right: 1px solid var(--lx-border);
-  background: var(--lx-surface);
+  background: var(--lx-chrome);
   padding: var(--lx-space-4);
   position: sticky;
   /* Exactly the viewport minus the sticky bar, so the sidebar's own scroll starts where
@@ -1251,6 +1325,331 @@ body {
   width: 100%;
 }
 
+/* ---- La cabecera de consola premium (v1.1 §3, 06-10-2026) -----------------------------------
+
+   Tres zonas en una fila de 72px: identidad a la izquierda, buscador al centro, cuenta a la
+   derecha. El `space-between` de `.lx-shell-header-row` repartía dos bloques; con tres, el del
+   medio tiene que ser el que crece, porque es el único cuyo ancho no lo fija su contenido. */
+.lx-shell-header-row--console {
+  gap: var(--lx-space-5);
+}
+.lx-shell-header-row--console > .lx-shell-header__identity {
+  display: flex;
+  align-items: center;
+  gap: var(--lx-space-3);
+  min-width: 0;
+  /* No crece y no se encoge por debajo de su contenido: la identidad es lo que no se negocia.
+     Lo que cede dentro es el nombre de la municipalidad, que ya recorta solo. */
+  flex: 0 1 auto;
+}
+.lx-shell-header-row--console > .lx-shell-header__search {
+  /* El que crece. `min-width: 0` para que pueda encogerse por debajo del ancho del `input`, que si
+     no impone su tamaño por omisión (unos 170px) y empuja la cuenta fuera de la fila. */
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 420px;
+}
+.lx-shell-header-row--console > .lx-shell-header__account {
+  display: flex;
+  align-items: center;
+  gap: var(--lx-space-3);
+  flex: 0 0 auto;
+}
+/* El separador vertical que pide la §3, antes de la cuenta. Un borde y no un carácter: así mide
+   exactamente lo que mide la fila y no hereda la altura de línea de una fuente. */
+.lx-shell-header__divider {
+  width: 1px;
+  align-self: stretch;
+  margin: var(--lx-space-3) 0;
+  background: var(--lx-border);
+}
+
+/* El buscador: integrado en la barra, no una tarjeta flotando dentro de ella. */
+.lx-shell-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--lx-space-2);
+  height: 40px;
+  padding: 0 var(--lx-space-3);
+  border-radius: var(--lx-radius-sm);
+  /* Hundido respecto del cromo, como cualquier campo: un control donde se escribe se mete, no se
+     eleva. El mismo token que usan los inputs de formulario, así que si cambia, cambia con ellos. */
+  background: var(--lx-surface-input);
+  border: 1px solid var(--lx-border);
+  transition: border-color var(--lx-transition), box-shadow var(--lx-transition);
+}
+.lx-shell-search:focus-within {
+  border-color: var(--lx-primary);
+  box-shadow: var(--lx-shadow-focus);
+}
+.lx-shell-search__icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--lx-text-subtle);
+}
+.lx-shell-search__input {
+  flex: 1;
+  min-width: 0;
+  background: none;
+  border: none;
+  color: var(--lx-text);
+  font-family: inherit;
+  font-size: var(--lx-text-body-size);
+}
+.lx-shell-search__input::placeholder {
+  color: var(--lx-text-subtle);
+}
+.lx-shell-search__input:focus {
+  /* El anillo lo lleva el contenedor, que es la forma que se ve. Dos anillos concéntricos es lo
+     que pasa si se deja también el del navegador. */
+  outline: none;
+}
+/* Safari dibuja su propia X en un `type="search"`, con su propio color y su propio tamaño. */
+.lx-shell-search__input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+}
+.lx-shell-search__panel {
+  position: absolute;
+  top: calc(100% + var(--lx-space-2));
+  left: 0;
+  right: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  padding: var(--lx-space-2);
+  border-radius: var(--lx-radius-md);
+  /* La misma superficie, radio y sombra que una tarjeta elevada: la v1.1 pide que los desplegables
+     no se vean como un menú nativo suelto. */
+  background: var(--lx-surface-raised);
+  border: 1px solid var(--lx-border-strong);
+  box-shadow: var(--lx-shadow-md);
+}
+.lx-shell-search__heading {
+  margin: 0 0 var(--lx-space-1);
+  padding: 0 var(--lx-space-2);
+  font-size: var(--lx-text-meta-size);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--lx-text-subtle);
+}
+.lx-shell-search__row {
+  display: flex;
+  align-items: center;
+  gap: var(--lx-space-3);
+  min-height: 40px;
+  padding: var(--lx-space-2) var(--lx-space-2);
+  border: none;
+  border-radius: var(--lx-radius-sm);
+  background: none;
+  color: var(--lx-text);
+  font-family: inherit;
+  font-size: var(--lx-text-body-size);
+  text-align: left;
+  cursor: pointer;
+}
+.lx-shell-search__row--on {
+  background: color-mix(in srgb, var(--lx-primary) 20%, var(--lx-surface-raised));
+}
+.lx-shell-search__row-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--lx-text-subtle);
+}
+.lx-shell-search__row--on .lx-shell-search__row-icon {
+  color: var(--lx-primary-2);
+}
+.lx-shell-search__row-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lx-shell-search__row-meta {
+  flex-shrink: 0;
+  font-size: var(--lx-text-meta-size);
+  color: var(--lx-text-muted);
+}
+.lx-shell-search__empty {
+  margin: 0;
+  padding: var(--lx-space-2);
+  font-size: var(--lx-text-meta-size);
+  color: var(--lx-text-muted);
+}
+
+/* ---- MenuButton: un botón que abre acciones -------------------------------------------------- */
+.lx-menu {
+  position: relative;
+}
+.lx-menu__trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--lx-space-2);
+  min-height: 40px;
+  padding: var(--lx-space-1) var(--lx-space-2);
+  border: 1px solid transparent;
+  border-radius: var(--lx-radius-sm);
+  background: none;
+  color: var(--lx-text);
+  font-family: inherit;
+  cursor: pointer;
+  transition: background var(--lx-transition), border-color var(--lx-transition);
+}
+.lx-menu__trigger:hover {
+  background: color-mix(in srgb, var(--lx-text) 7%, var(--lx-chrome));
+  border-color: var(--lx-border);
+}
+.lx-menu__trigger:focus-visible {
+  outline: 2px solid var(--lx-focus-ring);
+  outline-offset: 2px;
+}
+.lx-menu__caret {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--lx-text-subtle);
+  transition: transform var(--lx-transition);
+}
+.lx-menu__caret--open {
+  transform: rotate(180deg);
+}
+.lx-menu__panel {
+  position: absolute;
+  top: calc(100% + var(--lx-space-2));
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  min-width: 200px;
+  padding: var(--lx-space-2);
+  border-radius: var(--lx-radius-md);
+  background: var(--lx-surface-raised);
+  border: 1px solid var(--lx-border-strong);
+  box-shadow: var(--lx-shadow-md);
+}
+.lx-menu__panel--end {
+  right: 0;
+}
+.lx-menu__panel--start {
+  left: 0;
+}
+.lx-menu__item {
+  display: flex;
+  align-items: center;
+  gap: var(--lx-space-3);
+  min-height: 40px;
+  padding: var(--lx-space-2);
+  border: none;
+  border-radius: var(--lx-radius-sm);
+  background: none;
+  color: var(--lx-text);
+  font-family: inherit;
+  font-size: var(--lx-text-body-size);
+  text-align: left;
+  cursor: pointer;
+}
+.lx-menu__item:hover {
+  background: color-mix(in srgb, var(--lx-text) 8%, var(--lx-surface-raised));
+}
+.lx-menu__item:focus-visible {
+  outline: 2px solid var(--lx-focus-ring);
+  outline-offset: -2px;
+}
+/* El rojo como TEXTO, no como relleno: una fila de menú roja entera grita antes de que nadie la
+   haya elegido. `--lx-danger-text` y no `--lx-danger` por lo de siempre: el primero está medido
+   para leerse sobre una superficie oscura. */
+.lx-menu__item--danger {
+  color: var(--lx-danger-text);
+}
+.lx-menu__item-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--lx-text-subtle);
+}
+
+/* La identidad de la cuenta dentro del botón: nombre arriba, rol debajo y a media luz. */
+.lx-account {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  line-height: 1.25;
+}
+.lx-account__name {
+  font-size: var(--lx-text-meta-size);
+  font-weight: 700;
+  /* 24ch y no 18: medido, «Administrador municipal» son 22 caracteres y salía «Administrador
+     munici…». Un rol recortado a la mitad no dice con qué permisos entró alguien, que es justo para
+     lo que está ahí. 24 cubre también «Jefe de fiscalización». */
+  max-width: 24ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lx-account__role {
+  font-size: var(--lx-text-meta-size);
+  color: var(--lx-text-muted);
+  max-width: 24ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Las iniciales, cuando no hay foto —y no hay: no existe avatar en el modelo de usuario, así que
+   inventar un hueco circular gris sería dibujar un dato que no tenemos. Las iniciales SÍ las
+   tenemos. */
+.lx-account__initials {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--lx-radius-pill);
+  background: color-mix(in srgb, var(--lx-primary) 24%, var(--lx-chrome));
+  color: var(--lx-primary-2);
+  font-size: var(--lx-text-meta-size);
+  font-weight: 700;
+}
+
+/* En pantallas angostas la fila de tres zonas no cabe. El buscador es lo que se va: en un teléfono
+   la navegación entera está a un toque en la barra lateral apilada, y un campo de 420px dentro de
+   una fila de 320 es lo que empujaba la cuenta fuera de la pantalla. */
+/* Lo que se va en una fila angosta, y en qué orden.
+
+   Medido a 320, 390 y 430: con el nombre y el rol escritos al lado de las iniciales, la fila se
+   partía en dos y la cabecera pasaba de 72px a 112 — o sea lo contrario de «altura aproximada
+   72–76 px» (v1.1 §3), y encima dejaba la identidad y la cuenta en renglones distintos.
+
+   Primero se va el BUSCADOR: en un teléfono la barra lateral está apilada arriba del contenido, así
+   que los veintidós destinos están a un toque sin él. Después se van el NOMBRE y el ROL escritos,
+   pero no el botón: quedan las iniciales, que siguen diciendo que ese control es tu cuenta, y el
+   nombre y el rol siguen a un toque dentro del menú. Lo que no se va nunca es el acceso. */
+@media (max-width: 600px) {
+  .lx-shell-header-row--console > .lx-shell-header__search {
+    display: none;
+  }
+  .lx-shell-header-row--console .lx-account,
+  .lx-shell-header-row--console .lx-shell-header__divider {
+    display: none;
+  }
+}
+/* Y a 320px, lo último que cede: el nombre de la municipalidad.
+
+   Medido: a 320 la marca ocupa 105px, la ficha de municipalidad con su nombre unos 99 y el botón de
+   la cuenta 60. Con los rellenos son 328 en una fila de 320, así que se partía en dos renglones y la
+   cabecera subía a 111px. Queda el emblema, que es la parte que TenantBadge documenta como la que no
+   cede, con el nombre completo en `title` y en el nombre accesible. Es la misma decisión, medida de
+   la misma forma, que la que tomaron las cabeceras del fiscalizador y del ciudadano el 06-10. */
+@media (max-width: 359px) {
+  .lx-shell-header-row--console .lx-tenant-badge__label {
+    display: none;
+  }
+  .lx-shell-header-row--console .lx-tenant-badge {
+    padding-right: 3px;
+  }
+}
+
 /* Dos columnas que ceden parejo. `minmax(0, 1fr)` y no `1fr`: el mínimo implícito de `1fr` es el
    contenido, así que un hijo que no quiebra —un Select con placeholder largo, un monto— infla su
    columna y empuja la otra fuera de la pantalla. Estaba inline en PlateLookupPage,
@@ -1279,22 +1678,30 @@ body {
   font-size: var(--lx-text-meta-size);
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  /* 0.08em: la v1.1 pide «tracking y contraste secundario» para los encabezados de grupo. Sobre el
+     cromo este gris da 5.64, que es contraste secundario de verdad y no gris sobre gris. */
+  letter-spacing: 0.08em;
   color: var(--lx-text-subtle);
-  margin: var(--lx-space-4) 0 var(--lx-space-1);
+  margin: var(--lx-space-5) 0 var(--lx-space-1);
 }
 .lx-nav-link {
   /* Fila de icono + texto (§9 de la v3). Era `block`; con el icono adentro el texto quedaría
      debajo del dibujo en vez de al lado. */
   display: flex;
   align-items: center;
-  gap: var(--lx-space-2);
+  gap: var(--lx-space-3);
+  /* 44px de alto, la franja baja del rango de la v1.1 (44–48) y además el objetivo táctil mínimo
+     del proyecto. Antes el alto salía del relleno —unos 38px— y una fila de menú de 38px en una
+     tablet es un blanco difícil. El relleno se queda para el texto; el alto lo fija `min-height`. */
+  min-height: 44px;
   padding: var(--lx-space-2) var(--lx-space-3);
   border-radius: var(--lx-radius-sm);
   font-size: var(--lx-text-body-size);
   font-weight: 600;
   color: var(--lx-text);
   text-decoration: none;
+  /* «Transición 160–220 ms» (v1.1 §2). `--lx-transition` son 160ms con la curva del sistema. */
+  transition: background var(--lx-transition), color var(--lx-transition), box-shadow var(--lx-transition);
   /* A label that wraps makes neighbouring items sit at different heights and the whole
      column reads as ragged. The long Spanish admin labels reach this at 248px. */
   white-space: nowrap;
@@ -1302,7 +1709,11 @@ body {
   text-overflow: ellipsis;
 }
 .lx-nav-link:hover {
-  background: var(--lx-surface-hover);
+  /* Mezclado con el cromo y NO `--lx-surface-hover`: ese token está pensado para el hover de una
+     tarjeta, que vive sobre el lienzo. Acá el fondo es el cromo, y medido daba 1.32 contra él —casi
+     lo mismo que el destino activo, 1.40—, así que pasar el ratón por encima de un destino
+     cualquiera se veía igual que estar en él. Éste da 1.18: se nota, y no compite. */
+  background: color-mix(in srgb, var(--lx-text) 7%, var(--lx-chrome));
   text-decoration: none;
 }
 /* El icono es apoyo, no protagonista: va un tono por debajo del texto y sólo se enciende en el
@@ -1312,6 +1723,14 @@ body {
   flex-shrink: 0;
   color: var(--lx-text-subtle);
 }
+/* 20px, el mínimo del rango de la v1.1 (20–22). Se fija acá y no en cada una de las veintidós
+   llamadas de los dos shells: el tamaño de un icono de navegación es una decisión del sistema
+   visual, y repartida en veintidós `size={18}` la próxima persona cambia veinte y se le escapan
+   dos. Los componentes de icono dibujan `<svg width height>`, que esto pisa. */
+.lx-nav-link__icon svg {
+  width: 20px;
+  height: 20px;
+}
 
 .lx-nav-link > span:last-child {
   min-width: 0;
@@ -1320,11 +1739,20 @@ body {
 }
 
 .lx-nav-link--active {
-  background: var(--lx-surface-active);
+  /* «Fondo azul oscuro, texto e icono azul claro, y barra vertical izquierda de 3–4px en azul
+     brillante» (v1.1 §3). Era `--lx-surface-active`, un gris azulado del sistema de superficies:
+     correcto como superficie, pero no decía «azul» en ninguna parte.
+
+     Mezclado al 22% con el cromo y no un alfa: un alfa se ve distinto según lo que tenga debajo, y
+     este fondo vive sobre el cromo en el admin y sobre el mismo cromo en la plataforma. Medido da
+     1.40 contra el cromo —el hover da 1.18, así que el activo gana claramente— y el texto azul
+     claro encima da 5.93. */
+  background: color-mix(in srgb, var(--lx-primary) 22%, var(--lx-chrome));
   color: var(--lx-primary-strong);
   /* El estado activo tiene que ser evidente (§9): además del fondo y el color, una barra a la
-     izquierda, que es lo que se ve de reojo sin leer. */
-  box-shadow: inset 3px 0 0 var(--lx-primary-2);
+     izquierda, que es lo que se ve de reojo sin leer. 4px, el tope del rango de la v1.1, y en el
+     azul primario —5.86 sobre el cromo— que es el «azul brillante» que pide. */
+  box-shadow: inset 4px 0 0 var(--lx-primary);
 }
 
 .lx-nav-link--active .lx-nav-link__icon {
@@ -2601,19 +3029,20 @@ a.lx-list-row {
   :root {
     /* Las mismas capas de la paleta del 05-10-2026, separadas un escalón más: quien pide más
        contraste pide que las superficies se distingan, no otros colores. */
-    --lx-surface: #121C2B;
-    --lx-surface-2: #16243A;
-    --lx-surface-raised: #1C2E45;
+    --lx-chrome: #0E1E33;
+    --lx-surface: #152840;
+    --lx-surface-2: #1A3049;
+    --lx-surface-raised: #1F3853;
     /* Sólidas, como todas las de acá: un estado seleccionado translúcido es exactamente lo que
        alguien que pide más contraste está pidiendo que desaparezca. */
-    --lx-surface-hover: #22344C;
-    --lx-surface-active: #2A3E58;
-    --lx-surface-input: #0A111C;
+    --lx-surface-hover: #26405C;
+    --lx-surface-active: #2E4A69;
+    --lx-surface-input: #091523;
     --lx-glass-gradient: none;
     --lx-glass-gradient-raised: none;
     /* El borde deja de ser discreto: acá su trabajo es separar, no acompañar. */
-    --lx-border: #3C5068;
-    --lx-border-strong: #516782;
+    --lx-border: #44607E;
+    --lx-border-strong: #5B7897;
     --lx-text-muted: #C2D0E0;
     --lx-text-subtle: #AEBDD0;
   }

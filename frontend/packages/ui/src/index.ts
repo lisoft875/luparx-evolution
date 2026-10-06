@@ -36,6 +36,10 @@ export type { ConfirmDialogProps, ConfirmChange } from './components/ConfirmDial
 export { ErrorDialog } from './components/ErrorDialog';
 export type { ErrorDialogProps } from './components/ErrorDialog';
 export { PageLayout, CenteredLayout } from './components/PageLayout';
+export { MenuButton } from './components/MenuButton';
+export type { MenuButtonProps, MenuButtonItem } from './components/MenuButton';
+export { ShellSearch } from './components/ShellSearch';
+export type { ShellSearchProps, ShellSearchDestination } from './components/ShellSearch';
 export type { PageLayoutProps, CenteredLayoutProps } from './components/PageLayout';
 export { AuthScreen } from './components/AuthScreen';
 export type { AuthScreenProps } from './components/AuthScreen';

@@ -258,8 +258,31 @@ function revisarTema(nombre, mapa, oscuro) {
     de lo que hay hoy. Está dicho acá para que nadie lo lea como una regla general.
   */
   console.log('\n-- escalonado entre capas --');
-  medir('fondo → barra lateral/cabecera', escalon(mapa, '--lx-surface', '--lx-bg'), 1.05);
+  /*
+    `--lx-chrome` existe desde el 06-10-2026 y la línea de antes medía otra cosa.
+
+    Decía «fondo → barra lateral/cabecera» y comparaba `--lx-surface` con `--lx-bg`, porque hasta
+    entonces la barra lateral SE PINTABA con `--lx-surface` —el color de las tarjetas— y la cabecera
+    con `--lx-bg`, el del lienzo. O sea que la etiqueta describía una intención que el CSS no tenía:
+    de los cuatro planos que el ojo debería distinguir había dos colores.
+
+    Ahora el cromo es su propio token, y los escalones que se miden son distintos en cada tema
+    PORQUE la arquitectura visual de cada tema es distinta, no por ser indulgente con uno:
+
+      · En OSCURO el lienzo es lo más hundido y cada plano sube: lienzo < cromo < tarjeta. Los tres
+        escalones existen y se miden los tres.
+
+      · En CLARO se invierte y se aplana: la cabecera, la barra lateral y las tarjetas son todas
+        BLANCAS, y lo que separa es el lienzo gris por debajo más el borde. `--lx-chrome` y
+        `--lx-surface` valen literalmente lo mismo, así que exigir un escalón entre ellos sería
+        exigir que el tema claro deje de ser un tema claro. Lo que sí se exige en claro es que el
+        lienzo se distinga del blanco, que es el único escalón que ese tema tiene.
+  */
+  medir('lienzo → cromo (cabecera y barra lateral)', escalon(mapa, '--lx-chrome', '--lx-bg'), 1.05);
   if (oscuro) {
+    // El escalón intermedio, que sólo existe en oscuro: la tarjeta se apoya SOBRE el cromo en la
+    // zona de contenido y tiene que distinguirse de él, no sólo del lienzo.
+    medir('cromo → tarjeta', escalon(mapa, '--lx-surface', '--lx-chrome'), 1.05);
     medir('fondo → tarjeta (piso del incidente 25-09)', escalon(mapa, '--lx-surface-2', '--lx-bg'), 1.1);
     medir('tarjeta → hover', escalon(mapa, '--lx-surface-hover', '--lx-surface-2'), 1.1);
     medir('tarjeta → borde', escalon(mapa, '--lx-border', '--lx-surface-2'), 1.1);

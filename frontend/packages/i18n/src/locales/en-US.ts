@@ -186,6 +186,11 @@ export const enUS: Record<TranslationKey, string> = {
   'tenant.membership.status.REJECTED': 'Rejected',
   'tenant.membership.status.REVOKED': 'Revoked',
 
+  'admin.search.placeholder': 'Search…',
+  'admin.search.destinations': 'Go to',
+  'admin.search.inUsers': 'Search in Users',
+  'admin.search.empty': 'Nothing matches that.',
+  'admin.header.account': 'Your account',
   'admin.users.title': 'Users',
 
   'admin.zones.title': 'Zones',
