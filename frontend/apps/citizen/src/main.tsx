@@ -14,7 +14,11 @@ function renderBootFailure(target: HTMLElement, error: unknown): void {
   box.setAttribute('role', 'alert');
   box.style.cssText =
     'margin:0;padding:24px;font:14px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace;' +
-    'white-space:pre-wrap;color:#F5F8FF;background:#070C18;min-height:100vh;box-sizing:border-box';
+    // Los únicos dos colores escritos a mano del proyecto, y a propósito: esta pantalla se dibuja
+    // cuando la aplicación NO pudo arrancar, momento en el que puede que la hoja de estilos ni
+    // siquiera esté cargada y un `var(--lx-text)` no valdría nada. Son los valores de
+    // `--lx-text` y `--lx-bg` de la paleta del 05-10-2026, copiados.
+    'white-space:pre-wrap;color:#F8FAFC;background:#070B14;min-height:100vh;box-sizing:border-box';
   box.textContent = `LupaRX no pudo iniciar / failed to start:\n\n${message}`;
   target.appendChild(box);
 }

@@ -15,77 +15,106 @@
 
 :root {
   /* ==============================================================================================
-     PALETA OSCURA — GUÍA VISUAL DE COLOR Y JERARQUÍA (Javier, 2026-09-25).
+     PALETA OSCURA — GUÍA VISUAL DE COLOR Y APLICACIÓN v1.0 (Javier, 2026-10-05).
 
-     ESTA GUÍA SUSTITUYE AL PAQUETE LUPARX_UI_UX_360 COMO FUENTE DE VERDAD DEL COLOR.
+     ESTA GUÍA SUSTITUYE A LA DEL 25-09-2026, QUE A SU VEZ HABÍA SUSTITUIDO AL PAQUETE
+     LUPARX_UI_UX_360 COMO FUENTE DE VERDAD DEL COLOR.
 
-     Hasta hoy acá vivía esta regla: «estos 34 valores son los de `02_DESIGN_SYSTEM/tokens.css`,
-     VERBATIM; no se reinterpretan, no se ajustan a ojo». Se cumplió, y se deja escrito qué la
-     reemplazó en vez de borrarla: una regla que desaparece sin dejar rastro es la que alguien
-     vuelve a romper sin saber que existía. El paquete 360 sigue gobernando radios, sombras,
-     espaciado y tipografía; el COLOR de esta sección ya no.
+     Se deja escrita la cadena entera en vez de borrar lo anterior: una regla que desaparece sin
+     dejar rastro es la que alguien vuelve a romper sin saber que existía. El paquete 360 sigue
+     gobernando radios, sombras, espaciado y tipografía; el COLOR ya no, desde el 25-09. Y la paleta
+     del 25-09 la reemplaza ésta.
 
-     Ese archivo NO está en este repositorio —venía en el paquete entregado— así que no se puede
-     sincronizar desde acá. Si se vuelve a abrir, sus colores y éstos van a discrepar, y los que
-     mandan son éstos.
+     ── Los once valores de la guía, literales ────────────────────────────────────────────────────
 
-     ── De dónde sale cada valor ──────────────────────────────────────────────────────────────────
+       Nivel 0 · fondo global          #070B14
+       Nivel 1 · barra lateral, cabecera, contenedores de primer nivel   #0F1724
+       Nivel 2 · tarjetas, filtros, modales, bloques internos            #111D2B
+       Separación · bordes discretos   #1F2D3D
+       Texto principal                 #F8FAFC      Texto secundario   #94A3B8
+       Acento LuParX                   #3B82F6
+       Éxito #22C55E · Advertencia #F59E0B · Error #EF4444 · Info/neutro #A3B3C7
 
-     DE LA GUÍA, literales:
-       bg #06111F · bg-elevated/surface #0B1B2D · surface-2 #102844 · primary #0A84FF
-       primary-2 #19C6FF · text-muted #93A4B8 · success #12B981 · danger #E94B5F
+     ── Lo que se midió antes de aplicarla, y las tres cosas que salieron ─────────────────────────
 
-     DERIVADOS, porque la guía no los da y hay que mantener la escalera:
-       surface-hover #17365A  (un escalón por encima de surface-2, como lo era antes)
-       primary-hover #3398FF  (un escalón por encima del primario)
-       border / border-strong: se BAJÓ su presencia. La guía pide líneas divisorias «discretas, no
-         protagonistas» y no usar azul intenso en todos los bordes; el alfa baja de 0.20 a 0.14 y
-         de 0.42 a 0.30.
+     La paleta MEJORA casi todo lo que se puede medir. Sobre la tarjeta: texto 14.25 → 16.26,
+     secundario 5.85 → 6.63, éxito 5.88 → 7.47, info 5.72 → 7.96. El escalonado entre capas se
+     conserva donde de verdad importa —las tarjetas se dibujan sobre el FONDO, no sobre la barra
+     lateral, y ese salto queda en 1.157 contra el 1.166 de antes.
 
-     SIN CAMBIO, porque la guía no los menciona:
-       text #F7FAFF (ya era el «blanco roto» que pide) · text-subtle · warning · info
+     Tres combinaciones no pasaban, y las tres se resolvieron SIN salirse de la familia de color:
 
-     ── Lo que esto sí arregla, medido ────────────────────────────────────────────────────────────
+       1. Blanco sobre #3B82F6 da 3.68, por debajo de 4.5. El acento se queda como acento —foco,
+          selección, enlaces, estado activo, que es el papel que la guía le da— y el RELLENO de un
+          control pasa a #2563EB, de la misma familia: blanco encima da 5.17. A ojo son el mismo
+          azul; la diferencia sólo existe donde hay texto blanco encima.
 
-     El problema reportado —«toda la interfaz se ve como un solo bloque azul»— NO venía de los
-     tonos, que apenas cambian: ΔE76 de 3.1 en el fondo, 3.8 en el panel y 2.6 en el texto
-     secundario, todo por debajo del umbral de «apenas visible». Venía del ESCALONADO entre capas,
-     que era casi nulo:
+       2. #EF4444 como TEXTO de una insignia sobre su propio fondo rojo al 16% da 4.00. Para eso
+          está `--lx-danger-text` (#F87171): 5.06. `--lx-danger` sigue siendo #EF4444 para rellenos,
+          bordes e iconos, tal como lo da la guía. Mismo criterio que se aplicó al violeta el
+          25-09 por la misma razón.
 
-       antes:    bg → panel 1.084   panel → superficie 1.048   superficie → elevada 1.084
-       ahora:    bg → panel 1.091                              panel → elevada   1.166
-                 elevada → hover 1.215 (antes 1.118)
+       3. El botón primario se dibujaba con un GRADIENTE hacia el cian. Además de que la guía pide
+          «azul #3B82F6 con texto claro» —un color, no un degradado— y la regla 2 del rediseño 360°
+          prohíbe los gradientes decorativos, el extremo claro del degradado dejaba el texto blanco
+          en 2.7. `--lx-gradient-primary` se elimina y sus seis usos pasan a `--lx-primary-fill`.
 
-     `bg-elevated` pasa a valer lo mismo que `surface` a propósito: su único uso es el fondo de la
-     primera columna fija de una tabla, que tiene que ser opaco y coincidir con el de la fila. Que
-     fuera más oscuro hacía que esa columna se leyera como una banda aparte.
+     ── Derivados, porque la guía no los da y hay que mantener la escalera ────────────────────────
 
-     Contraste verificado sobre las tres capas: texto 18.1/16.6/14.3, secundario 7.4/6.8/5.9,
-     éxito 7.5/6.9/5.9, primario 5.2/4.8/4.1. Todo lo que es texto corrido pasa 4.5.
+       surface-hover #1A2C40 · surface-active #203550 · surface-raised #172636 (modales y
+       desplegables, un escalón sobre la tarjeta) · surface-input #0B1320 (los inputs se hunden
+       respecto de la tarjeta, no se elevan) · primary-2 #60A5FA (el acento claro: anillo de foco y
+       acento de plataforma) · text-subtle #7C8CA3.
+
+     ── Quién verifica esto ───────────────────────────────────────────────────────────────────────
+
+     `packages/ui/src/__checks__/paleta.check.mjs`, que lee ESTE archivo —no una copia de los
+     valores— resuelve los `var()` y los `color-mix`, y falla si alguna combinación baja del mínimo.
+     Corre con `npm run checks`. Si cambiás un tono acá, el número lo dice antes de desplegar.
      ============================================================================================== */
-  --lx-bg: #06111F;
-  --lx-bg-elevated: #0B1B2D;
-  --lx-surface: #0B1B2D;
-  --lx-surface-2: #102844;
-  --lx-surface-hover: #17365A;
-  --lx-border: rgba(117, 170, 235, 0.14);
-  --lx-border-strong: rgba(69, 151, 255, 0.3);
-  --lx-primary: #0A84FF;
-  --lx-primary-2: #19C6FF;
-  --lx-primary-hover: #3398FF;
-  --lx-text: #F7FAFF;
-  --lx-text-muted: #93A4B8;
-  --lx-text-subtle: #6F829B;
-  --lx-success: #12B981;
-  --lx-warning: #F4C95D;
-  --lx-danger: #E94B5F;
-  --lx-info: #43A5FF;
+  --lx-bg: #070B14;
+  /* Mismo valor que `surface` a propósito: su único uso es el fondo de la primera columna fija de
+     una tabla, que tiene que ser opaco y coincidir con el de la fila. Que fuera más oscuro hacía
+     que esa columna se leyera como una banda aparte. */
+  --lx-bg-elevated: #0F1724;
+  --lx-surface: #0F1724;
+  --lx-surface-2: #111D2B;
+  --lx-surface-hover: #1A2C40;
+  /* La guía da el borde como un color sólido y no como un alfa. Es mejor: un alfa se ve distinto
+     según lo que tenga debajo, y estos bordes separan tanto una tarjeta del fondo como una fila de
+     la siguiente dentro de la tarjeta. */
+  --lx-border: #1F2D3D;
+  --lx-border-strong: #2B3C50;
+  --lx-primary: #3B82F6;
+  --lx-primary-2: #60A5FA;
+  /* El relleno de un control, donde hay texto blanco encima. Ver el punto 1 de arriba. */
+  --lx-primary-fill: #2563EB;
+  --lx-primary-fill-hover: #1D4ED8;
+  --lx-primary-hover: #60A5FA;
+  --lx-text: #F8FAFC;
+  --lx-text-muted: #94A3B8;
+  --lx-text-subtle: #7C8CA3;
+  --lx-success: #22C55E;
+  --lx-warning: #F59E0B;
+  --lx-danger: #EF4444;
+  /* El rojo cuando es TEXTO sobre un fondo rojo suave. Ver el punto 2 de arriba. */
+  --lx-danger-text: #F87171;
+  /* Y el azul, por lo mismo: #3B82F6 sobre su propio fondo al 14% da 3.88. El acento claro da
+     5.33. El relleno, el acento y el texto-sobre-suave son tres trabajos distintos del mismo azul,
+     y por eso son tres tokens y no uno. */
+  --lx-primary-text: #60A5FA;
+  /* La tinta de un botón destructivo: oscura, porque blanco sobre este rojo da 3.76 y oscuro da
+     4.98. Nunca azul — una acción destructiva no se puede confundir con el acento de marca. */
+  --lx-danger-ink: #2A0409;
+  --lx-info: #A3B3C7;
   --lx-radius-sm: 8px;
   --lx-radius-md: 12px;
   --lx-radius-lg: 16px;
   --lx-radius-xl: 20px;
   --lx-shadow-card: 0 12px 32px rgba(0, 0, 0, 0.24);
-  --lx-shadow-focus: 0 0 0 3px rgba(8, 123, 255, 0.25);
+  /* Derivada del acento, no un rgba a mano con el azul de la paleta anterior: así sigue al token
+     cuando el acento cambie, en vez de quedarse en el azul viejo. */
+  --lx-shadow-focus: 0 0 0 3px color-mix(in srgb, var(--lx-primary) 32%, transparent);
   --lx-space-1: 4px;
   --lx-space-2: 8px;
   --lx-space-3: 12px;
@@ -120,6 +149,7 @@
   --lx-success-soft: color-mix(in srgb, var(--lx-success) 14%, transparent);
   --lx-warning-soft: color-mix(in srgb, var(--lx-warning) 14%, transparent);
   --lx-danger-soft: color-mix(in srgb, var(--lx-danger) 16%, transparent);
+  --lx-info-strong: #3B82F6;
   --lx-info-soft: color-mix(in srgb, var(--lx-info) 14%, transparent);
 
   /* ---- Acentos de CATEGORÍA (25-09-2026) ----
@@ -141,17 +171,27 @@
   --lx-accent-teal: #23A6A8;
   --lx-accent-teal-soft: color-mix(in srgb, var(--lx-accent-teal) 16%, transparent);
 
-  /* Superficies que la guía no nombra pero el sistema necesita. Sólidas, como las suyas. */
-  --lx-surface-raised: #0C2444;
-  --lx-surface-active: #143257;
-  --lx-surface-input: #061224;
+  /* Superficies que la guía no nombra pero el sistema necesita. Sólidas, como las suyas.
+     `raised` es lo que flota —modales y desplegables—, un escalón sobre la tarjeta. `input` va al
+     revés: un campo se HUNDE respecto de la tarjeta que lo contiene, no se eleva. */
+  --lx-surface-raised: #172636;
+  --lx-surface-active: #203550;
+  --lx-surface-input: #0B1320;
 
   /* El foco: la guía lo define como sombra (`--lx-shadow-focus`). `--lx-focus-ring` es el color
      del `outline` que usan 105 lugares; se alinea con el primary nuevo. */
   --lx-focus-ring: var(--lx-primary-2);
 
-  /* La guía pide "gradiente sutil primary→primary-2" en los botones primarios. */
-  --lx-gradient-primary: linear-gradient(135deg, var(--lx-primary) 0%, var(--lx-primary-2) 100%);
+  /*
+    Acá vivía `--lx-gradient-primary`, un degradado del primario al cian que rellenaba los botones
+    primarios y otros cinco elementos.
+
+    Se elimina por dos razones que apuntan al mismo lado. La guía del 05-10-2026 dice «botón
+    primario: azul #3B82F6 con texto claro» —un color, no un degradado— y la regla 2 del rediseño
+    360° prohíbe los gradientes decorativos. Y medido: el extremo claro del degradado dejaba el
+    texto blanco en 2.7:1, o sea que la mitad derecha de cada botón primario no era legible según
+    ningún criterio. Sus seis usos pasan a `--lx-primary-fill`, que es un color y pasa 5.17.
+  */
 
   /* Regla 2: nada de glass excesivo, y COMPONENTES.md dice "nada de glow permanente; glow azul
      sólo en foco/acción clave". El desenfoque baja y los gradientes de vidrio se retiran a
@@ -223,7 +263,10 @@
   --lx-border: rgba(15, 23, 42, 0.09);
   --lx-text: #0b1220;
   --lx-text-muted: #4b5872;
-  --lx-text-subtle: #7b879e;
+  /* Era #7b879e: 3.20 sobre la tarjeta, muy por debajo de 4.5. No es una regresión de hoy —venía
+     de antes— pero salió al medir y la guía pide expresamente «no bajar demasiado el contraste del
+     texto auxiliar». Éste da 5.16. */
+  --lx-text-subtle: #5A6676;
 
   /* On a light canvas the relationship inverts: the card is the brightest thing, so an
      input sits below it by being faintly tinted rather than by being darker. */
@@ -237,22 +280,39 @@
   --lx-primary-strong: #0839c7;
   --lx-primary-soft: rgba(10, 77, 255, 0.1);
   --lx-primary-contrast: #ffffff;
+  /* El relleno de un control con texto blanco encima, como en oscuro. */
+  --lx-primary-fill: #1D4ED8;
+  --lx-primary-fill-hover: #0839c7;
+  /* Sobre fondo claro el texto va oscuro, así que es el mismo primario: acá no hace falta aclarar
+     nada, y aclararlo sería lo contrario de lo que pide el contraste. */
+  --lx-primary-text: #0a4dff;
 
-  --lx-success: #157a4a;
-  --lx-success-soft: rgba(21, 122, 74, 0.1);
-  --lx-warning: #a5580a;
-  --lx-warning-soft: rgba(165, 88, 10, 0.12);
-  --lx-danger: #c0292f;
-  --lx-danger-soft: rgba(192, 41, 47, 0.1);
-  --lx-info: #0b7fa8;
-  --lx-info-soft: rgba(11, 127, 168, 0.1);
+  /*
+    Los estados, un escalón más oscuros que antes (05-10-2026).
+
+    Salió al escribir el comprobador de contraste: medidos como TEXTO sobre su propio fondo suave
+    —que es donde una insignia los dibuja— los valores anteriores quedaban por debajo de 4.5:
+    éxito 4.16, aviso 3.98, info 3.57, ámbar 4.09. Ninguno era una regresión de este cambio; vienen
+    de antes y nadie los había medido en el sitio donde de verdad se usan. Ahora los cuatro pasan
+    con margen, y el tono es el mismo, sólo más profundo.
+  */
+  --lx-success: #0E5C35;
+  --lx-success-soft: rgba(14, 92, 53, 0.1);
+  --lx-warning: #7E4207;
+  --lx-warning-soft: rgba(126, 66, 7, 0.12);
+  --lx-danger: #b91c1c;
+  --lx-danger-text: #b91c1c;
+  --lx-danger-ink: #ffffff;
+  --lx-danger-soft: rgba(185, 28, 28, 0.1);
+  --lx-info: #0A5A77;
+  --lx-info-soft: rgba(10, 90, 119, 0.1);
   /* Los mismos tres acentos, oscurecidos para leerse sobre blanco. */
-  --lx-accent-violet: #6d28d9;
-  --lx-accent-violet-soft: rgba(109, 40, 217, 0.1);
-  --lx-accent-amber: #92600b;
-  --lx-accent-amber-soft: rgba(146, 96, 11, 0.12);
-  --lx-accent-teal: #0f6f70;
-  --lx-accent-teal-soft: rgba(15, 111, 112, 0.1);
+  --lx-accent-violet: #5B21B6;
+  --lx-accent-violet-soft: rgba(91, 33, 182, 0.1);
+  --lx-accent-amber: #7A5009;
+  --lx-accent-amber-soft: rgba(122, 80, 9, 0.12);
+  --lx-accent-teal: #0C5C5D;
+  --lx-accent-teal-soft: rgba(12, 92, 93, 0.1);
 
   --lx-focus-ring: #0a4dff;
 
@@ -407,7 +467,7 @@ body {
 /* The glow is a hover affordance, not the resting state: a page of permanently glowing
    buttons is the "gaming interface" the brand brief rules out. */
 .lx-btn--primary {
-  background: var(--lx-gradient-primary);
+  background: var(--lx-primary-fill);
   border-color: var(--lx-border-strong);
   color: var(--lx-primary-contrast);
   box-shadow: none;
@@ -415,7 +475,12 @@ body {
 .lx-btn--primary:hover:not(:disabled) {
   border-color: var(--lx-border-strong);
   box-shadow: var(--lx-glow-primary);
-  filter: brightness(1.06);
+  /* Un escalón más OSCURO, no `brightness(1.06)`. Aclarar un relleno que lleva texto blanco encima
+     baja el contraste —justo lo que se acaba de arreglar— y además un filtro no se puede medir
+     desde el comprobador de paleta, que sólo ve tokens. Así el estado hover tiene su propio color
+     y su propio número: 6.70. */
+  background: var(--lx-primary-fill-hover);
+  filter: none;
 }
 .lx-btn--secondary {
   background: var(--lx-surface-2);
@@ -435,12 +500,13 @@ body {
 .lx-btn--ghost:hover:not(:disabled) {
   background: var(--lx-surface-hover);
 }
-/* Dark text on the light-on-dark danger tone, which is what clears AA here — white on
-   #ff7d8a does not. Never blue: a destructive action must not be confusable with the
-   brand accent. */
+/* Tinta oscura sobre el rojo, que es lo que pasa AA acá: blanco sobre #EF4444 da 3.76 y esta
+   tinta da 4.98. Nunca azul: una acción destructiva no se puede confundir con el acento de marca.
+   El valor sale de `--lx-danger-ink` en vez de estar escrito acá, para que el comprobador de
+   paleta pueda medirlo — un hexadecimal suelto en una regla es invisible para él. */
 .lx-btn--danger {
   background: var(--lx-danger);
-  color: #2a0409;
+  color: var(--lx-danger-ink);
   box-shadow: none;
 }
 .lx-btn--danger:hover:not(:disabled) {
@@ -450,14 +516,14 @@ body {
   width: 100%;
 }
 .lx-btn--solid {
-  background: var(--lx-gradient-primary);
+  background: var(--lx-primary-fill);
   color: var(--lx-primary-contrast);
   box-shadow: none;
 }
 .lx-btn--outline {
   background: var(--lx-primary-soft);
   border-color: var(--lx-primary);
-  color: var(--lx-primary);
+  color: var(--lx-primary-text);
   box-shadow: none;
 }
 
@@ -792,7 +858,9 @@ body {
 }
 .lx-alert--danger {
   background: var(--lx-danger-soft);
-  color: var(--lx-danger);
+  /* El rojo claro, no el de relleno: sobre su propio fondo al 16% el #EF4444 da 4.00 y éste 5.06.
+     Mismo criterio que el violeta de la guía de auditoría, por la misma razón medida. */
+  color: var(--lx-danger-text);
   border-color: var(--lx-danger-soft);
 }
 
@@ -1508,7 +1576,7 @@ a.lx-list-row {
 }
 .lx-list-row__icon--danger {
   background: var(--lx-danger-soft);
-  color: var(--lx-danger);
+  color: var(--lx-danger-text);
 }
 .lx-list-row__icon--circle {
   border-radius: 50%;
@@ -1566,7 +1634,7 @@ a.lx-list-row {
 .lx-chip[aria-pressed='true'] {
   background: var(--lx-primary-soft);
   border-color: var(--lx-primary);
-  color: var(--lx-primary);
+  color: var(--lx-primary-text);
 }
 /* Still legible, plainly not choosable — an option the municipality's rules leave no room for. */
 .lx-chip:disabled {
@@ -1592,7 +1660,7 @@ a.lx-list-row {
   color: var(--lx-text-muted);
 }
 .lx-chip-group--segmented .lx-chip[aria-pressed='true'] {
-  background: var(--lx-gradient-primary);
+  background: var(--lx-primary-fill);
   color: var(--lx-primary-contrast);
 }
 
@@ -1667,7 +1735,7 @@ a.lx-list-row {
   color: var(--lx-text-muted);
 }
 .lx-step[data-state='active'] .lx-step__index {
-  background: var(--lx-gradient-primary);
+  background: var(--lx-primary-fill);
   color: var(--lx-primary-contrast);
 }
 .lx-step[data-state='done'] .lx-step__index {
@@ -1799,7 +1867,9 @@ a.lx-list-row {
   padding: 0 4px;
   border-radius: var(--lx-radius-pill);
   background: var(--lx-danger);
-  color: #fff;
+  /* La misma tinta oscura que el botón destructivo, y por la misma razón medida: blanco sobre
+     #EF4444 da 3.76 y a 10px en negrita eso no alcanza ni de lejos. Ésta da 4.98. */
+  color: var(--lx-danger-ink);
   font-size: 10px;
   font-weight: 700;
   line-height: 16px;
@@ -1815,7 +1885,7 @@ a.lx-list-row {
   gap: var(--lx-space-2);
   padding: var(--lx-space-2) var(--lx-space-4);
   background: var(--lx-primary-soft);
-  color: var(--lx-primary);
+  color: var(--lx-primary-text);
   border-bottom: 1px solid var(--lx-primary);
   font-size: var(--lx-text-meta-size);
   font-weight: 700;
@@ -1906,7 +1976,9 @@ a.lx-list-row {
   padding: 0 4px;
   border-radius: var(--lx-radius-pill);
   background: var(--lx-danger);
-  color: #fff;
+  /* La misma tinta oscura que el botón destructivo, y por la misma razón medida: blanco sobre
+     #EF4444 da 3.76 y a 10px en negrita eso no alcanza ni de lejos. Ésta da 4.98. */
+  color: var(--lx-danger-ink);
   font-size: 10px;
   font-weight: 700;
   line-height: 16px;
@@ -2074,7 +2146,7 @@ a.lx-list-row {
   width: 100%;
   border: none;
   border-radius: var(--lx-radius-lg);
-  background: var(--lx-gradient-primary);
+  background: var(--lx-primary-fill);
   box-shadow: var(--lx-glow-primary);
   padding: var(--lx-space-5);
   color: var(--lx-primary-contrast);
@@ -2242,7 +2314,9 @@ a.lx-list-row {
   width: 72px;
   height: 3px;
   border-radius: var(--lx-radius-pill);
-  background: var(--lx-gradient-primary);
+  /* Sin degradado: es un acento de tres píxeles y no lleva texto encima, así que usa el acento
+     claro directamente. */
+  background: var(--lx-primary);
 }
 
 .lx-auth-screen__hero-title {
@@ -2521,19 +2595,23 @@ a.lx-list-row {
    making the surfaces solid rather than blurrier, and increase contrast likewise. */
 @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
   :root {
-    --lx-surface: #0a1428;
-    --lx-surface-2: #10203f;
-    --lx-surface-raised: #16305f;
-    /* Solid, like every other surface here: a translucent selected state is exactly what
-       somebody asking for more contrast is asking to be rid of. */
-    --lx-surface-hover: #10203f;
-    --lx-surface-active: #16305f;
-    --lx-surface-input: #050d1f;
+    /* Las mismas capas de la paleta del 05-10-2026, separadas un escalón más: quien pide más
+       contraste pide que las superficies se distingan, no otros colores. */
+    --lx-surface: #121C2B;
+    --lx-surface-2: #16243A;
+    --lx-surface-raised: #1C2E45;
+    /* Sólidas, como todas las de acá: un estado seleccionado translúcido es exactamente lo que
+       alguien que pide más contraste está pidiendo que desaparezca. */
+    --lx-surface-hover: #22344C;
+    --lx-surface-active: #2A3E58;
+    --lx-surface-input: #0A111C;
     --lx-glass-gradient: none;
     --lx-glass-gradient-raised: none;
-    --lx-border: rgba(90, 165, 255, 0.5);
-    --lx-text-muted: #c2d3ea;
-    --lx-text-subtle: #b0c3dd;
+    /* El borde deja de ser discreto: acá su trabajo es separar, no acompañar. */
+    --lx-border: #3C5068;
+    --lx-border-strong: #516782;
+    --lx-text-muted: #C2D0E0;
+    --lx-text-subtle: #AEBDD0;
   }
 
   .lx-card,
