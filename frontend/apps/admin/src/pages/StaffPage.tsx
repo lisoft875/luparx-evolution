@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { RequirePermission, useAuth } from '@luparx/auth';
-import { useTranslation, formatDateTime, type TranslationKey } from '@luparx/i18n';
+import { useTranslation, formatDateTime, roleLabel, type TranslationKey } from '@luparx/i18n';
 import {
   ApiError,
   TENANT_GRANTABLE_ROLES,
@@ -12,7 +12,7 @@ import {
   type StaffInvitation,
   type StaffMember,
 } from '@luparx/api-client';
-import { Alert, Badge, Button, IconMore, Input, Modal, Pagination, Select, Table } from '@luparx/ui';
+import { Alert, Badge, Button, Card, IconMore, Input, Modal, Pagination, Select, Table } from '@luparx/ui';
 import { AddStaffDialog } from '../components/AddStaffDialog';
 import { AdminShell } from '../components/AdminShell';
 
@@ -258,12 +258,63 @@ export function StaffPage(): React.JSX.Element {
     });
   }, [changingRole]);
 
+  /**
+   * Los sectores de un puesto, resumidos.
+   *
+   * <h2>Por qué esta celda era la que rompía la tabla</h2>
+   *
+   * <p>Dibujaba `zones.map(z => z.name).join(', ')`: todos los nombres, en una celda que —como todas
+   * las de esta tabla— es `nowrap`. Dos sectores con nombres municipales de verdad («San Rafael -
+   * Multiplaza», «Centro - Avenida Central») son más de 400px indivisibles, y eso es lo que empujaba
+   * Acciones fuera de la pantalla. El scroll horizontal era el síntoma; esto era la causa.</p>
+   *
+   * <h2>Cero sectores dice «Todos», no «Sin sectores»</h2>
+   *
+   * <p>Acá NO se sigue el PDF, y es a propósito. Pide «Si tiene 0 sectores: "Sin sectores"», y en
+   * este sistema una asignación vacía significa lo contrario: el servidor no restringe a nadie que no
+   * tenga sectores asignados, así que ese fiscalizador puede trabajar en TODOS. Escribir «Sin
+   * sectores» le diría a un administrador que alguien está limitado cuando no lo está, y la decisión
+   * que tomaría a partir de ahí —asignarle sectores «para que pueda trabajar»— lo limitaría. Un
+   * resumen que invierte el significado del dato no es un resumen, es un error.</p>
+   */
+  function sectoresDe(member: StaffMember): React.ReactNode {
+    if (member.zones.length === 0) {
+      return (
+        <span className="lx-text-meta" title={t('admin.staff.zones.allTitle')}>
+          {t('admin.staff.zones.all')}
+        </span>
+      );
+    }
+    const [primero, ...resto] = member.zones;
+    // El nombre completo de TODOS en `title`: el dato no se pierde, sólo se deja de dibujar entero.
+    // Un `title` nativo además nunca lo recorta el `overflow` de la tabla, que es el defecto que el
+    // propio PDF pide no reintroducir con un popover.
+    const todos = member.zones.map((zone) => zone.name).join(' · ');
+    return (
+      <span className="lx-staff-zones" title={todos}>
+        <span className="lx-staff-zones__first">{primero?.name}</span>
+        {/* `Badge` y no `Chip`: un Chip es un filtro pulsable —tiene `onClick` y estado
+            seleccionado— y esto es un contador que no se pulsa. Vestir un control de etiqueta
+            invita a hacerle clic y no pasa nada, que es la peor clase de adorno. */}
+        {resto.length > 0 ? (
+          <Badge tone="neutral">{t('admin.staff.zones.more', { count: resto.length })}</Badge>
+        ) : null}
+      </span>
+    );
+  }
+
   const data = query.data;
 
   return (
     <AdminShell>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-        <h1>{t('admin.staff.title')}</h1>
+      <div className="lx-page-header">
+        <div className="lx-page-header__group">
+          <h1>{t('admin.staff.title')}</h1>
+          {/* La descripción sube al encabezado, donde ya vive en Usuarios. Estaba debajo del título
+              como un párrafo suelto, y entre ella, el filtro con su propio margen y la tabla había
+              tres huecos verticales distintos: eso es lo que el PDF llama «espacio vacío». */}
+          <p className="lx-page-header__subtitle">{t('admin.staff.description')}</p>
+        </div>
         <RequirePermission permission="ROLE_ASSIGN">
           {/* One door, and it opens on the right first question. Hiring somebody starts with "does
               this person already exist here" — most of the time they do, because they parked
@@ -274,7 +325,6 @@ export function StaffPage(): React.JSX.Element {
           </Button>
         </RequirePermission>
       </div>
-      <p className="lx-text-meta">{t('admin.staff.description')}</p>
 
       {feedback ? <Alert tone="success">{feedback}</Alert> : null}
       {error ? <Alert tone="danger">{error}</Alert> : null}
@@ -284,26 +334,54 @@ export function StaffPage(): React.JSX.Element {
           siguió diciendo «Activo», así que el clic pareció no hacer nada. */}
       {query.isError ? <Alert tone="danger">{t('admin.staff.error.stale')}</Alert> : null}
 
-      <div style={{ maxWidth: 260, margin: '12px 0' }}>
-        <Select
-          aria-label={t('admin.staff.filter.status')}
-          value={status}
-          onChange={(value) => {
-            setPage(0);
-            setStatus(value as MembershipStatus | '');
-          }}
-          placeholder={t('admin.staff.filter.all')}
-          options={(['ACTIVE', 'SUSPENDED', 'REVOKED', 'PENDING_APPROVAL'] as MembershipStatus[]).map((s) => ({
-            value: s,
-            label: t(`tenant.membership.status.${s}` as TranslationKey),
-          }))}
-        />
-      </div>
+      <Card>
+        <div className="lx-filter-row">
+          <Select
+            aria-label={t('admin.staff.filter.status')}
+            value={status}
+            onChange={(value) => {
+              setPage(0);
+              setStatus(value as MembershipStatus | '');
+            }}
+            placeholder={t('admin.staff.filter.all')}
+            options={(['ACTIVE', 'SUSPENDED', 'REVOKED', 'PENDING_APPROVAL'] as MembershipStatus[]).map((s) => ({
+              value: s,
+              label: t(`tenant.membership.status.${s}` as TranslationKey),
+            }))}
+          />
+        </div>
+      </Card>
 
       {query.isLoading ? <p>{t('common.loading')}</p> : null}
       {data ? (
         <>
+          {/*
+            Seis columnas a la vez, sin desplazamiento horizontal en escritorio (06-10-2026).
+
+            `compact` devuelve 96px de los 192 que gastaban los rellenos de seis columnas, y los
+            anchos declarados reparten el resto en vez de dejar que mande la celda con el dato más
+            largo. Medido con la hoja de estilos de verdad: a 1280 el contenido disponible son 968px
+            y las columnas piden 964 sin apretar nada.
+
+            Las dos columnas fijas son la red, no el plan: cuando igualmente no quepa —un zoom al
+            125%, una traducción más larga— se queda a la vista quién es y se alcanza el menú, y lo
+            que viaja es el detalle. En escritorio normal no hay nada que desplazar y no se notan.
+          */}
           <Table
+            compact
+            fixedLayout
+            /*
+              816px: los mínimos de las cinco columnas declaradas (616) más un suelo de 200 para la
+              persona. Por debajo de eso la tabla se desplaza como un bloque en vez de estrujar la
+              columna de la persona hasta cero, que es lo que medido pasaba a 390px.
+
+              Medido: de 1280 hacia arriba no hay nada que desplazar, que es el criterio del PDF
+              —«Desktop amplio: sin scroll horizontal»—. Por debajo se desplaza con los dos extremos
+              fijos, así que nunca se pierde de vista a quién ni cómo operarlo.
+            */
+            minWidth="816px"
+            stickyFirstColumn
+            stickyLastColumn
             loading={query.isLoading}
             loadingLabel={t('common.loading')}
             emptyLabel={t('admin.staff.empty')}
@@ -313,21 +391,35 @@ export function StaffPage(): React.JSX.Element {
               {
                 key: 'name',
                 header: t('admin.staff.column.person'),
+                // Sin ancho declarado: es la que absorbe lo que sobra. Darle uno propio fue un error
+                // medido — con los seis anchos declarados, la suma de los máximos superaba el
+                // contenedor y la tabla desbordaba 95px justo en la pantalla MÁS ancha, que es la
+                // única donde sobraba espacio. El suelo de esta columna lo pone el `minWidth` de la
+                // tabla, que es donde ese suelo pertenece.
                 render: (member) => (
-                  <>
-                    <div>{member.fullName ?? '\u2014'}</div>
-                    <div className="lx-text-meta">{member.email}</div>
-                  </>
+                  <span className="lx-cell-stack">
+                    <span title={member.fullName ?? undefined}>{member.fullName ?? '\u2014'}</span>
+                    <span className="lx-text-meta" title={member.email ?? undefined}>
+                      {member.email}
+                    </span>
+                  </span>
                 ),
               },
               {
                 key: 'role',
                 header: t('admin.staff.column.role'),
-                render: (member) => t(`role.${member.role}` as TranslationKey),
+                width: 'clamp(130px, 13vw, 200px)',
+                // La etiqueta humana, del mismo sitio que todo lo demás desde la Fase 1.
+                render: (member) => roleLabel(t, member.role),
               },
               {
                 key: 'status',
                 header: t('admin.staff.column.status'),
+                // El PDF pide 110-125 y acá se excede a propósito: su rango supone una etiqueta de
+                // texto, y ésta es una insignia con punto y relleno de pastilla. Medido, «Suspendido»
+                // pide 122px de caja interior, así que con 125 de columna se salía 8px, cortada a
+                // media palabra. El mínimo es 140 por eso, no por gusto.
+                width: 'clamp(140px, 11vw, 160px)',
                 render: (member) => (
                   <>
                     <Badge tone={STATUS_TONE[member.status]}>
@@ -340,17 +432,13 @@ export function StaffPage(): React.JSX.Element {
               {
                 key: 'zones',
                 header: t('admin.staff.column.zones'),
-                // "Todas" is the honest reading of an empty assignment and the one the server acts
-                // on — a blank cell would let an administrator believe somebody is restricted when
-                // they are not.
-                render: (member) =>
-                  member.zones.length === 0
-                    ? t('admin.staff.zones.all')
-                    : member.zones.map((zone) => zone.name).join(', '),
+                width: 'clamp(140px, 14vw, 240px)',
+                render: sectoresDe,
               },
               {
                 key: 'lastUsed',
                 header: t('admin.staff.column.lastUsed'),
+                width: 'clamp(118px, 11vw, 175px)',
                 // The POST's own use, not the person's last sign-in. Since v0.26 a person may hold
                 // two posts, and the person-level stamp cannot tell them apart: it would show the
                 // same date on both rows and mark an unused inspector post as busy. When there is no
@@ -358,18 +446,26 @@ export function StaffPage(): React.JSX.Element {
                 // context, clearly labelled — never dressed up as this post's.
                 render: (member) => (
                   <>
-                    <div>
-                      {member.lastUsedAt
-                        ? formatDateTime(member.lastUsedAt, locale)
-                        : t('admin.staff.lastUsed.none')}
-                    </div>
-                    {!member.lastUsedAt && member.lastLoginAt ? (
-                      <div className="lx-text-meta">
-                        {t('admin.staff.lastUsed.personHint', {
-                          date: formatDateTime(member.lastLoginAt, locale),
-                        })}
-                      </div>
-                    ) : null}
+                    <span className="lx-cell-stack">
+                      <span>
+                        {member.lastUsedAt
+                          ? formatDateTime(member.lastUsedAt, locale)
+                          : t('admin.staff.lastUsed.none')}
+                      </span>
+                      {/* La frase completa en `title`: es una explicación, no un dato que se lea de
+                          un golpe, y escrita entera convertía esta columna en la más ancha de la
+                          tabla. */}
+                      {!member.lastUsedAt && member.lastLoginAt ? (
+                        <span
+                          className="lx-text-meta"
+                          title={t('admin.staff.lastUsed.personHint', {
+                            date: formatDateTime(member.lastLoginAt, locale),
+                          })}
+                        >
+                          {formatDateTime(member.lastLoginAt, locale)}
+                        </span>
+                      ) : null}
+                    </span>
                   </>
                 ),
               },
@@ -377,7 +473,7 @@ export function StaffPage(): React.JSX.Element {
                 key: 'actions',
                 header: t('admin.staff.column.actions'),
                 // Un botón, no cinco: lo que esta columna mide es lo que hacía desbordar la tabla.
-                width: '64px',
+                width: '80px',
                 render: (member) => (
                   <Button
                     type="button"

@@ -996,6 +996,81 @@ body {
   background-color: var(--lx-surface-2);
 }
 
+/* La columna de acciones, fija al extremo derecho.
+
+   Espejo de la primera, y por el mismo motivo invertido: si la tabla desborda, lo que se va de la
+   pantalla es la última columna —donde viven Desactivar, Restablecer acceso y Revocar—, y un
+   administrador que ve la fila pero no la puede operar tiene que arrastrar hasta perder de vista a
+   quién está operando. Con las dos fijas, el nombre y el menú se quedan y lo que viaja es el
+   detalle.
+
+   `right: 0` y fondo OPACO por lo mismo que la primera: lo que pasa por debajo no debe verse a
+   través. El borde va a la IZQUIERDA, que es el lado por el que entra el contenido. */
+.lx-table-sticky-last th:last-child,
+.lx-table-sticky-last td:last-child {
+  position: sticky;
+  right: 0;
+  z-index: 1;
+  background-color: var(--lx-bg-elevated);
+  border-left: 1px solid var(--lx-border);
+}
+.lx-table-sticky-last th:last-child {
+  background-color: var(--lx-surface-2);
+}
+
+/* Dos líneas en una celda: el dato y su apoyo. Nombre y correo, fecha y contexto.
+
+   Las celdas son `nowrap` por omisión —correcto para una fecha o un código— y eso convierte un
+   correo largo en una columna de 320px que empuja a las demás fuera de la pantalla. Acá el ancho lo
+   manda la columna y el texto cede con puntos suspensivos, con el valor completo en `title`. */
+.lx-cell-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.lx-cell-stack > * {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+/* Los anchos declarados mandan. Ver `fixedLayout` en Table.tsx para el por qué. */
+.lx-table--fixed {
+  table-layout: fixed;
+}
+/* Con `fixed`, lo que no cabe se SALE de la celda a menos que se le diga que se recorte: el
+   `nowrap` de la tabla sigue vigente y sin esto el texto se dibujaría encima de la columna
+   siguiente. Con esto, la columna angosta muestra «Administrador munici…» y el valor completo vive
+   en `title`. */
+.lx-table--fixed td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Las CABECERAS, al contrario, quiebran en dos líneas. Recortar «Estado de cuenta» a «Estado de
+   cu…» deja una columna sin nombre, y el nombre de la columna es lo que hace legible todo lo que
+   cuelga debajo. Dos líneas en la cabecera cuestan 18px una vez; una cabecera recortada cuesta en
+   cada fila. */
+.lx-table--fixed th {
+  white-space: normal;
+}
+
+/* Los sectores de un puesto: el principal y, si hay más, su contador. En una fila, porque son una
+   sola idea —«trabaja en este sector, y en N más»— y no dos datos. */
+.lx-staff-zones {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--lx-space-2);
+  min-width: 0;
+  max-width: 100%;
+}
+.lx-staff-zones__first {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Prose inside a table. Cells are `nowrap` by default — right for dates, codes and amounts,
    which must never break — but a column of sentences on one unbreakable line is wider than any
    layout and pushes the columns after it off the right edge. This clamps to two lines and caps

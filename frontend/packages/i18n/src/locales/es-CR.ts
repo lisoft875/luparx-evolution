@@ -501,7 +501,7 @@ export const esCR = {
   'admin.staff.empty': 'Esta municipalidad todavía no tiene funcionarios.',
   'admin.staff.error': 'No se pudo completar la acción.',
   'admin.staff.suspended': 'Acceso suspendido.',
-  'admin.staff.reactivated': 'Acceso reactivado.',
+  'admin.staff.reactivated': 'Acceso restablecido. El puesto vuelve a estar activo.',
   'admin.staff.revoked': 'Acceso revocado.',
   'admin.staff.resetSent': 'Se le envió el enlace para poner una contraseña nueva.',
   'admin.staff.zonesAssigned': 'Sectores actualizados.',
@@ -515,6 +515,8 @@ export const esCR = {
   'admin.staff.column.actions': 'Acciones',
   'admin.staff.lastLogin.never': 'Nunca ingresó',
   'admin.staff.zones.all': 'Todos',
+  'admin.staff.zones.more': '+{{count}}',
+  'admin.staff.zones.allTitle': 'Sin restricción de sector: puede trabajar en todos.',
   'admin.staff.zones.title': 'Sectores asignados',
   'admin.staff.zones.help':
     'Un fiscalizador sólo puede consultar placas y levantar boletas en los sectores que tenga asignados.',
@@ -587,7 +589,7 @@ export const esCR = {
   'portal.admin': 'Portal municipal',
   'portal.inspector': 'App de fiscalización',
   'admin.staff.action.suspend': 'Desactivar',
-  'admin.staff.action.reactivate': 'Reactivar',
+  'admin.staff.action.reactivate': 'Restablecer acceso',
   'admin.staff.action.revoke': 'Revocar',
   'admin.staff.action.zones': 'Sectores',
   'admin.staff.action.resetAccess': 'Forzar cambio de contraseña',
@@ -874,7 +876,7 @@ export const esCR = {
     'Esta lista no se pudo actualizar, así que puede estar mostrando datos viejos. Recargue la pantalla.',
   'admin.staff.reset.title': '¿Forzar un cambio de contraseña?',
   'admin.staff.reset.body':
-    'A {{name}} se le envía un enlace para poner una contraseña nueva. No cambia su puesto, su rol ni sus sectores: para devolverle un acceso quitado, use «Reactivar».',
+    'A {{name}} se le envía un enlace para poner una contraseña nueva. No cambia su puesto, su rol ni sus sectores: para devolverle un acceso quitado, use «Restablecer acceso».',
   'admin.staff.reset.closesSessions':
     'Se le cierran todas las sesiones abiertas, en todos sus dispositivos. Si está trabajando, va a tener que volver a entrar.',
   'admin.staff.reset.confirm': 'Enviar el enlace',

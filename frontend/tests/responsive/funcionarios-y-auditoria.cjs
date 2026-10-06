@@ -318,7 +318,11 @@ async function abrir(page, etiqueta) {
       );
       comprobar(/sesion|sesión/i.test(texto), '  y avisa que cierra las sesiones abiertas', texto.slice(0, 160));
       comprobar(
-        /Reactivar/i.test(texto),
+        // «Restablecer acceso» desde el 06-10-2026: es como lo llama el encargo de Funcionarios, y
+        // no colisiona porque esta acción —la de la contraseña— ya se llamaba «Forzar cambio de
+        // contraseña». La prosa de este diálogo nombra la otra para que nadie las confunda, así que
+        // tiene que nombrarla con la etiqueta que de verdad está en el botón.
+        /Restablecer acceso/i.test(texto),
         '  y señala cuál es la acción para devolver un acceso quitado',
         texto.slice(0, 160),
       );

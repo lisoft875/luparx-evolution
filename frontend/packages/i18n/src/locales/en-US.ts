@@ -497,6 +497,8 @@ export const enUS: Record<TranslationKey, string> = {
   'admin.staff.column.actions': 'Actions',
   'admin.staff.lastLogin.never': 'Never signed in',
   'admin.staff.zones.all': 'All',
+  'admin.staff.zones.more': '+{{count}}',
+  'admin.staff.zones.allTitle': 'No sector restriction: may work in all of them.',
   'admin.staff.zones.title': 'Assigned sectors',
   'admin.staff.zones.help':
     'An inspector can only check plates and issue citations in the sectors assigned to them.',
@@ -569,7 +571,7 @@ export const enUS: Record<TranslationKey, string> = {
   'portal.admin': 'Municipal portal',
   'portal.inspector': 'Enforcement app',
   'admin.staff.action.suspend': 'Deactivate',
-  'admin.staff.action.reactivate': 'Reactivate',
+  'admin.staff.action.reactivate': 'Restore access',
   'admin.staff.action.revoke': 'Revoke',
   'admin.staff.action.zones': 'Sectors',
   'admin.staff.action.resetAccess': 'Force a password change',
@@ -855,7 +857,7 @@ export const enUS: Record<TranslationKey, string> = {
     'This list could not be refreshed, so it may be showing old data. Reload the screen.',
   'admin.staff.reset.title': 'Force a password change?',
   'admin.staff.reset.body':
-    '{{name}} gets a link to set a new password. It does not change their post, role or sectors: to give back access that was taken away, use "Reactivate".',
+    '{{name}} gets a link to set a new password. It does not change their post, role or sectors: to give back access that was taken away, use "Restore access".',
   'admin.staff.reset.closesSessions':
     'All their open sessions are closed, on every device. If they are working, they will have to sign in again.',
   'admin.staff.reset.confirm': 'Send the link',
