@@ -68,11 +68,17 @@ const PORTALES = {
     prefijo: '',
     cuenta: process.env.CUENTA_CITIZEN ?? 'ana.morales@luparx.test',
     /*
-      «cuando corresponda», que es lo que dice el PDF. Las pantallas raíz de pestaña del ciudadano
-      —Multas, Billetera, Vehículos, Más, Perfil, Ayuda— no llevan cabecera por diseño: su título es
-      contenido y se desplaza, y así se aprobó el mockup. Decisión confirmada el 05-10-2026. Lo que
-      el arnés exige en ellas es lo que sí les corresponde: barra inferior siempre, un solo
-      contenedor de scroll y la última fila visible.
+      «cuando corresponda», que es lo que dice el PDF de barras fijas, y lo que corresponde cambió
+      el 06-10-2026.
+
+      El 05-10 la decisión fue dejar las pantallas raíz de pestaña sin cabecera: su título era
+      contenido y se desplazaba, como el mockup aprobado. El 06-10 se reportó que Vehículos,
+      Billetera y Más no mostraban la cabecera del resto de la experiencia y se decidió que la
+      lleven. Multas, Perfil y Ayuda siguen sin ella, así que la regla sigue siendo «donde la hay,
+      que se quede» y no «todas».
+
+      Se deja escrito el cambio de criterio en vez de sólo cambiar el valor: dentro de un mes, un
+      arnés que exige una cabecera donde el mockup no la tiene parece un arnés desactualizado.
     */
     cabeceraEsperada: 'cuando-exista',
     pantallas: [
