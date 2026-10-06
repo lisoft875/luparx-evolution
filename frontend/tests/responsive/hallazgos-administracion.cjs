@@ -107,10 +107,18 @@ async function entrar(context) {
   return page;
 }
 
-/** ¿Seguimos dentro, o la pantalla volvió al login? */
+/**
+ * ¿Seguimos dentro, o la pantalla volvió al login?
+ *
+ * <p>Por la RUTA. Un campo de contraseña no es un login: `/admin/profile` tiene el formulario para
+ * cambiar la contraseña, y decidirlo por ese campo convierte esa pantalla en un falso «la sesión se
+ * cayó». Acá todavía no pasaba —este arnés sólo recorre staff, roles y auditoría— y se corrige
+ * igual: es la cuarta vez que el mismo atajo aparece en una red de pruebas de este proyecto, y las
+ * tres anteriores sí produjeron fallos inventados.</p>
+ */
 async function sigueLaSesion(page) {
   return page.evaluate(() => ({
-    enLogin: Boolean(document.querySelector('input[type="password"]')),
+    enLogin: location.pathname.endsWith('/login'),
     url: location.pathname,
   }));
 }
@@ -578,7 +586,8 @@ async function sigueLaSesion(page) {
       await p.waitForTimeout(2000);
       const m = await p.evaluate(() => ({
         desbordaLaPagina: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
-        enLogin: Boolean(document.querySelector('input[type="password"]')),
+        // Por la ruta, no por el campo de contraseña: ver `sigueLaSesion` arriba.
+        enLogin: location.pathname.endsWith('/login'),
         h1: (document.querySelector('h1')?.textContent ?? '').trim().slice(0, 30),
       }));
       comprobar(

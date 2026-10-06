@@ -186,6 +186,26 @@ async function entrar(page) {
   );
 
   // ───────────────────────────────────────────── 4 · la columna de estado y su insignia
+  /*
+    Primero se quita el filtro, y esto NO es higiene: es el arreglo de un fallo.
+
+    La primera corrida dijo «los estados se dibujan como insignia — encontré 0», y la pantalla las
+    dibuja. Lo que pasó es que tres líneas antes se había elegido «Jefe de fiscalización» para
+    comprobar que filtra con el código, así que la tabla estaba legítimamente VACÍA: la cabecera
+    sigue ahí con cero filas, de modo que `thead th` contestaba y `tbody .lx-badge` contaba cero.
+
+    El delator estaba en la propia salida: dos líneas más abajo, con la pantalla recargada, decía
+    «filas sin filtro: 6». Contar celdas de una tabla filtrada a nada es medir el filtro, no la
+    celda.
+  */
+  await page.goto(`${BASE}/admin/users`, { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(2200);
+  const filasParaInsignias = await page.locator('tbody tr').count();
+  comprobar(
+    filasParaInsignias > 0,
+    'hay filas que mirar antes de medir sus celdas',
+    'la tabla salió vacía: lo que siga no dice nada de cómo se dibuja un estado',
+  );
   const cabeceras = await page.locator('thead th').allTextContents();
   dato(`columnas: ${cabeceras.map((c) => c.trim()).join(' · ')}`);
   comprobar(
@@ -194,32 +214,61 @@ async function entrar(page) {
     `las cabeceras son: ${cabeceras.join(', ')}`,
   );
   comprobar(cabeceras.some((c) => /^rol$/i.test(c.trim())), 'y hay una columna de Rol');
-  const insignias = await page.locator('tbody .lx-badge').count();
-  comprobar(insignias > 0, 'los estados se dibujan como insignia, no como texto plano', `encontré ${insignias}`);
-  comprobar(
-    (await page.locator('tbody .lx-badge__dot').count()) > 0,
-    'y la insignia lleva su punto de color',
-  );
+  if (filasParaInsignias > 0) {
+    const insignias = await page.locator('tbody .lx-badge').count();
+    comprobar(
+      insignias > 0,
+      'los estados se dibujan como insignia, no como texto plano',
+      `encontré ${insignias} en ${filasParaInsignias} filas`,
+    );
+    comprobar(
+      (await page.locator('tbody .lx-badge__dot').count()) > 0,
+      'y la insignia lleva su punto de color',
+    );
+  }
 
   // ───────────────────────────────────────────── 5 · búsqueda, filtros y paginación siguen vivos
-  // Se limpia el filtro de rol volviendo a la pantalla sin parámetros.
-  await page.goto(`${BASE}/admin/users`, { waitUntil: 'domcontentloaded' });
-  await page.waitForTimeout(2000);
-  const filasAntes = await page.locator('tbody tr').count();
-  const busqueda = page.locator('input[type="search"], main input').first();
-  const peticionBusqueda = page
-    .waitForRequest((r) => r.url().includes('/api/v1/admin/users?') && r.url().includes('q='), { timeout: 10000 })
-    .catch(() => null);
+  const filasAntes = filasParaInsignias;
+  /*
+    El buscador DE LA PANTALLA, dentro de la banda de filtros.
+
+    Acá decía `page.locator('input[type="search"], main input').first()`, y falló: desde el 06-10 la
+    cabecera del admin tiene un buscador global, que es el ÚNICO `input[type="search"]` de toda la
+    aplicación. Un selector con coma devuelve la primera coincidencia en orden del DOM, y la cabecera
+    va antes que `main`, así que el arnés escribía en el buscador de la cabecera —que abre un panel de
+    destinos y no consulta nada— y luego se quejaba de que la búsqueda no consultaba al servidor.
+
+    Un localizador escrito con una alternativa «por si acaso» es un localizador que no sabe qué está
+    midiendo. Éste nombra el sitio: el campo de la banda de filtros.
+  */
+  const busqueda = page.locator('.lx-filter-row--search input').first();
+  comprobar(
+    (await busqueda.count()) > 0,
+    'se encuentra el campo de búsqueda DE LA PANTALLA, no el de la cabecera',
+  );
+  const vistas = [];
+  const anota = (peticion) => {
+    const url = peticion.url();
+    if (url.includes('/api/v1/admin/users')) vistas.push(url.replace(BASE, ''));
+  };
+  page.on('request', anota);
   await busqueda.fill('a');
-  const pedidaBusqueda = await peticionBusqueda;
-  await page.waitForTimeout(1500);
-  comprobar(pedidaBusqueda !== null, 'la búsqueda sigue consultando al servidor');
+  await page.waitForTimeout(2500);
+  page.off('request', anota);
+  const conQ = vistas.filter((u) => /[?&]q=a(&|$)/.test(u));
+  comprobar(
+    conQ.length > 0,
+    'la búsqueda sigue consultando al servidor',
+    // Las URLs vistas, en el fallo: sin esto, «no consultó» no distingue entre un campo que no
+    // reacciona, un campo equivocado y una petición con otra forma. Con esto se lee de un golpe.
+    vistas.length > 0 ? `peticiones vistas: ${vistas.join(' | ')}` : 'no salió NINGUNA petición a /admin/users',
+  );
   dato(`filas sin filtro: ${filasAntes} · con «a»: ${await page.locator('tbody tr').count()}`);
 
   // El `?q=` de la URL, que es lo que el buscador de la cabecera usa.
   await page.goto(`${BASE}/admin/users?q=ana`, { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(2000);
-  const valorInicial = await page.locator('main input').first().inputValue().catch(() => '');
+  const valorInicial = await page.locator('.lx-filter-row--search input').first().inputValue().catch(() => '');
   comprobar(valorInicial === 'ana', 'la pantalla arranca filtrada por el `?q=` de la URL', `el campo dice «${valorInicial}»`);
 
   const paginacion = await page.locator('.lx-pagination, [class*="pagination"]').count();

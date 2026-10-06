@@ -284,11 +284,20 @@ async function entrar(page, portal) {
           al entrar: sin esto, medir el login disfrazado de pantalla real es exactamente el informe
           de cuarenta hallazgos falsos que originó todas estas redes.
         */
-        const cayoAlLogin = await page
-          .locator('input[type="password"]')
-          .first()
-          .isVisible()
-          .catch(() => false);
+        /*
+          Por la RUTA, no por «hay un campo de contraseña» (06-10-2026).
+
+          Este arnés recorre `/profile` en los dos portales, y la pantalla de Perfil tiene un
+          formulario para CAMBIAR la contraseña: siempre hay un `input[type="password"]` en ella. Con
+          la comprobación vieja, llegar a Perfil se leía como «la sesión se cayó», disparaba un
+          reinicio de sesión que no hacía falta, y al seguir viéndose el campo ABORTABA la corrida
+          entera con un mensaje sobre cuarenta hallazgos falsos — justo lo que la red venía a evitar.
+
+          Es la tercera vez que aparece el mismo error: `paleta-regresion.cjs` lo tuvo el 05-10,
+          `barras-fijas.cjs` el 06-10, y éste lo tenía desde que se escribió. Un campo de contraseña
+          no es un login; la ruta sí lo es.
+        */
+        const cayoAlLogin = new URL(page.url()).pathname.endsWith('/login');
         if (cayoAlLogin) {
           /*
             El token de acceso dura 15 minutos y la aplicación lo renueva sola con el refresh token;
@@ -307,11 +316,7 @@ async function entrar(page, portal) {
             await page.goto(`${BASE}${PREFIJO[PORTAL]}${ruta}`, { waitUntil: 'domcontentloaded' });
             await page.waitForTimeout(1100);
           }
-          const sigueCaido = await page
-            .locator('input[type="password"]')
-            .first()
-            .isVisible()
-            .catch(() => false);
+          const sigueCaido = new URL(page.url()).pathname.endsWith('/login');
           if (sigueCaido) {
             console.error(
               `\n  ✗ ${ruta} devuelve el login incluso después de volver a entrar. Se aborta en vez\n` +
