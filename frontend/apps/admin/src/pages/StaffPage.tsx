@@ -12,7 +12,7 @@ import {
   type StaffInvitation,
   type StaffMember,
 } from '@luparx/api-client';
-import { Alert, Badge, Button, Input, Modal, Pagination, Select, Table } from '@luparx/ui';
+import { Alert, Badge, Button, IconMore, Input, Modal, Pagination, Select, Table } from '@luparx/ui';
 import { AddStaffDialog } from '../components/AddStaffDialog';
 import { AdminShell } from '../components/AdminShell';
 
@@ -41,7 +41,7 @@ const STATUS_TONE: Record<MembershipStatus, 'success' | 'warning' | 'danger' | '
  */
 export function StaffPage(): React.JSX.Element {
   const { t, locale } = useTranslation();
-  const { apiClient } = useAuth();
+  const { apiClient, me } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
@@ -59,6 +59,22 @@ export function StaffPage(): React.JSX.Element {
   // Revocar —menos destructivas para la persona que las recibe— sí preguntaban. Y lo que hace es
   // cerrarle la sesión a alguien y obligarlo a cambiar la contraseña: eso se confirma.
   const [resetting, setResetting] = useState<StaffMember | null>(null);
+  /*
+    La fila de acciones pasó a ser un menú (05-10-2026).
+
+    Eran hasta cinco botones por fila —Sectores, Cambiar rol, Desactivar/Reactivar, Revocar y
+    Forzar cambio de contraseña— al lado de seis columnas de datos. La columna medía unos 500px y la
+    tabla desbordaba a escritorio con zoom al 100%: el hallazgo reporta haber visto una acción
+    cortada a media palabra, y una acción que no se lee no se puede usar.
+
+    Es un panel y no un desplegable flotante a propósito. La tabla vive dentro de un envoltorio con
+    `overflow-x: auto`, así que un menú dibujado en el flujo quedaría RECORTADO por ese mismo
+    desbordamiento; dibujarlo fuera con un portal significa medir y reposicionar contra el teclado,
+    las barras fijas y el borde de la pantalla, que es lo que `Select` ya hace en ciento veinte
+    líneas que no conviene duplicar. Un `Modal` ya resuelve foco, Escape y fondo, y en un teléfono
+    una hoja de acciones a todo el ancho se acierta mejor que un menú de 200px.
+  */
+  const [acciones, setAcciones] = useState<StaffMember | null>(null);
   const [zoning, setZoning] = useState<StaffMember | null>(null);
   const [zoneSelection, setZoneSelection] = useState<string[]>([]);
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -196,6 +212,19 @@ export function StaffPage(): React.JSX.Element {
    */
   function enCurso(mutacion: { isPending: boolean; variables?: StaffMember }, member: StaffMember): boolean {
     return mutacion.isPending && mutacion.variables?.membershipId === member.membershipId;
+  }
+
+  /**
+   * ¿Es éste mi propio puesto?
+   *
+   * <p>Forzar el cambio de contraseña sobre la propia cuenta revoca todas las sesiones de quien la
+   * tiene, o sea la de quien pulsa. El servidor lo rechaza desde el 02-10-2026 con 403
+   * SELF_ACTION_DENIED, y eso es lo que impide el accidente; esto es lo otro que hay que hacer:
+   * no ofrecer una acción cuya única respuesta posible es un error.</p>
+   */
+  function soyYo(member: StaffMember): boolean {
+    const yo = me?.user?.id;
+    return Boolean(yo) && yo === member.userId;
   }
 
   /** Mientras una acción de esta fila está en vuelo, las demás de la misma fila no se pueden pulsar. */
@@ -347,77 +376,19 @@ export function StaffPage(): React.JSX.Element {
               {
                 key: 'actions',
                 header: t('admin.staff.column.actions'),
+                // Un botón, no cinco: lo que esta columna mide es lo que hacía desbordar la tabla.
+                width: '64px',
                 render: (member) => (
-                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                    <RequirePermission permission="ZONE_ASSIGN">
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        onClick={() => {
-                          setZoning(member);
-                          setZoneSelection(member.zones.map((zone) => zone.zoneId));
-                        }}
-                      >
-                        {t('admin.staff.action.zones')}
-                      </Button>
-                    </RequirePermission>
-                    <RequirePermission permission="ROLE_ASSIGN">
-                      {member.status !== 'REVOKED' ? (
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          onClick={() => {
-                            setChangingRole(member);
-                            setNextRole(member.role);
-                          }}
-                        >
-                          {t('admin.staff.action.changeRole')}
-                        </Button>
-                      ) : null}
-                      {member.status === 'SUSPENDED' ? (
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          loading={enCurso(reactivateMutation, member)}
-                          disabled={ocupada(member)}
-                          onClick={() => reactivateMutation.mutate(member)}
-                        >
-                          {t('admin.staff.action.reactivate')}
-                        </Button>
-                      ) : member.status === 'ACTIVE' ? (
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          disabled={ocupada(member)}
-                          onClick={() => setSuspending(member)}
-                        >
-                          {t('admin.staff.action.suspend')}
-                        </Button>
-                      ) : null}
-                      {member.status !== 'REVOKED' ? (
-                        <Button
-                          type="button"
-                          variant="danger"
-                          loading={enCurso(revokeMutation, member)}
-                          disabled={ocupada(member)}
-                          onClick={() => setRevoking(member)}
-                        >
-                          {t('admin.staff.action.revoke')}
-                        </Button>
-                      ) : null}
-                    </RequirePermission>
-                    <RequirePermission permission="USER_WRITE">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        loading={enCurso(resetMutation, member)}
-                        disabled={ocupada(member)}
-                        onClick={() => setResetting(member)}
-                      >
-                        {t('admin.staff.action.resetAccess')}
-                      </Button>
-                    </RequirePermission>
-                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    aria-label={t('admin.staff.actions.menu')}
+                    title={t('admin.staff.actions.menu')}
+                    disabled={ocupada(member)}
+                    onClick={() => setAcciones(member)}
+                  >
+                    <IconMore size={18} />
+                  </Button>
                 ),
               },
             ]}
@@ -436,6 +407,140 @@ export function StaffPage(): React.JSX.Element {
           />
         </>
       ) : null}
+
+      {/*
+        Las acciones del puesto, las que correspondan a su estado.
+
+        El criterio 4 del informe del 05-10-2026 —«no ofrecer una acción de
+        reactivación/restablecimiento que no corresponda al estado actual»— se cumple acá y no con
+        un botón deshabilitado: un control gris que no explica por qué está gris es una pregunta sin
+        responder. Lo que no aplica, no está; lo único que se dice en palabras es por qué no se
+        puede forzar la contraseña sobre uno mismo, que si no se dijera parecería un olvido.
+      */}
+      <Modal
+        open={acciones !== null}
+        onClose={() => setAcciones(null)}
+        title={t('admin.staff.actions.title')}
+        closeLabel={t('common.close')}
+      >
+        {acciones ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--lx-space-3)' }}>
+            <p className="lx-text-meta" style={{ margin: 0 }}>
+              {t('admin.staff.actions.subject', {
+                name: acciones.fullName ?? acciones.email ?? '\u2014',
+                role: t(`role.${acciones.role}` as TranslationKey),
+                status: t(`tenant.membership.status.${acciones.status}` as TranslationKey),
+              })}
+            </p>
+
+            <RequirePermission permission="ZONE_ASSIGN">
+              <Button
+                type="button"
+                variant="secondary"
+                fullWidth
+                onClick={() => {
+                  const member = acciones;
+                  setAcciones(null);
+                  setZoning(member);
+                  setZoneSelection(member.zones.map((zone) => zone.zoneId));
+                }}
+              >
+                {t('admin.staff.action.zones')}
+              </Button>
+            </RequirePermission>
+
+            <RequirePermission permission="ROLE_ASSIGN">
+              {acciones.status !== 'REVOKED' ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  fullWidth
+                  onClick={() => {
+                    const member = acciones;
+                    setAcciones(null);
+                    setChangingRole(member);
+                    setNextRole(member.role);
+                  }}
+                >
+                  {t('admin.staff.action.changeRole')}
+                </Button>
+              ) : null}
+              {acciones.status === 'SUSPENDED' ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  fullWidth
+                  onClick={() => {
+                    const member = acciones;
+                    setAcciones(null);
+                    reactivateMutation.mutate(member);
+                  }}
+                >
+                  {t('admin.staff.action.reactivate')}
+                </Button>
+              ) : acciones.status === 'ACTIVE' ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  fullWidth
+                  onClick={() => {
+                    const member = acciones;
+                    setAcciones(null);
+                    setSuspending(member);
+                  }}
+                >
+                  {t('admin.staff.action.suspend')}
+                </Button>
+              ) : null}
+              {acciones.status !== 'REVOKED' ? (
+                <Button
+                  type="button"
+                  variant="danger"
+                  fullWidth
+                  onClick={() => {
+                    const member = acciones;
+                    setAcciones(null);
+                    setRevoking(member);
+                  }}
+                >
+                  {t('admin.staff.action.revoke')}
+                </Button>
+              ) : null}
+            </RequirePermission>
+
+            <RequirePermission permission="USER_WRITE">
+              {/* Sobre un puesto revocado no tiene sentido —el acceso ya no existe, y la cuenta se
+                  administra desde la ficha de la persona— y sobre la propia cuenta sólo puede dar
+                  403: el servidor la rechaza para no cerrarle la sesión a quien la pulsa. */}
+              {acciones.status !== 'REVOKED' && !soyYo(acciones) ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  fullWidth
+                  onClick={() => {
+                    const member = acciones;
+                    setAcciones(null);
+                    setResetting(member);
+                  }}
+                >
+                  {t('admin.staff.action.resetAccess')}
+                </Button>
+              ) : null}
+              {soyYo(acciones) ? (
+                <p className="lx-text-meta" style={{ margin: 0 }}>
+                  {t('admin.staff.action.resetAccess.self')}
+                </p>
+              ) : null}
+            </RequirePermission>
+
+            {acciones.status === 'REVOKED' ? (
+              <p className="lx-text-meta" style={{ margin: 0 }}>
+                {t('admin.staff.actions.none')}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+      </Modal>
 
       {/* Suspending says out loud what it does and what it does not: the account survives, and so
           does everything the officer did. That sentence belongs where the button is. */}

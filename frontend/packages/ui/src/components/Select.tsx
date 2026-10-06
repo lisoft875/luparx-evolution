@@ -14,6 +14,20 @@ export interface SelectOption {
   /** Leading mark for this row: a pin, a car, a municipality's emblem. */
   icon?: React.ReactNode;
   disabled?: boolean;
+  /**
+   * Título del tramo al que pertenece esta opción (05-10-2026).
+   *
+   * <p>Para una lista larga que una persona no recorre sino que ojea: ochenta y cuatro acciones
+   * auditables en una columna plana no son un filtro, son un listado. Con esto, las opciones que
+   * comparten `group` quedan bajo un rótulo —«Personas y accesos», «Boletas»— y buscar deja de ser
+   * leer todo.</p>
+   *
+   * <p>El rótulo se dibuja antes de la primera opción de cada tramo, así que el ORDEN de
+   * `options` es el que manda: las opciones de un mismo grupo tienen que venir juntas. No se
+   * reordenan acá a propósito — quien arma la lista ya decidió el orden, y un componente que lo
+   * cambia por su cuenta es un componente en el que no se confía.</p>
+   */
+  group?: string;
 }
 
 export interface SelectProps {
@@ -362,8 +376,26 @@ export function Select({
               </li>
             ) : (
               options.map((option, index) => (
+                /*
+                  El rótulo del tramo va como un `<li>` presentacional dentro de la misma lista, y
+                  no como un `<ul role="group">` anidado, que sería lo canónico.
+
+                  La razón es honesta y tiene un costo que conviene dejar escrito: toda la
+                  navegación con teclado de este componente —`activeIndex`, la escritura rápida,
+                  `aria-activedescendant`— indexa sobre el array PLANO de opciones. Anidar cambiaría
+                  la estructura del DOM y el cálculo de desplazamiento de un componente que
+                  funciona, para ganar que un lector de pantalla anuncie además el nombre del
+                  tramo. Las etiquetas de las opciones ya se explican solas («Ver personas»,
+                  «Emitir boletas»), así que lo que se pierde es poco; si algún día hace falta, el
+                  cambio es acá y está localizado.
+                */
+                <React.Fragment key={option.value}>
+                {option.group && option.group !== options[index - 1]?.group ? (
+                  <li className="lx-listbox__group" role="presentation">
+                    {option.group}
+                  </li>
+                ) : null}
                 <li
-                  key={option.value}
                   id={optionId(index)}
                   role="option"
                   aria-selected={option.value === value}
@@ -413,6 +445,7 @@ export function Select({
                     {option.detail ? <span className="lx-listbox__detail">{option.detail}</span> : null}
                   </span>
                 </li>
+                </React.Fragment>
               ))
             )}
           </ul>,

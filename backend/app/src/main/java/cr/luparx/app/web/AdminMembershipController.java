@@ -199,7 +199,8 @@ public class AdminMembershipController {
      * may be revoked by a different administrator. That is a rule about who is left in charge, it
      * belongs to the municipality and not to this method, and it is not invented here.</p>
      */
-    private static void requireNotOwnPost(TenantMembership membership) {
+    // Visibilidad de paquete por la misma razón que requireNotSelf: ver SelfActionGuardsTest.
+    static void requireNotOwnPost(TenantMembership membership) {
         UserId caller = TenantContextHolder.require().userId();
         if (caller != null && membership.getUserId().equals(caller.value())) {
             throw ForbiddenException.of(ErrorCode.MEMBERSHIP_SELF_MODIFICATION_DENIED,

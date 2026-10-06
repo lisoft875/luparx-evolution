@@ -18,6 +18,7 @@ import {
   SummaryList,
   SummaryRow,
   Table,
+  isValidIpAddress,
 } from '@luparx/ui';
 
 /**
@@ -26,21 +27,32 @@ import {
  * Escritos a mano y no derivados de la página cargada: un desplegable cuyas opciones salen de lo
  * que ya se ve sólo permite filtrar por lo que ya se ve, que es el filtro que nadie necesita.
  */
-const MODULOS = [
-  'parking-rate',
-  'parking-zone',
-  'parking-policy',
-  'parking-space',
-  'parking-space-format',
-  'citation',
-  'exemption',
-  'user',
-  'membership',
-  'settlement',
-] as const;
+/**
+ * Los módulos que se pueden filtrar, por área funcional (05-10-2026).
+ *
+ * <p>Eran diez seguidos, sin orden aparente: `parking-rate` primero y `user` octavo. El informe
+ * pide ordenarlos por áreas y con nombres consistentes con el menú principal, así que ahora el
+ * orden es el del menú y cada uno dice a qué área pertenece.</p>
+ *
+ * <p>La lista NO se recorta: la bitácora registra más tipos de recurso que éstos, y los muestra
+ * igual con su nombre técnico cuando no hay traducción. Lo que esto decide es sólo qué se puede
+ * elegir del desplegable.</p>
+ */
+const MODULOS: readonly { tipo: string; grupo: string }[] = [
+  { tipo: 'user', grupo: 'people' },
+  { tipo: 'membership', grupo: 'people' },
+  { tipo: 'parking-zone', grupo: 'parking' },
+  { tipo: 'parking-space', grupo: 'parking' },
+  { tipo: 'parking-space-format', grupo: 'parking' },
+  { tipo: 'parking-rate', grupo: 'parking' },
+  { tipo: 'parking-policy', grupo: 'parking' },
+  { tipo: 'citation', grupo: 'citations' },
+  { tipo: 'exemption', grupo: 'exemptions' },
+  { tipo: 'settlement', grupo: 'finance' },
+];
 import { AdminShell } from '../components/AdminShell';
 import { startOfDay, startOfNextDay } from '../lib/dateRange';
-import { AUDIT_ACTIONS, auditActionLabel } from '../lib/auditActions';
+import { AUDIT_ACTION_GROUPS, auditActionLabel } from '../lib/auditActions';
 import { useMediaQuery } from '@luparx/features';
 
 /** Los tamaños de página que ofrece el selector. El servidor recorta cualquier cosa por encima de 100. */
@@ -205,13 +217,17 @@ export function AuditPage(): React.JSX.Element {
           onChange={(value) => refilter(() => setAction(value))}
           options={[
             { value: '', label: t('admin.audit.filter.action.all') },
-            // El código interno va de detalle, no de etiqueta: quien lo conoce lo sigue viendo y
-            // quien no, ya no lo necesita para encontrar nada.
-            ...AUDIT_ACTIONS.map((codigo) => ({
-              value: codigo,
-              label: auditActionLabel(t, codigo),
-              detail: codigo,
-            })),
+            // Ochenta y tres acciones en una columna plana no son un filtro, son un listado. Van
+            // por categoría, en el orden del trabajo, y el código interno sigue de detalle: quien
+            // lo conoce lo ve y quien no, ya no lo necesita para encontrar nada.
+            ...AUDIT_ACTION_GROUPS.flatMap((grupo) =>
+              grupo.acciones.map((codigo) => ({
+                value: codigo,
+                label: auditActionLabel(t, codigo),
+                detail: codigo,
+                group: t(`admin.audit.group.${grupo.clave}` as TranslationKey),
+              })),
+            ),
           ]}
         />
         <Select
@@ -220,7 +236,11 @@ export function AuditPage(): React.JSX.Element {
           onChange={(value) => refilter(() => setModulo(value))}
           options={[
             { value: '', label: t('admin.audit.filter.module.all') },
-            ...MODULOS.map((tipo) => ({ value: tipo, label: t(`admin.audit.module.${tipo}` as TranslationKey) })),
+            ...MODULOS.map(({ tipo, grupo }) => ({
+              value: tipo,
+              label: t(`admin.audit.module.${tipo}` as TranslationKey),
+              group: t(`admin.audit.group.${grupo}` as TranslationKey),
+            })),
           ]}
         />
         <Input
@@ -596,6 +616,7 @@ function OriginProbe({ onMatch }: { onMatch: (probe: AuditOriginProbe) => void }
   const { apiClient } = useAuth();
   const [address, setAddress] = useState('');
   const [result, setResult] = useState<AuditOriginProbe | null>(null);
+  const [invalid, setInvalid] = useState(false);
 
   const probe = useMutation({
     mutationFn: (ip: string) => apiClient.adminAudit.checkOrigin({ ip }),
@@ -612,17 +633,38 @@ function OriginProbe({ onMatch }: { onMatch: (probe: AuditOriginProbe) => void }
         style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}
         onSubmit={(event) => {
           event.preventDefault();
-          if (address.trim()) {
-            probe.mutate(address.trim());
+          /*
+            La validación ANTES de la petición (05-10-2026).
+
+            Se escribió `999.999.999.999` y esto salió a la red. El servidor lo hasheó, contestó
+            cero coincidencias —la única respuesta posible para algo que nadie pudo usar nunca— y la
+            pantalla lo pintó en VERDE: «ninguna entrada viene de esa dirección». Eso se lee como
+            «queda descartada», cuando lo que pasó es que la pregunta no tenía sentido. Y el cotejo
+            quedó en la bitácora como una consulta legítima.
+
+            El servidor también valida ahora, y es el que manda. Esto es lo que hace que el
+            criterio de aceptación se cumpla entero: sin petición, sin gastar crédito del limitador
+            y sin que el campo pueda producir un evento de auditoría.
+          */
+          const escrita = address.trim();
+          if (!isValidIpAddress(escrita)) {
+            setResult(null);
+            setInvalid(true);
+            return;
           }
+          setInvalid(false);
+          probe.mutate(escrita);
         }}
       >
         <Input
           placeholder={t('admin.audit.origin.probe.placeholder')}
           aria-label={t('admin.audit.origin.probe.placeholder')}
+          invalid={invalid}
+          aria-invalid={invalid || undefined}
           value={address}
           onChange={(e) => {
             setResult(null);
+            setInvalid(false);
             setAddress(e.target.value);
           }}
         />
@@ -630,6 +672,11 @@ function OriginProbe({ onMatch }: { onMatch: (probe: AuditOriginProbe) => void }
           {t('admin.audit.origin.probe.submit')}
         </Button>
       </form>
+      {invalid ? (
+        <Alert tone="danger" data-testid="audit-probe-invalid">
+          {t('admin.audit.origin.probe.invalid')}
+        </Alert>
+      ) : null}
       {probe.isError ? (
         <Alert tone="danger">{t('admin.audit.origin.probe.failed')}</Alert>
       ) : null}

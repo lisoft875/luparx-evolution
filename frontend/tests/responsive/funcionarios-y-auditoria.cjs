@@ -121,6 +121,26 @@ async function abrir(page, etiqueta) {
     if (msg.type() === 'error') errores.push(msg.text().slice(0, 200));
   });
 
+  /**
+   * Abre el menú de acciones de una fila y devuelve el panel.
+   *
+   * <p>Desde el 05-10-2026 las acciones no son botones en la fila: la columna desbordaba la tabla y
+   * recortaba la última acción, así que ahora hay un botón de tres puntos que abre un panel con las
+   * que correspondan a ese estado. Este arnés buscaba los botones en la fila, y por eso había que
+   * tocarlo: no cambió lo que comprueba, cambió por dónde se llega.</p>
+   */
+  async function abrirAcciones(fila) {
+    await fila.locator('td:last-child button').first().click();
+    await page.waitForTimeout(900);
+    const panel = page.getByRole('dialog');
+    return (await panel.isVisible().catch(() => false)) ? panel : null;
+  }
+
+  async function cerrarAcciones() {
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(500);
+  }
+
   // ===============================================================================================
   // §2.1 — Revocar
   // ===============================================================================================
@@ -137,11 +157,17 @@ async function abrir(page, etiqueta) {
   comprobar(hayPropia > 0, `la fila de la cuenta con la que se probó (${CUENTA}) está en la lista`);
 
   // --- a) en OTRA fila: se abre la confirmación y se cancela. No se revoca a nadie.
-  const ajena = filas.filter({ hasNotText: CUENTA }).filter({ hasText: 'Revocar' }).first();
+  const ajena = filas.filter({ hasNotText: CUENTA }).filter({ hasNotText: 'Revocado' }).first();
   if ((await ajena.count()) > 0) {
     const antes = (await ajena.textContent()) ?? '';
-    await ajena.getByRole('button', { name: 'Revocar' }).click();
-    await page.waitForTimeout(500);
+    const menu = await abrirAcciones(ajena);
+    comprobar(menu !== null, 'el botón de la fila abre el panel de acciones');
+    if (menu === null) {
+      comprobar(false, 'ARNÉS: sin panel de acciones no se puede seguir con Revocar');
+      await cerrarAcciones();
+    }
+    await menu.getByRole('button', { name: 'Revocar' }).first().click();
+    await page.waitForTimeout(700);
     const dialogo = page.getByRole('dialog');
     const abierto = await dialogo.isVisible().catch(() => false);
     comprobar(abierto, 'pulsar Revocar abre una confirmación en vez de revocar de un solo clic');
@@ -168,11 +194,14 @@ async function abrir(page, etiqueta) {
 
   // --- b) en la PROPIA fila: se confirma. El servidor debe rechazarlo.
   if (hayPropia > 0) {
-    const botonPropio = propia.getByRole('button', { name: 'Revocar' });
+    const menuPropio = await abrirAcciones(propia);
+    const botonPropio = menuPropio
+      ? menuPropio.getByRole('button', { name: 'Revocar' })
+      : page.locator('nada');
     if ((await botonPropio.count()) > 0) {
       const estadoAntes = (await propia.textContent()) ?? '';
-      await botonPropio.click();
-      await page.waitForTimeout(500);
+      await botonPropio.first().click();
+      await page.waitForTimeout(700);
       const dialogo = page.getByRole('dialog');
       const [respuesta] = await Promise.all([
         page
@@ -213,69 +242,100 @@ async function abrir(page, etiqueta) {
   // ===============================================================================================
   // «Restablecer acceso» — el P1 del 02-10-2026
   // ===============================================================================================
-  console.log('── forzar un cambio de contraseña pregunta, y no se lo puede uno hacer a sí mismo ──');
+  console.log('── forzar un cambio de contraseña: no se ofrece sobre uno mismo, y sobre otro avisa ──');
   await page.goto(`${BASE}/admin/staff`, { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(2400);
 
+  /*
+    Este bloque cambió de forma el 05-10-2026, y conviene decir por qué para que nadie lo «arregle»
+    devolviéndolo a lo de antes.
+
+    Antes se pulsaba «Forzar cambio de contraseña» en la PROPIA fila, se confirmaba, y se comprobaba
+    que el servidor contestara 403 y que la sesión siguiera en pie. Era la única prueba de la guarda
+    que arregló el P1 del 02-10-2026.
+
+    El criterio 4 del informe del 05-10-2026 dice que no se ofrezca una acción que no corresponde al
+    estado, y una acción cuya única respuesta posible es un 403 no corresponde nunca. Así que el
+    botón dejó de ofrecerse sobre la propia cuenta — y con él se fue el camino por el que este arnés
+    llegaba al 403.
+
+    La guarda del servidor NO se dejó sin probar: se movió a donde pertenecía desde el principio,
+    `SelfActionGuardsTest` en el backend, que la prueba directamente y no a través de un botón. Lo
+    que se comprueba acá es lo que a esta altura se puede comprobar: que la pantalla no lo ofrece,
+    que dice por qué, y que sobre otra persona la acción sigue existiendo y sigue avisando de lo
+    que hace.
+  */
   const propiaFila = page.locator('tbody tr').filter({ hasText: CUENTA }).first();
-  const botonReset = propiaFila.getByRole('button', { name: /Forzar cambio de contraseña/i });
-  if ((await botonReset.count()) > 0) {
-    await botonReset.click();
-    await page.waitForTimeout(600);
-    const dialogo = page.getByRole('dialog');
-    const abierto = await dialogo.isVisible().catch(() => false);
-    comprobar(abierto, 'pulsar «Forzar cambio de contraseña» pregunta antes de ejecutar');
-    if (abierto) {
-      const texto = (await dialogo.textContent()) ?? '';
-      // Lo que de verdad hace, dicho antes de hacerlo: ni el nombre del botón ni la intuición lo
-      // dicen, y es lo que provocó el incidente.
+  if ((await propiaFila.count()) > 0) {
+    const panel = await abrirAcciones(propiaFila);
+    comprobar(panel !== null, 'la propia fila abre su panel de acciones');
+    if (panel) {
+      const texto = (await panel.textContent()) ?? '';
+      comprobar(
+        (await panel.getByRole('button', { name: /Forzar cambio de contraseña/i }).count()) === 0,
+        'sobre la propia cuenta NO se ofrece forzar el cambio de contraseña',
+        'el botón sigue ahí, y sólo puede dar 403',
+      );
+      comprobar(
+        /propia cuenta/i.test(texto) && /sesi/i.test(texto),
+        'y la pantalla dice por qué, en vez de que parezca un olvido',
+        texto.slice(0, 200),
+      );
+      // Revocar y Cambiar rol son acciones del PUESTO y siguen ofreciéndose: lo que se esconde es
+      // una sola acción, no todas. Sin esto, un panel vacío pasaría esta prueba.
+      comprobar(
+        (await panel.getByRole('button', { name: /Revocar/i }).count()) > 0,
+        'y el resto de las acciones del puesto siguen ahí',
+      );
+    }
+    await cerrarAcciones();
+  } else {
+    comprobar(false, `ARNÉS: la fila de ${CUENTA} no está en la lista`);
+  }
+
+  // Sobre OTRA persona: la acción existe y la confirmación dice lo que de verdad hace. No se
+  // ejecuta — forzarle la contraseña a una cuenta sembrada la dejaría fuera de los demás arneses.
+  const otraFila = page
+    .locator('tbody tr')
+    .filter({ hasNotText: CUENTA })
+    .filter({ hasNotText: 'Revocado' })
+    .first();
+  if ((await otraFila.count()) > 0) {
+    const panel = await abrirAcciones(otraFila);
+    const boton = panel
+      ? panel.getByRole('button', { name: /Forzar cambio de contraseña/i })
+      : page.locator('nada');
+    comprobar((await boton.count()) > 0, 'sobre otra persona la acción SÍ se ofrece');
+    if ((await boton.count()) > 0) {
+      await boton.first().click();
+      await page.waitForTimeout(800);
+      const dialogo = page.getByRole('dialog');
+      const texto = (await dialogo.textContent().catch(() => '')) ?? '';
       comprobar(
         /contraseña/i.test(texto),
-        '  y dice que fuerza un cambio de contraseña, no una reactivación',
+        '  y la confirmación dice que fuerza un cambio de contraseña, no una reactivación',
         texto.slice(0, 160),
       );
-      comprobar(
-        /sesion|sesión/i.test(texto),
-        '  y avisa que cierra las sesiones abiertas',
-        texto.slice(0, 160),
-      );
+      comprobar(/sesion|sesión/i.test(texto), '  y avisa que cierra las sesiones abiertas', texto.slice(0, 160));
       comprobar(
         /Reactivar/i.test(texto),
         '  y señala cuál es la acción para devolver un acceso quitado',
         texto.slice(0, 160),
       );
-
-      // El punto crítico del informe: hacérselo a uno mismo no puede expulsar al operador.
-      const [respuesta] = await Promise.all([
-        page
-          .waitForResponse((r) => /\/password-reset/.test(r.url()) && r.request().method() === 'POST', {
-            timeout: 15000,
-          })
-          .catch(() => null),
-        dialogo.getByRole('button', { name: /Enviar el enlace/i }).click(),
-      ]);
-      await page.waitForTimeout(2000);
-
-      comprobar(
-        respuesta !== null && respuesta.status() === 403,
-        'el servidor rechaza forzárselo a uno mismo (403)',
-        `status=${respuesta ? respuesta.status() : 'sin respuesta'}`,
-      );
-      const aviso = (await page.locator('.lx-alert, [role="alert"]').allTextContents()).join(' | ');
-      comprobar(
-        /propia cuenta/i.test(aviso),
-        'y la pantalla lo explica en vez de dejarlo en silencio',
-        aviso.slice(0, 200) || '(ninguna alerta)',
-      );
-      // La condición de aceptación obligatoria del §4.
+      const cancelar = dialogo.getByRole('button', { name: /Cancelar/i });
+      if ((await cancelar.count()) > 0) await cancelar.first().click();
+      else await page.keyboard.press('Escape');
+      await page.waitForTimeout(700);
       comprobar(
         !/login|select-tenant/.test(page.url()) && /\/admin\/staff/.test(page.url()),
-        'LA SESIÓN DEL OPERADOR SIGUE EN PIE y seguimos en Funcionarios',
+        'y cancelar deja la sesión y la pantalla donde estaban',
         `url=${page.url().replace(BASE, '')}`,
       );
+    } else {
+      await cerrarAcciones();
     }
   } else {
-    comprobar(false, 'ARNÉS: la fila propia no ofrece «Forzar cambio de contraseña»');
+    comprobar(false, 'ARNÉS: no hay ninguna fila ajena no revocada con la que probar');
   }
 
   // ===============================================================================================
@@ -286,8 +346,13 @@ async function abrir(page, etiqueta) {
   await page.waitForTimeout(2200);
   const conCambioRol = page.locator('tbody tr').filter({ hasText: 'Fiscalizador' }).first();
   if ((await conCambioRol.count()) > 0) {
-    await conCambioRol.getByRole('button', { name: /Cambiar rol/i }).click();
-    await page.waitForTimeout(600);
+    // Por el menú de la fila, como todas las acciones desde el 05-10-2026.
+    const panelRol = await abrirAcciones(conCambioRol);
+    if (panelRol === null) {
+      comprobar(false, 'ARNÉS: la fila no abrió su panel de acciones');
+    }
+    await page.getByRole('dialog').getByRole('button', { name: /Cambiar rol/i }).first().click();
+    await page.waitForTimeout(800);
     const dialogo = page.getByRole('dialog');
     const texto = (await dialogo.textContent()) ?? '';
     comprobar(

@@ -118,58 +118,58 @@ function comprobar(ok, mensaje, detalle) {
   // ---------------------------------------------------------------------------------------------
   // 1. La matriz de roles
   // ---------------------------------------------------------------------------------------------
-  console.log('── /roles · la matriz dice lo mismo que la tabla del servidor ──');
+  console.log('── /roles · lo desplegado dice lo mismo que la tabla del servidor ──');
   await page.goto(`${BASE}/admin/roles`, { waitUntil: 'domcontentloaded' });
-  await page.waitForTimeout(2200);
+  await page.waitForTimeout(2400);
 
-  const matriz = await page.evaluate(() => {
-    const tabla = document.querySelector('.lx-table');
-    if (!tabla) return null;
-    // Se lee `data-permission` de cada celda, que la pantalla emite justamente para esto.
-    //
-    // La primera versión hacía dos cosas y las dos estaban mal: contaba columnas por su posición
-    // —frágil, porque las cabeceras están traducidas y su orden puede cambiar— y pedía
-    // /admin/roles con un `fetch` dentro de la página para saber qué permiso era cada una. Ese
-    // fetch se llevó un 401, porque la sesión de LuParX vive en un token en memoria y no en una
-    // cookie: una petición hecha por fuera del cliente no lleva credenciales. Resultado: cinco
-    // «ese permiso no existe en la respuesta del servidor» contra una matriz que estaba perfecta,
-    // más un 401 que ensució las comprobaciones de consola y de API. Noveno falso positivo de la
-    // sesión, y esta vez el arnés no midió otra pantalla: se rompió a sí mismo.
-    const filas = [...tabla.querySelectorAll('tbody tr')].map((tr) => {
-      const concedidos = {};
-      for (const celda of tr.querySelectorAll('[data-permission]')) {
-        concedidos[celda.getAttribute('data-permission')] = celda.getAttribute('data-granted') === 'true';
-      }
-      return { rol: (tr.querySelector('code')?.textContent || '').trim(), concedidos };
-    });
-    return { filas };
-  });
+  /*
+    La matriz de dieciséis columnas dejó de existir el 05-10-2026: ahora es una fila por rol que se
+    despliega con los permisos agrupados por área. Así que este bloque CAMBIÓ de forma, no de
+    propósito: sigue comprobando que lo que la pantalla muestra coincide con lo que el servidor
+    concede, sólo que para verlo hay que abrir el rol.
 
-  if (matriz === null) {
-    comprobar(false, 'la tabla de la matriz no se dibujó', `consola: ${consola.slice(0, 2).join(' | ') || 'limpia'}`);
-  } else {
-    comprobar(matriz.filas.length > 0, `la matriz tiene ${matriz.filas.length} roles`);
-    const plataforma = matriz.filas.filter((f) => f.rol.startsWith('PLATFORM_'));
-    comprobar(plataforma.length === 0, 'no se listan roles de plataforma',
-      plataforma.length ? `aparecieron: ${plataforma.map((f) => f.rol).join(', ')}` : undefined);
+    Se sigue leyendo `data-permission` / `data-granted`, que la pantalla emite justamente para esto.
+    Y se sigue distinguiendo «la pantalla lo muestra negado» de «no hay fila para ese permiso»: un
+    permiso ausente no es un permiso negado, y confundirlos fue el error de la primera versión.
+  */
+  const listados = await page.evaluate(() =>
+    [...document.querySelectorAll('[data-role]')].map((n) => n.getAttribute('data-role')),
+  );
+  comprobar(listados.length > 0, `se listan ${listados.length} roles`);
+  const plataforma = listados.filter((rol) => (rol ?? '').startsWith('PLATFORM_'));
+  comprobar(plataforma.length === 0, 'no se listan roles de plataforma',
+    plataforma.length ? `aparecieron: ${plataforma.join(', ')}` : undefined);
 
-    for (const criterio of CRITERIOS) {
-      const fila = matriz.filas.find((f) => f.rol === criterio.rol);
-      if (!fila) {
-        comprobar(false, `${criterio.rol}: no aparece en la matriz`);
-        continue;
-      }
-      // Que la celda EXISTA es parte de la comprobación: un permiso ausente de la matriz no es lo
-      // mismo que uno negado, y confundirlos fue el error de la primera versión.
-      for (const permiso of criterio.debe) {
-        comprobar(fila.concedidos[permiso] === true, `${criterio.rol} → ${permiso}: concedido`,
-          permiso in fila.concedidos ? 'la matriz lo muestra NEGADO' : 'no hay columna para ese permiso');
-      }
-      for (const permiso of criterio.noDebe) {
-        comprobar(fila.concedidos[permiso] === false, `${criterio.rol} → ${permiso}: NO concedido`,
-          permiso in fila.concedidos ? 'la matriz lo muestra CONCEDIDO' : 'no hay columna para ese permiso');
-      }
+  for (const criterio of CRITERIOS) {
+    const fila = page.locator(`[data-role="${criterio.rol}"]`).first();
+    if ((await fila.count()) === 0) {
+      comprobar(false, `${criterio.rol}: no aparece en la lista de roles`);
+      continue;
     }
+    await fila.locator('button').first().click();
+    await page.waitForTimeout(700);
+    const concedidos = await fila.evaluate((nodo) => {
+      const mapa = {};
+      for (const item of nodo.querySelectorAll('[data-permission]')) {
+        mapa[item.getAttribute('data-permission')] = item.getAttribute('data-granted') === 'true';
+      }
+      return mapa;
+    });
+    if (Object.keys(concedidos).length === 0) {
+      comprobar(false, `${criterio.rol}: al abrirlo no apareció ningún permiso`);
+      continue;
+    }
+    for (const permiso of criterio.debe) {
+      comprobar(concedidos[permiso] === true, `${criterio.rol} → ${permiso}: concedido`,
+        permiso in concedidos ? 'la pantalla lo muestra NEGADO' : 'no hay fila para ese permiso');
+    }
+    for (const permiso of criterio.noDebe) {
+      comprobar(concedidos[permiso] === false, `${criterio.rol} → ${permiso}: NO concedido`,
+        permiso in concedidos ? 'la pantalla lo muestra CONCEDIDO' : 'no hay fila para ese permiso');
+    }
+    // Cerrarlo: la pantalla abre uno a la vez, y dejarlo abierto cambia lo que mide el siguiente.
+    await fila.locator('button').first().click();
+    await page.waitForTimeout(400);
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -259,7 +259,7 @@ function comprobar(ok, mensaje, detalle) {
   // ---------------------------------------------------------------------------------------------
   // 4. La matriz en cinco anchos: es el candidato natural a desbordar
   // ---------------------------------------------------------------------------------------------
-  console.log('\n── /roles · responsive, que es donde una tabla de 18 columnas se rompe ──');
+  console.log('\n── /roles · responsive: ya no hay matriz, así que no debe haber scroll horizontal ──');
   for (const tam of TAMANOS) {
     const ctx = await browser.newContext({
       storageState: estado,
@@ -272,21 +272,23 @@ function comprobar(ok, mensaje, detalle) {
     await p.waitForTimeout(2000);
     const medida = await p.evaluate(() => {
       const doc = document.documentElement;
-      const envoltorio = document.querySelector('.lx-table-wrapper');
       return {
-        // El desborde que importa es el de la PÁGINA. Que la tabla sea más ancha que la pantalla es
-        // correcto y esperado: para eso su envoltorio desplaza en horizontal.
         desbordaLaPagina: doc.scrollWidth > doc.clientWidth + 1,
-        envoltorioDesplaza: envoltorio ? getComputedStyle(envoltorio).overflowX === 'auto' : false,
-        tablaMasAncha: envoltorio ? envoltorio.scrollWidth > envoltorio.clientWidth : false,
-        primeraFija: Boolean(document.querySelector('.lx-table-sticky-first')),
+        // Antes se EXIGÍA un envoltorio con desplazamiento horizontal, porque dieciséis columnas no
+        // caben en ninguna pantalla y eso era lo correcto para una matriz. Desde el 05-10-2026 no
+        // hay matriz, así que la expectativa se invierte: no debe quedar NINGÚN desplazamiento
+        // horizontal, en ninguna parte y a ningún ancho.
+        contenedoresQueDesplazan: [...document.querySelectorAll('main *')].filter(
+          (n) => n.scrollWidth > n.clientWidth + 2 && /(auto|scroll)/.test(getComputedStyle(n).overflowX),
+        ).length,
+        roles: document.querySelectorAll('[data-role]').length,
       };
     });
-    const ok = !medida.desbordaLaPagina && medida.envoltorioDesplaza && medida.primeraFija;
+    const ok = !medida.desbordaLaPagina && medida.contenedoresQueDesplazan === 0 && medida.roles > 0;
     comprobar(
       ok,
-      `${tam.nombre.padEnd(18)} ${tam.width}x${tam.height} · la página no desborda, la tabla se desplaza sola`,
-      `desbordaLaPagina=${medida.desbordaLaPagina} envoltorioDesplaza=${medida.envoltorioDesplaza} primeraFija=${medida.primeraFija}`,
+      `${tam.nombre.padEnd(18)} ${tam.width}x${tam.height} · nada desborda en horizontal`,
+      `desbordaLaPagina=${medida.desbordaLaPagina} contenedoresQueDesplazan=${medida.contenedoresQueDesplazan} roles=${medida.roles}`,
     );
     await ctx.close();
   }

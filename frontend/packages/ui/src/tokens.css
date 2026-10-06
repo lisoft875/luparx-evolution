@@ -706,6 +706,26 @@ body {
   font-size: var(--lx-text-meta-size);
 }
 
+/* El rótulo de un tramo de la lista (05-10-2026). Pegado arriba mientras se desplaza su tramo: en
+   una lista de ochenta y cuatro acciones, saber en qué categoría se está mirando es la mitad de lo
+   que hace útil agruparlas. */
+.lx-listbox__group {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: var(--lx-space-2) var(--lx-space-3);
+  background: var(--lx-surface-raised, var(--lx-surface));
+  color: var(--lx-text-subtle);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--lx-border);
+}
+.lx-listbox__group:not(:first-child) {
+  margin-top: var(--lx-space-2);
+}
+
 .lx-checkbox {
   display: flex;
   align-items: center;
@@ -3888,6 +3908,122 @@ a.lx-list-row {
 .lx-quick-tile__title {
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* --- Roles y permisos: una fila por rol, desplegable (05-10-2026) -----------------------------
+   Reemplaza a la matriz de dieciséis columnas con la primera fija. Lo que se gana no es espacio: es
+   que «¿qué puede hacer este rol?» se contesta leyendo hacia abajo. Cero desplazamiento horizontal
+   a cualquier ancho, que es lo que la matriz no podía dar. */
+.lx-role-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lx-space-2);
+}
+.lx-role-row {
+  border: 1px solid var(--lx-border);
+  border-radius: var(--lx-radius-md);
+  background: var(--lx-surface-2);
+  overflow: hidden;
+}
+/* La cabecera ES el botón: esto se abre y se cierra, y un objetivo táctil de todo el ancho es más
+   fácil de acertar que una flecha de dieciséis píxeles en la esquina. */
+.lx-role-row__head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  gap: var(--lx-space-3);
+  width: 100%;
+  min-height: var(--lx-touch-target-min);
+  padding: var(--lx-space-3);
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.lx-role-row__head:hover { background: var(--lx-surface-hover); }
+.lx-role-row__head:focus-visible {
+  outline: 2px solid var(--lx-focus-ring);
+  outline-offset: -2px;
+}
+.lx-role-row__name {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.lx-role-row__name code {
+  font-size: 0.75rem;
+}
+.lx-role-row__summary {
+  color: var(--lx-text-muted);
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.lx-role-row__caret {
+  display: inline-flex;
+  color: var(--lx-text-subtle);
+  transition: transform 120ms ease;
+}
+.lx-role-row__caret--open { transform: rotate(180deg); }
+
+/* En un teléfono las cuatro piezas no caben en un renglón: el portal y el resumen bajan y la flecha
+   se queda a la derecha del nombre, que es donde el pulgar la busca. */
+@media (max-width: 560px) {
+  .lx-role-row__head {
+    grid-template-columns: minmax(0, 1fr) auto;
+    row-gap: var(--lx-space-2);
+  }
+  .lx-role-row__portal { grid-column: 1; }
+  .lx-role-row__summary { grid-column: 1 / -1; }
+}
+
+.lx-role-panel {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--lx-space-4);
+  padding: 0 var(--lx-space-3) var(--lx-space-3);
+  border-top: 1px solid var(--lx-border);
+}
+.lx-role-group__title {
+  margin: var(--lx-space-3) 0 var(--lx-space-2);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--lx-text-subtle);
+}
+.lx-role-group__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+/* Concedido y negado se distinguen por la marca, por el color Y por la palabra: una lista de
+   permisos que sólo se lee por un punto verde no se puede leer en voz alta ni imprimir en gris. */
+.lx-perm {
+  display: grid;
+  grid-template-columns: 1rem minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: var(--lx-space-2);
+  font-size: 0.875rem;
+  color: var(--lx-text-muted);
+}
+.lx-perm--granted { color: var(--lx-text); }
+.lx-perm__mark {
+  text-align: center;
+  color: var(--lx-text-subtle);
+}
+.lx-perm--granted .lx-perm__mark { color: var(--lx-success); }
+.lx-perm__state {
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--lx-text-subtle);
   white-space: nowrap;
 }
 

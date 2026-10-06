@@ -436,7 +436,12 @@ public class AdminUserController {
      * <p>Se aplica también a bloquear, que es la misma forma del mismo error y peor: deja la cuenta
      * sin acceso hasta que otra persona la desbloquee.</p>
      */
-    private static void requireNotSelf(UUID targetUserId) {
+    // Visibilidad de paquete, no privada, para que SelfActionGuardsTest pueda probarla: es la
+    // guarda que arregló un P0 —forzarse el cambio de contraseña a uno mismo cerraba la sesión de
+    // quien lo pulsaba— y hasta el 05-10-2026 no tenía ninguna prueba. La única cosa que la
+    // verificaba era un arnés de navegador, por el camino de un botón que ahora, correctamente, ya
+    // no se ofrece.
+    static void requireNotSelf(UUID targetUserId) {
         UserId caller = TenantContextHolder.require().userId();
         if (caller != null && caller.value().equals(targetUserId)) {
             throw ForbiddenException.of(ErrorCode.SELF_ACTION_DENIED, "error.user.self.action");

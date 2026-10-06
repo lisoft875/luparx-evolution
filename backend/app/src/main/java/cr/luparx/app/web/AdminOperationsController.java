@@ -7,6 +7,7 @@ import cr.luparx.core.audit.AuditAction;
 import cr.luparx.core.error.ErrorCode;
 import cr.luparx.core.error.ValidationException;
 import cr.luparx.core.id.TenantId;
+import cr.luparx.core.net.IpAddresses;
 import cr.luparx.core.page.PageRequest;
 import cr.luparx.core.page.PageResponse;
 import cr.luparx.core.tenant.TenantContextHolder;
@@ -215,14 +216,31 @@ public class AdminOperationsController {
             @RequestParam(required = false) Instant from,
             @RequestParam(required = false) Instant to) {
         TenantId tenantId = TenantContextHolder.requireTenantId();
+
+        /*
+          Que sea una dirección, antes de tocar nada (05-10-2026).
+
+          Hasta hoy sólo se comprobaba que el campo no estuviera vacío. Se escribió
+          `999.999.999.999` y la plataforma lo hasheó, contó cero coincidencias —que es la única
+          respuesta posible para algo que nadie pudo haber usado nunca—, la pantalla lo mostró en
+          verde como «ninguna entrada viene de esa dirección», y el cotejo quedó anotado en la
+          bitácora como una consulta legítima.
+
+          Lo peor de los tres no es el hash: es el verde. Se lee como «esta dirección queda
+          descartada», cuando lo que pasó fue que la pregunta no tenía sentido. Y el evento de
+          auditoría, que existe para contestar «quién ha estado cotejando direcciones», queda con
+          una entrada que no cotejó ninguna.
+
+          La validación va ANTES del limitador de intentos a propósito: un error de tecleo no debe
+          gastar el crédito de cotejos de nadie.
+        */
+        String address = body.ip().trim();
+        if (!IpAddresses.isValid(address)) {
+            throw new ValidationException("ip", ErrorCode.VALIDATION_FAILED, "error.audit.originProbe.address");
+        }
         probeRateLimiter.checkAllowed(TenantContextHolder.current()
                         .map(cr.luparx.core.tenant.TenantContext::userId).orElse(null),
                 AuditAction.AUDIT_ORIGIN_PROBED, "error.audit.originProbe.rateLimited");
-
-        String address = body.ip().trim();
-        if (address.isEmpty()) {
-            throw new ValidationException("ip", ErrorCode.VALIDATION_FAILED, "error.audit.originProbe.address");
-        }
         String hash = cr.luparx.identity.service.Hashing.ipHash(address, securityProperties.ipHashPepper());
         Instant start = from == null ? Instant.now().minus(DEFAULT_REPORT_WINDOW_DAYS, ChronoUnit.DAYS) : from;
         Instant end = to == null ? Instant.now() : to;
