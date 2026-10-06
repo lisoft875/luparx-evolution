@@ -70,6 +70,13 @@ export function EnforcementCitationsPage(): React.JSX.Element {
     status: (params.get('status') as AdminCitationsQuery['status']) ?? undefined,
     zoneId: params.get('zoneId') ?? undefined,
     inspectorUserId: params.get('inspectorUserId') ?? undefined,
+    // Las fechas también (06-10-2026). Los campos «Desde» y «Hasta» existían desde el principio;
+    // lo que no existía era leerlos de la dirección, así que «Boletas hoy» del Inicio abría la
+    // lista entera y la municipalidad tenía que volver a escribir el día que acababa de pulsar.
+    // Van como instantes, que es lo que el servidor recibe: así la lista filtra por el mismo
+    // instante que contó la cifra, y no por una medianoche distinta.
+    from: params.get('from') ?? undefined,
+    to: params.get('to') ?? undefined,
   };
   const [draft, setDraft] = useState<AdminCitationsQuery>(fromUrl);
   const [applied, setApplied] = useState<AdminCitationsQuery>(fromUrl);

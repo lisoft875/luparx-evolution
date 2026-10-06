@@ -425,6 +425,7 @@ export const esCR = {
   'admin.home.kpi.rightNow': 'En este momento',
   'admin.home.kpi.citations': 'Boletas hoy',
   'admin.home.kpi.occupancy': 'Ocupación actual',
+  'admin.home.kpi.open': 'Abrir {{label}}',
   'admin.home.kpi.noBays': 'Sin dato',
   'admin.home.kpi.noBaysHint': 'Ninguna zona tiene bahías numeradas, así que no hay contra qué medirla.',
   'admin.home.revenue.title': 'Recaudación de los últimos 7 días',

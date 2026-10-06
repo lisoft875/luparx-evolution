@@ -408,6 +408,7 @@ export const enUS: Record<TranslationKey, string> = {
   'admin.home.kpi.rightNow': 'Right now',
   'admin.home.kpi.citations': 'Citations today',
   'admin.home.kpi.occupancy': 'Current occupancy',
+  'admin.home.kpi.open': 'Open {{label}}',
   'admin.home.kpi.noBays': 'No figure',
   'admin.home.kpi.noBaysHint': 'No zone has numbered bays, so there is nothing to measure it against.',
   'admin.home.revenue.title': 'Revenue over the last 7 days',

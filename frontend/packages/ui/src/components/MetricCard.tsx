@@ -66,11 +66,27 @@ export function MetricCard({
       ) : hint ? (
         <span className="lx-metric__hint">{hint}</span>
       ) : null}
+      {/* El chevron SÓLO cuando hay a dónde ir. Una tarjeta que se ve clicable y no lo es enseña a
+          desconfiar de las que sí lo son, y la especificación del 06-10-2026 lo dice en letra: «no
+          usar una tarjeta que parezca activa si realmente no tiene destino». */}
+      {onOpen ? (
+        <span className="lx-metric__chevron" aria-hidden="true">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" focusable="false">
+            <path
+              d="M6 3.5L10.5 8L6 12.5"
+              stroke="currentColor"
+              strokeWidth="1.7"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </span>
+      ) : null}
     </>
   );
 
   return (
-    <Card className="lx-metric">
+    <Card className={`lx-metric${onOpen ? ' lx-metric--link' : ''}`}>
       {onOpen ? (
         <button type="button" className="lx-metric__hit" onClick={onOpen} aria-label={openLabel ?? label}>
           {cuerpo}

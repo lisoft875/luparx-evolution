@@ -349,6 +349,203 @@ async function medir(page, dedo) {
     await ctx.close();
   }
 
+  // ===============================================================================================
+  // LOS CUATRO KPI SON ACCESOS (06-10-2026)
+  // ===============================================================================================
+  /*
+    El defecto que corrige la especificación: de las cuatro tarjetas sólo «Recaudación» navegaba, y
+    ninguna comunicaba que fuera pulsable. Lo que se mide acá no es que haya un `onClick` —eso lo
+    ve cualquiera leyendo el código— sino las cuatro cosas que sólo se saben ejecutando:
+
+      1. que la tarjeta ENTERA sea el control, y que sea un `<button>` de verdad (teclado incluido);
+      2. que al pulsarla se llegue a la ruta que dice, sin recargar la aplicación;
+      3. que no se pierda ni la sesión ni la municipalidad al llegar;
+      4. que «Atrás» del navegador devuelva al Inicio.
+
+    El quinto criterio —que las cuatro se vean iguales— se mide por el chevron y por el alto: cuatro
+    tarjetas «del mismo tipo» que midan distinto no son del mismo tipo.
+  */
+  console.log('\n── Los cuatro KPI como accesos ──');
+  function okInicio(ok, mensaje, detalle) {
+    if (ok) {
+      console.log(`  ok  ${mensaje}`);
+    } else {
+      fallos++;
+      console.log(`  ✗   ${mensaje}${detalle ? `\n        ${detalle}` : ''}`);
+    }
+  }
+
+  const DESTINOS = [
+    { etiqueta: 'Recaudación hoy', ruta: /\/admin\/billing/ },
+    { etiqueta: 'Estadías activas', ruta: /\/admin\/dashboard/ },
+    { etiqueta: 'Boletas hoy', ruta: /\/admin\/enforcement\/citations\?from=/ },
+    { etiqueta: 'Ocupación actual', ruta: /\/admin\/dashboard/ },
+  ];
+
+  {
+    const ctx = await browser.newContext({
+      storageState: estado,
+      viewport: { width: 1440, height: 900 },
+      locale: 'es-CR',
+      ignoreHTTPSErrors: true,
+    });
+    const page = await ctx.newPage();
+    await page.goto(`${BASE}/admin/`, { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(2600);
+
+    // --- 1. Las cuatro son del mismo tipo --------------------------------------------------------
+    const tarjetas = await page.$$eval('.lx-home-kpis .lx-metric', (nodos) =>
+      nodos.map((n) => {
+        const control = n.querySelector('.lx-metric__hit');
+        const caja = n.getBoundingClientRect();
+        return {
+          etiqueta: (n.querySelector('.lx-metric__label')?.textContent ?? '').trim(),
+          esBoton: control?.tagName === 'BUTTON',
+          // Toda el área útil: el control tiene que llenar la tarjeta, no ser un enlace adentro.
+          cubre: control
+            ? Math.round(control.getBoundingClientRect().width) >= Math.round(caja.width) - 2
+            : false,
+          chevron: n.querySelectorAll('.lx-metric__chevron').length,
+          cursor: control ? getComputedStyle(control).cursor : '',
+          alto: Math.round(caja.height),
+          // Elementos pulsables anidados: el documento prohíbe que un clic dispare dos cosas.
+          anidados: control ? control.querySelectorAll('button, a').length : 0,
+        };
+      }),
+    );
+    okInicio(tarjetas.length === 4, 'el Inicio sigue mostrando las cuatro tarjetas', `${tarjetas.length}`);
+    for (const tarjeta of tarjetas) {
+      okInicio(
+        tarjeta.esBoton && tarjeta.cubre && tarjeta.cursor === 'pointer' && tarjeta.chevron === 1,
+        `  «${tarjeta.etiqueta}» es un botón que cubre la tarjeta, con cursor y chevron`,
+        JSON.stringify(tarjeta),
+      );
+      okInicio(tarjeta.anidados === 0, `  «${tarjeta.etiqueta}» no anida otro control adentro`, String(tarjeta.anidados));
+    }
+    const altos = tarjetas.map((t) => t.alto);
+    okInicio(
+      altos.length > 0 && Math.max(...altos) - Math.min(...altos) <= 2,
+      '  y las cuatro miden lo mismo de alto',
+      altos.join(' / '),
+    );
+
+    // --- 2. El teclado llega y se ve ------------------------------------------------------------
+    let saltos = 0;
+    let enfocado = null;
+    while (saltos < 30) {
+      await page.keyboard.press('Tab');
+      saltos++;
+      enfocado = await page.evaluate(() => {
+        const activo = document.activeElement;
+        if (!activo || !activo.closest('.lx-home-kpis .lx-metric')) return null;
+        const estilo = getComputedStyle(activo);
+        return {
+          etiqueta: (activo.getAttribute('aria-label') ?? '').trim(),
+          outline: estilo.outlineStyle === 'none' ? 0 : parseFloat(estilo.outlineWidth) || 0,
+        };
+      });
+      if (enfocado) break;
+    }
+    okInicio(
+      Boolean(enfocado) && enfocado.outline > 0,
+      '  el tabulador llega a los KPI y el foco se ve',
+      enfocado ? JSON.stringify(enfocado) : `no se alcanzó ningún KPI en ${saltos} tabulaciones`,
+    );
+
+    // --- 3. Cada una abre lo suyo, conserva el contexto y vuelve --------------------------------
+    for (const destino of DESTINOS) {
+      await page.goto(`${BASE}/admin/`, { waitUntil: 'domcontentloaded' });
+      await page.waitForTimeout(2400);
+      const municipioAntes = await page.evaluate(
+        () => (document.querySelector('.lx-shell-header__identity')?.textContent ?? '').trim(),
+      );
+      const tarjeta = page.locator('.lx-home-kpis .lx-metric', { hasText: destino.etiqueta }).first();
+      if ((await tarjeta.count()) === 0) {
+        okInicio(false, `«${destino.etiqueta}» está en el Inicio`, 'no se encontró la tarjeta');
+        continue;
+      }
+      // Se pulsa el VALOR, no el botón: si el área útil no llegara hasta ahí, esto no navegaría.
+      const valor = tarjeta.locator('.lx-metric__value').first();
+      const antes = await page.evaluate(() => window.performance.now());
+      await valor.click();
+      await page.waitForTimeout(2400);
+      const url = page.url();
+      okInicio(destino.ruta.test(url), `«${destino.etiqueta}» abre su módulo`, url.replace(BASE, ''));
+      // Navegación de la SPA y no recarga: `performance.now()` se reinicia con cada documento nuevo.
+      const despues = await page.evaluate(() => window.performance.now());
+      okInicio(despues > antes, '  sin recargar la aplicación entera', `${Math.round(antes)} → ${Math.round(despues)}`);
+      const estadoDestino = await page.evaluate(() => ({
+        municipio: (document.querySelector('.lx-shell-header__identity')?.textContent ?? '').trim(),
+        titulo: (document.querySelector('h1')?.textContent ?? '').trim(),
+        enLogin: window.location.pathname.endsWith('/login'),
+      }));
+      okInicio(
+        !estadoDestino.enLogin && estadoDestino.titulo.length > 0,
+        `  y llega a una pantalla con título («${estadoDestino.titulo}»)`,
+        JSON.stringify(estadoDestino),
+      );
+      okInicio(
+        municipioAntes !== '' && estadoDestino.municipio === municipioAntes,
+        '  conservando la municipalidad',
+        `antes "${municipioAntes}" · después "${estadoDestino.municipio}"`,
+      );
+      await page.goBack({ waitUntil: 'domcontentloaded' });
+      await page.waitForTimeout(2000);
+      okInicio(/\/admin\/?(\?|$)/.test(page.url()), '  y «Atrás» devuelve al Inicio', page.url().replace(BASE, ''));
+    }
+
+    // --- 4. Ocupación por zona: los nombres dejan de cortarse -----------------------------------
+    /*
+      Lo que se mide no es «se ve bien» sino dos hechos: que ningún nombre quede recortado por el
+      clamp de dos renglones, y que la columna del nombre sea más ancha que la de la barra —que era
+      la causa: una barra de 4px de alto se quedaba con más ancho que el nombre de la zona.
+    */
+    await page.goto(`${BASE}/admin/`, { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(2600);
+    const zonas = await page.evaluate(() => {
+      const filas = [...document.querySelectorAll('.lx-zone-row')];
+      return filas.map((fila) => {
+        const nombre = fila.querySelector('.lx-zone-row__name');
+        const barra = fila.querySelector('.lx-zone-row__track');
+        const valor = fila.querySelector('.lx-zone-row__value');
+        return {
+          texto: (nombre?.textContent ?? '').trim(),
+          titulo: nombre?.getAttribute('title') ?? '',
+          // Recortado de verdad: el contenido no cabe en los dos renglones que se le dan.
+          recortado: nombre ? nombre.scrollHeight > nombre.clientHeight + 1 : false,
+          anchoNombre: nombre ? Math.round(nombre.getBoundingClientRect().width) : 0,
+          anchoBarra: barra ? Math.round(barra.getBoundingClientRect().width) : 0,
+          valorRecortado: valor ? valor.scrollWidth > valor.clientWidth + 1 : false,
+        };
+      });
+    });
+    if (zonas.length === 0) {
+      console.log('  ·       sin zonas en este entorno: no hay ocupación que medir');
+    } else {
+      const recortadas = zonas.filter((z) => z.recortado);
+      okInicio(
+        recortadas.length === 0,
+        `ninguna de las ${zonas.length} zonas queda con el nombre cortado`,
+        recortadas.map((z) => `${z.titulo || z.texto}`).join(' · '),
+      );
+      const estrechas = zonas.filter((z) => z.anchoNombre <= z.anchoBarra);
+      okInicio(
+        estrechas.length === 0,
+        '  y el nombre tiene más ancho que la barra, que era la causa',
+        estrechas.map((z) => `${z.texto}: nombre ${z.anchoNombre}px vs barra ${z.anchoBarra}px`).join(' · '),
+      );
+      const valores = zonas.filter((z) => z.valorRecortado);
+      okInicio(
+        valores.length === 0,
+        '  y ni el porcentaje ni «Sin bahías» se recortan',
+        valores.map((z) => z.texto).join(' · '),
+      );
+      const conTitulo = zonas.every((z) => z.titulo.length > 0);
+      okInicio(conTitulo, '  y cada nombre conserva su texto completo como respaldo');
+    }
+    await ctx.close();
+  }
+
   await browser.close();
   console.log(`\n===== ${TAMANOS.length} tamaños · ${fallos} con problemas =====`);
   process.exit(fallos > 0 ? 1 : 0);

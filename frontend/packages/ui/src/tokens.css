@@ -4317,11 +4317,14 @@ a.lx-list-row {
 
 .lx-metric__hit {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  /* Tres columnas desde el 06-10-2026: la tercera es el chevron. En la variante sin destino no se
+     dibuja nada en ella y `auto` la deja en cero ancho, así que las tarjetas con y sin enlace
+     siguen midiendo lo mismo. */
+  grid-template-columns: auto minmax(0, 1fr) auto;
   grid-template-areas:
-    'icono etiqueta'
-    'icono valor'
-    'icono delta';
+    'icono etiqueta flecha'
+    'icono valor flecha'
+    'icono delta flecha';
   gap: 0 var(--lx-space-3);
   align-content: center;
   width: 100%;
@@ -4343,6 +4346,44 @@ a.lx-list-row {
 
 .lx-metric:hover .lx-metric__hit:not(.lx-metric__hit--static) {
   background: var(--lx-surface-hover);
+}
+
+/* --- Que se entienda que son accesos (06-10-2026) ---------------------------------------------
+   El documento pide una sola cosa en cuatro palabras: «que se note sin parecer animación
+   decorativa». Así que el hover mueve dos cosas y ninguna de ellas desplaza nada: el borde se
+   aclara hacia el azul del sistema y el chevron se tiñe y avanza dos píxeles. Sin sombra, sin
+   `translateY` —una tarjeta que sube empuja a la de al lado a los ojos de quien la mira— y sin
+   gradientes, que la §2 prohíbe en letra. */
+.lx-metric--link {
+  transition: border-color 170ms ease;
+}
+.lx-metric--link:hover {
+  border-color: color-mix(in srgb, var(--lx-primary) 55%, var(--lx-border));
+}
+.lx-metric__chevron {
+  grid-area: flecha;
+  align-self: center;
+  display: inline-flex;
+  margin-left: var(--lx-space-2);
+  color: var(--lx-text-subtle);
+  transition: color 170ms ease, transform 170ms ease;
+}
+.lx-metric--link:hover .lx-metric__chevron,
+.lx-metric__hit:focus-visible .lx-metric__chevron {
+  color: var(--lx-primary-2);
+  transform: translateX(2px);
+}
+/* Quien pidió menos movimiento conserva el color, que es la información, y pierde el
+   desplazamiento, que es el adorno. */
+@media (prefers-reduced-motion: reduce) {
+  .lx-metric--link,
+  .lx-metric__chevron {
+    transition: none;
+  }
+  .lx-metric--link:hover .lx-metric__chevron,
+  .lx-metric__hit:focus-visible .lx-metric__chevron {
+    transform: none;
+  }
 }
 
 /* El bloque del icono: un cuadrado tenue del color de la métrica. El acento vive acá y no en el
@@ -4728,7 +4769,12 @@ a.lx-list-row {
    alta; la barra es la que repite el dato en forma de largo. */
 .lx-zone-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(48px, 1.1fr) auto;
+  /* El nombre manda (06-10-2026). Era `1fr` de nombre contra `1.1fr` de barra: en una columna de
+     ~390px eso le daba 170px a una barra de 4px de alto y 154px al nombre de la zona, y por eso en
+     staging se leía «Escazú centro pru…». La barra no necesita ancho para decir lo que dice —es
+     una proporción, no una escala— así que el reparto se invierte y el espacio muerto se acaba
+     antes que el nombre, que es literalmente lo que pide el documento. */
+  grid-template-columns: minmax(0, 2.4fr) minmax(56px, 1fr) auto;
   align-items: center;
   gap: 0 var(--lx-space-3);
   padding: 3px 0;
@@ -4762,18 +4808,28 @@ a.lx-list-row {
   .lx-zone-row__track { grid-column: 1 / -1; }
 }
 
+/* Hasta dos renglones antes de recortar. Un nombre municipal de dos palabras cabe entero en uno y
+   los largos de verdad —«San Rafael - Multinivel»— caben en dos; sólo lo excepcional llega a la
+   elipsis, y ése conserva su `title`. Se recorta por renglones y no por caracteres porque un
+   `text-overflow` corta siempre, aunque sobre la mitad del renglón de abajo. */
 .lx-zone-row__name {
   color: var(--lx-text);
   font-size: 0.8125rem;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
+/* El porcentaje y «Sin bahías» no se recortan nunca: la columna es `auto` y esto se lo asegura. */
 .lx-zone-row__value {
   color: var(--lx-text-muted);
   font-size: 0.8125rem;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .lx-zone-row__track {

@@ -140,6 +140,35 @@ export function HomePage(): React.JSX.Element {
 
   const dinero = (minor: number, currency: string): string => formatCurrencyMinor(minor, currency, locale);
 
+  /**
+   * Adónde lleva cada KPI, y por qué a ese sitio y no a otro (especificación del 06-10-2026).
+   *
+   * <p>Hasta hoy sólo «Recaudación» llevaba a alguna parte. Las otras tres eran cifras que no se
+   * podían comprobar, que es la misma regla que el Panel cumple desde la v0.36: un número del que
+   * no se puede llegar a las filas que lo forman es decoración.</p>
+   *
+   * <p>Los destinos se auditaron contra las rutas que EXISTEN, no contra las que el documento
+   * nombra:</p>
+   *
+   * <ul>
+   *   <li><b>Recaudación</b> → Conciliación. Ya era así; no se tocó.</li>
+   *   <li><b>Boletas de hoy</b> → la lista de boletas, acotada desde la medianoche de hoy. La
+   *       pantalla ya tenía los campos «Desde» y «Hasta»; lo único que le faltaba era leerlos de la
+   *       dirección, así que se completó eso en vez de inventarle un filtro. Va `from` y no `to`:
+   *       no hay boletas en el futuro, y con `to` la fecha mostrada en el campo saltaría al día
+   *       siguiente cada tarde, porque el campo rotula en UTC y acá son las seis menos.</li>
+   *   <li><b>Estadías activas</b> y <b>Ocupación</b> → el Panel. Es la ÚNICA pantalla que tiene
+   *       estadías vigentes y ocupación por zona; «Zonas» lista zonas, bahías y estado, y no
+   *       muestra ocupación. Mandar la ocupación a Zonas se vería bien en el documento y dejaría a
+   *       la municipalidad en una pantalla que no contesta la pregunta.</li>
+   * </ul>
+   *
+   * <p>No se pasa período al Panel: su selector arranca con su propia ventana y la ocupación es de
+   * ahora en las dos pantallas, así que no hay nada que sincronizar.</p>
+   */
+  const irALasBoletasDeHoy = (): void =>
+    navigate(`/enforcement/citations?from=${encodeURIComponent(desdeHoy.toISOString())}`);
+
   const recaudacion = useMemo(() => {
     const days = serie.data?.days ?? [];
     if (days.length === 0) return null;
@@ -317,7 +346,7 @@ export function HomePage(): React.JSX.Element {
                         : 'flat'
                 }
                 onOpen={() => navigate('/billing')}
-                openLabel={t('admin.home.kpi.revenue')}
+                openLabel={t('admin.home.kpi.open', { label: t('admin.home.kpi.revenue') })}
               />
               <MetricCard
                 icon={<IconCar size={20} />}
@@ -331,6 +360,8 @@ export function HomePage(): React.JSX.Element {
                   )
                 }
                 hint={t('admin.home.kpi.rightNow')}
+                onOpen={() => navigate('/dashboard')}
+                openLabel={t('admin.home.kpi.open', { label: t('admin.home.kpi.activeSessions') })}
               />
               <MetricCard
                 icon={<IconFine size={20} />}
@@ -338,6 +369,8 @@ export function HomePage(): React.JSX.Element {
                 label={t('admin.home.kpi.citations')}
                 value={panel.isLoading ? <Skeleton height="1.5rem" width="40%" /> : String(boletasHoy)}
                 hint={t('admin.home.kpi.inPeriod')}
+                onOpen={irALasBoletasDeHoy}
+                openLabel={t('admin.home.kpi.open', { label: t('admin.home.kpi.citations') })}
               />
               <MetricCard
                 icon={<IconGauge size={20} />}
@@ -353,6 +386,8 @@ export function HomePage(): React.JSX.Element {
                   )
                 }
                 hint={ocupacion != null ? t('admin.home.kpi.rightNow') : t('admin.home.kpi.noBaysHint')}
+                onOpen={() => navigate('/dashboard')}
+                openLabel={t('admin.home.kpi.open', { label: t('admin.home.kpi.occupancy') })}
               />
             </div>
 
