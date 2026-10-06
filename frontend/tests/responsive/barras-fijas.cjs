@@ -305,7 +305,20 @@ async function medir(page) {
       otrosScroll,
       ultimaFila: caja(ultimaFila),
       desbordeH: doc.scrollWidth > doc.clientWidth + 1,
-      enLogin: Boolean(document.querySelector('input[type="password"]')),
+      /*
+        Por la RUTA, y no por «hay un campo de contraseña» (06-10-2026).
+
+        Con el campo, las doce comprobaciones que fallaron en la primera corrida de este arnés
+        fueron las doce de Perfil, en los dos portales y en los ocho tamaños, diciendo «la sesión se
+        cayó a mitad de corrida». No se había caído nada: la pantalla de Perfil tiene un formulario
+        para CAMBIAR la contraseña, así que siempre hay un `input[type="password"]` en ella.
+
+        El delator estaba en la propia salida: la pantalla siguiente —Ayuda— pasaba sus dieciocho
+        comprobaciones sin una queja. Una sesión caída se habría llevado esa también. Es el mismo
+        falso positivo que `paleta-regresion.cjs` tuvo el 05-10 y que ahí ya se arregló así; quedó
+        sin arreglar acá, en un arnés que entonces no se había corrido nunca.
+      */
+      enLogin: location.pathname.endsWith('/login'),
       h1: (document.querySelector('h1')?.textContent ?? '').trim().slice(0, 40),
     };
   });

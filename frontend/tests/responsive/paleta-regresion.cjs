@@ -40,15 +40,30 @@ if (/^<.*>$/.test(PASS) || PASS.trim() === '') {
  * tiene. Un hallazgo idéntico en los cuatro portales es sospechoso de ser del arnés, y lo era.</p>
  */
 const PALETA = {
-  '--lx-bg': '#070B14',
-  '--lx-surface': '#0F1724',
-  '--lx-surface-2': '#111D2B',
-  '--lx-border': '#1F2D3D',
-  '--lx-text': '#F8FAFC',
-  '--lx-text-muted': '#94A3B8',
-  '--lx-primary': '#3B82F6',
-  '--lx-success': '#22C55E',
-  '--lx-warning': '#F59E0B',
+  /*
+    Los valores de la ESPECIFICACIÓN DE ACABADO VISUAL PREMIUM v1.1 (06-10-2026), con las tres
+    correcciones medidas que documenta `tokens.css`.
+
+    Antes eran los de la guía del 05-10, y por eso este arnés falló 34 veces en la corrida del
+    06-10: la paleta cambió y la tabla se quedó. Esos 34 no eran un defecto, eran este arnés
+    haciendo su trabajo —avisar de que los colores desplegados no son los que alguien escribió
+    acá—. Lo que hay que mantener al día es esta tabla, y con la fecha al lado para que la próxima
+    vez se vea de un golpe cuál de las dos cosas está vieja.
+
+    `--lx-chrome` entra a la lista: es un token nuevo, el plano propio de la cabecera y la barra
+    lateral, y es justamente el que puede desaparecer sin que ninguna pantalla se rompa — lo que
+    pasaría es que la consola volvería a verse plana, en silencio.
+  */
+  '--lx-bg': '#07111F',
+  '--lx-chrome': '#0B182A',
+  '--lx-surface': '#102033',
+  '--lx-surface-2': '#14263A',
+  '--lx-border': '#263A4F',
+  '--lx-text': '#F4F8FC',
+  '--lx-text-muted': '#94A8BC',
+  '--lx-primary': '#1597FF',
+  '--lx-success': '#25D17D',
+  '--lx-warning': '#F4AE3D',
   '--lx-danger': '#EF4444',
   '--lx-info': '#A3B3C7',
 };
@@ -84,6 +99,23 @@ const PALETA_VIEJA = [
   ['rgb(6, 17, 31)', 'el fondo anterior #06111F'],
   ['rgb(18, 185, 129)', 'el verde anterior #12B981'],
   ['rgb(233, 75, 95)', 'el rojo anterior #E94B5F'],
+  /*
+    Y los de la guía del 05-10, superados por la v1.1 el 06-10.
+
+    Van acá por lo mismo que los otros: cambiar un token no arrastra un color escrito a mano dentro
+    de un componente, y media consola con la paleta nueva y media con la de ayer es precisamente lo
+    que la especificación llama «no dejar páginas antiguas con componentes visuales incompatibles».
+
+    Si alguna de estas líneas falla, NO es ruido: significa que ese valor sigue pintándose en algún
+    sitio que no pasa por un token. El fondo #070B14 y la superficie #0F1724 son los dos que más
+    vale vigilar, porque son los que la v1.1 vino a separar.
+  */
+  ['rgb(7, 11, 20)', 'el fondo de la guía del 05-10, #070B14'],
+  ['rgb(15, 23, 36)', 'la superficie del 05-10, #0F1724 — era la barra lateral Y la tarjeta'],
+  ['rgb(17, 29, 43)', 'la tarjeta alta del 05-10, #111D2B'],
+  ['rgb(59, 130, 246)', 'el azul del 05-10, #3B82F6'],
+  ['rgb(34, 197, 94)', 'el verde del 05-10, #22C55E'],
+  ['rgb(245, 158, 11)', 'el ámbar del 05-10, #F59E0B'],
 ];
 
 const PORTALES = {

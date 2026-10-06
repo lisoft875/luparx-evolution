@@ -151,7 +151,7 @@ export function BillingReconciliationPage(): React.JSX.Element {
             primer corte la lista tiene filas, y es justo el caso donde hace falta explicar que no
             es un atraso del proveedor sino que todavía no llegó nada. */}
         {totals.data ? (
-          <Alert tone={TONO[estado]} data-testid="billing-state">
+          <Alert tone={TONO[estado]} testId="billing-state">
             {t(FRASE[estado], { amount: formatCurrencyMinor(MONTO[estado], currency, locale) })}
           </Alert>
         ) : null}
