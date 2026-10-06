@@ -12,5 +12,7 @@ public enum NotificationSubjectType {
     PARKING_SESSION,
     CITATION,
     WALLET_TRANSACTION,
-    TIME_CREDIT
+    TIME_CREDIT,
+    /** El puesto de alguien en una municipalidad: su membresía. */
+    MEMBERSHIP
 }

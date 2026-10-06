@@ -169,7 +169,17 @@ public class CitizenNotificationController {
         // The catalogue travels with the answer so the screen never hardcodes the list: a category
         // added next year appears on it without shipping a client (ADR 0008's rule, applied to a
         // vocabulary rather than to a country list).
-        List<String> available = Arrays.stream(NotificationCategory.values()).map(Enum::name).toList();
+        //
+        // Filtrado por `emailChoice()` desde el 06-10-2026, y esa regla es exactamente la que hacía
+        // falta: la categoría WORK —la boleta anulada, el puesto cambiado— se añadió para los avisos
+        // de quien trabaja para la municipalidad, y sin este filtro habría aparecido SOLA en esta
+        // pantalla, que es del ciudadano. Una casilla para algo que no va a recibir nunca, con una
+        // clave de traducción que no existe. La virtud de que el catálogo viaje con la respuesta es
+        // también su riesgo: lo que se añade al enum sale publicado sin que nadie lo decida.
+        List<String> available = Arrays.stream(NotificationCategory.values())
+                .filter(NotificationCategory::emailChoice)
+                .map(Enum::name)
+                .toList();
         return new NotificationDtos.NotificationPreferencesResponse(preference.isEmailEnabled(), enabled,
                 available, preference.getUpdatedAt());
     }

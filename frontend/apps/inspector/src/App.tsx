@@ -18,6 +18,7 @@ import { CitationDetailPage } from './pages/CitationDetailPage';
 import { QueuePage } from './pages/QueuePage';
 import { HelpPage } from './pages/HelpPage';
 import { MorePage } from './pages/MorePage';
+import { NotificationsPage } from './pages/NotificationsPage';
 import { ProfilePage } from './pages/ProfilePage';
 
 const queryClient = new QueryClient({
@@ -149,6 +150,16 @@ export function App(): React.JSX.Element {
                   <RequireAuth loginPath="/login">
                     <RequireTenant selectTenantPath="/select-tenant">
                       <HelpPage />
+                    </RequireTenant>
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/notifications"
+                element={
+                  <RequireAuth loginPath="/login">
+                    <RequireTenant selectTenantPath="/select-tenant">
+                      <NotificationsPage />
                     </RequireTenant>
                   </RequireAuth>
                 }

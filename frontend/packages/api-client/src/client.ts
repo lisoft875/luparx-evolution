@@ -219,6 +219,7 @@ import type {
   VehicleAttributeCatalogEntry,
   VerifyEmailRequest,
   WalletResponse,
+  AppNotification,
   CitizenNotification,
   NotificationPreferences,
   UpdateNotificationPreferencesRequest,
@@ -1211,6 +1212,29 @@ export class ApiClient {
       this.http.request('GET', '/api/v1/citizen/notifications/preferences'),
     updatePreferences: (payload: UpdateNotificationPreferencesRequest): Promise<NotificationPreferences> =>
       this.http.request('PUT', '/api/v1/citizen/notifications/preferences', { body: payload }),
+  };
+
+  /**
+   * La campana del fiscalizador (06-10-2026).
+   *
+   * Misma forma que la del ciudadano porque es el mismo servicio debajo — la tabla, la idempotencia y
+   * el conteo indexado nunca fueron del ciudadano. Lo que cambia es la ruta y quién puede llamarla:
+   * `/citizen/notifications` está cerrada con `hasRole('CITIZEN')`, así que un fiscalizador recibiría
+   * un 403, y si se le abriera vería su buzón de vecino dentro de la aplicación de trabajo.
+   *
+   * No tiene preferencias: los avisos de trabajo son de la categoría `WORK`, que no sale por correo.
+   */
+  readonly inspectorNotifications = {
+    list: (query: PageParams = {}): Promise<PagedResponse<AppNotification>> =>
+      this.http.request<PagedResponse<AppNotification>>('GET', '/api/v1/inspector/notifications', {
+        query: { page: query.page, size: query.size },
+      }),
+    unreadCount: (): Promise<{ unread: number }> =>
+      this.http.request('GET', '/api/v1/inspector/notifications/unread-count'),
+    markRead: (id: string): Promise<AppNotification> =>
+      this.http.request('POST', `/api/v1/inspector/notifications/${id}/read`),
+    markAllRead: (): Promise<{ marked: number }> =>
+      this.http.request('POST', '/api/v1/inspector/notifications/read-all'),
   };
 
   readonly citizenFines = {

@@ -1,6 +1,7 @@
 package cr.luparx.app.web;
 
 import cr.luparx.app.notification.CitizenNotifier;
+import cr.luparx.app.notification.StaffNotifier;
 import cr.luparx.app.audit.AuditRecorder;
 import cr.luparx.app.web.dto.EnforcementDtos;
 import cr.luparx.core.audit.AuditAction;
@@ -83,6 +84,7 @@ public class AdminEnforcementController {
     private final EnforcementMapper mapper;
     private final AuditRecorder auditRecorder;
     private final CitizenNotifier citizenNotifier;
+    private final StaffNotifier staffNotifier;
 
     public AdminEnforcementController(CitationService citationService,
                                       EnforcementCheckService checkService,
@@ -93,7 +95,8 @@ public class AdminEnforcementController {
                                       AppealNoticeService noticeService,
                                       EnforcementMapper mapper,
                                       AuditRecorder auditRecorder,
-                                       CitizenNotifier citizenNotifier) {
+                                      CitizenNotifier citizenNotifier,
+                                      StaffNotifier staffNotifier) {
         this.citationService = citationService;
         this.checkService = checkService;
         this.clock = clock;
@@ -104,6 +107,7 @@ public class AdminEnforcementController {
         this.mapper = mapper;
         this.auditRecorder = auditRecorder;
         this.citizenNotifier = citizenNotifier;
+        this.staffNotifier = staffNotifier;
     }
 
     /**
@@ -220,6 +224,10 @@ public class AdminEnforcementController {
         TenantId tenantId = TenantContextHolder.requireTenantId();
         Citation citation = citationService.cancel(tenantId, actor(), id, request.reason());
         auditStatus(AuditAction.CITATION_CANCELLED, citation, request.reason());
+        // Al fiscalizador que la emitió, después del acto y nunca en vez de él (06-10-2026). Hasta hoy
+        // la anulación quedaba sólo en la bitácora, que es para quien audita: quien escribió la boleta
+        // no tenía forma de enterarse de que ya no está en pie.
+        staffNotifier.citationVoided(citation, request.reason());
         return detail(tenantId, citation);
     }
 

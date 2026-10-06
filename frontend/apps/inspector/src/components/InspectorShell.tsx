@@ -8,6 +8,7 @@ import {
   Badge,
   BottomTabBar,
   Brand,
+  IconBell,
   IconCheck,
   IconFine,
   IconList,
@@ -15,7 +16,7 @@ import {
   IconPin,
 } from '@luparx/ui';
 import type { BottomTab } from '@luparx/ui';
-import { useCitationQueue, useIsOnline, useZoneDirectorySeed } from '../lib/queries';
+import { useCitationQueue, useInspectorUnreadCount, useIsOnline, useZoneDirectorySeed } from '../lib/queries';
 
 export interface InspectorShellProps {
   children: React.ReactNode;
@@ -52,6 +53,18 @@ export function InspectorShell({
   const location = useLocation();
   const online = useIsOnline();
   const { pending } = useCitationQueue();
+  /*
+    El número de la campana (06-10-2026).
+
+    Suma dos cosas distintas a propósito, y hay que decirlo: los avisos del servidor sin leer y las
+    boletas que todavía no salieron del teléfono. La campana no es «mensajes», es «lo que requiere tu
+    atención», y para un fiscalizador una boleta sin subir requiere más atención que cualquier aviso.
+
+    La cola no puede ser una notificación del servidor —son boletas que el servidor no conoce— así que
+    es el cliente el único que puede sumarlas, y es acá.
+  */
+  const sinLeer = useInspectorUnreadCount();
+  const avisos = (sinLeer.data?.unread ?? 0) + pending;
   // One request per session, on whatever screen the officer lands on, so the zone picker is not
   // empty on a device that has already worked a shift.
   useZoneDirectorySeed();
@@ -195,6 +208,38 @@ export function InspectorShell({
             No se creó ningún indicador nuevo: es esta misma insignia, con el mismo `useIsOnline`,
             dentro del `.lx-app-bar__end` que ya existía y estaba vacío en este portal.
           */
+          /*
+            La campana, a la derecha del estado (06-10-2026).
+
+            Va en `actions` y no en `end`, lo que la pone DESPUÉS de «En línea» — al revés del
+            diagrama del PDF, y con motivo. `actions` es la maquinaria que ya existe para esto: dibuja
+            `.lx-app-bar__icon-btn` con su objetivo táctil de 44px y `.lx-app-bar__badge` con el
+            contador, que es exactamente lo que el encargo pide reutilizar en vez de crear. Y el orden
+            que produce es el mejor de los dos: lo único pulsable de esa esquina queda en la esquina,
+            donde llega el pulgar, y el estado —que no se pulsa— queda al lado. Es además cómo está el
+            Ciudadano desde que tiene campana, y la consistencia entre portales pesa más que el orden
+            de un dibujo.
+
+            Sin contador cuando es cero: `badgeCount` no se dibuja con un valor falso, y `undefined`
+            mientras la consulta viaja es lo correcto —decir «0 avisos» antes de preguntar sería la
+            pantalla adivinando—.
+
+            Sólo en las pantallas raíz. Una de detalle lleva flecha y título, y la propia pantalla de
+            avisos es una de ellas: una campana ahí sería un botón que lleva a donde ya estás. El
+            estado de conexión SÍ se queda en todas, que es lo que el PDF de barras fijas pide.
+          */
+          actions={
+            !onBack
+              ? [
+                  {
+                    icon: <IconBell />,
+                    label: t('inspector.notifications.open'),
+                    onClick: () => navigate('/notifications'),
+                    badgeCount: avisos > 0 ? avisos : undefined,
+                  },
+                ]
+              : []
+          }
           end={
             /* Nunca el color solo: la insignia lleva la palabra además del tono.
 
@@ -207,11 +252,17 @@ export function InspectorShell({
                cabe y donde además se puede tocar para ir a verlas. */
             <Badge
               /* El gancho estable para medir desde fuera: una sola insignia de conexión en la
-                 pantalla, y dentro de la barra. Buscarla por su texto obligaría al arnés a
-                 conocer las traducciones. */
-              className="lx-connection-badge"
+                 pantalla, y dentro de la barra. Buscarla por su texto obligaría a las pruebas a
+                 conocer las traducciones.
+
+                 Compacta y sin icono desde que la fila tiene campana (06-10-2026). El icono estaba
+                 cuando esta insignia tenía una franja entera para ella sola; en una esquina que
+                 ahora también lleva un botón de 44px son 20px que se pagan con el nombre de la
+                 municipalidad. Medido: con el icono, a 390px ese nombre quedaba en 34px y a 430 con
+                 «M. de Oca» en 39. La palabra es lo que dice el estado —el tono nunca viaja solo— y
+                 es exactamente la misma decisión que el Ciudadano ya tomó por el mismo motivo. */
+              className="lx-connection-badge lx-connection-badge--compact"
               tone={online ? 'success' : 'warning'}
-              icon={<IconOffline size={16} />}
             >
               {online ? t('inspector.home.online') : t('inspector.offline.badge')}
             </Badge>

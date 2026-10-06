@@ -65,7 +65,20 @@ const PORTALES = {
       distintos (06-10-2026) y dos medidas distintas; una sola comprobación «está a la derecha» daría
       por bueno el ciudadano con la insignia en cualquier parte del grupo.
     */
-    conexion: 'borde',
+    /*
+      `grupo` desde el 06-10-2026, y antes era `borde`.
+
+      Hasta hoy la insignia de conexión era lo único que había a la derecha de la cabecera del
+      fiscalizador, así que quedaba pegada al borde y eso era lo que se comprobaba. Con la campana, lo
+      pulsable se queda la esquina —donde llega el pulgar— y la insignia pasa a ser lo último ANTES de
+      ella. Es exactamente la forma que el Ciudadano ya tenía, así que los dos portales se verifican
+      ahora con la misma regla en vez de con dos.
+
+      `grupo` sirve además para las pantallas de detalle, donde la campana no está y la insignia vuelve
+      a quedar al borde: lo que mide es que esté dentro del grupo derecho, que es verdad en los dos
+      casos. Una regla que vale para los dos estados es mejor que dos reglas que hay que mantener.
+    */
+    conexion: 'grupo',
     // En Fiscalización la insignia va en TODAS, también en las de detalle con flecha: el estado de
     // conexión es el motivo por el que la barra existe para quien está de pie poniendo una boleta.
     conexionSoloRaiz: false,
@@ -77,6 +90,7 @@ const PORTALES = {
       { ruta: '/more', nombre: 'Más' },
       { ruta: '/profile', nombre: 'Perfil' },
       { ruta: '/help', nombre: 'Ayuda' },
+      { ruta: '/notifications', nombre: 'Avisos' },
     ],
     // La más larga del portal, la que recorre los ocho viewports del paso 2.
     larga: '/profile',

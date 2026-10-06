@@ -2,7 +2,14 @@ import { useCallback, useEffect, useMemo, useSyncExternalStore } from 'react';
 import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 import { useAuth } from '@luparx/auth';
 import { locationPermissionGranted, takePosition } from './capture';
-import type { CitationDetail, InfractionType, PagedResponse, PlateStatus, Citation } from '@luparx/api-client';
+import type {
+  AppNotification,
+  CitationDetail,
+  InfractionType,
+  PagedResponse,
+  PlateStatus,
+  Citation,
+} from '@luparx/api-client';
 import {
   flushQueue,
   pendingCount,
@@ -29,6 +36,8 @@ const KEYS = {
   infractionTypes: ['inspector', 'infraction-types'] as const,
   citations: (page: number, size: number) => ['inspector', 'citations', page, size] as const,
   citation: (id: string) => ['inspector', 'citation', id] as const,
+  notifications: (page: number, size: number) => ['inspector', 'notifications', page, size] as const,
+  unreadCount: ['inspector', 'notifications', 'unread-count'] as const,
 };
 
 /**
@@ -220,3 +229,65 @@ export function useCitationQueue(): QueueApi {
 // las dos especificaciones del 24-09-2026 piden reutilizar la lógica de conectividad existente en
 // vez de copiarla. Se re-exporta desde acá para no tocar los cinco archivos que ya la importaban.
 export { useIsOnline } from '@luparx/features';
+
+/**
+ * Los avisos de trabajo de esta persona en la municipalidad activa (06-10-2026).
+ *
+ * <p>Mismo servicio que la campana del ciudadano, otra ruta: `/citizen/notifications` está cerrada con
+ * `hasRole('CITIZEN')`, así que acá daría 403, y si se abriera mostraría el buzón de vecino dentro de
+ * la aplicación de trabajo.</p>
+ */
+export function useInspectorNotifications(
+  page: number,
+  size: number,
+): UseQueryResult<PagedResponse<AppNotification>> {
+  const { apiClient } = useAuth();
+  return useQuery({
+    queryKey: KEYS.notifications(page, size),
+    queryFn: () => apiClient.inspectorNotifications.list({ page, size }),
+  });
+}
+
+/**
+ * El número de la campana.
+ *
+ * <p>Su propia consulta y no un campo de la lista, por lo mismo que en el ciudadano: esto se pregunta
+ * desde cualquier pantalla y la lista no.</p>
+ *
+ * <p>`refetchInterval` NO: un fiscalizador trabaja medio turno sin cobertura y un sondeo que falla
+ * cada treinta segundos es batería gastada en reintentos. Se refresca al montar la cabecera y cuando
+ * la ventana vuelve al frente, que es cuando alguien podría haber leído algo en otro lado.</p>
+ */
+export function useInspectorUnreadCount(): UseQueryResult<{ unread: number }> {
+  const { apiClient } = useAuth();
+  return useQuery({
+    queryKey: KEYS.unreadCount,
+    queryFn: () => apiClient.inspectorNotifications.unreadCount(),
+    // Un fallo acá no merece reintentos: la insignia ausente es una respuesta correcta.
+    retry: false,
+  });
+}
+
+/** Marcar uno como leído. Invalida el conteo, que es lo que la cabecera muestra. */
+export function useMarkInspectorNotificationRead() {
+  const { apiClient } = useAuth();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiClient.inspectorNotifications.markRead(id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['inspector', 'notifications'] });
+    },
+  });
+}
+
+/** Marcar todos. */
+export function useMarkAllInspectorNotificationsRead() {
+  const { apiClient } = useAuth();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiClient.inspectorNotifications.markAllRead(),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['inspector', 'notifications'] });
+    },
+  });
+}

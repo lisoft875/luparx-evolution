@@ -1159,19 +1159,43 @@ export interface ParkingPolicy {
 // ---- Citizen: notifications (CONTRACT.md "v0.38") ---------------------------------------------
 
 /** What a notification is about, at the grain the citizen chooses by for email. */
-export type NotificationCategory = 'PARKING' | 'FINES' | 'WALLET';
+export type NotificationCategory =
+  | 'PARKING'
+  | 'FINES'
+  | 'WALLET'
+  /**
+   * Lo que le pasa al trabajo de quien trabaja PARA la municipalidad (06-10-2026).
+   *
+   * No es elegible como preferencia de correo, y el servidor no la publica en el catálogo de
+   * `/citizen/notifications/preferences` justamente por eso: una casilla para algo que un ciudadano
+   * no puede recibir.
+   */
+  | 'WORK';
 
-/** The facts the platform tells a citizen about. Stable keys; the sentence is rendered client-side. */
+/** The facts the platform tells somebody about. Stable keys; the sentence is rendered client-side. */
 export type NotificationType =
+  // Del ciudadano
   | 'PARKING_SESSION_EXPIRING'
   | 'PARKING_SESSION_EXPIRED'
   | 'CITATION_ISSUED'
   | 'APPEAL_RESOLVED'
   | 'WALLET_TOPUP_CREDITED'
-  | 'TIME_CREDITS_EXPIRING';
+  | 'TIME_CREDITS_EXPIRING'
+  // De quien trabaja para la municipalidad (06-10-2026)
+  | 'CITATION_VOIDED'
+  | 'POST_SUSPENDED'
+  | 'POST_REACTIVATED'
+  | 'POST_ROLE_CHANGED'
+  | 'POST_ZONES_CHANGED';
 
 /** Where a notification navigates to. */
-export type NotificationSubjectType = 'PARKING_SESSION' | 'CITATION' | 'WALLET_TRANSACTION' | 'TIME_CREDIT';
+export type NotificationSubjectType =
+  | 'PARKING_SESSION'
+  | 'CITATION'
+  | 'WALLET_TRANSACTION'
+  | 'TIME_CREDIT'
+  /** El puesto de alguien en una municipalidad. */
+  | 'MEMBERSHIP';
 
 /**
  * One line of the bell.
@@ -1183,7 +1207,15 @@ export type NotificationSubjectType = 'PARKING_SESSION' | 'CITATION' | 'WALLET_T
  * `params` are raw — a plate, an ISO instant, an amount in minor units — so the screen formats them
  * with the reader's locale rules, exactly as every other number in this app is formatted.
  */
-export interface CitizenNotification {
+/**
+ * Una fila de la campana, de cualquier portal.
+ *
+ * <p>`AppNotification` desde el 06-10-2026. Se llamaba `CitizenNotification` cuando el único buzón
+ * era el del ciudadano; la forma siempre fue la misma —un tipo, un sujeto y sus parámetros— y el
+ * fiscalizador la reutiliza tal cual. `CitizenNotification` se conserva como alias para no romper lo
+ * que ya la importaba.</p>
+ */
+export interface AppNotification {
   id: string;
   type: NotificationType;
   category: NotificationCategory;
@@ -1193,6 +1225,9 @@ export interface CitizenNotification {
   createdAt: string;
   readAt?: string | null;
 }
+
+/** El nombre anterior, conservado para no tocar lo que ya lo importaba. */
+export type CitizenNotification = AppNotification;
 
 /**
  * What of this reaches the person's email.

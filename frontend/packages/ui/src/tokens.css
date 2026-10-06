@@ -5089,25 +5089,33 @@ a.lx-list-row {
 
    Sólo estas dos cabeceras. La administración y la plataforma no son barras de teléfono y no se
    tocan. */
-@media (max-width: 359px) {
-  .lx-app-bar--inspector .lx-tenant-badge__label {
+/* Un solo umbral para los dos portales desde el 06-10-2026.
+
+   Eran dos: 360px en Fiscalización y 430px en el Ciudadano, y la diferencia estaba bien medida —la
+   fila del ciudadano llevaba 52px más de campana—. Al ganar la suya, la del fiscalizador quedó con la
+   misma carga exacta: marca, municipalidad, estado compacto y un botón de 44px. Medido con los dos
+   umbrales distintos, a 390px el nombre quedaba en 34px y a 430 con «M. de Oca» en 39: slivers, que es
+   lo que esta regla existe para evitar.
+
+   Dos umbrales para dos filas idénticas es una diferencia que sólo se sostiene mientras nadie la
+   revisa. */
+@media (max-width: 429px) {
+  .lx-app-bar--inspector .lx-tenant-badge__label,
+  .lx-app-bar--citizen .lx-tenant-badge__label {
     display: none;
   }
-  .lx-app-bar--inspector .lx-tenant-badge {
+  .lx-app-bar--inspector .lx-tenant-badge,
+  .lx-app-bar--citizen .lx-tenant-badge {
     /* Sin etiqueta, el relleno de la derecha dejaba el emblema descentrado en su propia ficha. */
     padding-right: 3px;
   }
 }
-@media (max-width: 429px) {
-  .lx-app-bar--citizen .lx-tenant-badge__label {
-    display: none;
-  }
-  .lx-app-bar--citizen .lx-tenant-badge {
-    padding-right: 3px;
-  }
-}
 
-/* La insignia de conexión del ciudadano: pequeña y discreta, que es lo que pide el PDF (06-10-2026).
+/* La insignia de conexión, pequeña y discreta (06-10-2026).
+
+   Nació para el Ciudadano, que es quien lo pidió así, y el fiscalizador la adoptó el mismo día al
+   ganar su campana: su fila quedó con la misma carga, y el icono de 16px era lo que se pagaba con el
+   nombre de la municipalidad.
 
    Su fila carga una cosa más que la del fiscalizador —la campana de notificaciones, 44px de objetivo
    táctil— y el encargo dice «pequeño, discreto, claramente visible». Las tres cosas apuntan al mismo
@@ -5123,8 +5131,9 @@ a.lx-list-row {
   font-size: calc(var(--lx-text-meta-size) - 1px);
 }
 /* La campana queda en la esquina, y entre insignia y campana no hace falta el hueco grande de la
-   fila: son dos cosas del mismo grupo. */
-.lx-app-bar--citizen .lx-app-bar__end {
+   fila: son dos cosas del mismo grupo. Los dos portales, que ahora tienen la misma esquina. */
+.lx-app-bar--citizen .lx-app-bar__end,
+.lx-app-bar--inspector .lx-app-bar__end {
   gap: var(--lx-space-2);
 }
 

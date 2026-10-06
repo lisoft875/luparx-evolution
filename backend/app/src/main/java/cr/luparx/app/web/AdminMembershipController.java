@@ -2,6 +2,7 @@ package cr.luparx.app.web;
 
 import cr.luparx.app.audit.AuditRecorder;
 import cr.luparx.app.notification.SmtpNotificationSender;
+import cr.luparx.app.notification.StaffNotifier;
 import cr.luparx.app.outbox.OutboxRecorder;
 import cr.luparx.app.web.dto.AdminDtos;
 import cr.luparx.core.audit.AuditAction;
@@ -72,6 +73,7 @@ public class AdminMembershipController {
     private final AuditRecorder auditRecorder;
     private final OutboxRecorder outboxRecorder;
     private final ResponseMapper mapper;
+    private final StaffNotifier staffNotifier;
 
     public AdminMembershipController(MembershipService membershipService,
                                      MembershipZoneService zoneService,
@@ -82,7 +84,8 @@ public class AdminMembershipController {
                                      SmtpNotificationSender portalUrls,
                                      AuditRecorder auditRecorder,
                                      OutboxRecorder outboxRecorder,
-                                     ResponseMapper mapper) {
+                                     ResponseMapper mapper,
+                                     StaffNotifier staffNotifier) {
         this.membershipService = membershipService;
         this.zoneService = zoneService;
         this.catalogService = catalogService;
@@ -93,6 +96,7 @@ public class AdminMembershipController {
         this.auditRecorder = auditRecorder;
         this.outboxRecorder = outboxRecorder;
         this.mapper = mapper;
+        this.staffNotifier = staffNotifier;
     }
 
     @GetMapping
@@ -240,6 +244,20 @@ public class AdminMembershipController {
                         .compare("role", previousRole, String.valueOf(membership.getRole()))
                         .compare("status", previousStatus, String.valueOf(membership.getStatus()))
                         .build());
+        /*
+          Y se le avisa a la persona, SÓLO si el rol cambió de verdad (06-10-2026).
+
+          Esta ruta acepta rol, estado o los dos, y se llama también cuando sólo cambia el estado.
+          Avisar «te cambiaron el rol» porque alguien mandó el mismo rol que ya tenía sería un aviso
+          que no corresponde a ningún hecho — y la idempotencia no lo salvaría, porque el sujeto es la
+          membresía y la segunda vez sí sería un hecho distinto.
+
+          El estado no se avisa acá: desactivar y restablecer tienen sus propias rutas, que son por
+          donde pasa el panel, y son las que avisan. Un PUT con estado es la puerta de servicio.
+        */
+        if (!previousRole.equals(String.valueOf(membership.getRole()))) {
+            staffNotifier.postRoleChanged(membership, previousRole);
+        }
         return mapper.toMembership(membership);
     }
 
@@ -335,6 +353,9 @@ public class AdminMembershipController {
         auditRecorder.record(AuditAction.MEMBERSHIP_SUSPENDED, "membership", id.toString(),
                 Map.of("userId", membership.getUserId().toString(),
                         "reason", String.valueOf(request.reason())));
+        // Y se le dice a la persona (06-10-2026). Llegar un lunes con el acceso cortado y sin saber
+        // por qué es la peor versión de esto, y la bitácora no la lee quien lo sufre.
+        staffNotifier.postSuspended(membership, request.reason());
         return mapper.toMembership(membership);
     }
 
@@ -347,6 +368,7 @@ public class AdminMembershipController {
         TenantMembership membership = membershipService.reactivate(id, tenantId);
         auditRecorder.record(AuditAction.MEMBERSHIP_REACTIVATED, "membership", id.toString(),
                 Map.of("userId", membership.getUserId().toString()));
+        staffNotifier.postReactivated(membership);
         return mapper.toMembership(membership);
     }
 
@@ -393,6 +415,10 @@ public class AdminMembershipController {
                 AuditChanges.builder()
                         .compare("zones", zonesBefore, describeZones(assigned, zonesOfTenant))
                         .build());
+        // La cantidad, no los nombres: los nombres cambian y el aviso quedaría hablando de un sector
+        // que se renombró. La pantalla del fiscalizador lee sus sectores actuales, que es lo que
+        // quiere ver cuando abre esto.
+        staffNotifier.postZonesChanged(membership, assigned.size());
         return assigned.stream()
                 .map(zonesOfTenant::get)
                 .map(zone -> new AdminDtos.ZoneAssignmentResponse(zone.getId(), zone.getCode(), zone.getName()))
