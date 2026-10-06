@@ -15,6 +15,15 @@ export interface AppBarProps {
   title?: React.ReactNode;
   subtitle?: React.ReactNode;
   actions?: AppBarAction[];
+  /**
+   * Contenido libre a la derecha de la barra, antes de los botones de icono.
+   *
+   * <p>Para lo que NO es un botón: la insignia de conexión del fiscalizador, por ejemplo. Existe
+   * porque `actions` sólo sabe dibujar `<button>` con un icono dentro, y meter ahí una insignia
+   * obligaba a inventarse un botón que no hace nada. El contenedor `.lx-app-bar__end` ya estaba;
+   * esto es la forma de llenarlo sin disfrazar una etiqueta de control.</p>
+   */
+  end?: React.ReactNode;
   className?: string;
 }
 
@@ -34,6 +43,7 @@ export function AppBar({
   title,
   subtitle,
   actions = [],
+  end,
   className,
 }: AppBarProps): React.JSX.Element {
   return (
@@ -56,6 +66,7 @@ export function AppBar({
         ) : null}
       </div>
       <div className="lx-app-bar__end">
+        {end}
         {actions.map((action, index) => (
           <button
             key={index}

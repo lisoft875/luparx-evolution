@@ -2,8 +2,19 @@ import * as React from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from '@luparx/i18n';
-import { ActiveTenantBadge, TenantSheet } from '@luparx/features';
-import { AppBar, Brand, BottomTabBar, IconBell, IconCar, IconHome, IconList, IconPark, IconWallet } from '@luparx/ui';
+import { ActiveTenantBadge, TenantSheet, useIsOnline } from '@luparx/features';
+import {
+  AppBar,
+  Badge,
+  Brand,
+  BottomTabBar,
+  IconBell,
+  IconCar,
+  IconHome,
+  IconList,
+  IconPark,
+  IconWallet,
+} from '@luparx/ui';
 import type { BottomTab } from '@luparx/ui';
 import { ActiveSessionsBar } from './ActiveSessionsBar';
 import { useUnreadNotificationCount } from '../lib/queries';
@@ -56,6 +67,13 @@ export function CitizenShell({
   // Only for the root screens that show the bell: a detail screen renders a back arrow instead, and
   // polling a count nobody can see would be a request per minute per open screen for nothing.
   const unreadQuery = useUnreadNotificationCount();
+  /*
+    El MISMO dato que la fila «Estado de conexión» de Más lee desde el 19-09-2026: `useIsOnline` de
+    `@luparx/features`, que escucha los eventos `online`/`offline` del navegador. No se creó lógica
+    ni API nueva —el PDF del 06-10-2026 lo prohíbe en letra— y no hace falta: el hook ya estaba
+    importado en este mismo portal, a dos pantallas de acá.
+  */
+  const enLinea = useIsOnline();
   const unreadCount = unreadQuery.data?.unread;
   const location = useLocation();
 
@@ -175,6 +193,7 @@ export function CitizenShell({
       <div className="lx-top-chrome">
         {bare ? null : (
         <AppBar
+          className="lx-app-bar--citizen"
           start={
             !onBack ? (
               <>
@@ -190,6 +209,33 @@ export function CitizenShell({
           backLabel={t('common.back')}
           title={onBack ? title : undefined}
           subtitle={onBack ? subtitle : undefined}
+          /*
+            El estado de conexión, arriba a la derecha de la MISMA fila (06-10-2026).
+
+            Sólo en las pantallas raíz —las que llevan marca, municipalidad y campana—, que son las
+            cinco de la barra inferior más Movimientos y Notificaciones. Una pantalla de detalle
+            lleva flecha y título, y meterle una insignia de conexión al lado del título sería
+            cambiar pantallas que el PDF deja explícitamente fuera.
+
+            `end` y no `actions`: `actions` dibuja `<button>` con un icono dentro, y esto no se
+            pulsa. Va ANTES de la campana porque el orden de lectura deja lo accionable en la
+            esquina, donde está el pulgar.
+
+            Pequeño y discreto, que es lo que pide el PDF: sin icono y un punto más chico que una
+            insignia de contenido. En esta fila ya hay marca, municipalidad y campana, y a 320px el
+            icono de 16px era la diferencia entre caber y no caber. El tono no viaja solo: lleva la
+            palabra, siempre.
+          */
+          end={
+            !onBack ? (
+              <Badge
+                className="lx-connection-badge lx-connection-badge--compact"
+                tone={enLinea ? 'success' : 'warning'}
+              >
+                {enLinea ? t('citizen.more.connection.ok') : t('citizen.more.connection.none')}
+              </Badge>
+            ) : undefined
+          }
           actions={
             !onBack
               ? [

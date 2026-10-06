@@ -1,5 +1,12 @@
 /**
- * Barras fijas en Fiscalización y Ciudadano — el PDF del 05-10-2026.
+ * Barras fijas en Fiscalización y Ciudadano — los PDF del 05 y del 06-10-2026.
+ *
+ * <p>El del 06-10-2026 añade cuatro preguntas sobre la cabecera del fiscalizador: que haya UN solo
+ * indicador de conexión, que esté dentro de `.lx-app-bar`, que esté arriba a la derecha y que la
+ * franja que lo llevaba —`.lx-inspector-status-bar`— no quede en el árbol. Esa última es la que
+ * importa escribir así: «desaparecer» con `display: none` dejaría el componente duplicado en el
+ * layout, que es lo que el PDF prohíbe en letra, y una comprobación visual no distingue las dos
+ * cosas. Contar nodos sí.</p>
  *
  * <h2>Qué contesta este arnés que la hoja de estilos no</h2>
  *
@@ -51,6 +58,17 @@ const PORTALES = {
     cuenta: process.env.CUENTA_INSPECTOR ?? 'inspector@luparx.test',
     // Con cabecera en TODAS desde el 05-10-2026: el PDF lo pide como arquitectura, no por pantalla.
     cabeceraEsperada: 'siempre',
+    /*
+      Dónde tiene que estar la insignia de conexión. En Fiscalización la fila no lleva nada más a la
+      derecha, así que va pegada al borde: `borde`. En el Ciudadano la campana es lo accionable y le
+      toca la esquina, así que la insignia es la última ANTES de la campana: `grupo`. Son dos PDF
+      distintos (06-10-2026) y dos medidas distintas; una sola comprobación «está a la derecha» daría
+      por bueno el ciudadano con la insignia en cualquier parte del grupo.
+    */
+    conexion: 'borde',
+    // En Fiscalización la insignia va en TODAS, también en las de detalle con flecha: el estado de
+    // conexión es el motivo por el que la barra existe para quien está de pie poniendo una boleta.
+    conexionSoloRaiz: false,
     pantallas: [
       { ruta: '/', nombre: 'Consulta' },
       { ruta: '/cite', nombre: 'Boleta' },
@@ -81,17 +99,32 @@ const PORTALES = {
       arnés que exige una cabecera donde el mockup no la tiene parece un arnés desactualizado.
     */
     cabeceraEsperada: 'cuando-exista',
+    conexion: 'grupo',
+    /*
+      En el Ciudadano va sólo en las pantallas raíz: las que llevan marca, municipalidad y campana.
+      Una pantalla de detalle lleva flecha y título, y añadirle una insignia de conexión al lado del
+      título sería tocar pantallas que el PDF del 06-10-2026 deja explícitamente fuera (Perfil, entre
+      ellas). Así que acá se distingue, y no se exige donde no debe estar.
+    */
+    conexionSoloRaiz: true,
+    /*
+      `sinCabecera` marca las tres que NO la llevan por diseño —`bare`: su título es contenido y se
+      desplaza—. El resto la lleva, y eso ya se puede exigir: lo que el PDF del 06-10-2026 reporta es
+      que Vehículos, Billetera y Más no la mostraban, y que las cinco pantallas de la barra inferior
+      deben usar el mismo patrón. Con `cuando-exista` a secas, una regresión que volviera a quitarla
+      no fallaría ninguna comprobación.
+    */
     pantallas: [
       { ruta: '/', nombre: 'Inicio' },
       { ruta: '/park', nombre: 'Estacionamiento' },
-      { ruta: '/fines', nombre: 'Multas' },
+      { ruta: '/fines', nombre: 'Multas', sinCabecera: true },
       { ruta: '/vehicles', nombre: 'Vehículos' },
       { ruta: '/wallet', nombre: 'Billetera' },
       { ruta: '/movements', nombre: 'Movimientos' },
       { ruta: '/notifications', nombre: 'Notificaciones' },
       { ruta: '/more', nombre: 'Más' },
-      { ruta: '/profile', nombre: 'Perfil' },
-      { ruta: '/help', nombre: 'Ayuda' },
+      { ruta: '/profile', nombre: 'Perfil', sinCabecera: true },
+      { ruta: '/help', nombre: 'Ayuda', sinCabecera: true },
     ],
     larga: '/more',
   },
@@ -192,7 +225,13 @@ async function medir(page) {
     const caja = (n) => {
       if (!n) return null;
       const r = n.getBoundingClientRect();
-      return { top: Math.round(r.top), bottom: Math.round(r.bottom), height: Math.round(r.height) };
+      return {
+        top: Math.round(r.top),
+        bottom: Math.round(r.bottom),
+        height: Math.round(r.height),
+        left: Math.round(r.left),
+        right: Math.round(r.right),
+      };
     };
     /*
       ¿Se puede TOCAR? Estar en el DOM y con una caja dentro del viewport no alcanza: un elemento
@@ -240,8 +279,27 @@ async function medir(page) {
       cromos: document.querySelectorAll('.lx-top-chrome').length,
       barra: caja(document.querySelector('.lx-app-bar')),
       barraAlcanzable: alcanzable(document.querySelector('.lx-app-bar')),
-      franja: caja(document.querySelector('.lx-inspector-status-bar')),
-      franjaAlcanzable: alcanzable(document.querySelector('.lx-inspector-status-bar')),
+      /*
+        El PDF del 06-10-2026: UN solo «En línea», dentro de la barra, arriba a la derecha, y la
+        franja de abajo borrada del árbol —no escondida—. Las cuatro cosas se miden por separado
+        porque fallan por separado: se puede tener una sola insignia en el sitio equivocado, o dos
+        con una invisible, o la franja vacía ocupando una fila.
+      */
+      franjaVieja: document.querySelectorAll('.lx-inspector-status-bar').length,
+      conexiones: document.querySelectorAll('.lx-connection-badge').length,
+      conexion: caja(document.querySelector('.lx-connection-badge')),
+      conexionAlcanzable: alcanzable(document.querySelector('.lx-connection-badge')),
+      conexionEnBarra: Boolean(document.querySelector('.lx-connection-badge')?.closest('.lx-app-bar')),
+      grupoDerecho: caja(document.querySelector('.lx-app-bar__end')),
+      // Primera del grupo derecho: con campana, significa que la campana queda a su derecha y nada
+      // más entre las dos.
+      // ¿Es una pantalla de detalle? La flecha de volver lo dice, y es lo que distingue una raíz de
+      // pestaña —marca + municipalidad + campana— de una pantalla a la que se entró desde otra.
+      tieneVolver: Boolean(document.querySelector('.lx-app-bar__back')),
+      conexionPrimeraDelGrupo:
+        document.querySelector('.lx-app-bar__end')?.firstElementChild
+        === document.querySelector('.lx-connection-badge'),
+      cromo: caja(document.querySelector('.lx-top-chrome')),
       pie: caja(document.querySelector('.lx-bottom-tab-bar')),
       pieAlcanzable: alcanzable(document.querySelector('.lx-bottom-tab-bar')),
       otrosScroll,
@@ -258,8 +316,13 @@ async function medir(page) {
  *
  * <p>`exigeCabecera` distingue los dos portales: en Fiscalización la cabecera va en todas; en
  * Ciudadano, en las que la tienen —y donde no la hay, no se inventa un fallo.</p>
+ *
+ * <p>`conexion` dice dónde debe estar la insignia de estado: `'borde'` pegada al borde derecho de la
+ * barra (Fiscalización, que no lleva nada más ahí), `'grupo'` la última antes de la campana
+ * (Ciudadano), `'no'` en ninguna parte. Sólo se exige si la pantalla tiene cabecera: en una pantalla
+ * `bare` no hay barra donde ponerla, y pedirla sería inventar un fallo.</p>
  */
-function revisar(etiqueta, arriba, abajo, exigeCabecera, esInspector) {
+function revisar(etiqueta, arriba, abajo, exigeCabecera, conexion, soloRaiz = false) {
   const sinScroll = arriba.scrollMax <= 20;
 
   comprobar(arriba.pies === 1, `${etiqueta} · una barra inferior y sólo una`, `hay ${arriba.pies}`);
@@ -273,6 +336,67 @@ function revisar(etiqueta, arriba, abajo, exigeCabecera, esInspector) {
 
   if (exigeCabecera) {
     comprobar(arriba.barras === 1, `${etiqueta} · tiene cabecera`, 'no se encontró .lx-app-bar');
+  }
+
+  // --- Los PDF del 06-10-2026: un solo «En línea», arriba a la derecha, sin franja debajo -------
+  // La franja vieja del fiscalizador no debe existir en NINGÚN portal, con cabecera o sin ella: era
+  // marcado, y borrarla del árbol es la mitad del encargo. `display: none` no cuenta.
+  comprobar(
+    arriba.franjaVieja === 0,
+    `${etiqueta} · la segunda franja de «En línea» no existe en el árbol`,
+    `quedan ${arriba.franjaVieja} .lx-inspector-status-bar — esconderla con CSS no cuenta`,
+  );
+  const exigeConexion = conexion !== 'no' && arriba.barras === 1 && !(soloRaiz && arriba.tieneVolver);
+  if (soloRaiz && arriba.tieneVolver) {
+    dato(`${etiqueta} · pantalla de detalle: la insignia de conexión no va acá, por diseño`);
+  }
+  if (exigeConexion) {
+    comprobar(
+      arriba.conexiones === 1,
+      `${etiqueta} · un solo indicador de conexión`,
+      `encontré ${arriba.conexiones}`,
+    );
+    comprobar(
+      arriba.conexionEnBarra === true,
+      `${etiqueta} · y está DENTRO de la cabecera, no debajo`,
+    );
+    if (arriba.conexion && arriba.barra) {
+      if (conexion === 'borde') {
+        comprobar(
+          arriba.barra.right - arriba.conexion.right <= 24,
+          `${etiqueta} · la insignia está alineada al borde derecho de la cabecera`,
+          `quedan ${arriba.barra.right - arriba.conexion.right}px entre la insignia y el borde`,
+        );
+      } else if (arriba.grupoDerecho) {
+        // Con campana al lado, «a la derecha» no es «pegada al borde»: lo accionable se queda con la
+        // esquina. Lo que se exige es que no haya nada entre la insignia y la campana.
+        comprobar(
+          arriba.conexionPrimeraDelGrupo === true,
+          `${etiqueta} · la insignia es lo último antes de la campana`,
+        );
+        comprobar(
+          arriba.grupoDerecho.right - arriba.conexion.right <= 60,
+          `${etiqueta} · y está dentro del grupo de la derecha, no suelta en la fila`,
+          `quedan ${arriba.grupoDerecho.right - arriba.conexion.right}px hasta el fin del grupo`,
+        );
+      }
+      comprobar(
+        arriba.conexion.left + arriba.conexion.height / 2 > (arriba.barra.left + arriba.barra.right) / 2,
+        `${etiqueta} · y en la mitad derecha, no en el medio de la fila`,
+      );
+    }
+  }
+  if (arriba.cromo && arriba.barra) {
+    // «No queda una fila vacía debajo»: el cromo superior mide lo que mide la barra. Si sobra alto,
+    // algo sigue ocupando una fila — vacía o no. En el Ciudadano el cromo lleva además la barra de
+    // estadía en curso, que sólo existe mientras hay una estadía: por eso se compara «mide lo mismo
+    // o lleva algo de verdad», y no «mide lo mismo» a secas.
+    comprobar(
+      Math.abs(arriba.cromo.height - arriba.barra.height) <= 1 || arriba.cromo.height > arriba.barra.height + 24,
+      `${etiqueta} · no sobra una fila casi vacía debajo de la cabecera`,
+      `el cromo mide ${arriba.cromo.height}px y la barra ${arriba.barra.height}px`
+        + ` (${arriba.cromo.height - arriba.barra.height}px de más)`,
+    );
   }
 
   if (sinScroll) {
@@ -292,11 +416,17 @@ function revisar(etiqueta, arriba, abajo, exigeCabecera, esInspector) {
       `${etiqueta} · y se puede tocar, no sólo está en el DOM`,
     );
   }
-  if (esInspector) {
+  if (exigeConexion) {
     comprobar(
-      abajo.franja !== null && abajo.franja.top >= 0 && abajo.franja.bottom <= abajo.alto,
+      abajo.conexion !== null && abajo.conexion.top >= 0 && abajo.conexion.bottom <= abajo.alto,
       `${etiqueta} · el estado de conexión tampoco se va`,
-      abajo.franja ? `top=${abajo.franja.top} bottom=${abajo.franja.bottom}` : 'no se encontró la franja',
+      abajo.conexion
+        ? `top=${abajo.conexion.top} bottom=${abajo.conexion.bottom}`
+        : 'no se encontró la insignia de conexión',
+    );
+    comprobar(
+      abajo.conexionAlcanzable === true,
+      `${etiqueta} · y se puede leer, no está tapado por el contenido`,
     );
   }
 
@@ -390,8 +520,10 @@ function revisar(etiqueta, arriba, abajo, exigeCabecera, esInspector) {
 
         await alFondo(page);
         const abajo = await medir(page);
-        const exigeCabecera = cfg.cabeceraEsperada === 'siempre';
-        revisar(pantalla.nombre, arriba, abajo, exigeCabecera, portal === 'inspector');
+        // `sinCabecera` sólo existe en el Ciudadano y marca las `bare`. En el resto, la cabecera se
+        // exige: es lo que el PDF del 06-10-2026 reporta como faltante en tres pantallas.
+        const exigeCabecera = cfg.cabeceraEsperada === 'siempre' || !pantalla.sinCabecera;
+        revisar(pantalla.nombre, arriba, abajo, exigeCabecera, cfg.conexion, cfg.conexionSoloRaiz);
 
         // Volver arriba: ni salto ni superposición (pruebas 5 y 6 del PDF).
         await alTope(page);
@@ -403,8 +535,8 @@ function revisar(etiqueta, arriba, abajo, exigeCabecera, esInspector) {
             `empezó en ${arriba.barra.top} y volvió a ${devuelta.barra.top}`,
           );
         }
-        if (cfg.cabeceraEsperada === 'cuando-exista' && arriba.barras === 0) {
-          dato(`${pantalla.nombre} · sin cabecera, por diseño (pantalla raíz de pestaña)`);
+        if (pantalla.sinCabecera && arriba.barras === 0) {
+          dato(`${pantalla.nombre} · sin cabecera, por diseño (su título es contenido y se desplaza)`);
         }
       }
       await ctx.close();
@@ -430,8 +562,9 @@ function revisar(etiqueta, arriba, abajo, exigeCabecera, esInspector) {
         `${tamano.nombre} ${tamano.width}×${tamano.height}`,
         arriba,
         abajo,
-        cfg.cabeceraEsperada === 'siempre',
-        portal === 'inspector',
+        cfg.cabeceraEsperada === 'siempre' || !cfg.pantallas.find((p) => p.ruta === cfg.larga)?.sinCabecera,
+        cfg.conexion,
+        cfg.conexionSoloRaiz,
       );
       await ctx.close();
     }

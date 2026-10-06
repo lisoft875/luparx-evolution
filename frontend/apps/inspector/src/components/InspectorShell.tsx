@@ -34,9 +34,12 @@ export interface InspectorShellProps {
  * primary action inside the thumb's reach on a phone held in one hand — which is how this app is
  * used, standing, in the sun, sometimes with gloves.
  *
- * The pending count rides on the same badge as the connection state rather than getting its own
- * spot: "sin conexión · 2 pendientes" is one fact about the shift, and two separate indicators for
- * it would compete for the same glance.
+ * El recuento de pendientes NO va en esa insignia (06-10-2026). Durante un día compartieron texto
+ * —«sin conexión · 2 pendientes»— con el argumento de que son un solo hecho del turno. El argumento
+ * sigue siendo bueno y la fila no da para él: la insignia vive en la esquina de una barra que ya
+ * lleva el logo y la municipalidad, y esa frase no cabe en un teléfono de 320px. El recuento tiene
+ * su sitio propio desde el primer día, y mejor: la pestaña «Pendientes» lo lleva como número y se
+ * puede tocar para ir a verlas.
  */
 export function InspectorShell({
   children,
@@ -44,7 +47,7 @@ export function InspectorShell({
   subtitle,
   onBack,
 }: InspectorShellProps): React.JSX.Element {
-  const { t, tPlural } = useTranslation();
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
   const online = useIsOnline();
@@ -148,18 +151,18 @@ export function InspectorShell({
       }
     >
       {/*
-        El cromo de arriba, como un solo bloque que se queda (05-10-2026).
+        El cromo de arriba, que se queda (05-10-2026).
 
-        Antes la barra era fija sólo donde una pantalla pedía `stickyHeader` —dos de nueve— y la
-        insignia de conexión no lo era en ninguna: vivía debajo de la cabecera, en flujo normal, así
-        que al desplazar «Mis boletas» se iba de la pantalla junto con el logo y la municipalidad.
-        Eso es lo que reporta el PDF de barras fijas, y lo que pide es exactamente esto: que el
-        header conserve «logo, municipalidad, estado En línea».
+        Antes la barra era fija sólo donde una pantalla pedía `stickyHeader` —dos de nueve—, así que
+        al desplazar «Mis boletas» el logo, la municipalidad y el estado de conexión se iban de la
+        pantalla. Eso es lo que reporta el PDF de barras fijas, y lo que pide es exactamente esto:
+        que el header conserve «logo, municipalidad, estado En línea».
 
         `.lx-top-chrome` no es nuevo: es el mismo bloque que el Ciudadano usa desde el contrato
-        v0.10 para agrupar su barra y el cronómetro de estadía. Agruparlos es lo que hace que la
-        safe-area del notch se pague UNA vez —la paga la barra, que va primero— y que las dos filas
-        se queden o se vayan juntas en vez de cada una por su cuenta.
+        v0.10 para agrupar su barra y el cronómetro de estadía. Acá envuelve una sola fila —desde el
+        06-10-2026 el estado de conexión va DENTRO de la barra, no debajo— y sigue siendo el sitio
+        correcto: es lo que hace fija la cabecera, y si mañana el fiscalizador gana una franja de
+        verdad (una alerta de turno, digamos) va acá y se queda con ella.
 
         `sticky` y no `fixed`: el bloque conserva su lugar en el flujo, así que no hay que compensar
         su altura con relleno, no aparece una segunda barra de desplazamiento y el contenido no
@@ -167,6 +170,7 @@ export function InspectorShell({
       */}
       <div className="lx-top-chrome">
         <AppBar
+          className="lx-app-bar--inspector"
           start={
             !onBack ? (
               <>
@@ -179,24 +183,40 @@ export function InspectorShell({
           backLabel={t('common.back')}
           title={onBack ? title : undefined}
           subtitle={onBack ? subtitle : undefined}
-        />
-        {/* Franja propia y a todo el ancho, con fondo opaco: lo que se desplaza tiene que pasar por
-            DEBAJO y no verse a través. El recuadro interior comparte la caja de `main` para que la
-            insignia quede alineada con el contenido y no pegada al borde de la pantalla. */}
-        <div className="lx-inspector-status-bar">
-          <div className="lx-inspector-status-bar__inner">
-            {/* Never colour alone: the badge always carries the word as well as the tone. */}
-            <Badge tone={online ? 'success' : 'warning'} icon={<IconOffline size={16} />}>
-              {online
-                ? pending > 0
-                  ? tPlural('inspector.queue.count', pending)
-                  : t('inspector.home.online')
-                : pending > 0
-                  ? tPlural('inspector.offline.queued', pending)
-                  : t('inspector.offline.badge')}
+          /*
+            El estado de conexión, a la derecha de la MISMA fila (06-10-2026).
+
+            Del 05 al 06 de octubre esto fue una franja propia a todo el ancho
+            —`.lx-inspector-status-bar`— colgada debajo de la barra dentro de este mismo
+            `.lx-top-chrome`. Funcionaba y se quedaba fija, y era dos filas de cromo para una sola
+            idea: el PDF del 06-10-2026 lo reporta como «duplicación visual» y pide un único «En
+            línea» arriba a la derecha. La franja se borró del árbol; no está escondida con CSS.
+
+            No se creó ningún indicador nuevo: es esta misma insignia, con el mismo `useIsOnline`,
+            dentro del `.lx-app-bar__end` que ya existía y estaba vacío en este portal.
+          */
+          end={
+            /* Nunca el color solo: la insignia lleva la palabra además del tono.
+
+               Y lleva SÓLO la palabra. Antes decía «Sin conexión · 3 pendientes» porque tenía una
+               franja de 320px de ancho para ella sola; en la esquina de una barra que ya carga el
+               logo y la municipalidad, esa frase no cabe en un teléfono de 320px sin recortarse a
+               «Sin conexión · 3 pend…», y un recuadro recortado en la esquina es justo el defecto
+               que el PDF pide no reintroducir. El recuento no se pierde: la pestaña «Pendientes»
+               lo lleva como número desde siempre (`badgeCount`, más abajo), que es un sitio donde
+               cabe y donde además se puede tocar para ir a verlas. */
+            <Badge
+              /* El gancho estable para medir desde fuera: una sola insignia de conexión en la
+                 pantalla, y dentro de la barra. Buscarla por su texto obligaría al arnés a
+                 conocer las traducciones. */
+              className="lx-connection-badge"
+              tone={online ? 'success' : 'warning'}
+              icon={<IconOffline size={16} />}
+            >
+              {online ? t('inspector.home.online') : t('inspector.offline.badge')}
             </Badge>
-          </div>
-        </div>
+          }
+        />
       </div>
       <main
         style={{

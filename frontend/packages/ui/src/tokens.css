@@ -2559,7 +2559,6 @@ a.lx-list-row {
 .lx-app-bar,
 .lx-bottom-tab-bar,
 .lx-sticky-timer-bar,
-.lx-inspector-status-bar,
 .lx-centered-layout__card {
   -webkit-backdrop-filter: blur(var(--lx-blur-1));
   backdrop-filter: blur(var(--lx-blur-1));
@@ -2626,8 +2625,7 @@ a.lx-list-row {
   .lx-app-bar,
   .lx-bottom-tab-bar,
   .lx-sticky-timer-bar,
-  .lx-inspector-status-bar,
-  .lx-centered-layout__card,
+    .lx-centered-layout__card,
   .lx-modal,
   .lx-language-pill {
     -webkit-backdrop-filter: none;
@@ -4477,23 +4475,99 @@ a.lx-list-row {
   }
 }
 
-/* La franja de estado del fiscalizador (05-10-2026).
-   Segunda fila de la cabecera, dentro de `.lx-top-chrome`: lleva la insignia de «En línea / Sin
-   conexión · N pendientes». A todo el ancho y con fondo OPACO porque lo que se desplaza pasa por
-   debajo y no debe verse a través; el recuadro interior comparte la caja de `main` para que la
-   insignia quede alineada con el contenido.
+/* La cabecera del fiscalizador, en UNA fila (06-10-2026).
 
-   Reemplaza a la prop `sticky` de AppBar (26-09-2026 – 05-10-2026): fijar la barra sola dejaba esta
-   insignia desplazándose, que es la mitad de lo que el PDF de barras fijas pide conservar. */
-.lx-inspector-status-bar {
-  background: var(--lx-surface);
-  border-bottom: 1px solid var(--lx-border);
+   Acá vivió `.lx-inspector-status-bar`, del 05 al 06 de octubre: una segunda franja a todo el ancho,
+   dentro de `.lx-top-chrome`, sólo para la insignia de «En línea». Se fue entera —regla y marcado—
+   porque el PDF del 06-10-2026 la reporta como duplicación visual y pide un único indicador arriba a
+   la derecha, y porque esconderla con `display: none` habría dejado el componente duplicado en el
+   layout, que es exactamente lo que el PDF prohíbe.
+
+   La insignia se mudó al `.lx-app-bar__end` que ya existía. Lo único que la mudanza necesita es
+   decidir QUIÉN cede cuando tres cosas no caben en una fila de 320px, y no dejarlo al azar del
+   orden de los elementos. */
+.lx-app-bar--inspector .lx-app-bar__start,
+.lx-app-bar--citizen .lx-app-bar__start {
+  /* El que cede es el nombre de la municipalidad: `.lx-tenant-badge` ya tiene `min-width: 0` y su
+     etiqueta ya recorta con puntos suspensivos, con el nombre completo en `title` y en el nombre
+     accesible —decisión que TenantBadge documenta desde que existe—, así que recortarlo no cuesta
+     información. El emblema no se encoge y el logo tampoco. */
+  flex: 1 1 auto;
 }
-.lx-inspector-status-bar__inner {
-  width: 100%;
-  max-width: 640px;
-  margin: 0 auto;
-  padding: var(--lx-space-2) var(--lx-space-4);
+.lx-app-bar--inspector .lx-app-bar__end,
+.lx-app-bar--citizen .lx-app-bar__end {
+  /* Y el que NO cede es el estado de conexión: es el motivo por el que la barra existe para un
+     fiscalizador que está de pie y necesita saber si la boleta salió del teléfono. */
+  flex: 0 0 auto;
+}
+.lx-app-bar--inspector .lx-app-bar__end .lx-badge,
+.lx-app-bar--citizen .lx-app-bar__end .lx-badge {
+  /* Dos pasos de relleno en vez de tres: medido, a 320px la fila va al píxel y un píxel de desborde
+     es una barra de desplazamiento horizontal en toda la aplicación. */
+  padding-right: var(--lx-space-2);
+  padding-left: var(--lx-space-2);
+}
+
+/* Cuándo el nombre de la municipalidad deja de dibujarse, y por qué en dos umbrales distintos.
+
+   Esto está medido con esta misma hoja de estilos, en los ocho tamaños de la estrategia de pruebas,
+   con los nombres que manda el servidor (`shortName`: «San José», «Escazú», «M. de Oca»). La cuenta
+   de una fila es: ancho − 32 de relleno − 105 de la marca − los huecos − el ancho de la ficha de
+   municipalidad sin etiqueta (43) − la insignia de estado − la campana si la hay.
+
+   FISCALIZACIÓN, sin campana. «En línea» mide 94px, «Sin conexión» 129. Por encima de 360px el
+   nombre entra entero o casi («M. de Oca» a 390px se recorta a 55 de 73, legible). A 320px quedan
+   30px para una ficha que ya pide 43, y la etiqueta salía con 20px —«S…»—.
+
+   CIUDADANO, con campana (44px de objetivo táctil) e insignia compacta (70px / 102px). Para que
+   «M. de Oca» quepa entero hacen falta 427px de ancho, así que en TODO teléfono la etiqueta sale
+   recortada, y a 390px sin conexión salía con 30px, que es una letra y un punto.
+
+   En los dos casos la decisión es la misma y la toma TenantBadge desde que existe: lo que no cede es
+   el emblema («at that width the emblem is what identifies the municipality at a glance, and half a
+   shrunken logo identifies nothing»), y el nombre completo sigue en `title` y en el nombre accesible.
+   O sea que no se pierde información: se deja de dibujar mal. Lo que cambia entre los dos portales es
+   DÓNDE está ese límite, porque una fila con campana tiene 52px menos.
+
+   Sólo estas dos cabeceras. La administración y la plataforma no son barras de teléfono y no se
+   tocan. */
+@media (max-width: 359px) {
+  .lx-app-bar--inspector .lx-tenant-badge__label {
+    display: none;
+  }
+  .lx-app-bar--inspector .lx-tenant-badge {
+    /* Sin etiqueta, el relleno de la derecha dejaba el emblema descentrado en su propia ficha. */
+    padding-right: 3px;
+  }
+}
+@media (max-width: 429px) {
+  .lx-app-bar--citizen .lx-tenant-badge__label {
+    display: none;
+  }
+  .lx-app-bar--citizen .lx-tenant-badge {
+    padding-right: 3px;
+  }
+}
+
+/* La insignia de conexión del ciudadano: pequeña y discreta, que es lo que pide el PDF (06-10-2026).
+
+   Su fila carga una cosa más que la del fiscalizador —la campana de notificaciones, 44px de objetivo
+   táctil— y el encargo dice «pequeño, discreto, claramente visible». Las tres cosas apuntan al mismo
+   sitio: sin icono (el `svg` de 16px más su hueco eran 20px, y a 320px eran la diferencia entre caber
+   y no caber), un punto de letra más abajo, y el relleno justo. Lo que NO se toca es la palabra: el
+   tono nunca viaja solo.
+
+   «Claramente visible» no es «más grande»: el contraste de `--lx-success-soft` sobre la superficie de
+   la barra es el mismo que mide el verificador de paleta para cualquier insignia, y 12px en semibold
+   lo conserva. Lo que la hace discreta es el tamaño, no un color más apagado. */
+.lx-connection-badge--compact {
+  padding: 1px var(--lx-space-2);
+  font-size: calc(var(--lx-text-meta-size) - 1px);
+}
+/* La campana queda en la esquina, y entre insignia y campana no hace falta el hueco grande de la
+   fila: son dos cosas del mismo grupo. */
+.lx-app-bar--citizen .lx-app-bar__end {
+  gap: var(--lx-space-2);
 }
 
 /* La tarjeta de Ayuda que ES la acción (26-09-2026).
