@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { RequirePermission, useAuth } from '@luparx/auth';
-import { useTranslation, formatDateTime, roleLabel, type TranslationKey } from '@luparx/i18n';
+import { useTranslation, formatDate, formatDateTime, formatTime, roleLabel, type TranslationKey } from '@luparx/i18n';
 import {
   ApiError,
   TENANT_GRANTABLE_ROLES,
@@ -371,7 +371,7 @@ export function StaffPage(): React.JSX.Element {
             compact
             fixedLayout
             /*
-              816px: los mínimos de las cinco columnas declaradas (616) más un suelo de 200 para la
+              838px: los mínimos de las cinco columnas declaradas (638) más un suelo de 200 para la
               persona. Por debajo de eso la tabla se desplaza como un bloque en vez de estrujar la
               columna de la persona hasta cero, que es lo que medido pasaba a 390px.
 
@@ -379,7 +379,7 @@ export function StaffPage(): React.JSX.Element {
               —«Desktop amplio: sin scroll horizontal»—. Por debajo se desplaza con los dos extremos
               fijos, así que nunca se pierde de vista a quién ni cómo operarlo.
             */
-            minWidth="816px"
+            minWidth="838px"
             stickyFirstColumn
             stickyLastColumn
             loading={query.isLoading}
@@ -408,7 +408,11 @@ export function StaffPage(): React.JSX.Element {
               {
                 key: 'role',
                 header: t('admin.staff.column.role'),
-                width: 'clamp(130px, 13vw, 200px)',
+                // Quiebra en dos líneas en vez de recortarse: «Administrador municipal» y «Jefe de
+                // fiscalización» tienen que leerse enteros, y el ajuste del 06-10-2026 lo pide con
+                // nombre y apellido. Con 130px de mínimo y dos líneas entran los dos.
+                wrap: true,
+                width: 'clamp(130px, 12vw, 190px)',
                 // La etiqueta humana, del mismo sitio que todo lo demás desde la Fase 1.
                 render: (member) => roleLabel(t, member.role),
               },
@@ -432,13 +436,20 @@ export function StaffPage(): React.JSX.Element {
               {
                 key: 'zones',
                 header: t('admin.staff.column.zones'),
-                width: 'clamp(140px, 14vw, 240px)',
+                // «San Rafael - Multiplaza +1» tiene que leerse, no quedar en «San Rafael - M…». Con
+                // quiebre, el nombre del sector principal cae en dos líneas y el contador se queda a
+                // su lado; la lista completa sigue en el `title`.
+                wrap: true,
+                width: 'clamp(160px, 15vw, 250px)',
                 render: sectoresDe,
               },
               {
                 key: 'lastUsed',
                 header: t('admin.staff.column.lastUsed'),
-                width: 'clamp(118px, 11vw, 175px)',
+                // Dos líneas de verdad —fecha arriba, hora abajo— y no una frase recortada. Era
+                // «22 sept 2026, 1…», que no dice ni el día ni la hora. Separadas, las dos entran en
+                // 120px de columna y ninguna se corta.
+                width: 'clamp(120px, 10vw, 150px)',
                 // The POST's own use, not the person's last sign-in. Since v0.26 a person may hold
                 // two posts, and the person-level stamp cannot tell them apart: it would show the
                 // same date on both rows and mark an unused inspector post as busy. When there is no
@@ -446,12 +457,16 @@ export function StaffPage(): React.JSX.Element {
                 // context, clearly labelled — never dressed up as this post's.
                 render: (member) => (
                   <>
-                    <span className="lx-cell-stack">
+                    <span className="lx-cell-stack lx-cell-stack--wrap">
+                      {/* La fecha y la hora en renglones distintos, con los formateadores que ya
+                          existían por separado. `formatDateTime` las junta en una frase que, en una
+                          columna de 120px, se recortaba justo donde está la hora. */}
                       <span>
                         {member.lastUsedAt
-                          ? formatDateTime(member.lastUsedAt, locale)
+                          ? formatDate(member.lastUsedAt, locale)
                           : t('admin.staff.lastUsed.none')}
                       </span>
+                      {member.lastUsedAt ? <span>{formatTime(member.lastUsedAt, locale)}</span> : null}
                       {/* La frase completa en `title`: es una explicación, no un dato que se lea de
                           un golpe, y escrita entera convertía esta columna en la más ancha de la
                           tabla. */}
@@ -462,7 +477,7 @@ export function StaffPage(): React.JSX.Element {
                             date: formatDateTime(member.lastLoginAt, locale),
                           })}
                         >
-                          {formatDateTime(member.lastLoginAt, locale)}
+                          {formatDate(member.lastLoginAt, locale)}
                         </span>
                       ) : null}
                     </span>

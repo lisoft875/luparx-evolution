@@ -1056,6 +1056,38 @@ body {
   white-space: normal;
 }
 
+/* La pila de dos líneas cuando NINGUNA de las dos debe recortarse. `.lx-cell-stack` recorta con
+   puntos suspensivos, que es correcto para un correo largo y no para una fecha: «22 sept 20…» no dice
+   el año. Acá cada renglón se queda entero y la columna se dimensiona para que entren. */
+.lx-cell-stack--wrap > * {
+  overflow: visible;
+  text-overflow: clip;
+  /*
+    Y quiebran, además de no recortarse.
+
+    Lo encontró la medición: en la columna de «Último uso», la frase del caso vacío —«Sin uso
+    registrado»— es más larga que cualquier fecha, y quitado el recorte se salía de la celda en los
+    seis anchos. No es una fecha: es la frase que dice que no hay ninguna. Acortarla a «Sin uso» habría
+    sido resolver un problema de ancho quitándole palabras a una oración clara; que quiebre cuesta un
+    renglón en las filas que no tienen fecha, y ninguno en las que sí.
+  */
+  white-space: normal;
+}
+
+/* Una celda que quiebra en vez de recortarse. Ver `wrap` en Table.tsx para el por qué.
+
+   `-webkit-line-clamp` y no un alto fijo: el tope son dos LÍNEAS, no una medida, así que la fila crece
+   lo que haga falta con la tipografía de cada aparato en vez de cortar a mitad de un renglón. Y pisa el
+   `overflow: hidden` + `text-overflow` del modo fijo, que es lo que estaba recortando. */
+.lx-table__cell--wrap {
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: clip;
+}
+
 /* Los sectores de un puesto: el principal y, si hay más, su contador. En una fila, porque son una
    sola idea —«trabaja en este sector, y en N más»— y no dos datos. */
 .lx-staff-zones {

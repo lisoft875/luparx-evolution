@@ -116,7 +116,31 @@ async function medirTabla(page) {
         }
       }
     }
+    /*
+      Y lo que el ajuste del 06-10-2026 añade: que los datos se LEAN.
+
+      La corrección anterior quitó el desplazamiento horizontal recortando todo, y produjo
+      «Administrador muni…», «San Rafael - M…» y «22 sept 2026, 1…». El arnés lo dejó pasar porque
+      preguntaba si algo se salía de su celda, y un texto con puntos suspensivos no se sale de nada: es
+      justamente la forma de no salirse. Faltaba la otra pregunta.
+
+      Dos preguntas, porque son dos mecanismos. Una celda con quiebre entra entera cuando su
+      `scrollHeight` cabe en su caja —si el tope de dos líneas tuvo que cortar, sobra alto—. Y una pila
+      de renglones sin recorte entra cuando ninguno desborda su ancho.
+    */
+    const ilegibles = [];
+    for (const td of document.querySelectorAll('tbody td.lx-table__cell--wrap')) {
+      if (td.scrollHeight > td.clientHeight + 2) {
+        ilegibles.push(`«${(td.textContent ?? '').trim().slice(0, 20)}» cortado a dos líneas`);
+      }
+    }
+    for (const linea of document.querySelectorAll('tbody .lx-cell-stack--wrap > span')) {
+      if (linea.scrollWidth > linea.clientWidth + 1) {
+        ilegibles.push(`«${(linea.textContent ?? '').trim()}» no cabe en su renglón`);
+      }
+    }
     return {
+      ilegibles: [...new Set(ilegibles)],
       desbordePagina: doc.scrollWidth - doc.clientWidth,
       desbordeTabla: env.scrollWidth - env.clientWidth,
       cabeceras,
@@ -188,9 +212,28 @@ async function medirTabla(page) {
       `${tam.nombre} ${tam.width}px · nada cortado a media palabra`,
       m.cortadas.join(' | '),
     );
+    comprobar(
+      m.ilegibles.length === 0,
+      `${tam.nombre} ${tam.width}px · y los datos se leen enteros, sin puntos suspensivos`,
+      m.ilegibles.join(' | '),
+    );
     if (tam.width === 1536) {
       dato(`columnas: ${m.cabeceras.join(' · ')}`);
       dato(`${m.filas} filas`);
+      /*
+        Los textos que el PDF nombra uno por uno. Se comprueban por su contenido COMPLETO en la
+        pantalla: con «Administrador muni…» el `innerText` ya no contiene «Administrador municipal», así
+        que la ausencia de la cadena entera es exactamente el defecto.
+      */
+      const visible = (await page.locator('tbody').innerText().catch(() => '')) ?? '';
+      for (const frase of ['Administrador municipal', 'Jefe de fiscalización']) {
+        if (visible.includes(frase.slice(0, 12))) {
+          comprobar(visible.includes(frase), `se lee «${frase}» completo`,
+            `la tabla dice: ${visible.replace(/\s+/g, ' ').slice(0, 120)}`);
+        } else {
+          dato(`«${frase}» no está en las filas de staging: no se pudo comprobar`);
+        }
+      }
     }
   }
 

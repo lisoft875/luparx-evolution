@@ -16,6 +16,19 @@ export interface TableColumn<T> {
    * cada celda tenga que repetirlos.</p>
    */
   width?: string;
+  /**
+   * Que el texto de esta columna QUIEBRE en dos líneas en vez de recortarse con puntos suspensivos.
+   *
+   * <p>Existe porque la alternativa resultó peor de lo que parecía. Con `fixedLayout` y las celdas en
+   * `nowrap`, todo lo que no cabe se recorta, y en la tabla de Funcionarios eso producía
+   * «Administrador muni…», «San Rafael - M…» y «22 sept 2026, 1…»: la tabla cabía y había dejado de
+   * poderse leer. Recortar un nombre de rol a la mitad no es resumirlo, es quitarlo.</p>
+   *
+   * <p>Lo que cuesta es alto de fila, y es el precio correcto: una tabla un poco más alta se lee, una
+   * tabla recortada no. Dos líneas como máximo, para que una celda larga no estire su fila al triple
+   * de las demás.</p>
+   */
+  wrap?: boolean;
 }
 
 export interface TableProps<T> {
@@ -147,7 +160,9 @@ export function Table<T>({
             rows.map((row) => (
               <tr key={rowKey(row)}>
                 {columns.map((column) => (
-                  <td key={column.key}>{column.render(row)}</td>
+                  <td key={column.key} className={column.wrap ? 'lx-table__cell--wrap' : undefined}>
+                    {column.render(row)}
+                  </td>
                 ))}
               </tr>
             ))
