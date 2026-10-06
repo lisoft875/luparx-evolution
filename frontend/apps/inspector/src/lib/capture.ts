@@ -36,6 +36,16 @@ export interface CapturedPosition {
 
 export type PermissionOutcome = 'granted' | 'denied' | 'unavailable';
 
+/**
+ * Lo que se puede decir de un permiso SIN preguntarle a nadie.
+ *
+ * <p>Tres estados y no dos, porque «no concedido» mezcla dos cosas que no se parecen: un permiso
+ * denegado —que hay que ir a arreglar a los ajustes del teléfono— y un permiso que todavía no se ha
+ * pedido, que es lo normal al abrir la aplicación y no es ningún problema. Un diagnóstico que
+ * llamara «problema» al segundo estaría dando un parte falso todos los días.</p>
+ */
+export type PermissionReadiness = 'granted' | 'denied' | 'asksOnUse';
+
 interface NativeCameraPlugin {
   getPhoto(options: Record<string, unknown>): Promise<{ webPath?: string; dataUrl?: string; format?: string }>;
   checkPermissions?(): Promise<{ camera?: string }>;
@@ -83,6 +93,30 @@ export function hasNativeCamera(): boolean {
 
 export function hasNativeGeolocation(): boolean {
   return nativeGeolocation() !== null;
+}
+
+/**
+ * Whether the camera is ALREADY usable on this device — asked without prompting anybody.
+ *
+ * <p>Read-only on purpose: this exists for the diagnostic, and a diagnostic that raises a
+ * permission sheet is not a diagnostic, it is a request. The asking still happens where it always
+ * happened, on the citation form, with its explanation first.</p>
+ *
+ * <p>On the web there is no camera permission to read: the photograph comes from a
+ * `<input type="file" capture>` and the operating system's own picker decides at the moment of
+ * use. That is `asksOnUse`, which is the truth, and not `granted`, which would be a guess.</p>
+ */
+export async function cameraPermissionState(): Promise<PermissionReadiness> {
+  const plugin = nativeCamera();
+  if (!plugin?.checkPermissions) return 'asksOnUse';
+  try {
+    const status = await plugin.checkPermissions();
+    if (status?.camera === 'granted' || status?.camera === 'limited') return 'granted';
+    if (status?.camera === 'denied') return 'denied';
+    return 'asksOnUse';
+  } catch {
+    return 'asksOnUse';
+  }
 }
 
 /**
@@ -167,22 +201,41 @@ export async function takeNativePhoto(): Promise<CapturedPhoto | null> {
  * the officer did not agree to give.</p>
  */
 export async function locationPermissionGranted(): Promise<boolean> {
+  return (await locationPermissionState()) === 'granted';
+}
+
+/**
+ * The same question as above, answered with the three states the diagnostic needs.
+ *
+ * <p>This is where the knowledge lives now and {@link locationPermissionGranted} delegates to it:
+ * two functions reading the same permission by different paths is how they end up disagreeing.</p>
+ *
+ * <p>A browser that refuses the query, or does not implement it, reads as `asksOnUse` — because
+ * that is exactly what will happen: the prompt appears on the first `getCurrentPosition`. It never
+ * reads as `granted`, which would record a position nobody agreed to give, nor as `denied`, which
+ * would report a problem that does not exist.</p>
+ */
+export async function locationPermissionState(): Promise<PermissionReadiness> {
   const plugin = nativeGeolocation();
   if (plugin && typeof plugin.checkPermissions === 'function') {
     try {
       const status = await plugin.checkPermissions();
-      return status?.location === 'granted' || status?.coarseLocation === 'granted';
+      if (status?.location === 'granted' || status?.coarseLocation === 'granted') return 'granted';
+      if (status?.location === 'denied') return 'denied';
+      return 'asksOnUse';
     } catch {
-      return false;
+      return 'asksOnUse';
     }
   }
-  if (typeof navigator === 'undefined' || !navigator.permissions?.query) return false;
+  if (typeof navigator === 'undefined' || !navigator.geolocation) return 'denied';
+  if (!navigator.permissions?.query) return 'asksOnUse';
   try {
     const status = await navigator.permissions.query({ name: 'geolocation' as PermissionName });
-    return status.state === 'granted';
+    if (status.state === 'granted') return 'granted';
+    return status.state === 'denied' ? 'denied' : 'asksOnUse';
   } catch {
     // Some browsers refuse the query itself. Not knowing is not the same as knowing it is granted.
-    return false;
+    return 'asksOnUse';
   }
 }
 

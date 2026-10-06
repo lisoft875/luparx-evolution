@@ -5223,3 +5223,91 @@ a.lx-list-row {
 .lx-help-card:hover .lx-help-card__action {
   color: var(--lx-primary-hover);
 }
+
+/* -------------------------------------------------------------------------------------------------
+   Diagnóstico de la aplicación (06-10-2026)
+
+   Seis filas de ESTADO, no seis accesos. El color vive en el disco del icono y en el borde de la
+   fila; el texto se queda en los tonos de siempre sobre la superficie de siempre, que es lo que el
+   comprobador de contraste ya mide. Las tres parejas fondo/color son exactamente las de `.lx-badge`
+   —no se inventa una paleta para esta pantalla.
+   ------------------------------------------------------------------------------------------------- */
+.lx-diag {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lx-space-4);
+}
+.lx-diag__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--lx-space-2);
+}
+.lx-diag__row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--lx-space-3);
+  padding: var(--lx-space-3);
+  border: 1px solid var(--lx-border);
+  border-radius: var(--lx-radius-md);
+  background: var(--lx-surface-2);
+}
+.lx-diag__row[data-tono='aviso'] {
+  border-color: color-mix(in srgb, var(--lx-warning) 45%, var(--lx-border));
+}
+.lx-diag__row[data-tono='problema'] {
+  border-color: color-mix(in srgb, var(--lx-danger) 45%, var(--lx-border));
+}
+.lx-diag__icon {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--lx-radius-sm);
+  background: var(--lx-success-soft);
+  color: var(--lx-success);
+}
+.lx-diag__icon svg {
+  width: 18px;
+  height: 18px;
+}
+.lx-diag__row[data-tono='aviso'] .lx-diag__icon {
+  background: var(--lx-warning-soft);
+  color: var(--lx-warning);
+}
+.lx-diag__row[data-tono='problema'] .lx-diag__icon {
+  background: var(--lx-danger-soft);
+  color: var(--lx-danger-text);
+}
+.lx-diag__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.lx-diag__title {
+  margin: 0;
+  font-weight: 600;
+}
+.lx-diag__state {
+  margin: 0;
+  color: var(--lx-text-muted);
+}
+.lx-diag__note {
+  margin: var(--lx-space-1) 0 0;
+  color: var(--lx-text-muted);
+  font-size: var(--lx-text-meta-size);
+  /* Una nota de dos renglones en un teléfono de 360 px no se corta: se parte. */
+  white-space: normal;
+}
+/* El botón sólo existe cuando hay algo que arreglar, así que no se estira a todo lo ancho: eso lo
+   haría parecer el final de la tarjeta y no el remedio de ESA fila. */
+.lx-diag__action {
+  margin-top: var(--lx-space-3);
+  align-self: flex-start;
+}

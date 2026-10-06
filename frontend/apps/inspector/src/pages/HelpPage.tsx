@@ -1,30 +1,31 @@
 import * as React from 'react';
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@luparx/auth';
 import { useTranslation, type TranslationKey } from '@luparx/i18n';
 import {
+  Alert,
   Badge,
   Button,
   Card,
   CardStack,
-  IconArrowLeft,
   IconCheck,
   IconEye,
   IconFine,
+  IconGauge,
   IconOffline,
+  IconPin,
   IconSearch,
-  IconShield,
   IconSystem,
-  ListRow,
+  IconUser,
   Modal,
-  SummaryList,
-  SummaryRow,
 } from '@luparx/ui';
 import { InspectorShell } from '../components/InspectorShell';
+import { cameraPermissionState, locationPermissionState, type PermissionReadiness } from '../lib/capture';
 import { useCitationQueue, useIsOnline } from '../lib/queries';
 
 /**
- * Ayuda: cinco eventualidades del turno, cada una con la salida ya construida.
+ * Ayuda: cinco eventualidades del turno y, la sexta, el diagnóstico de la aplicación.
  *
  * <h2>Qué cambió el 26-09-2026</h2>
  *
@@ -35,27 +36,43 @@ import { useCitationQueue, useIsOnline } from '../lib/queries';
  * <p>Ahora cada tarjeta ES la acción. Y ninguna trae pantalla nueva: cuatro llevan a rutas que ya
  * existen y la quinta abre un panel corto con el estado que la aplicación ya conoce.</p>
  *
+ * <h2>Qué cambió el 06-10-2026, y por qué era un error mío</h2>
+ *
+ * <p>La sexta tarjeta era «Resolver un problema» y abría una lista de siete filas. Cinco de esas
+ * siete ERAN, por construcción, las cinco tarjetas de arriba: las derivaba de la misma tabla para
+ * que no pudieran discrepar. El resultado fue peor que la discrepancia que evitaba —un modal que
+ * repetía la pantalla que lo había abierto— y se ve de un golpe en las dos capturas del PDF del
+ * 06-10. La derivación era correcta y la idea era mala.</p>
+ *
+ * <p>La sexta tarjeta ahora hace lo único que ninguna de las otras cinco hace: MEDIR. Responde
+ * «¿mi aplicación está funcionando?» con seis comprobaciones del estado real, y ofrece un botón
+ * solamente donde hay algo que arreglar. Si no hay nada, no hay ningún botón: un control de
+ * recuperación visible cuando no hay nada que recuperar enseña a ignorarlo.</p>
+ *
  * <h2>Lo que NO se creó, a propósito</h2>
  *
  * <ul>
- *   <li><b>Ningún segundo sistema offline.</b> El panel de «Si te quedás sin señal» lee
- *       {@link useIsOnline} y {@link useCitationQueue}, que son los mismos que alimentan la insignia
- *       de la cabecera y el contador de la barra inferior. Si alguna vez discrepan, es un error;
- *       por eso hay una sola fuente.</li>
+ *   <li><b>Ningún segundo sistema offline.</b> El panel de «Si te quedás sin señal» y el
+ *       diagnóstico leen {@link useIsOnline} y {@link useCitationQueue}, que son los mismos que
+ *       alimentan la insignia de la cabecera y el contador de la barra inferior. Si alguna vez
+ *       discrepan, es un error; por eso hay una sola fuente.</li>
  *   <li><b>Ninguna galería de evidencia.</b> Las fotos se agregan DENTRO de una boleta, así que la
  *       tarjeta lleva al flujo de boleta, que es el punto correcto del flujo existente.</li>
- *   <li><b>Ninguna ruta nueva.</b> `/`, `/cite` y `/queue` ya estaban.</li>
+ *   <li><b>Ninguna ruta nueva, ningún endpoint nuevo.</b> `/`, `/cite` y `/queue` ya estaban, y el
+ *       diagnóstico no llama al servidor: todo lo que informa se mide en el dispositivo.</li>
+ *   <li><b>Ninguna versión de la aplicación.</b> El PDF la pide «si ya existe». No existe: el
+ *       frontend no expone ninguna, y escribir una constante a mano sería inventar el dato que el
+ *       propio PDF prohíbe inventar.</li>
  * </ul>
  */
 type ClaveEventualidad = 'offline' | 'plate' | 'citation' | 'evidence' | 'queue';
-type ClaveProblema = ClaveEventualidad | 'error' | 'back';
 
 interface Entrada {
-  clave: ClaveEventualidad | 'triage';
+  clave: ClaveEventualidad | 'diag';
   icono: React.ReactNode;
   /**
-   * Adónde lleva. `null` = abre un panel, no una pantalla: la conexión para `offline`, la lista de
-   * problemas para `triage`.
+   * Adónde lleva. `null` = abre un panel, no una pantalla: la conexión para `offline`, el
+   * diagnóstico para `diag`.
    */
   ruta: string | null;
 }
@@ -70,70 +87,257 @@ const EVENTUALIDADES: { clave: ClaveEventualidad; icono: React.ReactNode; ruta: 
   { clave: 'queue', icono: <IconCheck />, ruta: '/queue' },
 ];
 
-/**
- * Las seis tarjetas: las cinco de siempre y el triaje, que es la sexta (05-10-2026).
- *
- * <p>La sexta no es una explicación más. Las otras cinco suponen que uno ya sabe cuál de las cinco
- * aplica; ésta es para cuando no se sabe, y por eso va al final y abre una lista en vez de llevar
- * a una ruta.</p>
- */
-const ENTRADAS: Entrada[] = [
-  ...EVENTUALIDADES,
-  { clave: 'triage', icono: <IconShield />, ruta: null },
-];
+/** Las seis tarjetas: las cinco de siempre y el diagnóstico, que es la sexta. */
+const ENTRADAS: Entrada[] = [...EVENTUALIDADES, { clave: 'diag', icono: <IconGauge />, ruta: null }];
 
 /**
- * Los siete problemas del triaje, y por qué esta tabla se DERIVA de la de arriba.
+ * El tono de una comprobación.
  *
- * <p>Cinco de los siete son las mismas cinco eventualidades, con el mismo destino. Escribirlos otra
- * vez habría dejado dos listas que pueden discrepar: cambiar la ruta de la evidencia en una y
- * olvidarla en la otra es el error que se comete a los tres meses, y el síntoma —una ayuda que
- * lleva a un sitio y otra ayuda que lleva a otro— no se parece a su causa. Así que las cinco se
- * toman de {@link EVENTUALIDADES} y sólo se agregan los dos que el PDF trae nuevos.</p>
+ * <p>`aviso` no es un `problema` flojo. `problema` es algo que ahora mismo impide trabajar o puede
+ * perder datos; `aviso` es algo que conviene saber y con lo que se trabaja igual —la ubicación
+ * denegada, por ejemplo: una boleta sin coordenadas es una boleta perfectamente válida, y pintarla
+ * de rojo enseñaría a no creerle al rojo.</p>
  */
-const PROBLEMAS: { clave: ClaveProblema; icono: React.ReactNode }[] = [
-  ...EVENTUALIDADES.map(({ clave, icono }) => ({ clave: clave as ClaveProblema, icono })),
-  { clave: 'error', icono: <IconSystem /> },
-  { clave: 'back', icono: <IconArrowLeft /> },
-];
+type Tono = 'ok' | 'aviso' | 'problema';
+
+interface Comprobacion {
+  clave: string;
+  tono: Tono;
+  icono: React.ReactNode;
+  titulo: string;
+  estado: string;
+  /** Sólo cuando el tono no es `ok`: qué significa y qué se puede hacer. */
+  nota?: string;
+  /** Sólo cuando existe algo que de verdad resuelve. Nunca un botón decorativo. */
+  accion?: { etiqueta: string; onClick: () => void; ocupado?: boolean };
+}
+
+/** Lo que las comprobaciones asíncronas devuelven. `null` mientras se están midiendo. */
+interface Medicion {
+  camara: PermissionReadiness;
+  ubicacion: PermissionReadiness;
+  almacenamiento: boolean;
+}
+
+/**
+ * ¿Este dispositivo está guardando lo que la aplicación le confía?
+ *
+ * <p>La cola de boletas vive en `localStorage` (ver `citationQueue.ts`). En modo privado, o con el
+ * almacenamiento lleno, escribir ahí lanza —y entonces una boleta levantada sin señal se pierde al
+ * cerrar la aplicación, en silencio y sin que nada en la pantalla lo delate. Es el único fallo de
+ * esta aplicación que no se nota hasta que ya costó una boleta, así que se comprueba escribiendo
+ * de verdad y borrando lo escrito.</p>
+ */
+function almacenamientoDisponible(): boolean {
+  try {
+    const clave = 'luparx.diag.probe';
+    window.localStorage.setItem(clave, '1');
+    window.localStorage.removeItem(clave);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export function HelpPage(): React.JSX.Element {
   const { t, tPlural } = useTranslation();
   const navigate = useNavigate();
   const online = useIsOnline();
-  const { pending } = useCitationQueue();
+  const { rows, pending, flush, retryAll } = useCitationQueue();
+  const { status, activeTenant } = useAuth();
   const [verConexion, setVerConexion] = useState(false);
-  const [verProblemas, setVerProblemas] = useState(false);
-  const [verError, setVerError] = useState(false);
+  const [verDiagnostico, setVerDiagnostico] = useState(false);
+  const [medicion, setMedicion] = useState<Medicion | null>(null);
+  const [sincronizando, setSincronizando] = useState(false);
 
-  /** Abre lo que esa tarjeta abre: la conexión, o la lista de problemas. */
+  const fallidas = rows.filter((row) => row.state === 'FAILED').length;
+
+  /**
+   * Mide lo que hay que preguntar y esperar. Se vuelve a correr cada vez que se abre el panel y
+   * después de cada acción: un diagnóstico que no se actualiza tras pulsar «Sincronizar ahora»
+   * deja al fiscalizador mirando el problema que acaba de resolver.
+   */
+  const medir = useCallback(async () => {
+    const [camara, ubicacion] = await Promise.all([cameraPermissionState(), locationPermissionState()]);
+    setMedicion({ camara, ubicacion, almacenamiento: almacenamientoDisponible() });
+  }, []);
+
+  useEffect(() => {
+    if (!verDiagnostico) return;
+    void medir();
+  }, [verDiagnostico, medir]);
+
+  /** Abre lo que esa tarjeta abre: la conexión, o el diagnóstico. */
   function abrirPanel(clave: Entrada['clave']): void {
-    if (clave === 'triage') setVerProblemas(true);
-    else setVerConexion(true);
+    if (clave === 'diag') {
+      setMedicion(null);
+      setVerDiagnostico(true);
+    } else {
+      setVerConexion(true);
+    }
+  }
+
+  async function sincronizarAhora(): Promise<void> {
+    setSincronizando(true);
+    try {
+      await flush();
+    } finally {
+      setSincronizando(false);
+      await medir();
+    }
+  }
+
+  /** El permiso, dicho en palabras. Los tres estados existen porque los tres pasan de verdad. */
+  function textoPermiso(estado: PermissionReadiness): string {
+    if (estado === 'granted') return t('inspector.help.diag.permission.granted');
+    if (estado === 'denied') return t('inspector.help.diag.permission.denied');
+    return t('inspector.help.diag.permission.asks');
   }
 
   /**
-   * Resuelve un problema del triaje con lo que ya existe. Ninguna rama crea un proceso paralelo.
+   * Las seis comprobaciones, en el orden del PDF.
+   *
+   * <p>Ninguna fila lleva a «Consultar una placa», «Levantar una boleta», «Fotos y evidencia» ni
+   * «Pendientes» como acceso: §4 lo prohíbe en letra, y además sería volver a la lista que esto
+   * vino a borrar. Una ruta sólo aparece cuando ES el remedio del problema detectado.</p>
    */
-  function resolver(clave: ClaveProblema): void {
-    setVerProblemas(false);
-    if (clave === 'error') {
-      setVerError(true);
-      return;
+  function comprobaciones(): Comprobacion[] {
+    const lista: Comprobacion[] = [];
+
+    // 1. Conexión.
+    lista.push({
+      clave: 'connection',
+      tono: online ? 'ok' : 'problema',
+      icono: <IconOffline />,
+      titulo: t('inspector.help.diag.connection'),
+      estado: online ? t('inspector.home.online') : t('inspector.offline.badge'),
+      nota: online ? undefined : t('inspector.help.diag.connection.note'),
+      accion: online
+        ? undefined
+        : { etiqueta: t('inspector.help.offline.action'), onClick: () => setVerConexion(true) },
+    });
+
+    // 2. Sincronización. Un solo dato y una sola fila: «sincronización» y «operaciones pendientes»
+    //    son la misma cola leída dos veces, y dos filas que siempre dicen lo mismo son ruido.
+    if (fallidas > 0) {
+      lista.push({
+        clave: 'sync',
+        tono: 'problema',
+        icono: <IconCheck />,
+        titulo: t('inspector.help.diag.sync'),
+        estado: tPlural('inspector.help.diag.sync.failed', fallidas),
+        nota: t('inspector.help.diag.sync.failedNote'),
+        // Reintentar sin señal no reintenta nada: el botón aparece sólo cuando puede funcionar.
+        accion: online
+          ? { etiqueta: t('inspector.help.diag.sync.retry'), onClick: () => retryAll() }
+          : undefined,
+      });
+    } else if (pending > 0) {
+      lista.push({
+        clave: 'sync',
+        tono: 'aviso',
+        icono: <IconCheck />,
+        titulo: t('inspector.help.diag.sync'),
+        estado: tPlural('inspector.help.diag.sync.pending', pending),
+        nota: online ? t('inspector.help.diag.sync.note') : t('inspector.help.diag.sync.offlineNote'),
+        accion: online
+          ? {
+              etiqueta: t('inspector.help.diag.sync.action'),
+              onClick: () => void sincronizarAhora(),
+              ocupado: sincronizando,
+            }
+          : undefined,
+      });
+    } else {
+      lista.push({
+        clave: 'sync',
+        tono: 'ok',
+        icono: <IconCheck />,
+        titulo: t('inspector.help.diag.sync'),
+        estado: t('inspector.help.diag.sync.ok'),
+      });
     }
-    if (clave === 'back') {
-      // La navegación que ya hay, no una nueva: el historial del navegador, que es el mismo que
-      // mueve la flecha de la cabecera. Sin historial —una pestaña abierta directo en /help— no
-      // hay «anterior», así que se va a la raíz del módulo, que es la Consulta.
-      if (typeof window !== 'undefined' && window.history.length > 1) navigate(-1);
-      else navigate('/');
-      return;
+
+    // 3. Sesión.
+    if (status !== 'authenticated') {
+      lista.push({
+        clave: 'session',
+        tono: 'problema',
+        icono: <IconUser />,
+        titulo: t('inspector.help.diag.session'),
+        estado: t('inspector.help.diag.session.problem'),
+        nota: t('inspector.help.diag.session.note'),
+        accion: { etiqueta: t('inspector.help.diag.session.action'), onClick: () => navigate('/login') },
+      });
+    } else if (!activeTenant) {
+      lista.push({
+        clave: 'session',
+        tono: 'problema',
+        icono: <IconUser />,
+        titulo: t('inspector.help.diag.session'),
+        estado: t('inspector.help.diag.session.noTenant'),
+        nota: t('inspector.help.diag.session.noTenantNote'),
+        accion: {
+          etiqueta: t('inspector.help.diag.session.chooseTenant'),
+          onClick: () => navigate('/select-tenant'),
+        },
+      });
+    } else {
+      lista.push({
+        clave: 'session',
+        tono: 'ok',
+        icono: <IconUser />,
+        titulo: t('inspector.help.diag.session'),
+        estado: t('inspector.help.diag.session.ok'),
+      });
     }
-    const eventualidad = EVENTUALIDADES.find((e) => e.clave === clave);
-    if (!eventualidad) return;
-    if (eventualidad.ruta === null) setVerConexion(true);
-    else navigate(eventualidad.ruta);
+
+    // 4 y 5. Cámara y ubicación. Un permiso denegado no trae botón: en el teléfono se activa en los
+    //        ajustes del sistema, y volver a pedirlo desde acá no abre nada —sería un control
+    //        muerto, que es precisamente lo que este PDF vino a quitar.
+    const camara = medicion?.camara ?? 'asksOnUse';
+    lista.push({
+      clave: 'camera',
+      tono: camara === 'denied' ? 'aviso' : 'ok',
+      icono: <IconEye />,
+      titulo: t('inspector.help.diag.camera'),
+      estado: textoPermiso(camara),
+      nota: camara === 'denied' ? t('inspector.help.diag.camera.deniedNote') : undefined,
+    });
+
+    const ubicacion = medicion?.ubicacion ?? 'asksOnUse';
+    lista.push({
+      clave: 'location',
+      tono: ubicacion === 'denied' ? 'aviso' : 'ok',
+      icono: <IconPin />,
+      titulo: t('inspector.help.diag.location'),
+      estado: textoPermiso(ubicacion),
+      nota: ubicacion === 'denied' ? t('inspector.help.diag.location.deniedNote') : undefined,
+    });
+
+    // 6. La aplicación. Lo que de verdad se puede medir acá es si este dispositivo guarda.
+    const guarda = medicion?.almacenamiento ?? true;
+    lista.push({
+      clave: 'app',
+      tono: guarda ? 'ok' : 'problema',
+      icono: <IconSystem />,
+      titulo: t('inspector.help.diag.app'),
+      estado: guarda ? t('inspector.help.diag.app.ok') : t('inspector.help.diag.app.problem'),
+      nota: guarda ? undefined : t('inspector.help.diag.app.note'),
+      accion: guarda
+        ? undefined
+        : {
+            etiqueta: t('inspector.help.diag.app.reload'),
+            onClick: () => window.location.reload(),
+          },
+    });
+
+    return lista;
   }
+
+  const filas = comprobaciones();
+  const hayProblema = filas.some((fila) => fila.tono === 'problema');
+  const hayAviso = filas.some((fila) => fila.tono === 'aviso');
 
   return (
     <InspectorShell title={t('inspector.help.title')} onBack={() => navigate('/more')}>
@@ -194,64 +398,72 @@ export function HelpPage(): React.JSX.Element {
         </div>
       </Modal>
 
-      {/* La sexta opción: un triaje, no un manual. Siete filas, cada una con su salida ya
-          construida, y la fila se cierra en el acto —la lista no es un sitio donde quedarse. */}
+      {/* El diagnóstico: estado → problema → solución, en ese orden y sin una sola fila de más.
+          El resumen va arriba para que la respuesta a «¿está funcionando?» se lea sin desplazarse,
+          que es como se mira esto: de pie y con prisa. */}
       <Modal
-        open={verProblemas}
-        onClose={() => setVerProblemas(false)}
-        title={t('inspector.help.triage.title')}
+        open={verDiagnostico}
+        onClose={() => setVerDiagnostico(false)}
+        title={t('inspector.help.diag.title')}
         closeLabel={t('common.close')}
       >
-        <p className="lx-text-meta" style={{ marginTop: 0 }}>
-          {t('inspector.help.triage.intro')}
-        </p>
-        <div>
-          {PROBLEMAS.map((problema) => (
-            <ListRow
-              key={problema.clave}
-              icon={problema.icono}
-              title={t(`inspector.help.${problema.clave}.title` as TranslationKey)}
-              meta={t(`inspector.help.${problema.clave}.action` as TranslationKey)}
-              onClick={() => resolver(problema.clave)}
-            />
-          ))}
-        </div>
-      </Modal>
-
-      {/* «La aplicación presenta un error»: información útil y la recuperación que ya existe.
-          Lo útil es lo que la aplicación de verdad sabe —conexión, cuánto está esperando— y no una
-          lista de causas posibles; la recuperación es volver a montarla, que es exactamente lo que
-          hace el botón de reintentar de la pantalla de error. */}
-      <Modal
-        open={verError}
-        onClose={() => setVerError(false)}
-        title={t('inspector.help.error.title')}
-        closeLabel={t('common.close')}
-      >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--lx-space-4)' }}>
-          <SummaryList>
-            <SummaryRow
-              label={t('inspector.help.error.state')}
-              value={online ? t('inspector.home.online') : t('inspector.offline.badge')}
-            />
-            <SummaryRow
-              label={t('inspector.help.queue.title')}
-              value={
-                pending > 0
-                  ? tPlural('inspector.offline.queued', pending)
-                  : t('inspector.help.offline.nothingPending')
-              }
-            />
-          </SummaryList>
-          <p className="lx-text-body" style={{ margin: 0 }}>
-            {t('inspector.help.error.body')}
-          </p>
-          <p className="lx-text-meta" style={{ margin: 0 }}>
-            {t('inspector.help.error.safe')}
-          </p>
-          <Button type="button" fullWidth onClick={() => window.location.reload()}>
-            {t('inspector.help.error.reload')}
-          </Button>
+        <div className="lx-diag">
+          {medicion === null ? (
+            <p className="lx-text-meta" style={{ margin: 0 }}>
+              {t('inspector.help.diag.checking')}
+            </p>
+          ) : (
+            <>
+              <Alert
+                tone={hayProblema ? 'warning' : hayAviso ? 'info' : 'success'}
+                testId="inspector-diagnostico-resumen"
+              >
+                {hayProblema
+                  ? t('inspector.help.diag.someIssue')
+                  : hayAviso
+                    ? t('inspector.help.diag.someWarning')
+                    : t('inspector.help.diag.allGood')}
+              </Alert>
+              <ul className="lx-diag__list">
+                {filas.map((fila) => (
+                  <li key={fila.clave} className="lx-diag__row" data-tono={fila.tono} data-check={fila.clave}>
+                    <span className="lx-diag__icon" aria-hidden="true">
+                      {fila.icono}
+                    </span>
+                    <div className="lx-diag__body">
+                      <p className="lx-diag__title">
+                        {fila.titulo}
+                        {/* El tono se dice también en palabras: el color no es información para
+                            quien no lo distingue, y una fila con problema tiene que leerse como tal
+                            en un lector de pantalla. */}
+                        <span className="lx-visually-hidden">
+                          {' · '}
+                          {fila.tono === 'ok'
+                            ? t('inspector.help.diag.tone.ok')
+                            : fila.tono === 'aviso'
+                              ? t('inspector.help.diag.tone.warning')
+                              : t('inspector.help.diag.tone.problem')}
+                        </span>
+                      </p>
+                      <p className="lx-diag__state">{fila.estado}</p>
+                      {fila.nota ? <p className="lx-diag__note">{fila.nota}</p> : null}
+                      {fila.accion ? (
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          className="lx-diag__action"
+                          loading={fila.accion.ocupado}
+                          onClick={fila.accion.onClick}
+                        >
+                          {fila.accion.ocupado ? t('inspector.help.diag.sync.working') : fila.accion.etiqueta}
+                        </Button>
+                      ) : null}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
         </div>
       </Modal>
     </InspectorShell>

@@ -1217,25 +1217,62 @@ export const esCR = {
   'inspector.help.queue.title': 'Pendientes',
   'inspector.help.queue.body':
     'Ahí están las boletas que todavía no llegaron al servidor. Si alguna se queda trabada, abrila: te dice por qué.',
-  /* --- Sexta opción: el triaje (05-10-2026) ---------------------------------------------------
-     No es un manual ni una sexta explicación: es la lista de los siete problemas del turno, cada
-     uno con la salida que YA existe. Se entra acá cuando no se sabe cuál de las otras cinco
-     tarjetas aplica. */
-  'inspector.help.triage.title': 'Resolver un problema',
-  'inspector.help.triage.body':
-    'Elegí lo que te está pasando y te llevamos directo a donde se resuelve. Nada de esto crea un trámite nuevo.',
-  'inspector.help.triage.action': 'Ver la lista de problemas',
-  'inspector.help.triage.intro': '¿Qué te está pasando?',
-  'inspector.help.error.title': 'La aplicación presenta un error',
-  'inspector.help.error.action': 'Ver qué hacer',
-  'inspector.help.error.body':
-    'Recargar la aplicación la vuelve a montar desde cero y resuelve casi todos los errores de pantalla. Si al recargar sigue igual, decile a la municipalidad lo que dice la pantalla de error tal cual: es lo único que distingue un fallo del siguiente.',
-  'inspector.help.error.reload': 'Recargar la aplicación',
-  'inspector.help.error.safe':
-    'Lo que está esperando a sincronizarse queda guardado en este teléfono. Recargar no lo borra ni lo duplica.',
-  'inspector.help.error.state': 'Estado ahora mismo',
-  'inspector.help.back.title': 'Necesito volver',
-  'inspector.help.back.action': 'Volver a la pantalla anterior',
+  /* --- Sexta opción: el diagnóstico (06-10-2026) ----------------------------------------------
+     Antes era «Resolver un problema» y abría una lista de siete filas que repetía, casi exacta, las
+     cinco tarjetas de arriba. Ahora mide: contesta «¿mi aplicación está funcionando?» y sólo ofrece
+     un botón donde hay algo que arreglar. Las claves del triaje —`triage.*`, `error.*`, `back.*`—
+     se borraron con él: una cadena que ya nadie muestra es una cadena que alguien traduce de más. */
+  'inspector.help.diag.title': 'Diagnóstico de la aplicación',
+  'inspector.help.diag.body':
+    'Revisa la conexión, lo que falta por enviar, tu sesión y los permisos de este teléfono. Te dice en una pantalla si algo no está funcionando.',
+  'inspector.help.diag.action': 'Revisar el estado de la aplicación',
+  'inspector.help.diag.checking': 'Revisando el estado…',
+  'inspector.help.diag.allGood': 'Todo está funcionando correctamente.',
+  'inspector.help.diag.someWarning': 'Funciona, pero hay algo que conviene que sepás.',
+  'inspector.help.diag.someIssue': 'Encontramos algo que hay que resolver.',
+  'inspector.help.diag.tone.ok': 'correcto',
+  'inspector.help.diag.tone.warning': 'atención',
+  'inspector.help.diag.tone.problem': 'problema',
+  'inspector.help.diag.connection': 'Conexión',
+  'inspector.help.diag.connection.note':
+    'Seguí trabajando igual: la boleta se guarda en el teléfono y se envía sola cuando vuelva la señal.',
+  'inspector.help.diag.sync': 'Sincronización',
+  'inspector.help.diag.sync.ok': 'Todo sincronizado',
+  'inspector.help.diag.sync.pending.one': '{{count}} operación esperando',
+  'inspector.help.diag.sync.pending.other': '{{count}} operaciones esperando',
+  'inspector.help.diag.sync.failed.one': '{{count}} operación no se pudo enviar',
+  'inspector.help.diag.sync.failed.other': '{{count}} operaciones no se pudieron enviar',
+  'inspector.help.diag.sync.note': 'Se envían solas; esto sólo adelanta el envío.',
+  'inspector.help.diag.sync.offlineNote': 'Sin señal no se pueden enviar. Salen solas cuando vuelva.',
+  'inspector.help.diag.sync.failedNote':
+    'En Pendientes podés abrir cada una y ver por qué falló. Reintentar no duplica nada: se reusa la misma clave de envío.',
+  'inspector.help.diag.sync.action': 'Sincronizar ahora',
+  'inspector.help.diag.sync.retry': 'Reintentar ahora',
+  'inspector.help.diag.sync.working': 'Enviando…',
+  'inspector.help.diag.session': 'Sesión',
+  'inspector.help.diag.session.ok': 'Sesión activa',
+  'inspector.help.diag.session.problem': 'Sesión no disponible',
+  'inspector.help.diag.session.note': 'Volvé a entrar con tu usuario para seguir trabajando.',
+  'inspector.help.diag.session.action': 'Iniciar sesión',
+  'inspector.help.diag.session.noTenant': 'Sin municipalidad activa',
+  'inspector.help.diag.session.noTenantNote':
+    'Tu sesión está abierta pero no hay una municipalidad elegida, así que no se puede consultar ni emitir.',
+  'inspector.help.diag.session.chooseTenant': 'Elegir municipalidad',
+  'inspector.help.diag.camera': 'Cámara',
+  'inspector.help.diag.camera.deniedNote':
+    'Sin cámara no vas a poder adjuntar evidencia. Se activa en los ajustes del teléfono, en los permisos de LuParX.',
+  'inspector.help.diag.location': 'Ubicación',
+  'inspector.help.diag.location.deniedNote':
+    'La boleta se emite igual, sin coordenadas. Se activa en los ajustes del teléfono, en los permisos de LuParX.',
+  'inspector.help.diag.permission.granted': 'Permiso concedido',
+  'inspector.help.diag.permission.asks': 'Se pide al usarla',
+  'inspector.help.diag.permission.denied': 'Permiso denegado',
+  'inspector.help.diag.app': 'Aplicación',
+  'inspector.help.diag.app.ok': 'Funcionando correctamente',
+  'inspector.help.diag.app.problem': 'Este teléfono no está guardando datos',
+  'inspector.help.diag.app.note':
+    'Una boleta levantada sin señal podría perderse al cerrar la aplicación. Suele ser el modo privado del navegador o el almacenamiento lleno.',
+  'inspector.help.diag.app.reload': 'Recargar la aplicación',
   'citizen.more.profile': 'Mi perfil',
   'citizen.more.fines': 'Multas',
   'citizen.more.fines.meta': 'Consultá tus multas y presentá un reclamo.',

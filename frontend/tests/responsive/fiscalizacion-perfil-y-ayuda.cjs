@@ -214,8 +214,8 @@ async function estadoDeLaCabecera(page) {
     { titulo: 'Levantar una boleta', destino: /\/cite/ },
     { titulo: 'Fotos y evidencia', destino: /\/cite/ },
     { titulo: 'Pendientes', destino: /\/queue/ },
-    // La sexta, del 05-10-2026: no lleva a una ruta, abre la lista de problemas.
-    { titulo: 'Resolver un problema', destino: null, triaje: true },
+    // La sexta, del 06-10-2026: no lleva a una ruta, abre el diagnóstico de la aplicación.
+    { titulo: 'Diagnóstico de la aplicación', destino: null, diagnostico: true },
   ];
 
   for (const opcion of OPCIONES) {
@@ -236,63 +236,66 @@ async function estadoDeLaCabecera(page) {
       const dialogo = page.getByRole('dialog');
       const abierto = await dialogo.isVisible().catch(() => false);
       comprobar(abierto, '  abre un panel corto y no una pantalla nueva');
-      if (abierto && opcion.triaje) {
+      if (abierto && opcion.diagnostico) {
         /*
-          La sexta opción es un TRIAJE: los siete problemas del PDF, cada uno con su salida. Se
-          comprueban los siete por nombre —no un conteo, que no distingue «faltan dos» de «hay dos
-          repetidos»— y después que uno de los dos nuevos de verdad resuelva: el de volver tiene
-          que sacarte de Ayuda usando la navegación que ya existe.
+          La sexta opción ya no es un triaje: MIDE. Lo que hay que comprobar, entonces, no es que
+          estén las siete filas de antes —esas eran el defecto— sino tres cosas distintas:
+
+            1. que diga el estado de las seis comprobaciones del PDF;
+            2. que NO vuelva a ofrecer «Consultar una placa», «Levantar una boleta», «Fotos y
+               evidencia» ni «Pendientes», que es literalmente lo que §4 prohíbe;
+            3. que con todo en orden no haya ni un botón de recuperación. Ésta es la que de verdad
+               distingue un diagnóstico de otra lista de accesos, y la que se rompería primero si
+               alguien «mejorara» la pantalla agregándole un botón fijo.
         */
-        const PROBLEMAS = [
-          'Si te quedás sin señal',
-          'Consultar una placa',
-          'Levantar una boleta',
-          'Fotos y evidencia',
-          'Pendientes',
-          'La aplicación presenta un error',
-          'Necesito volver',
-        ];
-        for (const problema of PROBLEMAS) {
-          const fila = dialogo.getByText(problema, { exact: true }).first();
-          comprobar((await fila.count()) > 0, `    «${problema}» está en la lista`);
+        await page.waitForSelector('.lx-diag__row', { timeout: 8000 }).catch(() => {});
+        const filas = await page.$$eval('.lx-diag__row', (nodos) =>
+          nodos.map((n) => ({
+            clave: n.getAttribute('data-check'),
+            tono: n.getAttribute('data-tono'),
+            texto: (n.textContent ?? '').replace(/\s+/g, ' ').trim(),
+            botones: n.querySelectorAll('button').length,
+          })),
+        );
+        const ESPERADAS = ['connection', 'sync', 'session', 'camera', 'location', 'app'];
+        comprobar(
+          filas.map((f) => f.clave).join(',') === ESPERADAS.join(','),
+          '    diagnostica las seis cosas del PDF, en su orden',
+          filas.map((f) => f.clave).join(',') || 'no se pintó ninguna fila',
+        );
+
+        const textoPanel = (await dialogo.textContent().catch(() => '')) ?? '';
+        for (const repetida of ['Consultar una placa', 'Levantar una boleta', 'Fotos y evidencia']) {
+          comprobar(!textoPanel.includes(repetida), `    ya no repite «${repetida}»`);
         }
-
-        // El de error: información útil y la recuperación que ya existe, no una lista de causas.
-        await dialogo.getByText('La aplicación presenta un error', { exact: true }).first().click();
-        await page.waitForTimeout(1200);
-        const panelError = page.getByRole('dialog');
-        const textoError = (await panelError.textContent().catch(() => '')) ?? '';
         comprobar(
-          /recargar/i.test(textoError),
-          '    el problema de error ofrece recargar la aplicación',
-          textoError.slice(0, 160),
+          !/Ver los pendientes|Ir a consultar|Ir a levantar|Ir al flujo/.test(textoPanel),
+          '    y no quedó ningún acceso de los de Ayuda',
+          textoPanel.slice(0, 200),
         );
-        comprobar(
-          /en línea|sin conexión/i.test(textoError) && /esperando|sincroniz/i.test(textoError),
-          '    y antes de eso dice el estado real: conexión y qué está esperando',
-          textoError.slice(0, 200),
-        );
-        await page.keyboard.press('Escape');
-        await page.waitForTimeout(500);
 
-        // El de volver: tiene que SALIR de Ayuda, con el historial que ya hay.
-        await page.goto(`${BASE}/inspector/more`, { waitUntil: 'domcontentloaded' });
-        await page.waitForTimeout(1600);
-        await page.getByRole('button').filter({ hasText: 'Ayuda' }).first().click().catch(() => {});
-        await page.waitForTimeout(1600);
-        if (/\/help/.test(page.url())) {
-          await page.getByRole('button').filter({ hasText: 'Resolver un problema' }).first().click();
-          await page.waitForTimeout(1000);
-          await page.getByRole('dialog').getByText('Necesito volver', { exact: true }).first().click();
-          await page.waitForTimeout(1800);
+        // Con conexión y la cola al día, el panel no ofrece NADA que pulsar.
+        const problemas = filas.filter((f) => f.tono !== 'ok');
+        const botones = filas.reduce((suma, f) => suma + f.botones, 0);
+        if (problemas.length === 0) {
           comprobar(
-            !/\/help/.test(page.url()),
-            '    el problema de volver saca de Ayuda con la navegación existente',
-            `seguimos en ${page.url().replace(BASE, '')}`,
+            botones === 0 && /Todo está funcionando correctamente/.test(textoPanel),
+            '    todo en orden: lo dice y no muestra ni un botón de recuperación',
+            `${botones} botón(es); resumen: ${textoPanel.slice(0, 120)}`,
           );
         } else {
-          console.log(`  ·       no se pudo entrar a Ayuda desde Más para probar «Necesito volver» (${page.url().replace(BASE, '')})`);
+          // El entorno llegó con algo pendiente: entonces lo que toca comprobar es lo contrario,
+          // que el problema traiga su acción y las filas sanas sigan sin botones.
+          const sanasConBoton = filas.filter((f) => f.tono === 'ok' && f.botones > 0).length;
+          comprobar(
+            sanasConBoton === 0,
+            '    las comprobaciones en orden no muestran botones',
+            `${sanasConBoton} fila(s) correctas con botón`,
+          );
+          console.log(`  ·       el entorno trae ${problemas.map((f) => f.clave).join(', ')} con aviso; se verifican abajo`);
         }
+        await page.keyboard.press('Escape');
+        await page.waitForTimeout(400);
       } else if (abierto) {
         const texto = (await dialogo.textContent()) ?? '';
         comprobar(
@@ -324,6 +327,181 @@ async function estadoDeLaCabecera(page) {
       );
       comprobar(contenido.barra === 1, '  con la navegación inferior intacta', `${contenido.barra} barra(s)`);
     }
+  }
+
+  // ===============================================================================================
+  // DIAGNÓSTICO — los dos problemas que sí se pueden provocar
+  // ===============================================================================================
+  /*
+    Un diagnóstico que sólo se ha visto en verde no está probado: lo que hay que demostrar es que
+    DETECTA. Se provocan los dos únicos estados que un navegador deja provocar sin tocar el
+    servidor —sin señal, y con algo esperando en la cola— y se comprueba que cada uno aparece con
+    su acción y que las demás filas siguen sin botones.
+
+    Los permisos no se provocan: Chromium concede o deniega por contexto, y denegarlos acá probaría
+    la configuración del arnés, no la pantalla.
+  */
+  console.log('── Diagnóstico: que detecte de verdad ──');
+
+  async function abrirDiagnostico(p) {
+    await p.goto(`${BASE}/inspector/help`, { waitUntil: 'domcontentloaded' });
+    await p.waitForTimeout(2200);
+    await p.getByRole('button').filter({ hasText: 'Diagnóstico de la aplicación' }).first().click();
+    await p.waitForSelector('.lx-diag__row', { timeout: 8000 }).catch(() => {});
+    await p.waitForTimeout(400);
+    return p.$$eval('.lx-diag__row', (nodos) =>
+      nodos.map((n) => ({
+        clave: n.getAttribute('data-check'),
+        tono: n.getAttribute('data-tono'),
+        texto: (n.textContent ?? '').replace(/\s+/g, ' ').trim(),
+        botones: [...n.querySelectorAll('button')].map((b) => (b.textContent ?? '').trim()),
+      })),
+    );
+  }
+
+  // --- Sin señal -------------------------------------------------------------------------------
+  await context.setOffline(true);
+  {
+    const filas = await abrirDiagnostico(page);
+    const conexion = filas.find((f) => f.clave === 'connection');
+    comprobar(
+      conexion?.tono === 'problema',
+      'sin señal, la conexión se marca como problema',
+      conexion ? `tono=${conexion.tono} · ${conexion.texto}` : 'no se pintó la fila de conexión',
+    );
+    comprobar(
+      (conexion?.botones ?? []).some((b) => /estado de la conexión/i.test(b)),
+      '  y ofrece la única acción que resuelve: ver el estado de la conexión',
+      JSON.stringify(conexion?.botones ?? []),
+    );
+    const sanasConBoton = filas.filter((f) => f.tono === 'ok' && f.botones.length > 0);
+    comprobar(
+      sanasConBoton.length === 0,
+      '  mientras las comprobaciones en orden siguen sin un solo botón',
+      sanasConBoton.map((f) => f.clave).join(', '),
+    );
+    const texto = (await page.getByRole('dialog').textContent().catch(() => '')) ?? '';
+    comprobar(
+      !/Todo está funcionando correctamente/.test(texto),
+      '  y el resumen deja de decir que todo está bien',
+      texto.slice(0, 140),
+    );
+    await page.keyboard.press('Escape');
+  }
+  await context.setOffline(false);
+  await page.waitForTimeout(600);
+
+  // --- Con algo esperando ------------------------------------------------------------------------
+  /*
+    La cola se siembra en `localStorage`, que es donde vive de verdad (ver `citationQueue.ts`), con
+    `nextAttemptAt` en el futuro: así la fila CUENTA como pendiente y el barrido automático no
+    intenta enviarla. Sin eso, el arnés le mandaría al servidor de staging una boleta inventada —y
+    este trabajo es sólo de pruebas, no de datos.
+  */
+  const tenantId = await page.evaluate(() => {
+    try {
+      return window.localStorage.getItem('luparx.tenant.inspector.v1');
+    } catch {
+      return null;
+    }
+  });
+  if (!tenantId) {
+    console.log('  ·       sin municipalidad recordada en este navegador: no se puede sembrar la cola');
+  } else {
+    await page.evaluate((tid) => {
+      const fila = {
+        id: 'diagnostico-arnes',
+        tenantId: tid,
+        deviceCitationId: 'diagnostico-arnes',
+        idempotencyKey: 'diagnostico-arnes',
+        issueIdempotencyKey: 'diagnostico-arnes',
+        createdAt: new Date().toISOString(),
+        payload: {},
+        photos: [],
+        requiresPhoto: false,
+        infractionName: 'Prueba de diagnóstico',
+        state: 'PENDING',
+        attempts: 0,
+        lastErrorCode: null,
+        lastErrorMessage: null,
+        // Un día en el futuro: nunca le toca el turno de envío.
+        nextAttemptAt: Date.now() + 86_400_000,
+        citationId: null,
+        number: null,
+        status: null,
+        sentAt: null,
+      };
+      window.localStorage.setItem(`luparx.inspector.citationQueue.${tid}`, JSON.stringify([fila]));
+    }, tenantId);
+
+    const filas = await abrirDiagnostico(page);
+    const sync = filas.find((f) => f.clave === 'sync');
+    comprobar(
+      sync?.tono === 'aviso' && /1 operación esperando/.test(sync.texto),
+      'con una operación en la cola, la sincronización lo dice con el número',
+      sync ? `tono=${sync.tono} · ${sync.texto}` : 'no se pintó la fila de sincronización',
+    );
+    comprobar(
+      (sync?.botones ?? []).some((b) => /Sincronizar ahora/i.test(b)),
+      '  y aparece «Sincronizar ahora», que antes no estaba',
+      JSON.stringify(sync?.botones ?? []),
+    );
+    const otras = filas.filter((f) => f.clave !== 'sync' && f.botones.length > 0);
+    comprobar(
+      otras.length === 0,
+      '  y nada más cambió: ninguna otra fila ganó un botón',
+      otras.map((f) => `${f.clave}:${f.botones.join('/')}`).join(', '),
+    );
+    await page.keyboard.press('Escape');
+
+    // La cola se deja como estaba: un arnés que ensucia el entorno hace fallar al siguiente.
+    await page.evaluate((tid) => {
+      window.localStorage.removeItem(`luparx.inspector.citationQueue.${tid}`);
+    }, tenantId);
+  }
+
+  // --- Móvil y escritorio ------------------------------------------------------------------------
+  /*
+    §10 pide las dos. Lo que se mide no es «se ve bien» sino lo único que se puede medir: que el
+    panel quepa —ni desborda la página ni se corta su propio contenido— y que las seis filas sigan
+    ahí en los dos anchos. Un diagnóstico que en el teléfono muestra cinco filas y en el escritorio
+    seis estaría mintiendo en uno de los dos sitios.
+  */
+  for (const tam of [
+    { nombre: 'móvil estándar', width: 390, height: 664 },
+    { nombre: 'escritorio', width: 1536, height: 960 },
+  ]) {
+    const ctx = await browser.newContext({
+      locale: 'es-CR',
+      ignoreHTTPSErrors: true,
+      viewport: { width: tam.width, height: tam.height },
+      storageState: await context.storageState(),
+    });
+    const p2 = await ctx.newPage();
+    await p2.goto(`${BASE}/inspector/help`, { waitUntil: 'domcontentloaded' });
+    await p2.waitForTimeout(2200);
+    await p2.getByRole('button').filter({ hasText: 'Diagnóstico de la aplicación' }).first().click();
+    await p2.waitForSelector('.lx-diag__row', { timeout: 8000 }).catch(() => {});
+    await p2.waitForTimeout(500);
+    const medida = await p2.evaluate(() => {
+      const doc = document.documentElement;
+      const filas = [...document.querySelectorAll('.lx-diag__row')];
+      const panel = document.querySelector('[role="dialog"]');
+      const cajaPanel = panel ? panel.getBoundingClientRect() : null;
+      return {
+        filas: filas.length,
+        desbordaPagina: doc.scrollWidth > doc.clientWidth + 1,
+        // Una fila cuyo contenido no cabe en su propia caja: texto cortado de verdad.
+        filasQueDesbordan: filas.filter((n) => n.scrollWidth > n.clientWidth + 1).length,
+        panelCabe: cajaPanel ? cajaPanel.left >= -1 && cajaPanel.right <= window.innerWidth + 1 : false,
+      };
+    });
+    comprobar(
+      medida.filas === 6 && !medida.desbordaPagina && medida.filasQueDesbordan === 0 && medida.panelCabe,
+      `${tam.nombre.padEnd(16)} ${tam.width}x${tam.height} · las seis filas caben y nada desborda`,
+      JSON.stringify(medida),
+    );
+    await ctx.close();
   }
 
   // Volver a Ayuda / Más desde donde sea: el prompt lo pide explícitamente.
