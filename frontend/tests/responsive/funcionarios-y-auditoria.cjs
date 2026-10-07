@@ -397,7 +397,7 @@ async function abrir(page, etiqueta) {
   await page.goto(`${BASE}/admin/audit`, { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(2400);
 
-  const { lista: listaAcciones } = await abrir(page, 'Acción');
+  await abrir(page, 'Acción');
   const etiquetas = await page.getByRole('option').allTextContents();
   comprobar(
     etiquetas.some((e) => /Sectores asignados/.test(e)),

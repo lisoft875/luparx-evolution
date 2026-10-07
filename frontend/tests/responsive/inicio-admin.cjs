@@ -461,13 +461,13 @@ async function medir(page, dedo) {
           fondo: hit ? getComputedStyle(hit).backgroundColor : '',
         };
       });
-      comprobar(
+      okInicio(
         Math.abs(medida.altoTarjeta - medida.altoBoton) <= 1
           && Math.abs(medida.anchoTarjeta - medida.anchoBoton) <= 1,
         `  «${etiqueta}» se resalta de borde a borde, sin franja`,
         `tarjeta ${medida.anchoTarjeta}x${medida.altoTarjeta} · botón ${medida.anchoBoton}x${medida.altoBoton}`,
       );
-      comprobar(
+      okInicio(
         medida.fondo !== reposo && medida.fondo !== '' && medida.fondo !== 'rgba(0, 0, 0, 0)',
         '  y el fondo de verdad cambia al pasar por encima',
         `reposo=${reposo} hover=${medida.fondo}`,

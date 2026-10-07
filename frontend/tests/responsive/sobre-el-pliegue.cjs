@@ -25,7 +25,7 @@
  *   BASE=http://localhost:5183 node tests/responsive/sobre-el-pliegue.cjs
  *   PORTAL=inspector node tests/responsive/sobre-el-pliegue.cjs
  */
-const { chromium, devices } = require('playwright');
+const { chromium } = require('playwright');
 
 const BASE = process.env.BASE ?? 'https://staging.luparx.com';
 const PASS = process.env.PASS ?? 'Password123!';

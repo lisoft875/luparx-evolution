@@ -90,7 +90,7 @@ async function entrar(context) {
 }
 
 /** Las filas de la bitácora de esta zona, de la más reciente a la más vieja. */
-async function bitacoraDe(page, codigoZona) {
+async function bitacoraDe(page, _codigoZona) {
   await page.goto(`${BASE}/admin/audit`, { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(2400);
   const combo = page.getByRole('combobox', { name: 'Módulo' }).first();
