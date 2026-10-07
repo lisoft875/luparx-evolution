@@ -117,18 +117,18 @@
      sí: era el literal del acento viejo (#3B82F6) escrito a mano, y seguir al acento es su trabajo.
      ============================================================================================== */
   /* ── Nivel 0 · el lienzo ──────────────────────────────────────────────────────────────────── */
-  --lx-bg: #07111F;
+  --lx-bg: #071827;
   /* ── Nivel 1 · el cromo: cabecera y barra lateral ─────────────────────────────────────────────
      Un plano propio, que es lo que la v1.1 pide y lo que no existía: la cabecera usaba
      `--lx-bg` (el mismo color que el contenido, o sea ninguna presencia) y la barra lateral usaba
      `--lx-surface` (el mismo color que las tarjetas, o sea una tarjeta gigante). */
-  --lx-chrome: #0B182A;
+  --lx-chrome: #0A1D2D;
   /* Mismo valor que `surface` a propósito: su único uso es el fondo de la primera columna fija de
      una tabla, que tiene que ser opaco y coincidir con el de la fila. Que fuera más oscuro hacía
      que esa columna se leyera como una banda aparte. */
   --lx-bg-elevated: #102033;
-  --lx-surface: #102033;
-  --lx-surface-2: #14263A;
+  --lx-surface: #102536;
+  --lx-surface-2: #142D40;
   /*
     06-10-2026: sube de #1A3047 a #183B56, que es el valor que pide la especificación del Inicio.
     No es una preferencia, es una medición: el paso entre la superficie y su hover era 1.22 —«un
@@ -143,9 +143,9 @@
   /* La guía da el borde como un color sólido y no como un alfa. Es mejor: un alfa se ve distinto
      según lo que tenga debajo, y estos bordes separan tanto una tarjeta del fondo como una fila de
      la siguiente dentro de la tarjeta. */
-  --lx-border: #263A4F;
+  --lx-border: #274256;
   --lx-border-strong: #34506B;
-  --lx-primary: #1597FF;
+  --lx-primary: #28A8FF;
   --lx-primary-2: #58B9FF;
   /* El relleno de un control, donde hay texto blanco encima. Ver el punto 1 de arriba. */
   --lx-primary-fill: #0B78D4;
@@ -153,12 +153,24 @@
   --lx-primary-hover: #58B9FF;
   --lx-text: #F4F8FC;
   --lx-text-muted: #94A8BC;
-  --lx-text-subtle: #7F93A8;
+  /* 07-10: sube de #7F93A8 a #8698AC. No por gusto — al aclararse `--lx-surface-2` para la
+     referencia aprobada, el valor viejo cayó a 4.49 sobre ella. Es el mismo patrón del teal del
+     06-10: un color se rompe porque se movió OTRO. Éste da 4.80. */
+  --lx-text-subtle: #8698AC;
   --lx-success: #25D17D;
   --lx-warning: #F4AE3D;
   --lx-danger: #EF4444;
   /* El rojo cuando es TEXTO sobre un fondo rojo suave. Ver el punto 2 de arriba. */
-  --lx-danger-text: #F87171;
+  /*
+    07-10: sube de #F87171 a #FF6B6B, que es el valor de la referencia aprobada del Inicio, y de
+    paso destapa un defecto que llevaba meses: CINCO reglas pintaban texto con `--lx-danger`
+    —el mensaje de error de un campo, un monto de cargo, la insignia de peligro, el cronómetro
+    vencido y la flecha de variación negativa— y ese token es el RELLENO. Sobre una tarjeta daba
+    4.37, por debajo de 4.5. El comprobador no lo veía porque mide los tokens, no en qué regla se
+    usa cada uno: el token estaba bien y el uso estaba mal. Las cinco pasan a `--lx-danger-text`,
+    que da 5.93.
+  */
+  --lx-danger-text: #FF6B6B;
   /* Y el azul, por lo mismo: #3B82F6 sobre su propio fondo al 14% da 3.88. El acento claro da
      5.33. El relleno, el acento y el texto-sobre-suave son tres trabajos distintos del mismo azul,
      y por eso son tres tokens y no uno. */
@@ -224,7 +236,9 @@
      propio fondo suave (14% sobre la superficie) `#8B5CF6` da **3.55:1**, por debajo del 4.5 que
      pide un texto de 12 px. `#A78BFA` da 5.16:1 con el mismo tono. El ámbar `#D99A24` (5.80) y el
      verde azulado `#23A6A8` (4.79) sí pasan y quedan como los dio la guía. */
-  --lx-accent-violet: #A78BFA;
+  /* Y lo mismo acá: 4.18 sobre su propio fondo tenue después de aclarar la superficie. #B39BFF
+     da 4.77. El violeta ya se había subido una vez por esto mismo, en la guía de auditoría. */
+  --lx-accent-violet: #B39BFF;
   --lx-accent-violet-soft: color-mix(in srgb, var(--lx-accent-violet) 14%, transparent);
   --lx-accent-amber: #D99A24;
   --lx-accent-amber-soft: color-mix(in srgb, var(--lx-accent-amber) 14%, transparent);
@@ -900,7 +914,7 @@ body {
 }
 .lx-field__error {
   font-size: var(--lx-text-meta-size);
-  color: var(--lx-danger);
+  color: var(--lx-danger-text);
   margin: 0;
 }
 
@@ -2140,7 +2154,7 @@ a.lx-list-row {
   gap: 2px;
 }
 .lx-amount--charge {
-  color: var(--lx-danger);
+  color: var(--lx-danger-text);
 }
 .lx-amount--income {
   color: var(--lx-success);
@@ -2246,7 +2260,7 @@ a.lx-list-row {
 }
 .lx-badge--danger {
   background: var(--lx-danger-soft);
-  color: var(--lx-danger);
+  color: var(--lx-danger-text);
 }
 .lx-badge--info {
   background: var(--lx-info-soft);
@@ -2669,7 +2683,7 @@ a.lx-list-row {
    está en falta y puede recibir una boleta. El texto cambia a palabra en el componente; el color
    solo nunca alcanza. */
 .lx-timer--expired {
-  color: var(--lx-danger);
+  color: var(--lx-danger-text);
   font-variant-numeric: normal;
 }
 
@@ -4462,7 +4476,7 @@ a.lx-list-row {
 .lx-metric__hint { color: var(--lx-text-subtle); }
 .lx-metric__delta { color: var(--lx-text-muted); }
 .lx-metric__delta--up > [aria-hidden] { color: var(--lx-success); }
-.lx-metric__delta--down > [aria-hidden] { color: var(--lx-danger); }
+.lx-metric__delta--down > [aria-hidden] { color: var(--lx-danger-text); }
 .lx-metric__delta--flat > [aria-hidden] { color: var(--lx-text-subtle); }
 
 /* --- Indicadores de estado del sistema ----------------------------------------------------------

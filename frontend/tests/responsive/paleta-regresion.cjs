@@ -53,18 +53,32 @@ const PALETA = {
     `--lx-chrome` entra a la lista: es un token nuevo, el plano propio de la cabecera y la barra
     lateral, y es justamente el que puede desaparecer sin que ninguna pantalla se rompa — lo que
     pasaría es que la consola volvería a verse plana, en silencio.
+
+    ── 07-10-2026: la referencia visual exacta del Inicio ─────────────────────────────────────
+
+    Dos especificaciones el mismo día —el Inicio del admin y Fiscalización— pedían paletas
+    DISTINTAS entre sí, dos días después de una que exigía una sola global. Se reconcilió en una,
+    midiendo. Lo que resolvió la aparente contradicción de los azules es que no eran el mismo
+    papel: el admin pedía acento (#28A8FF, texto e iconos sobre superficie, 6.07) y Fiscalización
+    pedía relleno de botón (#1382F6, que con texto blanco da 3.78 y NO se adoptó — el relleno se
+    queda en #0B78D4, que da 4.51).
+
+    `--lx-danger-text` entra a la lista por un defecto que esto destapó: cinco reglas pintaban
+    TEXTO con `--lx-danger`, que es el relleno, y daba 4.37 sobre una tarjeta. La insignia de
+    peligro estaba en 3.64. Ahora es #FF6B6B y da 5.93 y 4.93.
   */
-  '--lx-bg': '#07111F',
-  '--lx-chrome': '#0B182A',
-  '--lx-surface': '#102033',
-  '--lx-surface-2': '#14263A',
-  '--lx-border': '#263A4F',
+  '--lx-bg': '#071827',
+  '--lx-chrome': '#0A1D2D',
+  '--lx-surface': '#102536',
+  '--lx-surface-2': '#142D40',
+  '--lx-border': '#274256',
   '--lx-text': '#F4F8FC',
   '--lx-text-muted': '#94A8BC',
-  '--lx-primary': '#1597FF',
+  '--lx-primary': '#28A8FF',
   '--lx-success': '#25D17D',
   '--lx-warning': '#F4AE3D',
   '--lx-danger': '#EF4444',
+  '--lx-danger-text': '#FF6B6B',
   '--lx-info': '#A3B3C7',
 };
 
@@ -92,6 +106,11 @@ const EXCEPCIONES = {
  * buscan los tonos viejos más reconocibles en lo que el navegador calculó.</p>
  */
 const PALETA_VIEJA = [
+  // Los de la v1.1 del 06-10, superados por la referencia exacta del 07-10.
+  ['rgb(7, 17, 31)', 'el fondo de la v1.1 #07111F'],
+  ['rgb(16, 32, 51)', 'la tarjeta de la v1.1 #102033'],
+  ['rgb(21, 151, 255)', 'el azul de la v1.1 #1597FF'],
+  ['rgb(248, 113, 113)', 'el rojo de texto de la v1.1 #F87171'],
   ['rgb(10, 132, 255)', 'el azul anterior #0A84FF'],
   ['rgb(25, 198, 255)', 'el cian anterior #19C6FF'],
   ['rgb(16, 40, 68)', 'la tarjeta anterior #102844'],
