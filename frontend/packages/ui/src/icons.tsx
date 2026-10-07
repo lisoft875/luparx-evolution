@@ -209,6 +209,27 @@ export const IconShield = iconFactory(
   </>,
 );
 
+/*
+  El icono de Ayuda (07-10-2026).
+
+  Hasta hoy la Ayuda de los dos portales usaba `IconShield`. Eran consistentes entre sí —eso era
+  cierto y por eso el encargo del acceso no tenía nada que corregir— pero un escudo significa
+  protección, y en el menú del admin ESE MISMO icono es «Roles y permisos». El mismo dibujo decía
+  dos cosas distintas en el mismo producto.
+
+  Es un glifo más en el set que ya existe, no un sistema de iconos nuevo: misma rejilla de 24, mismo
+  `iconFactory`, mismo grosor de trazo. El punto va como un trazo de longitud cero y no como un
+  `circle`, para que herede el `stroke-linecap: round` y se dibuje redondo a cualquier tamaño sin
+  una segunda forma que rellenar.
+*/
+export const IconHelp = iconFactory(
+  <>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M9.6 9.3a2.5 2.5 0 0 1 4.9.7c0 1.7-2.5 2.2-2.5 4" />
+    <path d="M12 17.3v.01" />
+  </>,
+);
+
 export const IconGlobe = iconFactory(
   <>
     <circle cx="12" cy="12" r="9" />

@@ -12,7 +12,7 @@ import {
   IconGlobe,
   IconLogout,
   IconOffline,
-  IconShield,
+  IconHelp,
   IconSystem,
   IconUser,
   ListRow,
@@ -129,8 +129,10 @@ export function MorePage(): React.JSX.Element {
         </Card>
 
         <Card>
+          {/* El icono de ayuda, no el escudo (07-10-2026): en el admin ese mismo escudo es
+              «Roles y permisos», que es lo que un escudo significa. */}
           <ListRow
-            icon={<IconShield size={18} />}
+            icon={<IconHelp size={18} />}
             title={t('inspector.more.help')}
             meta={t('inspector.more.help.meta')}
             value={<IconChevronRight size={16} />}

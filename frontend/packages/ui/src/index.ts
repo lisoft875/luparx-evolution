@@ -140,6 +140,7 @@ export {
   IconPhone,
   IconIdCard,
   IconShield,
+  IconHelp,
   IconGlobe,
   IconPlus,
   IconCreditCard,

@@ -333,6 +333,75 @@ async function entrar(context) {
   );
 
   // ===============================================================================================
+  // 3d · EL ACCESO DESDE «MÁS», EN LOS DOS PORTALES
+  // ===============================================================================================
+  /*
+    El encargo del acceso pedía que el del fiscalizador se viera como el del ciudadano. Ya se veía
+    —mismo componente, mismos props— y por eso lo único que cambió fue el icono: era un escudo, y
+    en el menú del admin ese mismo escudo es «Roles y permisos».
+
+    Se comprueba lo que de verdad importa de un icono compartido: que los DOS portales dibujen el
+    mismo, y que no sea el de permisos. Si alguien cambia uno solo, esto lo dice.
+  */
+  console.log('── El acceso a Ayuda desde «Más» ──');
+  {
+    const formaDelIcono = async (p2, ruta) => {
+      await p2.goto(`${BASE}${ruta}`, { waitUntil: 'domcontentloaded' });
+      await p2.waitForTimeout(2200);
+      return p2.evaluate(() => {
+        const filas = [...document.querySelectorAll('.lx-list-row')];
+        const fila = filas.find((n) => /^Ayuda/.test((n.textContent ?? '').trim()));
+        if (!fila) return null;
+        const svg = fila.querySelector('svg');
+        const caja = fila.getBoundingClientRect();
+        return {
+          titulo: (fila.querySelector('.lx-list-row__title')?.textContent ?? '').trim(),
+          // La huella del dibujo: si cambia en un portal y no en el otro, esto deja de coincidir.
+          icono: svg ? [...svg.children].map((h) => h.tagName + ':' + (h.getAttribute('d') ?? h.getAttribute('r') ?? '')).join('|') : '',
+          alto: Math.round(caja.height),
+        };
+      });
+    };
+
+    const ciudadano = await formaDelIcono(page, '/more');
+    const ctxInsp = await browser.newContext({ locale: 'es-CR', ignoreHTTPSErrors: true, viewport: { width: 390, height: 664 } });
+    const pInsp = await ctxInsp.newPage();
+    // El fiscalizador es otra sesión: este script entra como ciudadano, así que se mide sin sesión
+    // sólo si la ruta lo permite; si manda al login, se dice y no se inventa un resultado.
+    await pInsp.goto(`${BASE}/inspector/more`, { waitUntil: 'domcontentloaded' });
+    await pInsp.waitForTimeout(2200);
+    const enLoginInsp = await pInsp.evaluate(() => window.location.pathname.endsWith('/login'));
+    const inspector = enLoginInsp ? null : await formaDelIcono(pInsp, '/inspector/more');
+    await ctxInsp.close();
+
+    comprobar(
+      Boolean(ciudadano) && ciudadano.titulo === 'Ayuda',
+      `el acceso del ciudadano dice «Ayuda» y nada más`,
+      ciudadano ? JSON.stringify(ciudadano) : 'no se encontró la fila',
+    );
+    comprobar(
+      Boolean(ciudadano) && ciudadano.alto >= 44,
+      '  con blanco táctil suficiente',
+      ciudadano ? `${ciudadano.alto}px` : '—',
+    );
+    // El escudo de «Roles y permisos» empieza con el contorno del escudo; el de ayuda, con un círculo.
+    comprobar(
+      Boolean(ciudadano) && ciudadano.icono.startsWith('circle:'),
+      '  y su icono es el de ayuda, no el escudo de permisos',
+      ciudadano ? ciudadano.icono.slice(0, 80) : '—',
+    );
+    if (inspector) {
+      comprobar(
+        inspector.icono === ciudadano.icono,
+        'el fiscalizador dibuja exactamente el mismo icono',
+        `ciudadano=${ciudadano.icono.slice(0, 50)} · fiscalizador=${inspector.icono.slice(0, 50)}`,
+      );
+    } else {
+      console.log('  ·       sin sesión de fiscalizador en este contexto: su icono no se pudo comparar');
+    }
+  }
+
+  // ===============================================================================================
   // 4 · MÓVIL Y ESCRITORIO
   // ===============================================================================================
   console.log('── Móvil y escritorio ──');

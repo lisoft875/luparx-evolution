@@ -14,7 +14,7 @@ import {
   IconUser,
   IconBell,
   IconOffline,
-  IconShield,
+  IconHelp,
   IconSystem,
   ListRow,
   Badge,
@@ -109,8 +109,10 @@ export function MorePage(): React.JSX.Element {
               </Badge>
             }
           />
+          {/* Ver la nota del mismo cambio en el fiscalizador: los dos accesos comparten icono a
+              propósito, y por eso el cambio va en los dos o en ninguno. */}
           <ListRow
-            icon={<IconShield size={18} />}
+            icon={<IconHelp size={18} />}
             title={t('citizen.more.help')}
             meta={t('citizen.more.help.meta')}
             value={<IconChevronRight size={16} />}
