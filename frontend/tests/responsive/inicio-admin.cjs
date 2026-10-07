@@ -451,12 +451,24 @@ async function medir(page, dedo) {
       await page.waitForTimeout(350);
       const medida = await tarjeta.evaluate((n) => {
         const hit = n.querySelector('.lx-metric__hit');
-        const cajaN = n.getBoundingClientRect();
         const cajaH = hit ? hit.getBoundingClientRect() : null;
         return {
-          altoTarjeta: Math.round(cajaN.height),
+          /*
+            Contra la caja INTERIOR de la tarjeta, no contra la exterior.
+
+            La primera versión comparaba con `getBoundingClientRect()`, que incluye el borde, y las
+            cuatro fallaron por exactamente 2px en cada eje: 277x103 contra 275x101. Esos 2px son
+            el borde de 1px de la tarjeta a cada lado, y el fondo de un hover que llega al borde
+            POR DENTRO es exactamente lo correcto — el borde es el filo de la tarjeta, no una
+            franja sin pintar. La medición pedía algo imposible y lo llamaba defecto.
+
+            `clientWidth`/`clientHeight` son la caja de relleno, y como `.lx-metric` no tiene
+            relleno propio, el botón debe coincidir EXACTO. Tolerancia de 1px sólo por el redondeo
+            del navegador, no por el borde.
+          */
+          altoTarjeta: n.clientHeight,
           altoBoton: cajaH ? Math.round(cajaH.height) : 0,
-          anchoTarjeta: Math.round(cajaN.width),
+          anchoTarjeta: n.clientWidth,
           anchoBoton: cajaH ? Math.round(cajaH.width) : 0,
           fondo: hit ? getComputedStyle(hit).backgroundColor : '',
         };
@@ -465,7 +477,7 @@ async function medir(page, dedo) {
         Math.abs(medida.altoTarjeta - medida.altoBoton) <= 1
           && Math.abs(medida.anchoTarjeta - medida.anchoBoton) <= 1,
         `  «${etiqueta}» se resalta de borde a borde, sin franja`,
-        `tarjeta ${medida.anchoTarjeta}x${medida.altoTarjeta} · botón ${medida.anchoBoton}x${medida.altoBoton}`,
+        `interior de la tarjeta ${medida.anchoTarjeta}x${medida.altoTarjeta} · botón ${medida.anchoBoton}x${medida.altoBoton}`,
       );
       okInicio(
         medida.fondo !== reposo && medida.fondo !== '' && medida.fondo !== 'rgba(0, 0, 0, 0)',
