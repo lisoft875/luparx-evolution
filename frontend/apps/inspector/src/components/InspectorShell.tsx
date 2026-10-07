@@ -65,6 +65,8 @@ export function InspectorShell({
   */
   const sinLeer = useInspectorUnreadCount();
   const avisos = (sinLeer.data?.unread ?? 0) + pending;
+  /** La única pantalla sin campana: la de los avisos. Un botón hacia donde ya estás. */
+  const enAvisos = location.pathname.startsWith('/notifications');
   // One request per session, on whatever screen the officer lands on, so the zone picker is not
   // empty on a device that has already worked a shift.
   useZoneDirectorySeed();
@@ -224,13 +226,25 @@ export function InspectorShell({
             mientras la consulta viaja es lo correcto —decir «0 avisos» antes de preguntar sería la
             pantalla adivinando—.
 
-            Sólo en las pantallas raíz. Una de detalle lleva flecha y título, y la propia pantalla de
-            avisos es una de ellas: una campana ahí sería un botón que lleva a donde ya estás. El
-            estado de conexión SÍ se queda en todas, que es lo que el PDF de barras fijas pide.
+            En TODAS las pantallas menos en la de avisos (corregido el 07-10-2026).
+
+            Hasta ayer la condición era `!onBack`: la campana sólo en las pantallas raíz. El
+            razonamiento era que una pantalla de detalle lleva flecha y título y no necesita más
+            cromo. Está mal, y el PDF del 07-10 lo muestra con una captura: entrar a Ayuda hacía
+            desaparecer la campana, y con ella el contador de avisos sin leer. Un indicador que se
+            esconde al navegar no es un indicador — su trabajo es estar cuando uno NO lo está
+            buscando. La campana es parte del header global, igual que «En línea».
+
+            La única excepción que sobrevive es la propia pantalla de avisos: ahí la campana sería
+            un botón que lleva a donde ya estás, y ésa sigue siendo la razón de siempre para no
+            dibujar un control muerto. Se decide por la ruta y no por `onBack`, porque `onBack` dice
+            «esta pantalla tiene vuelta atrás», que es otra pregunta.
           */
           actions={
-            !onBack
-              ? [
+            // Ver la nota de arriba: la campana se queda en TODAS menos en los avisos.
+            enAvisos
+              ? []
+              : [
                   {
                     icon: <IconBell />,
                     label: t('inspector.notifications.open'),
@@ -238,7 +252,6 @@ export function InspectorShell({
                     badgeCount: avisos > 0 ? avisos : undefined,
                   },
                 ]
-              : []
           }
           end={
             /* Nunca el color solo: la insignia lleva la palabra además del tono.

@@ -429,6 +429,54 @@ async function medir(page, dedo) {
       altos.join(' / '),
     );
 
+    // --- 1b. El hover pinta la tarjeta ENTERA (07-10-2026) --------------------------------------
+    /*
+      El defecto que trajo la captura del 07-10: en «Estadías activas» el resaltado dejaba una
+      franja inferior con el color de reposo, y parecía que el hover pertenecía a un hijo interno.
+      La causa era medible: `.lx-home-kpis` es una cuadrícula que estira las cuatro tarjetas a la
+      altura de la más alta, y el botón de adentro tenía ancho pero no alto.
+
+      Por eso lo que se mide no es «se ve bien» sino el hecho: con el mouse encima, la caja del
+      botón tiene que coincidir con la caja de la tarjeta, y su fondo tiene que haber cambiado.
+      Comparar píxeles diría «cambió algo»; esto dice QUÉ.
+    */
+    for (const etiqueta of DESTINOS.map((d) => d.etiqueta)) {
+      const tarjeta = page.locator('.lx-home-kpis .lx-metric', { hasText: etiqueta }).first();
+      if ((await tarjeta.count()) === 0) continue;
+      const reposo = await tarjeta.evaluate((n) => {
+        const hit = n.querySelector('.lx-metric__hit');
+        return hit ? getComputedStyle(hit).backgroundColor : '';
+      });
+      await tarjeta.hover();
+      await page.waitForTimeout(350);
+      const medida = await tarjeta.evaluate((n) => {
+        const hit = n.querySelector('.lx-metric__hit');
+        const cajaN = n.getBoundingClientRect();
+        const cajaH = hit ? hit.getBoundingClientRect() : null;
+        return {
+          altoTarjeta: Math.round(cajaN.height),
+          altoBoton: cajaH ? Math.round(cajaH.height) : 0,
+          anchoTarjeta: Math.round(cajaN.width),
+          anchoBoton: cajaH ? Math.round(cajaH.width) : 0,
+          fondo: hit ? getComputedStyle(hit).backgroundColor : '',
+        };
+      });
+      comprobar(
+        Math.abs(medida.altoTarjeta - medida.altoBoton) <= 1
+          && Math.abs(medida.anchoTarjeta - medida.anchoBoton) <= 1,
+        `  «${etiqueta}» se resalta de borde a borde, sin franja`,
+        `tarjeta ${medida.anchoTarjeta}x${medida.altoTarjeta} · botón ${medida.anchoBoton}x${medida.altoBoton}`,
+      );
+      comprobar(
+        medida.fondo !== reposo && medida.fondo !== '' && medida.fondo !== 'rgba(0, 0, 0, 0)',
+        '  y el fondo de verdad cambia al pasar por encima',
+        `reposo=${reposo} hover=${medida.fondo}`,
+      );
+    }
+    // Se suelta el mouse para que el hover no contamine las mediciones siguientes.
+    await page.mouse.move(0, 0);
+    await page.waitForTimeout(250);
+
     // --- 2. El teclado llega y se ve ------------------------------------------------------------
     let saltos = 0;
     let enfocado = null;

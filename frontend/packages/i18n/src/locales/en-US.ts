@@ -1164,12 +1164,12 @@ export const enUS: Record<TranslationKey, string> = {
   'inspector.more.about': 'About LuParX',
   'inspector.more.about.meta': 'Opens the official site.',
   // --- Help ---------------------------------------------------------------------------------------
-  'inspector.help.offline.action': 'See the connection state',
+  'inspector.help.offline.action': 'See connection',
   'inspector.help.offline.nothingPending': 'Nothing is waiting to sync.',
-  'inspector.help.plate.action': 'Go and check a plate',
-  'inspector.help.citation.action': 'Go and issue a citation',
-  'inspector.help.evidence.action': 'Go to the citation flow',
-  'inspector.help.queue.action': 'See what is pending',
+  'inspector.help.plate.action': 'Check a plate',
+  'inspector.help.citation.action': 'Issue a citation',
+  'inspector.help.evidence.action': 'Add evidence',
+  'inspector.help.queue.action': 'See pending',
   'inspector.help.title': 'Help',
   'inspector.help.offline.title': 'If you lose signal',
   'inspector.help.offline.body':
@@ -1189,7 +1189,7 @@ export const enUS: Record<TranslationKey, string> = {
   'inspector.help.diag.title': 'App diagnostics',
   'inspector.help.diag.body':
     'Checks the connection, what is still to be sent, your session and this phone\'s permissions. One screen tells you whether something is not working.',
-  'inspector.help.diag.action': 'Check the state of the app',
+  'inspector.help.diag.action': 'See diagnostics',
   'inspector.help.diag.checking': 'Checking…',
   'inspector.help.diag.allGood': 'Everything is working correctly.',
   'inspector.help.diag.someWarning': 'It works, but there is something you should know.',
@@ -1231,6 +1231,11 @@ export const enUS: Record<TranslationKey, string> = {
   'inspector.help.diag.permission.granted': 'Permission granted',
   'inspector.help.diag.permission.asks': 'Asked for when used',
   'inspector.help.diag.permission.denied': 'Permission denied',
+  'inspector.help.diag.permission.working': 'Asking…',
+  'inspector.help.diag.camera.allow': 'Allow the camera',
+  'inspector.help.diag.location.allow': 'Allow location',
+  'inspector.help.diag.location.allowNote':
+    'With permission granted, a plate check records where it was made. Without it the citation is issued all the same, with no coordinates.',
   'inspector.help.diag.app': 'App',
   'inspector.help.diag.app.ok': 'Working correctly',
   'inspector.help.diag.app.problem': 'This phone is not storing data',
@@ -1255,6 +1260,12 @@ export const enUS: Record<TranslationKey, string> = {
   'citizen.more.about.meta': 'Opens the official site.',
   // --- Citizen help ---------------------------------------------------------------------------------
   'citizen.help.title': 'Help',
+  'citizen.help.park.action': 'Park',
+  'citizen.help.extend.action': 'See the active stay',
+  'citizen.help.fine.action': 'See fines',
+  'citizen.help.appeal.action': 'Appeal a fine',
+  'citizen.help.wallet.action': 'See wallet',
+  'citizen.help.plate.action': 'See vehicles',
   'citizen.help.park.title': 'How to park',
   'citizen.help.park.body':
     'Pick the zone, the plate and how long you want. The charge leaves your wallet when you start, so check the balance first. Time starts then, not when you arrived.',

@@ -76,6 +76,8 @@ export function CitizenShell({
   const enLinea = useIsOnline();
   const unreadCount = unreadQuery.data?.unread;
   const location = useLocation();
+  /** La única pantalla sin campana: la de los avisos. Un botón hacia donde ya estás. */
+  const enAvisos = location.pathname.startsWith('/notifications');
 
   // The footer (the tab bar) is `position: fixed`, so it never reserves space in normal flow on
   // its own — measured here and applied as `main`'s bottom padding so it can never cover page
@@ -237,8 +239,26 @@ export function CitizenShell({
             ) : undefined
           }
           actions={
-            !onBack
-              ? [
+            /*
+              La campana se queda en TODAS las pantallas menos en la de avisos (07-10-2026).
+
+              Era `!onBack`: sólo en las raíces. El mismo defecto que el fiscalizador tenía y que el
+              PDF del 07-10 reportó allá con una captura — entrar a una pantalla interna hacía
+              desaparecer la campana y, con ella, el contador de avisos sin leer. Un indicador que se
+              esconde al navegar no es un indicador: su trabajo es estar cuando uno NO lo está
+              buscando.
+
+              Se corrige acá aunque el encargo del ciudadano hablara sólo de la cabecera de Ayuda,
+              porque el encargo pide «mantener la experiencia visual consistente con las demás
+              pantallas» y porque devolverle la cabecera a Ayuda SIN esto le habría quitado la
+              campana a esa pantalla: habría cambiado un defecto por otro.
+
+              La única excepción es la propia pantalla de avisos: ahí sería un botón hacia donde ya
+              estás. Se decide por la ruta y no por `onBack`, que contesta otra pregunta.
+            */
+            enAvisos
+              ? []
+              : [
                   {
                     icon: <IconBell />,
                     label: t('common.notifications'),
@@ -249,7 +269,6 @@ export function CitizenShell({
                     badgeCount: unreadCount,
                   },
                 ]
-              : []
           }
         />
         )}

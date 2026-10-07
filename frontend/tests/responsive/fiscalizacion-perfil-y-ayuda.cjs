@@ -279,6 +279,7 @@ async function estadoDeLaCabecera(page) {
           nodos.map((n) => ({
             clave: n.getAttribute('data-check'),
             tono: n.getAttribute('data-tono'),
+            accion: n.getAttribute('data-accion'),
             texto: (n.textContent ?? '').replace(/\s+/g, ' ').trim(),
             botones: n.querySelectorAll('button').length,
           })),
@@ -294,29 +295,37 @@ async function estadoDeLaCabecera(page) {
         for (const repetida of ['Consultar una placa', 'Levantar una boleta', 'Fotos y evidencia']) {
           comprobar(!textoPanel.includes(repetida), `    ya no repite «${repetida}»`);
         }
+        // Los títulos de arriba y también las acciones cortas del 07-10: si alguna reaparece acá,
+        // el diagnóstico volvió a ser un menú.
         comprobar(
-          !/Ver los pendientes|Ir a consultar|Ir a levantar|Ir al flujo/.test(textoPanel),
+          !/Ver pendientes|Consultar placa|Levantar boleta|Ver evidencia/.test(textoPanel),
           '    y no quedó ningún acceso de los de Ayuda',
           textoPanel.slice(0, 200),
         );
 
-        // Con conexión y la cola al día, el panel no ofrece NADA que pulsar.
+        /*
+          Con conexión y la cola al día, el panel no ofrece ni un REMEDIO. La distinción es del
+          07-10: un botón de «Permitir la ubicación» no es un botón de recuperación —no hay nada
+          que recuperar— sino la oportunidad de conceder un permiso que todavía no se dio, y en el
+          navegador del arnés ése es el estado normal. Contar «botones» a secas haría fallar la
+          comprobación por lo único que el diagnóstico tiene derecho a ofrecer estando sano.
+        */
         const problemas = filas.filter((f) => f.tono !== 'ok');
-        const botones = filas.reduce((suma, f) => suma + f.botones, 0);
+        const remedios = filas.filter((f) => f.accion === 'remedio').length;
         if (problemas.length === 0) {
           comprobar(
-            botones === 0 && /Todo está funcionando correctamente/.test(textoPanel),
+            remedios === 0 && /Todo está funcionando correctamente/.test(textoPanel),
             '    todo en orden: lo dice y no muestra ni un botón de recuperación',
-            `${botones} botón(es); resumen: ${textoPanel.slice(0, 120)}`,
+            `${remedios} remedio(s); resumen: ${textoPanel.slice(0, 120)}`,
           );
         } else {
           // El entorno llegó con algo pendiente: entonces lo que toca comprobar es lo contrario,
           // que el problema traiga su acción y las filas sanas sigan sin botones.
-          const sanasConBoton = filas.filter((f) => f.tono === 'ok' && f.botones > 0).length;
+          const sanasConRemedio = filas.filter((f) => f.tono === 'ok' && f.accion === 'remedio').length;
           comprobar(
-            sanasConBoton === 0,
-            '    las comprobaciones en orden no muestran botones',
-            `${sanasConBoton} fila(s) correctas con botón`,
+            sanasConRemedio === 0,
+            '    las comprobaciones en orden no muestran botones de recuperación',
+            `${sanasConRemedio} fila(s) correctas con remedio`,
           );
           console.log(`  ·       el entorno trae ${problemas.map((f) => f.clave).join(', ')} con aviso; se verifican abajo`);
         }
@@ -367,6 +376,102 @@ async function estadoDeLaCabecera(page) {
     Los permisos no se provocan: Chromium concede o deniega por contexto, y denegarlos acá probaría
     la configuración del arnés, no la pantalla.
   */
+  // ===============================================================================================
+  // LA CAMPANA NO SE VA, Y LAS ACCIONES SON CORTAS (07-10-2026)
+  // ===============================================================================================
+  /*
+    Dos encargos del 07-10, los dos sobre la misma pantalla:
+
+      · La campana desaparecía al entrar a Ayuda, porque se dibujaba sólo en las pantallas raíz.
+        Un indicador de avisos sin leer que se esconde al navegar no es un indicador. Se comprueba
+        en Ayuda Y con el diagnóstico abierto, que es donde la captura del PDF la echó de menos.
+      · Las acciones eran frases largas —«Ir a consultar una placa»— y ahora son cortas con una
+        flecha. Se mide el patrón completo en las seis: título, descripción, acción y flecha.
+  */
+  console.log('── La campana se queda, y las acciones son cortas ──');
+  await page.goto(`${BASE}/inspector/help`, { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(2400);
+  {
+    const cabecera = await page.evaluate(() => {
+      const barra = document.querySelector('.lx-app-bar');
+      const campana = barra ? barra.querySelector('.lx-app-bar__icon-btn') : null;
+      const caja = campana ? campana.getBoundingClientRect() : null;
+      return {
+        campanas: document.querySelectorAll('.lx-app-bar__icon-btn').length,
+        visible: caja ? caja.width > 0 && caja.height > 0 && caja.top >= -1 : false,
+        tactil: caja ? Math.round(Math.min(caja.width, caja.height)) : 0,
+        enLinea: document.querySelectorAll('.lx-connection-badge').length,
+        cabeceras: document.querySelectorAll('.lx-app-bar').length,
+      };
+    });
+    comprobar(
+      cabecera.campanas === 1 && cabecera.visible,
+      'en Ayuda la campana sigue ahí, y una sola',
+      JSON.stringify(cabecera),
+    );
+    comprobar(cabecera.tactil >= 44, '  con su blanco táctil de 44px', `${cabecera.tactil}px`);
+    comprobar(cabecera.enLinea === 1, '  y «En línea» sigue a su lado, sin duplicarse');
+    comprobar(cabecera.cabeceras === 1, '  sin una segunda cabecera', `${cabecera.cabeceras}`);
+
+    // Con el diagnóstico abierto: el modal no reemplaza el header.
+    await page.getByRole('button').filter({ hasText: 'Diagnóstico de la aplicación' }).first().click();
+    await page.waitForSelector('.lx-diag__row', { timeout: 8000 }).catch(() => {});
+    const conModal = await page.evaluate(() => ({
+      campanas: document.querySelectorAll('.lx-app-bar__icon-btn').length,
+      cabeceras: document.querySelectorAll('.lx-app-bar').length,
+    }));
+    comprobar(
+      conModal.campanas === 1 && conModal.cabeceras === 1,
+      '  y con el diagnóstico abierto tampoco desaparece',
+      JSON.stringify(conModal),
+    );
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(500);
+
+    // En los avisos NO va, que es la única excepción: sería un botón hacia donde ya estás.
+    await page.goto(`${BASE}/inspector/notifications`, { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(2200);
+    const enAvisos = await page.evaluate(() => document.querySelectorAll('.lx-app-bar__icon-btn').length);
+    comprobar(enAvisos === 0, 'en la pantalla de avisos la campana no se dibuja', `${enAvisos}`);
+  }
+
+  // --- El patrón de las seis tarjetas ------------------------------------------------------------
+  await page.goto(`${BASE}/inspector/help`, { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(2400);
+  {
+    const tarjetas = await page.$$eval('.lx-help-card', (nodos) =>
+      nodos.map((n) => {
+        const accion = n.querySelector('.lx-help-card__action');
+        const caja = n.getBoundingClientRect();
+        return {
+          titulo: (n.querySelector('.lx-help-card__title')?.textContent ?? '').trim(),
+          icono: n.querySelectorAll('.lx-help-card__icon').length,
+          accion: (accion?.textContent ?? '').trim(),
+          flecha: n.querySelectorAll('.lx-help-card__go').length,
+          alto: Math.round(caja.height),
+          // Texto cortado de verdad dentro de la acción: la frase corta no debe necesitar elipsis.
+          accionCortada: accion ? accion.scrollWidth > accion.clientWidth + 1 : false,
+        };
+      }),
+    );
+    comprobar(tarjetas.length === 6, 'las seis tarjetas de Ayuda siguen ahí', `${tarjetas.length}`);
+    for (const tarjeta of tarjetas) {
+      comprobar(
+        tarjeta.icono === 1 && tarjeta.accion.length > 0 && tarjeta.flecha === 1,
+        `  «${tarjeta.titulo}» tiene icono, acción y flecha de dirección`,
+        JSON.stringify(tarjeta),
+      );
+      // «Ir a consultar una placa» son 24 caracteres; «Consultar placa» son 15. El corte en 22 deja
+      // pasar las seis nuevas y no deja pasar ninguna de las viejas.
+      comprobar(
+        tarjeta.accion.length <= 22 && !tarjeta.accionCortada,
+        `  y su acción es corta y entera («${tarjeta.accion}»)`,
+        `${tarjeta.accion.length} caracteres · cortada=${tarjeta.accionCortada}`,
+      );
+      comprobar(tarjeta.alto >= 44, '  con blanco táctil suficiente', `${tarjeta.alto}px`);
+    }
+  }
+
   console.log('── Diagnóstico: que detecte de verdad ──');
 
   /*
@@ -388,6 +493,7 @@ async function estadoDeLaCabecera(page) {
       nodos.map((n) => ({
         clave: n.getAttribute('data-check'),
         tono: n.getAttribute('data-tono'),
+        accion: n.getAttribute('data-accion'),
         texto: (n.textContent ?? '').replace(/\s+/g, ' ').trim(),
         botones: [...n.querySelectorAll('button')].map((b) => (b.textContent ?? '').trim()),
       })),
@@ -410,15 +516,15 @@ async function estadoDeLaCabecera(page) {
       conexion ? `tono=${conexion.tono} · ${conexion.texto}` : 'no se pintó la fila de conexión',
     );
     comprobar(
-      (conexion?.botones ?? []).some((b) => /estado de la conexión/i.test(b)),
-      '  y ofrece la única acción que resuelve: ver el estado de la conexión',
+      (conexion?.botones ?? []).some((b) => /ver conexión/i.test(b)),
+      '  y ofrece la única acción que resuelve: ver la conexión',
       JSON.stringify(conexion?.botones ?? []),
     );
-    const sanasConBoton = filas.filter((f) => f.tono === 'ok' && f.botones.length > 0);
+    const sanasConRemedio = filas.filter((f) => f.tono === 'ok' && f.accion === 'remedio');
     comprobar(
-      sanasConBoton.length === 0,
-      '  mientras las comprobaciones en orden siguen sin un solo botón',
-      sanasConBoton.map((f) => f.clave).join(', '),
+      sanasConRemedio.length === 0,
+      '  mientras las comprobaciones en orden siguen sin un botón de recuperación',
+      sanasConRemedio.map((f) => f.clave).join(', '),
     );
     const texto = (await page.getByRole('dialog').textContent().catch(() => '')) ?? '';
     comprobar(
@@ -486,10 +592,10 @@ async function estadoDeLaCabecera(page) {
       '  y aparece «Sincronizar ahora», que antes no estaba',
       JSON.stringify(sync?.botones ?? []),
     );
-    const otras = filas.filter((f) => f.clave !== 'sync' && f.botones.length > 0);
+    const otras = filas.filter((f) => f.clave !== 'sync' && f.accion === 'remedio');
     comprobar(
       otras.length === 0,
-      '  y nada más cambió: ninguna otra fila ganó un botón',
+      '  y nada más cambió: ninguna otra fila ganó un botón de recuperación',
       otras.map((f) => `${f.clave}:${f.botones.join('/')}`).join(', '),
     );
     await page.keyboard.press('Escape');

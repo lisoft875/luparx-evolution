@@ -10,6 +10,7 @@ import {
   Card,
   CardStack,
   IconCheck,
+  IconChevronRight,
   IconEye,
   IconFine,
   IconGauge,
@@ -21,7 +22,14 @@ import {
   Modal,
 } from '@luparx/ui';
 import { InspectorShell } from '../components/InspectorShell';
-import { cameraPermissionState, locationPermissionState, type PermissionReadiness } from '../lib/capture';
+import {
+  cameraPermissionState,
+  hasNativeCamera,
+  locationPermissionState,
+  requestCameraPermission,
+  takePosition,
+  type PermissionReadiness,
+} from '../lib/capture';
 import { useCitationQueue, useIsOnline } from '../lib/queries';
 
 /**
@@ -108,8 +116,16 @@ interface Comprobacion {
   estado: string;
   /** Sólo cuando el tono no es `ok`: qué significa y qué se puede hacer. */
   nota?: string;
-  /** Sólo cuando existe algo que de verdad resuelve. Nunca un botón decorativo. */
-  accion?: { etiqueta: string; onClick: () => void; ocupado?: boolean };
+  /**
+   * Sólo cuando existe algo que de verdad resuelve. Nunca un botón decorativo.
+   *
+   * <p>`tipo` distingue las dos clases de acción, y la distinción importa: un `remedio` aparece
+   * únicamente ante un problema detectado —ésa es la regla del 06-10— mientras que un `permiso` es
+   * una oportunidad, no una falla: la aplicación funciona sin él y pedirlo antes del turno es mejor
+   * que pedirlo frente a un carro. Las pruebas comprueban por separado que con todo en orden no
+   * haya ni un `remedio`.</p>
+   */
+  accion?: { etiqueta: string; onClick: () => void; ocupado?: boolean; tipo: 'remedio' | 'permiso' };
 }
 
 /** Lo que las comprobaciones asíncronas devuelven. `null` mientras se están midiendo. */
@@ -149,6 +165,8 @@ export function HelpPage(): React.JSX.Element {
   const [verDiagnostico, setVerDiagnostico] = useState(false);
   const [medicion, setMedicion] = useState<Medicion | null>(null);
   const [sincronizando, setSincronizando] = useState(false);
+  /** Qué permiso se está pidiendo ahora mismo, para que su botón diga «Pidiendo…» y no dos veces. */
+  const [pidiendo, setPidiendo] = useState<'camera' | 'location' | null>(null);
 
   const fallidas = rows.filter((row) => row.state === 'FAILED').length;
 
@@ -187,6 +205,36 @@ export function HelpPage(): React.JSX.Element {
     }
   }
 
+  /**
+   * Pide la ubicación de verdad, con lo que ya existe.
+   *
+   * <p>Llama a {@link takePosition} y no a `requestLocationPermission`, que es lo que parecería
+   * natural: en el navegador esa función no pregunta nada —devuelve `granted` si existe
+   * `navigator.geolocation` y se acabó— porque el aviso del sistema lo dispara la PRIMERA lectura.
+   * Un botón que no abre ningún diálogo y después pinta la fila en verde estaría mintiendo. Una
+   * lectura real pregunta, y después la medición dice lo que el usuario contestó.</p>
+   */
+  async function permitirUbicacion(): Promise<void> {
+    setPidiendo('location');
+    try {
+      await takePosition();
+    } finally {
+      setPidiendo(null);
+      await medir();
+    }
+  }
+
+  /** Lo mismo para la cámara, que en nativo sí tiene una solicitud de permiso de verdad. */
+  async function permitirCamara(): Promise<void> {
+    setPidiendo('camera');
+    try {
+      await requestCameraPermission();
+    } finally {
+      setPidiendo(null);
+      await medir();
+    }
+  }
+
   /** El permiso, dicho en palabras. Los tres estados existen porque los tres pasan de verdad. */
   function textoPermiso(estado: PermissionReadiness): string {
     if (estado === 'granted') return t('inspector.help.diag.permission.granted');
@@ -214,7 +262,7 @@ export function HelpPage(): React.JSX.Element {
       nota: online ? undefined : t('inspector.help.diag.connection.note'),
       accion: online
         ? undefined
-        : { etiqueta: t('inspector.help.offline.action'), onClick: () => setVerConexion(true) },
+        : { etiqueta: t('inspector.help.offline.action'), onClick: () => setVerConexion(true), tipo: 'remedio' },
     });
 
     // 2. Sincronización. Un solo dato y una sola fila: «sincronización» y «operaciones pendientes»
@@ -229,7 +277,7 @@ export function HelpPage(): React.JSX.Element {
         nota: t('inspector.help.diag.sync.failedNote'),
         // Reintentar sin señal no reintenta nada: el botón aparece sólo cuando puede funcionar.
         accion: online
-          ? { etiqueta: t('inspector.help.diag.sync.retry'), onClick: () => retryAll() }
+          ? { etiqueta: t('inspector.help.diag.sync.retry'), onClick: () => retryAll(), tipo: 'remedio' }
           : undefined,
       });
     } else if (pending > 0) {
@@ -245,6 +293,7 @@ export function HelpPage(): React.JSX.Element {
               etiqueta: t('inspector.help.diag.sync.action'),
               onClick: () => void sincronizarAhora(),
               ocupado: sincronizando,
+              tipo: 'remedio',
             }
           : undefined,
       });
@@ -267,7 +316,7 @@ export function HelpPage(): React.JSX.Element {
         titulo: t('inspector.help.diag.session'),
         estado: t('inspector.help.diag.session.problem'),
         nota: t('inspector.help.diag.session.note'),
-        accion: { etiqueta: t('inspector.help.diag.session.action'), onClick: () => navigate('/login') },
+        accion: { etiqueta: t('inspector.help.diag.session.action'), onClick: () => navigate('/login'), tipo: 'remedio' },
       });
     } else if (!activeTenant) {
       lista.push({
@@ -280,6 +329,7 @@ export function HelpPage(): React.JSX.Element {
         accion: {
           etiqueta: t('inspector.help.diag.session.chooseTenant'),
           onClick: () => navigate('/select-tenant'),
+          tipo: 'remedio',
         },
       });
     } else {
@@ -303,6 +353,21 @@ export function HelpPage(): React.JSX.Element {
       titulo: t('inspector.help.diag.camera'),
       estado: textoPermiso(camara),
       nota: camara === 'denied' ? t('inspector.help.diag.camera.deniedNote') : undefined,
+      /*
+        El botón sólo donde de verdad abre un diálogo: `asksOnUse` Y con cámara nativa. En el
+        navegador no hay permiso de cámara que pedir —la foto sale del selector del sistema, y
+        `requestCameraPermission()` devuelve `granted` sin preguntar nada—, así que ahí un
+        «Permitir acceso» pintaría la fila de verde sin que nadie hubiera concedido nada.
+      */
+      accion:
+        camara === 'asksOnUse' && hasNativeCamera()
+          ? {
+              etiqueta: t('inspector.help.diag.camera.allow'),
+              onClick: () => void permitirCamara(),
+              ocupado: pidiendo === 'camera',
+              tipo: 'permiso',
+            }
+          : undefined,
     });
 
     const ubicacion = medicion?.ubicacion ?? 'asksOnUse';
@@ -312,7 +377,23 @@ export function HelpPage(): React.JSX.Element {
       icono: <IconPin />,
       titulo: t('inspector.help.diag.location'),
       estado: textoPermiso(ubicacion),
-      nota: ubicacion === 'denied' ? t('inspector.help.diag.location.deniedNote') : undefined,
+      nota:
+        ubicacion === 'denied'
+          ? t('inspector.help.diag.location.deniedNote')
+          : ubicacion === 'asksOnUse'
+            ? t('inspector.help.diag.location.allowNote')
+            : undefined,
+      // Acá sí funciona en los dos sitios, porque la lectura de posición dispara el aviso del
+      // sistema tanto en el teléfono como en el navegador.
+      accion:
+        ubicacion === 'asksOnUse'
+          ? {
+              etiqueta: t('inspector.help.diag.location.allow'),
+              onClick: () => void permitirUbicacion(),
+              ocupado: pidiendo === 'location',
+              tipo: 'permiso',
+            }
+          : undefined,
     });
 
     // 6. La aplicación. Lo que de verdad se puede medir acá es si este dispositivo guarda.
@@ -329,6 +410,7 @@ export function HelpPage(): React.JSX.Element {
         : {
             etiqueta: t('inspector.help.diag.app.reload'),
             onClick: () => window.location.reload(),
+            tipo: 'remedio',
           },
     });
 
@@ -363,8 +445,15 @@ export function HelpPage(): React.JSX.Element {
                 <span className="lx-text-meta">
                   {t(`inspector.help.${entrada.clave}.body` as TranslationKey)}
                 </span>
+                {/* Frase corta y flecha: lo que antes era «Ir a consultar una placa» ahora es
+                    «Consultar placa ›». La flecha no es decorativa —dice que esto lleva a algún
+                    lado— pero se marca `aria-hidden` porque eso ya lo dice el texto, y un lector de
+                    pantalla anunciando «chevron derecha» después de cada acción es ruido. */}
                 <span className="lx-help-card__action">
                   {t(`inspector.help.${entrada.clave}.action` as TranslationKey)}
+                  <span className="lx-help-card__go" aria-hidden="true">
+                    <IconChevronRight size={14} />
+                  </span>
                 </span>
               </span>
             </button>
@@ -426,7 +515,13 @@ export function HelpPage(): React.JSX.Element {
               </Alert>
               <ul className="lx-diag__list">
                 {filas.map((fila) => (
-                  <li key={fila.clave} className="lx-diag__row" data-tono={fila.tono} data-check={fila.clave}>
+                  <li
+                    key={fila.clave}
+                    className="lx-diag__row"
+                    data-tono={fila.tono}
+                    data-check={fila.clave}
+                    data-accion={fila.accion?.tipo}
+                  >
                     <span className="lx-diag__icon" aria-hidden="true">
                       {fila.icono}
                     </span>
@@ -455,7 +550,13 @@ export function HelpPage(): React.JSX.Element {
                           loading={fila.accion.ocupado}
                           onClick={fila.accion.onClick}
                         >
-                          {fila.accion.ocupado ? t('inspector.help.diag.sync.working') : fila.accion.etiqueta}
+                          {fila.accion.ocupado
+                            ? t(
+                                fila.accion.tipo === 'permiso'
+                                  ? 'inspector.help.diag.permission.working'
+                                  : 'inspector.help.diag.sync.working',
+                              )
+                            : fila.accion.etiqueta}
                         </Button>
                       ) : null}
                     </div>

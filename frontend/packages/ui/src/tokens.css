@@ -129,7 +129,17 @@
   --lx-bg-elevated: #102033;
   --lx-surface: #102033;
   --lx-surface-2: #14263A;
-  --lx-surface-hover: #1A3047;
+  /*
+    06-10-2026: sube de #1A3047 a #183B56, que es el valor que pide la especificación del Inicio.
+    No es una preferencia, es una medición: el paso entre la superficie y su hover era 1.22 —«un
+    cambio sutil» que en la práctica no se ve— y el pedido equivale a 1.32. Este valor da 1.41 y
+    conserva el texto secundario en 4.77 sobre él, que pasa 4.5; el #20405E que daría aún más paso
+    lo baja a 4.39 y por eso no se usó.
+
+    El fondo y la superficie NO se tocaron: la separación que la especificación pide entre ellos
+    (1.16) es la que ya había (1.15). Lo que estaba flojo era el hover, y es lo único que se movió.
+  */
+  --lx-surface-hover: #183B56;
   /* La guía da el borde como un color sólido y no como un alfa. Es mejor: un alfa se ve distinto
      según lo que tenga debajo, y estos bordes separan tanto una tarjeta del fondo como una fila de
      la siguiente dentro de la tarjeta. */
@@ -4313,6 +4323,21 @@ a.lx-list-row {
   /* Sin relleno propio: lo pone el botón de adentro, para que el área de clic llegue al borde. */
   padding: 0;
   overflow: hidden;
+  /*
+    `grid` para que el botón de adentro se ESTIRE a la tarjeta (06-10-2026).
+
+    Acá estaba el defecto de la captura: `.lx-home-kpis` es una cuadrícula, así que las cuatro
+    tarjetas miden lo que mide la más alta —«Recaudación hoy», cuyo monto ocupa dos renglones—.
+    El botón tenía `width: 100%` y NINGUNA altura, de modo que en las otras tres terminaba antes
+    del borde inferior y el fondo del hover dejaba una franja con el color de reposo. Parecía que
+    el resaltado pertenecía a un hijo interno, que es exactamente como lo describe el PDF.
+
+    Un `div` con `display: grid` y una sola fila estira a su hijo por omisión (`stretch`), así que
+    el botón llega al borde sin una sola medida escrita a mano. El `overflow: hidden` de arriba es
+    lo que hace que ese fondo respete el radio de la tarjeta: una sola superficie, un solo borde,
+    un solo estado — que es lo que el documento pide en letra.
+  */
+  display: grid;
 }
 
 .lx-metric__hit {
@@ -4328,6 +4353,8 @@ a.lx-list-row {
   gap: 0 var(--lx-space-3);
   align-content: center;
   width: 100%;
+  /* La otra mitad del arreglo: sin esto el botón mide lo que mide su contenido. */
+  height: 100%;
   /* v4 §2: relleno vertical 14-16px, altura objetivo 88-100px. Medido: 93px. */
   padding: 14px var(--lx-space-4);
   border: 0;
@@ -5275,6 +5302,29 @@ a.lx-list-row {
   color: var(--lx-primary);
   font-size: var(--lx-text-meta-size);
   font-weight: 600;
+  /* Frase corta y flecha, en una sola línea (07-10-2026). El chevron va PEGADO al texto y no
+     alineado al borde derecho de la tarjeta: a 320px el borde queda a seis centímetros de la
+     última palabra y la flecha deja de leerse como «esto continúa» para parecer un control
+     suelto. El área táctil no depende de esto — la tarjeta entera es el botón desde el 26-09. */
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.lx-help-card__go {
+  display: inline-flex;
+  flex: 0 0 auto;
+  transition: transform 160ms ease;
+}
+.lx-help-card:hover .lx-help-card__go {
+  transform: translateX(2px);
+}
+@media (prefers-reduced-motion: reduce) {
+  .lx-help-card__go {
+    transition: none;
+  }
+  .lx-help-card:hover .lx-help-card__go {
+    transform: none;
+  }
 }
 .lx-help-card:hover .lx-help-card__action {
   color: var(--lx-primary-hover);

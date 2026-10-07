@@ -1196,12 +1196,12 @@ export const esCR = {
   'inspector.more.about': 'Acerca de LuParX',
   'inspector.more.about.meta': 'Abre el sitio oficial.',
   // --- Ayuda: lo que de verdad pasa en un turno --------------------------------------------------
-  'inspector.help.offline.action': 'Ver el estado de la conexión',
+  'inspector.help.offline.action': 'Ver conexión',
   'inspector.help.offline.nothingPending': 'No hay nada esperando a sincronizarse.',
-  'inspector.help.plate.action': 'Ir a consultar una placa',
-  'inspector.help.citation.action': 'Ir a levantar una boleta',
-  'inspector.help.evidence.action': 'Ir al flujo de boleta',
-  'inspector.help.queue.action': 'Ver los pendientes',
+  'inspector.help.plate.action': 'Consultar placa',
+  'inspector.help.citation.action': 'Levantar boleta',
+  'inspector.help.evidence.action': 'Ver evidencia',
+  'inspector.help.queue.action': 'Ver pendientes',
   'inspector.help.title': 'Ayuda',
   'inspector.help.offline.title': 'Si te quedás sin señal',
   'inspector.help.offline.body':
@@ -1226,7 +1226,7 @@ export const esCR = {
   'inspector.help.diag.title': 'Diagnóstico de la aplicación',
   'inspector.help.diag.body':
     'Revisa la conexión, lo que falta por enviar, tu sesión y los permisos de este teléfono. Te dice en una pantalla si algo no está funcionando.',
-  'inspector.help.diag.action': 'Revisar el estado de la aplicación',
+  'inspector.help.diag.action': 'Ver diagnóstico',
   'inspector.help.diag.checking': 'Revisando el estado…',
   'inspector.help.diag.allGood': 'Todo está funcionando correctamente.',
   'inspector.help.diag.someWarning': 'Funciona, pero hay algo que conviene que sepás.',
@@ -1268,6 +1268,11 @@ export const esCR = {
   'inspector.help.diag.permission.granted': 'Permiso concedido',
   'inspector.help.diag.permission.asks': 'Se pide al usarla',
   'inspector.help.diag.permission.denied': 'Permiso denegado',
+  'inspector.help.diag.permission.working': 'Pidiendo…',
+  'inspector.help.diag.camera.allow': 'Permitir la cámara',
+  'inspector.help.diag.location.allow': 'Permitir la ubicación',
+  'inspector.help.diag.location.allowNote':
+    'Con el permiso dado, la consulta de placa guarda dónde se hizo. Sin él la boleta se emite igual, sin coordenadas.',
   'inspector.help.diag.app': 'Aplicación',
   'inspector.help.diag.app.ok': 'Funcionando correctamente',
   'inspector.help.diag.app.problem': 'Este teléfono no está guardando datos',
@@ -1292,6 +1297,14 @@ export const esCR = {
   'citizen.more.about.meta': 'Abre el sitio oficial.',
   // --- Ayuda del ciudadano -------------------------------------------------------------------------
   'citizen.help.title': 'Ayuda',
+  /* Cada tema lleva a la pantalla que de verdad lo resuelve (07-10-2026). Ninguna ruta es nueva:
+     son las cinco pestañas y Multas, que ya existían. Lo que se agregó es el enlace. */
+  'citizen.help.park.action': 'Estacionar',
+  'citizen.help.extend.action': 'Ver estacionamiento activo',
+  'citizen.help.fine.action': 'Ver multas',
+  'citizen.help.appeal.action': 'Apelar boleta',
+  'citizen.help.wallet.action': 'Ver billetera',
+  'citizen.help.plate.action': 'Ver vehículos',
   'citizen.help.park.title': 'Cómo estacionar',
   'citizen.help.park.body':
     'Elegí la zona, la placa y cuánto tiempo querés. El cobro sale de tu billetera al iniciar, así que revisá el saldo antes. El tiempo empieza a correr en ese momento, no cuando llegaste.',
