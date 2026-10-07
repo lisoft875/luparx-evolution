@@ -14,6 +14,13 @@ export { focusFirstFieldError } from './fieldErrors';
 export { isValidIpAddress, isIpv4, isIpv6 } from './ipAddress';
 export type { PrimerCampoConError } from './fieldErrors';
 export { Alert } from './components/Alert';
+export { DiagnosticList } from './components/DiagnosticList';
+export type {
+  DiagnosticListProps,
+  DiagnosticCheck,
+  DiagnosticAction,
+  DiagnosticTone,
+} from './components/DiagnosticList';
 export type { AlertProps, AlertTone } from './components/Alert';
 export { DateField } from './components/DateField';
 export type { DateFieldProps } from './components/DateField';

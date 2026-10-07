@@ -1,22 +1,27 @@
 /**
- * Ciudadano → Ayuda: la cabecera que se perdía y las seis tarjetas que no llevaban a ningún lado.
+ * Ciudadano → Centro de Ayuda: dos niveles, y que ninguno sea un segundo menú.
  *
  * <h2>Qué se mide y por qué así</h2>
  *
- * <p>El encargo del 07-10-2026 reporta dos cosas en la misma pantalla: al entrar a Ayuda se perdía
- * la cabecera superior, y las seis tarjetas eran texto informativo sin acción. Las dos se
- * comprueban por el hecho y no por el aspecto:</p>
+ * <p>La Ayuda del ciudadano fue tres cosas en dos días: seis párrafos sin salida, después seis
+ * tarjetas que llevaban cada una a su módulo —lo cual arregló un defecto y creó otro, porque una
+ * Ayuda cuyos botones son los módulos de la barra de abajo es un segundo menú— y ahora un centro
+ * que pregunta por el PROBLEMA y deja el módulo para el final.</p>
+ *
+ * <p>Entonces lo que hay que comprobar no es «hay tarjetas y llevan a algún lado»; eso ya lo
+ * cumplía la versión que se reportó como defectuosa. Es más exigente:</p>
  *
  * <ul>
- *   <li><b>La cabecera.</b> Que exista UNA `.lx-app-bar` —ni cero, que era el defecto, ni dos, que
- *       sería la corrección hecha mal— y que la campana y la navegación inferior sigan ahí.</li>
- *   <li><b>Las acciones.</b> Se pulsan las seis y se comprueba a qué ruta llegaron y que la
- *       pantalla de destino pintó su propio título. Un enlace que navega a una pantalla vacía es un
- *       enlace muerto con mejor disfraz.</li>
+ *   <li><b>El primer nivel NO nombra módulos.</b> Cinco categorías de problema y el bloque de
+ *       estado, y ni «Estacionar» ni «Billetera» ni «Vehículos» como título de categoría. Ésta es
+ *       la comprobación que distingue esta versión de la anterior.</li>
+ *   <li><b>El segundo nivel explica antes de llevar.</b> Cada opción tiene título, explicación y
+ *       —sólo si hay función— una acción corta. La explicación va ARRIBA del botón.</li>
+ *   <li><b>Ningún botón muerto.</b> Se pulsa cada opción con acción y se comprueba dónde cayó: una
+ *       ruta real, el diagnóstico, o una recarga.</li>
+ *   <li><b>El buscador filtra de verdad</b> y dice honestamente cuando no encuentra.</li>
+ *   <li><b>La cabecera y la campana</b> sobreviven a los dos niveles.</li>
  * </ul>
- *
- * <p>Ninguna de las seis rutas es nueva, así que lo que esto protege es que sigan existiendo: el
- * día que alguien renombre `/vehicles`, esta prueba lo dice antes que una municipalidad.</p>
  *
  *   PASS='...' node tests/responsive/ayuda-ciudadano.cjs
  */
@@ -41,17 +46,24 @@ function comprobar(ok, mensaje, detalle) {
   }
 }
 
-/** Las seis tarjetas y la ruta que YA existía para cada una. */
-const TEMAS = [
-  { titulo: 'Cómo estacionar', ruta: /\/park/ },
-  // Ampliar no tiene ruta propia: el panel vive en la tarjeta de la estadía del Inicio.
-  { titulo: 'Si necesitás más tiempo', ruta: /\/$|\/\?/ },
-  { titulo: 'Si te llega una boleta', ruta: /\/fines/ },
-  // Apelar necesita saber CUÁL boleta, así que se elige en la lista.
-  { titulo: 'Apelar una boleta', ruta: /\/fines/ },
-  { titulo: 'La billetera', ruta: /\/wallet/ },
-  { titulo: 'Placas compartidas', ruta: /\/vehicles/ },
+/** Las cinco categorías del primer nivel, y cuántas opciones trae cada una. */
+const CATEGORIAS = [
+  { clave: 'parking', titulo: 'Mi estacionamiento', opciones: 5 },
+  { clave: 'payments', titulo: 'Pagos y billetera', opciones: 5 },
+  { clave: 'fines', titulo: 'Multas y boletas', opciones: 4 },
+  { clave: 'vehicles', titulo: 'Vehículos', opciones: 4 },
+  { clave: 'app', titulo: 'Problemas con la aplicación', opciones: 5 },
 ];
+
+/**
+ * Nombres de MÓDULO que no deben aparecer como título en el primer nivel.
+ *
+ * <p>Es la comprobación que separa esta versión de la anterior. «Vehículos» es a la vez una
+ * categoría legítima y el nombre de una pestaña, así que no entra en la lista: lo que delata un
+ * segundo menú es que la Ayuda ofrezca VERBOS de módulo —«Estacionar», «Ver billetera»— como
+ * primera decisión, antes de que nadie haya dicho qué le pasa.</p>
+ */
+const VERBOS_DE_MODULO = ['Estacionar', 'Ver billetera', 'Ver multas', 'Ver vehículos', 'Consultar placa'];
 
 async function entrar(context) {
   const page = await context.newPage();
@@ -140,71 +152,185 @@ async function entrar(context) {
   comprobar(!cabecera.desborda, '  y sin desborde horizontal');
 
   // ===============================================================================================
-  // 2 · LAS SEIS TARJETAS SON ACCIONES
+  // 2 · EL PRIMER NIVEL PREGUNTA, NO LISTA MÓDULOS
   // ===============================================================================================
-  console.log('── Las seis tarjetas ──');
-  const tarjetas = await page.$$eval('.lx-help-card', (nodos) =>
-    nodos.map((n) => {
-      const accion = n.querySelector('.lx-help-card__action');
-      const caja = n.getBoundingClientRect();
-      return {
+  console.log('── El primer nivel ──');
+  const primerNivel = await page.evaluate(() => {
+    const categorias = [...document.querySelectorAll('[data-categoria]')];
+    return {
+      filas: categorias.map((n) => ({
+        clave: n.getAttribute('data-categoria'),
         titulo: (n.querySelector('.lx-help-card__title')?.textContent ?? '').trim(),
-        icono: n.querySelectorAll('.lx-help-card__icon').length,
-        accion: (accion?.textContent ?? '').trim(),
-        flecha: n.querySelectorAll('.lx-help-card__go').length,
+        alto: Math.round(n.getBoundingClientRect().height),
         boton: n.tagName === 'BUTTON',
-        alto: Math.round(caja.height),
-        accionCortada: accion ? accion.scrollWidth > accion.clientWidth + 1 : false,
-      };
-    }),
+        flecha: n.querySelectorAll('.lx-help-card__go').length,
+      })),
+      buscador: document.querySelectorAll('input[type="search"]').length,
+      texto: (document.querySelector('main')?.textContent ?? '').replace(/\s+/g, ' ').trim(),
+    };
+  });
+
+  comprobar(
+    primerNivel.filas.length === CATEGORIAS.length + 1,
+    `el primer nivel muestra las ${CATEGORIAS.length} categorías y el bloque de estado`,
+    primerNivel.filas.map((f) => f.clave).join(', '),
   );
-  comprobar(tarjetas.length === 6, 'las seis tarjetas están ahí', `${tarjetas.length}`);
-  for (const tarjeta of tarjetas) {
+  for (const categoria of CATEGORIAS) {
+    const fila = primerNivel.filas.find((f) => f.clave === categoria.clave);
     comprobar(
-      tarjeta.boton && tarjeta.icono === 1 && tarjeta.accion.length > 0 && tarjeta.flecha === 1,
-      `  «${tarjeta.titulo}»: botón con icono, acción y flecha`,
-      JSON.stringify(tarjeta),
+      Boolean(fila) && fila.titulo === categoria.titulo && fila.boton && fila.flecha === 1,
+      `  «${categoria.titulo}» está, es un botón y tiene flecha`,
+      fila ? JSON.stringify(fila) : 'no está',
+    );
+    comprobar(fila && fila.alto >= 44, '  con blanco táctil suficiente', fila ? `${fila.alto}px` : '—');
+  }
+  comprobar(primerNivel.buscador === 1, 'hay un buscador, y uno solo', `${primerNivel.buscador}`);
+
+  /*
+    La comprobación que separa esta versión de la anterior: la Ayuda no abre ofreciendo verbos de
+    módulo. Si alguien «simplifica» esto volviendo a poner «Estacionar» o «Ver billetera» en la
+    primera pantalla, vuelve a ser el segundo menú que el encargo del 07-10 vino a quitar.
+  */
+  const verbosEncontrados = VERBOS_DE_MODULO.filter((v) => primerNivel.texto.includes(v));
+  comprobar(
+    verbosEncontrados.length === 0,
+    'y la primera pantalla no ofrece verbos de módulo: pregunta antes de llevar',
+    verbosEncontrados.join(', '),
+  );
+
+  // ===============================================================================================
+  // 3 · EL SEGUNDO NIVEL: EXPLICA, Y DESPUÉS LLEVA
+  // ===============================================================================================
+  console.log('── El segundo nivel ──');
+  for (const categoria of CATEGORIAS) {
+    await page.goto(`${BASE}/help/${categoria.clave}`, { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(2200);
+
+    const nivel = await page.evaluate(() => {
+      const opciones = [...document.querySelectorAll('[data-opcion]')];
+      return {
+        cabeceras: document.querySelectorAll('.lx-app-bar').length,
+        titulo: (document.querySelector('.lx-app-bar__title')?.textContent ?? '').trim(),
+        pregunta: (document.querySelector('main p')?.textContent ?? '').trim(),
+        opciones: opciones.map((n) => {
+          const cuerpo = n.querySelector('.lx-text-meta');
+          const accion = n.querySelector('.lx-help-card__action');
+          return {
+            clave: n.getAttribute('data-opcion'),
+            titulo: (n.querySelector('.lx-help-card__title')?.textContent ?? '').trim(),
+            explicacion: (cuerpo?.textContent ?? '').trim().length,
+            accion: (accion?.textContent ?? '').trim(),
+            // La explicación tiene que ir ARRIBA del botón, no adentro ni debajo.
+            explicaAntes: Boolean(cuerpo && accion)
+              && cuerpo.compareDocumentPosition(accion) === Node.DOCUMENT_POSITION_FOLLOWING,
+          };
+        }),
+      };
+    });
+
+    comprobar(
+      nivel.cabeceras === 1 && nivel.titulo === categoria.titulo,
+      `«${categoria.titulo}» abre con su cabecera y su título`,
+      JSON.stringify({ cabeceras: nivel.cabeceras, titulo: nivel.titulo }),
     );
     comprobar(
-      tarjeta.accion.length <= 26 && !tarjeta.accionCortada,
-      `  y su acción es corta y entera («${tarjeta.accion}»)`,
-      `${tarjeta.accion.length} caracteres · cortada=${tarjeta.accionCortada}`,
+      /necesitás resolver|está pasando/i.test(nivel.pregunta),
+      `  y pregunta primero («${nivel.pregunta}»)`,
     );
-    comprobar(tarjeta.alto >= 44, '  con blanco táctil suficiente', `${tarjeta.alto}px`);
+    comprobar(
+      nivel.opciones.length === categoria.opciones,
+      `  con sus ${categoria.opciones} opciones`,
+      `${nivel.opciones.length}: ${nivel.opciones.map((o) => o.clave).join(', ')}`,
+    );
+    for (const opcion of nivel.opciones) {
+      comprobar(
+        opcion.explicacion > 20 && opcion.accion.length > 0 && opcion.explicaAntes,
+        `  «${opcion.titulo}» explica y después ofrece «${opcion.accion}»`,
+        JSON.stringify(opcion),
+      );
+      comprobar(
+        opcion.accion.length <= 28,
+        '  con una acción corta',
+        `${opcion.accion.length} caracteres`,
+      );
+    }
   }
 
   // ===============================================================================================
-  // 3 · CADA ACCIÓN LLEGA A UNA PANTALLA DE VERDAD
+  // 3b · NINGÚN BOTÓN MUERTO: SE PULSAN TODOS
   // ===============================================================================================
-  console.log('── Adónde lleva cada una ──');
-  for (const tema of TEMAS) {
-    await page.goto(`${BASE}/help`, { waitUntil: 'domcontentloaded' });
-    await page.waitForTimeout(2200);
-    const tarjeta = page.locator('.lx-help-card').filter({ hasText: tema.titulo }).first();
-    if ((await tarjeta.count()) === 0) {
-      comprobar(false, `«${tema.titulo}» está en Ayuda`, 'no se encontró la tarjeta');
-      continue;
+  console.log('── Que cada acción haga algo ──');
+  for (const categoria of CATEGORIAS) {
+    const claves = await (async () => {
+      await page.goto(`${BASE}/help/${categoria.clave}`, { waitUntil: 'domcontentloaded' });
+      await page.waitForTimeout(2000);
+      return page.$$eval('[data-opcion]', (ns) => ns.map((n) => n.getAttribute('data-opcion')));
+    })();
+
+    for (const clave of claves) {
+      await page.goto(`${BASE}/help/${categoria.clave}`, { waitUntil: 'domcontentloaded' });
+      await page.waitForTimeout(1800);
+      const antes = page.url();
+      await page.locator(`[data-opcion="${clave}"]`).first().click();
+      await page.waitForTimeout(2000);
+      const despues = page.url();
+      const dialogo = await page.getByRole('dialog').isVisible().catch(() => false);
+      if (dialogo) {
+        // La acción era el diagnóstico: que de verdad haya medido algo.
+        const filas = await page.$$eval('.lx-diag__row', (ns) => ns.length);
+        comprobar(filas > 0, `«${categoria.clave}/${clave}» abre el diagnóstico con sus filas`, `${filas}`);
+        await page.keyboard.press('Escape');
+        await page.waitForTimeout(400);
+      } else {
+        const salioDeAyuda = !/\/help/.test(despues);
+        const titulo = await page.evaluate(
+          () =>
+            (document.querySelector('.lx-app-bar__title')?.textContent
+              ?? document.querySelector('h1')?.textContent
+              ?? '').trim(),
+        );
+        comprobar(
+          (salioDeAyuda || despues !== antes) && titulo.length > 0,
+          `«${categoria.clave}/${clave}» lleva a una pantalla de verdad («${titulo}»)`,
+          `${antes.replace(BASE, '')} → ${despues.replace(BASE, '')}`,
+        );
+      }
     }
-    await tarjeta.click();
-    await page.waitForTimeout(2200);
-    const ruta = page.url().replace(BASE, '');
-    comprobar(tema.ruta.test(ruta), `«${tema.titulo}» lleva a su pantalla (${ruta})`);
-    const destino = await page.evaluate(() => ({
-      // El título puede estar en la barra o ser el título de pantalla de una raíz de pestaña.
-      titulo:
-        (document.querySelector('.lx-app-bar__title')?.textContent
-          ?? document.querySelector('h1')?.textContent
-          ?? '').trim(),
-      enLogin: window.location.pathname.endsWith('/login'),
-      barra: document.querySelectorAll('.lx-bottom-tab-bar').length,
-    }));
-    comprobar(
-      !destino.enLogin && destino.titulo.length > 0,
-      `  y la pantalla de destino es la suya («${destino.titulo}»)`,
-      JSON.stringify(destino),
-    );
-    comprobar(destino.barra === 1, '  con la navegación inferior intacta');
   }
+
+  // ===============================================================================================
+  // 3c · EL BUSCADOR
+  // ===============================================================================================
+  console.log('── El buscador ──');
+  await page.goto(`${BASE}/help`, { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(2200);
+  await page.locator('input[type="search"]').first().fill('boleta');
+  await page.waitForTimeout(800);
+  const conBusqueda = await page.evaluate(() => ({
+    resultados: document.querySelectorAll('.lx-help-card').length,
+    categorias: document.querySelectorAll('[data-categoria]').length,
+    texto: (document.querySelector('main')?.textContent ?? '').replace(/\s+/g, ' ').trim(),
+  }));
+  comprobar(
+    conBusqueda.resultados > 0 && conBusqueda.categorias === 0,
+    'buscar «boleta» muestra resultados y deja de mostrar las categorías',
+    JSON.stringify({ resultados: conBusqueda.resultados, categorias: conBusqueda.categorias }),
+  );
+  comprobar(
+    /boleta/i.test(conBusqueda.texto),
+    '  y lo encontrado habla de boletas',
+    conBusqueda.texto.slice(0, 120),
+  );
+
+  // Sin coincidencias: lo dice, no se queda en blanco.
+  await page.locator('input[type="search"]').first().fill('zzzqqq');
+  await page.waitForTimeout(800);
+  const sinNada = (await page.evaluate(() => (document.querySelector('main')?.textContent ?? ''))) ?? '';
+  comprobar(
+    /no encontramos/i.test(sinNada),
+    'una búsqueda sin resultados lo dice en palabras',
+    sinNada.replace(/\s+/g, ' ').slice(0, 140),
+  );
 
   // ===============================================================================================
   // 4 · MÓVIL Y ESCRITORIO
@@ -229,6 +355,7 @@ async function entrar(context) {
       const tarjetas = [...document.querySelectorAll('.lx-help-card')];
       return {
         tarjetas: tarjetas.length,
+        categorias: document.querySelectorAll('[data-categoria]').length,
         cabeceras: document.querySelectorAll('.lx-app-bar').length,
         desborda: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
         // Contenido que no cabe en su propia caja: texto cortado de verdad.
@@ -237,10 +364,28 @@ async function entrar(context) {
       };
     });
     comprobar(
-      medida.tarjetas === 6 && medida.cabeceras === 1 && !medida.desborda
+      medida.categorias === 6 && medida.cabeceras === 1 && !medida.desborda
         && medida.cortadas === 0 && medida.chicas === 0,
-      `${tam.nombre.padEnd(16)} ${tam.width}x${tam.height} · cabecera, seis tarjetas, nada cortado`,
+      `${tam.nombre.padEnd(16)} ${tam.width}x${tam.height} · primer nivel entero, nada cortado`,
       JSON.stringify(medida),
+    );
+
+    // Y el segundo nivel, en el mismo ancho: es donde vive el texto largo.
+    await p2.goto(`${BASE}/help/parking`, { waitUntil: 'domcontentloaded' });
+    await p2.waitForTimeout(2000);
+    const segundo = await p2.evaluate(() => {
+      const opciones = [...document.querySelectorAll('[data-opcion]')];
+      return {
+        opciones: opciones.length,
+        cabeceras: document.querySelectorAll('.lx-app-bar').length,
+        desborda: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
+        cortadas: opciones.filter((n) => n.scrollWidth > n.clientWidth + 1).length,
+      };
+    });
+    comprobar(
+      segundo.opciones === 5 && segundo.cabeceras === 1 && !segundo.desborda && segundo.cortadas === 0,
+      `${''.padEnd(16)} ${tam.width}x${tam.height} · «Mi estacionamiento» cabe entero`,
+      JSON.stringify(segundo),
     );
     await ctx.close();
   }

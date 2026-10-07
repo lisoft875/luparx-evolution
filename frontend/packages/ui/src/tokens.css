@@ -5315,6 +5315,32 @@ a.lx-list-row {
   flex: 0 0 auto;
   transition: transform 160ms ease;
 }
+
+/* --- Dos variantes de la tarjeta de ayuda (07-10-2026) -----------------------------------------
+   `--compact` es una CATEGORÍA del centro de ayuda del ciudadano: icono, título y flecha, sin
+   descripción. Es deliberado y está en el encargo: un párrafo bajo cada una de las cinco convierte
+   la primera pantalla en algo que hay que leer entero antes de decidir por dónde entrar. La
+   explicación aparece en el segundo nivel, cuando ya se eligió.
+
+   `--static` es la opción que no tiene función detrás: explica y no finge. Hoy no hay ninguna, y
+   la regla existe para que la primera que aparezca no tenga que inventarse un destino.
+   ------------------------------------------------------------------------------------------- */
+.lx-help-card--compact {
+  align-items: center;
+  /* El renglón sigue midiendo lo que mide un blanco táctil, aunque lleve una sola línea. */
+  min-height: var(--lx-touch-target-min);
+}
+.lx-help-card--compact > .lx-help-card__go {
+  /* Acá sí al borde derecho: no acompaña a una frase, señala el renglón entero. */
+  margin-left: auto;
+  color: var(--lx-text-subtle);
+}
+.lx-help-card--compact:hover > .lx-help-card__go {
+  color: var(--lx-primary-2);
+}
+.lx-help-card--static {
+  cursor: default;
+}
 .lx-help-card:hover .lx-help-card__go {
   transform: translateX(2px);
 }

@@ -1260,30 +1260,134 @@ export const enUS: Record<TranslationKey, string> = {
   'citizen.more.about.meta': 'Opens the official site.',
   // --- Citizen help ---------------------------------------------------------------------------------
   'citizen.help.title': 'Help',
-  'citizen.help.park.action': 'Park',
-  'citizen.help.extend.action': 'See the active stay',
-  'citizen.help.fine.action': 'See fines',
-  'citizen.help.appeal.action': 'Appeal a fine',
-  'citizen.help.wallet.action': 'See wallet',
-  'citizen.help.plate.action': 'See vehicles',
-  'citizen.help.park.title': 'How to park',
-  'citizen.help.park.body':
-    'Pick the zone, the plate and how long you want. The charge leaves your wallet when you start, so check the balance first. Time starts then, not when you arrived.',
-  'citizen.help.extend.title': 'If you need more time',
-  'citizen.help.extend.body':
-    'You can extend from Home while the stay is still active. Once it has ended it cannot be extended: you start a new one, and between the two the car is uncovered.',
-  'citizen.help.fine.title': 'If you get a citation',
-  'citizen.help.fine.body':
-    'It appears under "Fines" with the reason, the zone and the time. A citation is an act of the municipality: it does not go away on its own, but it can be appealed.',
-  'citizen.help.appeal.title': 'Appealing a citation',
-  'citizen.help.appeal.body':
-    'From the citation detail, telling them what happened. The municipality reviews it and tells you the outcome; meanwhile the citation stands, so appeal before the deadline passes.',
-  'citizen.help.wallet.title': 'The wallet',
-  'citizen.help.wallet.body':
-    'Top it up at an enabled counter or by card. Every movement is listed under "Movements" with its date and reference, which is what you need if something does not add up.',
-  'citizen.help.plate.title': 'Shared plates',
-  'citizen.help.plate.body':
-    'The same plate can be registered by more than one person. When that happens the citation is visible, payable and appealable from both accounts, and whoever pays first pays for everyone.',
+  'citizen.help.ask': 'How can we help?',
+  'citizen.help.search.label': 'Search help',
+  'citizen.help.search.placeholder': 'What are you looking for?',
+  'citizen.help.search.empty': 'Nothing found for "{{query}}". Try other words or pick a category.',
+  'citizen.help.search.go': 'See how to solve it',
+  'citizen.help.whatDoYouNeed': 'What do you need?',
+  'citizen.help.whatToSolve': 'What do you need to solve?',
+  'citizen.help.whatIsHappening': 'What is happening?',
+  'citizen.help.cat.parking.title': 'My parking',
+  'citizen.help.cat.payments.title': 'Payments and wallet',
+  'citizen.help.cat.fines.title': 'Fines and citations',
+  'citizen.help.cat.vehicles.title': 'Vehicles',
+  'citizen.help.cat.app.title': 'App problems',
+  'citizen.help.status.title': 'App status',
+  'citizen.help.status.body': 'Check the connection, your session and whether this device is storing data.',
+  'citizen.help.status.action': 'See diagnostics',
+  'citizen.help.opt.parking.moreTime.title': 'I need more time',
+  'citizen.help.opt.parking.moreTime.body':
+    'You can extend from the home screen while the stay is still active. Once it has ended it cannot be extended: you start a new one, and in between the car is uncovered.',
+  'citizen.help.opt.parking.moreTime.action': 'See the active stay',
+  'citizen.help.opt.parking.cantStart.title': 'I cannot start my parking',
+  'citizen.help.opt.parking.cantStart.body':
+    'Check that the vehicle is registered, that there is balance and that the bay exists in the zone. The screen says which of the five steps is missing.',
+  'citizen.help.opt.parking.cantStart.action': 'Park',
+  'citizen.help.opt.parking.ended.title': 'My parking has ended',
+  'citizen.help.opt.parking.ended.body':
+    'An expired stay cannot be reopened. If the car is still there, start a new one: with no active stay the bay reads as unpaid.',
+  'citizen.help.opt.parking.ended.action': 'Park again',
+  'citizen.help.opt.parking.cantPay.title': 'I cannot pay',
+  'citizen.help.opt.parking.cantPay.body':
+    'Parking is charged to the wallet. If the balance is short, top it up first and try again.',
+  'citizen.help.opt.parking.cantPay.action': 'See wallet',
+  'citizen.help.opt.parking.location.title': 'I have a problem with my location',
+  'citizen.help.opt.parking.location.body':
+    'GPS is not needed: the zone and the bay are picked from a list, and the bay number is what identifies where the car is.',
+  'citizen.help.opt.parking.location.action': 'Park',
+  'citizen.help.opt.payments.cantPay.title': 'I cannot make a payment',
+  'citizen.help.opt.payments.cantPay.body':
+    'Check the wallet balance. If the charge was declined, the movement is recorded with the reason.',
+  'citizen.help.opt.payments.cantPay.action': 'See wallet',
+  'citizen.help.opt.payments.missing.title': 'My payment is missing',
+  'citizen.help.opt.payments.missing.body':
+    'Every charge and every top-up leaves a movement with its date and reference. If it is not there, it was not recorded.',
+  'citizen.help.opt.payments.missing.action': 'See movements',
+  'citizen.help.opt.payments.movements.title': 'I want to review my movements',
+  'citizen.help.opt.payments.movements.body':
+    'Every entry and exit from the wallet in detail, newest first.',
+  'citizen.help.opt.payments.movements.action': 'See movements',
+  'citizen.help.opt.payments.unknownCharge.title': 'I do not recognise a charge',
+  'citizen.help.opt.payments.unknownCharge.body':
+    'Find the movement by its date: it says what caused it. If the plate is shared, someone else may have used it.',
+  'citizen.help.opt.payments.unknownCharge.action': 'See movements',
+  'citizen.help.opt.payments.walletHelp.title': 'I need help with my wallet',
+  'citizen.help.opt.payments.walletHelp.body':
+    'It is topped up at the enabled points or by card. The balance is what pays for stays.',
+  'citizen.help.opt.payments.walletHelp.action': 'See wallet',
+  'citizen.help.opt.fines.got.title': 'I received a citation',
+  'citizen.help.opt.fines.got.body':
+    'It shows the reason, the zone and the time. It is a municipal act: it does not disappear on its own, but it can be appealed.',
+  'citizen.help.opt.fines.got.action': 'See fines',
+  'citizen.help.opt.fines.appeal.title': 'I want to appeal a citation',
+  'citizen.help.opt.fines.appeal.body':
+    'You appeal from the citation detail, telling what happened. Meanwhile the citation stands, so mind the deadline.',
+  'citizen.help.opt.fines.appeal.action': 'Pick the citation',
+  'citizen.help.opt.fines.dontUnderstand.title': 'I do not understand a citation',
+  'citizen.help.opt.fines.dontUnderstand.body':
+    'The detail carries the infraction, where and when it was, and the evidence attached when it was issued.',
+  'citizen.help.opt.fines.dontUnderstand.action': 'See the detail',
+  'citizen.help.opt.fines.mine.title': 'Check my citations',
+  'citizen.help.opt.fines.mine.body': 'Every citation on your plates, paid and outstanding.',
+  'citizen.help.opt.fines.mine.action': 'See fines',
+  'citizen.help.opt.vehicles.add.title': 'Add a vehicle',
+  'citizen.help.opt.vehicles.add.body':
+    'You can only park with a registered plate. You add it once and it stays available.',
+  'citizen.help.opt.vehicles.add.action': 'See vehicles',
+  'citizen.help.opt.vehicles.edit.title': 'Change a vehicle',
+  'citizen.help.opt.vehicles.edit.body':
+    'The name you recognise it by can be corrected. The plate itself is not edited: add the right one and remove the other.',
+  'citizen.help.opt.vehicles.edit.action': 'See vehicles',
+  'citizen.help.opt.vehicles.list.title': 'Check my vehicles',
+  'citizen.help.opt.vehicles.list.body': 'The plates registered to you in this municipality.',
+  'citizen.help.opt.vehicles.list.action': 'See vehicles',
+  'citizen.help.opt.vehicles.shared.title': 'Shared plates',
+  'citizen.help.opt.vehicles.shared.body':
+    'One plate can be registered by more than one person. When that happens the citation is seen, paid and appealed from both accounts, and whoever pays first pays for everyone.',
+  'citizen.help.opt.vehicles.shared.action': 'See vehicles',
+  'citizen.help.opt.app.offline.title': 'I have no connection',
+  'citizen.help.opt.app.offline.body':
+    'Without a connection a stay cannot be started or paid: everything is confirmed against the server at the time.',
+  'citizen.help.opt.app.offline.action': 'See diagnostics',
+  'citizen.help.opt.app.location.title': 'I have a problem with my location',
+  'citizen.help.opt.app.location.body':
+    'The app does not need your location for anything: the zone and the bay are picked by hand.',
+  'citizen.help.opt.app.location.action': 'See diagnostics',
+  'citizen.help.opt.app.notifications.title': 'I am not getting notifications',
+  'citizen.help.opt.app.notifications.body':
+    'Notices always arrive on that screen, and by email according to what you chose in its preferences.',
+  'citizen.help.opt.app.notifications.action': 'See notices',
+  'citizen.help.opt.app.error.title': 'The app shows an error',
+  'citizen.help.opt.app.error.body':
+    'Reloading mounts it again from scratch and clears almost every screen error. It deletes nothing of yours.',
+  'citizen.help.opt.app.error.action': 'Reload',
+  'citizen.help.opt.app.diagnostic.title': 'App diagnostics',
+  'citizen.help.opt.app.diagnostic.body':
+    'Checks the connection, your session and whether this device is storing data, all at once.',
+  'citizen.help.opt.app.diagnostic.action': 'See diagnostics',
+  'citizen.help.diag.title': 'App diagnostics',
+  'citizen.help.diag.allGood': 'Everything is working correctly.',
+  'citizen.help.diag.someWarning': 'It works, but there is something you should know.',
+  'citizen.help.diag.someIssue': 'We found something that needs solving.',
+  'citizen.help.diag.tone.ok': 'fine',
+  'citizen.help.diag.tone.warning': 'heads up',
+  'citizen.help.diag.tone.problem': 'problem',
+  'citizen.help.diag.connection': 'Connection',
+  'citizen.help.diag.connection.ok': 'Online',
+  'citizen.help.diag.connection.off': 'No connection',
+  'citizen.help.diag.connection.note':
+    'Without a connection a stay cannot be started or paid. Check your data or wifi and try again.',
+  'citizen.help.diag.session': 'Session',
+  'citizen.help.diag.session.ok': 'Session active',
+  'citizen.help.diag.session.problem': 'Session unavailable',
+  'citizen.help.diag.session.note': 'Sign in again with your account to keep using the app.',
+  'citizen.help.diag.app': 'App',
+  'citizen.help.diag.app.ok': 'Working correctly',
+  'citizen.help.diag.app.problem': 'This device is not storing data',
+  'citizen.help.diag.app.note':
+    'The app will ask you to sign in every time. It is usually the browser private mode or full storage.',
+  'citizen.help.diag.app.reload': 'Reload the app',
 
   'citizen.reminder.expiring.title': '{{minutes}} min of parking left',
   'citizen.reminder.expiring.body': '{{plate}} in space {{space}}. Extend from the app if you need to.',

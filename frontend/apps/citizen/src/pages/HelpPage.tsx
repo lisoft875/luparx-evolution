@@ -1,106 +1,183 @@
 import * as React from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useTranslation, type TranslationKey } from '@luparx/i18n';
+import { useTranslation } from '@luparx/i18n';
 import {
   Card,
   CardStack,
-  IconCar,
+  FormField,
+  IconCheck,
   IconChevronRight,
-  IconClock,
-  IconFine,
-  IconPark,
-  IconWallet,
+  Input,
 } from '@luparx/ui';
 import { CitizenShell } from '../components/CitizenShell';
+import { CitizenDiagnostic } from '../components/CitizenDiagnostic';
+import {
+  CATEGORIAS,
+  clavesOpcion,
+  plano,
+  tituloCategoria,
+  type ClaveCategoria,
+} from '../lib/helpCenter';
+import { ICONOS_CATEGORIA } from '../lib/helpIcons';
 
 /**
- * Ayuda del ciudadano: las preguntas que llegan al mostrador.
+ * El Centro de Ayuda del ciudadano: primer nivel.
  *
- * <h2>Cómo se eligieron</h2>
+ * <h2>Qué cambió el 07-10-2026, y por qué no alcanzaba con enlazar las tarjetas</h2>
  *
- * <p>No son «preguntas frecuentes» inventadas. Son las que el producto ya contesta de alguna forma
- * —en un mensaje de error, en un texto de ayuda de un campo, en una regla de negocio— y que alguien
- * sólo puede encontrar tropezándose con ellas. Reunirlas acá no agrega comportamiento: agrega un
- * lugar donde buscarlas antes de tropezar.</p>
+ * <p>Esta pantalla fue tres cosas en dos días. Primero seis párrafos que no llevaban a ninguna
+ * parte; después —esa misma mañana— seis tarjetas que llevaban cada una a su módulo. Lo segundo
+ * arregló el defecto que se había reportado y creó otro que se ve de un golpe en la captura del
+ * encargo siguiente: <b>una Ayuda cuyos seis botones son los cinco módulos de la barra de abajo es
+ * un segundo menú</b>, y un segundo menú no ayuda a nadie que no sepa ya a dónde ir.</p>
  *
- * <p>El texto vive en el catálogo de traducciones, como en la ayuda del fiscalizador: es contenido,
- * se corrige sin recompilar y se traduce con el resto.</p>
+ * <p>Ahora la pantalla pregunta primero, como la gente pregunta: no «¿a qué módulo querés entrar?»
+ * sino «¿qué necesitás resolver?». Cinco categorías de PROBLEMA, no de módulo, y el módulo aparece
+ * recién al final, cuando ya se eligió qué resolver. Es la diferencia entre un directorio y un
+ * mostrador de información.</p>
  *
- * <h2>Qué cambió el 07-10-2026, y por qué era un defecto y no una preferencia</h2>
+ * <h2>El buscador</h2>
  *
- * <p><b>La cabecera volvió.</b> Esta pantalla usaba `bare`, el modo de las pantallas raíz de
- * pestaña: sin barra superior, con el título como primer contenido. Pero Ayuda NO es una raíz de
- * pestaña —se entra desde «Más»— así que el modo correcto era siempre el de una pantalla de
- * detalle: flecha de volver y título en la barra. No se creó ninguna cabecera: se dejó de pedir la
- * excepción.</p>
- *
- * <p><b>Las seis tarjetas llevan a algún lado.</b> Eran seis párrafos. Explicaban bien y dejaban a
- * la persona donde estaba: quien lee «se recarga en los puntos habilitados o con tarjeta» tiene que
- * cerrar la ayuda, acordarse y navegar. Ahora la tarjeta entera es el botón, con la misma pieza que
- * el fiscalizador usa desde el 26-09 (`.lx-help-card`), frase corta y flecha.</p>
- *
- * <h2>Las dos cosas que NO se pudieron enlazar como pide el documento</h2>
- *
- * <ul>
- *   <li><b>Ampliar el estacionamiento no tiene ruta.</b> Es `ExtendSessionSheet`, un panel que se
- *       abre desde la tarjeta de la estadía en curso del Inicio. Así que la acción lleva al Inicio,
- *       que es donde está el botón de verdad cuando hay algo que ampliar. Inventarle un `/extend`
- *       habría sido una ruta nueva para una pantalla que no existe.</li>
- *   <li><b>Apelar necesita una boleta.</b> La ruta es `/fines/:id/appeal`: sin el identificador no
- *       hay apelación que abrir, así que la acción lleva a Multas, que es donde se elige cuál.</li>
- * </ul>
+ * <p>Filtra las veintitrés opciones del centro por su texto, acá en el navegador. No llama a
+ * ningún servicio y no busca placas ni boletas: no existe un endpoint de búsqueda, y un campo que
+ * acepta una placa y no encuentra nada es peor que uno que dice honestamente qué sabe buscar.</p>
  */
-interface Tema {
-  clave: 'park' | 'extend' | 'fine' | 'appeal' | 'wallet' | 'plate';
-  icono: React.ReactNode;
-  /** Una ruta que YA existe. Ninguna de estas seis es nueva. */
-  ruta: string;
-}
-
-const TEMAS: Tema[] = [
-  { clave: 'park', icono: <IconPark />, ruta: '/park' },
-  // Ver arriba: el panel de ampliar vive en la tarjeta de la estadía del Inicio, no en una ruta.
-  { clave: 'extend', icono: <IconClock />, ruta: '/' },
-  { clave: 'fine', icono: <IconFine />, ruta: '/fines' },
-  // Y apelar necesita saber CUÁL boleta, así que se elige en la lista.
-  { clave: 'appeal', icono: <IconFine />, ruta: '/fines' },
-  { clave: 'wallet', icono: <IconWallet />, ruta: '/wallet' },
-  { clave: 'plate', icono: <IconCar />, ruta: '/vehicles' },
-];
 
 export function HelpPage(): React.JSX.Element {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const [consulta, setConsulta] = useState('');
+  const [verDiagnostico, setVerDiagnostico] = useState(false);
+
+  /** Las opciones que coinciden con lo escrito, con su categoría a cuestas para poder llevar ahí. */
+  const coincidencias = useMemo(() => {
+    const aguja = plano(consulta.trim());
+    if (aguja === '') return [];
+    const encontradas: { categoria: ClaveCategoria; clave: string; titulo: string }[] = [];
+    for (const categoria of CATEGORIAS) {
+      for (const opcion of categoria.opciones) {
+        const titulo = t(clavesOpcion(categoria.clave, opcion.clave).title);
+        if (plano(titulo).includes(aguja)) {
+          encontradas.push({ categoria: categoria.clave, clave: opcion.clave, titulo });
+        }
+      }
+    }
+    return encontradas;
+  }, [consulta, t]);
+
+  const buscando = consulta.trim() !== '';
 
   return (
     <CitizenShell title={t('citizen.help.title')} onBack={() => navigate('/more')}>
       <CardStack>
-        {TEMAS.map((tema) => (
-          <Card key={tema.clave}>
-            {/* La misma pieza del fiscalizador, no una copia: `.lx-help-card` ya resuelve el icono,
-                la jerarquía del texto y el blanco táctil de la tarjeta entera. */}
-            <button type="button" className="lx-help-card" onClick={() => navigate(tema.ruta)}>
-              <span className="lx-help-card__icon" aria-hidden="true">
-                {tema.icono}
-              </span>
-              <span className="lx-help-card__text">
-                <span className="lx-help-card__title">
-                  {t(`citizen.help.${tema.clave}.title` as TranslationKey)}
-                </span>
-                <span className="lx-text-meta">
-                  {t(`citizen.help.${tema.clave}.body` as TranslationKey)}
-                </span>
-                <span className="lx-help-card__action">
-                  {t(`citizen.help.${tema.clave}.action` as TranslationKey)}
+        <Card>
+          <p className="lx-text-screen-title" style={{ margin: '0 0 var(--lx-space-3)' }}>
+            {t('citizen.help.ask')}
+          </p>
+          <FormField label={t('citizen.help.search.label')} htmlFor="buscar-ayuda">
+            <Input
+              id="buscar-ayuda"
+              type="search"
+              value={consulta}
+              placeholder={t('citizen.help.search.placeholder')}
+              onChange={(evento) => setConsulta(evento.target.value)}
+            />
+          </FormField>
+        </Card>
+
+        {/* Buscando, las categorías dejan sitio a lo encontrado: dos listas a la vez obligarían a
+            leer cuál de las dos contesta lo que se escribió. */}
+        {buscando ? (
+          coincidencias.length === 0 ? (
+            <Card>
+              <p className="lx-text-meta" style={{ margin: 0 }}>
+                {t('citizen.help.search.empty', { query: consulta.trim() })}
+              </p>
+            </Card>
+          ) : (
+            coincidencias.map((hallazgo) => (
+              <Card key={`${hallazgo.categoria}.${hallazgo.clave}`}>
+                <button
+                  type="button"
+                  className="lx-help-card"
+                  onClick={() => navigate(`/help/${hallazgo.categoria}`)}
+                >
+                  <span className="lx-help-card__icon" aria-hidden="true">
+                    {ICONOS_CATEGORIA[hallazgo.categoria]}
+                  </span>
+                  <span className="lx-help-card__text">
+                    <span className="lx-help-card__title">{hallazgo.titulo}</span>
+                    <span className="lx-text-meta">{t(tituloCategoria(hallazgo.categoria))}</span>
+                    <span className="lx-help-card__action">
+                      {t('citizen.help.search.go')}
+                      <span className="lx-help-card__go" aria-hidden="true">
+                        <IconChevronRight size={14} />
+                      </span>
+                    </span>
+                  </span>
+                </button>
+              </Card>
+            ))
+          )
+        ) : (
+          <>
+            <p className="lx-text-meta" style={{ margin: 0 }}>
+              {t('citizen.help.whatDoYouNeed')}
+            </p>
+            {/* Las categorías NO traen su explicación: el encargo lo pide en letra —«icono, título
+                corto, icono de dirección»— y tiene razón. Un párrafo bajo cada una convierte la
+                pantalla en algo que hay que leer entero antes de decidir. La explicación aparece
+                después, cuando ya se eligió por dónde. */}
+            {CATEGORIAS.map((categoria) => (
+              <Card key={categoria.clave}>
+                <button
+                  type="button"
+                  className="lx-help-card lx-help-card--compact"
+                  data-categoria={categoria.clave}
+                  onClick={() => navigate(`/help/${categoria.clave}`)}
+                >
+                  <span className="lx-help-card__icon" aria-hidden="true">
+                    {ICONOS_CATEGORIA[categoria.clave]}
+                  </span>
+                  <span className="lx-help-card__text">
+                    <span className="lx-help-card__title">{t(tituloCategoria(categoria.clave))}</span>
+                  </span>
                   <span className="lx-help-card__go" aria-hidden="true">
-                    <IconChevronRight size={14} />
+                    <IconChevronRight size={18} />
+                  </span>
+                </button>
+              </Card>
+            ))}
+
+            {/* El estado, al final: es lo que se mira cuando nada de lo de arriba aplica. */}
+            <Card>
+              <button
+                type="button"
+                className="lx-help-card"
+                data-categoria="estado"
+                onClick={() => setVerDiagnostico(true)}
+              >
+                <span className="lx-help-card__icon" aria-hidden="true">
+                  <IconCheck />
+                </span>
+                <span className="lx-help-card__text">
+                  <span className="lx-help-card__title">{t('citizen.help.status.title')}</span>
+                  <span className="lx-text-meta">{t('citizen.help.status.body')}</span>
+                  <span className="lx-help-card__action">
+                    {t('citizen.help.status.action')}
+                    <span className="lx-help-card__go" aria-hidden="true">
+                      <IconChevronRight size={14} />
+                    </span>
                   </span>
                 </span>
-              </span>
-            </button>
-          </Card>
-        ))}
+              </button>
+            </Card>
+          </>
+        )}
       </CardStack>
+
+      <CitizenDiagnostic open={verDiagnostico} onClose={() => setVerDiagnostico(false)} />
     </CitizenShell>
   );
 }

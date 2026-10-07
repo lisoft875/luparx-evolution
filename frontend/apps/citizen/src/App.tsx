@@ -13,6 +13,7 @@ import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import { TenantSelectPage } from './pages/TenantSelectPage';
 import { HomePage } from './pages/HomePage';
 import { HelpPage } from './pages/HelpPage';
+import { HelpCategoryPage } from './pages/HelpCategoryPage';
 import { MorePage } from './pages/MorePage';
 import { ProfilePage } from './pages/ProfilePage';
 import { ParkingPage } from './pages/ParkingPage';
@@ -118,6 +119,15 @@ export function App(): React.JSX.Element {
                 element={
                   <RequireAuth loginPath="/login">
                     <HelpPage />
+                  </RequireAuth>
+                }
+              />
+
+              <Route
+                path="/help/:categoria"
+                element={
+                  <RequireAuth loginPath="/login">
+                    <HelpCategoryPage />
                   </RequireAuth>
                 }
               />

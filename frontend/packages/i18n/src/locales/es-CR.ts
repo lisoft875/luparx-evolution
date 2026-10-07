@@ -1297,32 +1297,140 @@ export const esCR = {
   'citizen.more.about.meta': 'Abre el sitio oficial.',
   // --- Ayuda del ciudadano -------------------------------------------------------------------------
   'citizen.help.title': 'Ayuda',
+  // --- Centro de Ayuda del ciudadano (07-10-2026) ------------------------------------------------
+  /* Dejó de ser un segundo menú de módulos: ahora pregunta por el PROBLEMA y el módulo aparece al
+     final, cuando ya se eligió qué resolver. Las claves viejas `citizen.help.<tema>.*` se borraron
+     con la estructura que las usaba. */
+  'citizen.help.ask': '¿En qué podemos ayudarte?',
+  'citizen.help.search.label': 'Buscar ayuda',
+  'citizen.help.search.placeholder': '¿Qué estás buscando?',
+  'citizen.help.search.empty': 'No encontramos nada para «{{query}}». Probá con otras palabras o elegí una categoría.',
+  'citizen.help.search.go': 'Ver cómo resolverlo',
+  'citizen.help.whatDoYouNeed': '¿Qué necesitás?',
+  'citizen.help.whatToSolve': '¿Qué necesitás resolver?',
+  'citizen.help.whatIsHappening': '¿Qué está pasando?',
+  'citizen.help.cat.parking.title': 'Mi estacionamiento',
+  'citizen.help.cat.payments.title': 'Pagos y billetera',
+  'citizen.help.cat.fines.title': 'Multas y boletas',
+  'citizen.help.cat.vehicles.title': 'Vehículos',
+  'citizen.help.cat.app.title': 'Problemas con la aplicación',
+  'citizen.help.status.title': 'Estado de la aplicación',
+  'citizen.help.status.body': 'Revisá la conexión, tu sesión y si este dispositivo está guardando datos.',
+  'citizen.help.status.action': 'Ver diagnóstico',
+  'citizen.help.opt.parking.moreTime.title': 'Necesito más tiempo',
+  'citizen.help.opt.parking.moreTime.body':
+    'Podés ampliar desde el inicio mientras la estadía siga activa. Si ya terminó, no se extiende: hay que iniciar una nueva, y entre una y otra el carro está sin cubrir.',
+  'citizen.help.opt.parking.moreTime.action': 'Ver estacionamiento activo',
+  'citizen.help.opt.parking.cantStart.title': 'No puedo iniciar mi estacionamiento',
+  'citizen.help.opt.parking.cantStart.body':
+    'Revisá que el vehículo esté registrado, que haya saldo y que la bahía exista en la zona. La pantalla dice cuál de los cinco pasos falta.',
+  'citizen.help.opt.parking.cantStart.action': 'Estacionar',
+  'citizen.help.opt.parking.ended.title': 'Mi estacionamiento terminó',
+  'citizen.help.opt.parking.ended.body':
+    'Una estadía vencida no se reabre. Si el carro sigue ahí, iniciá una nueva: mientras no haya una activa, la bahía figura sin pagar.',
+  'citizen.help.opt.parking.ended.action': 'Estacionar de nuevo',
+  'citizen.help.opt.parking.cantPay.title': 'No puedo pagar',
+  'citizen.help.opt.parking.cantPay.body':
+    'El estacionamiento se cobra de la billetera. Si no alcanza, recargá primero y volvé a intentarlo.',
+  'citizen.help.opt.parking.cantPay.action': 'Ver billetera',
+  'citizen.help.opt.parking.location.title': 'Tengo un problema con mi ubicación',
+  'citizen.help.opt.parking.location.body':
+    'No hace falta el GPS: la zona y la bahía se eligen de una lista, y es el número de la bahía lo que identifica dónde está el carro.',
+  'citizen.help.opt.parking.location.action': 'Estacionar',
+  'citizen.help.opt.payments.cantPay.title': 'No puedo realizar un pago',
+  'citizen.help.opt.payments.cantPay.body':
+    'Revisá el saldo de la billetera. Si el cobro fue rechazado, el movimiento queda registrado con el motivo.',
+  'citizen.help.opt.payments.cantPay.action': 'Ver billetera',
+  'citizen.help.opt.payments.missing.title': 'Mi pago no aparece',
+  'citizen.help.opt.payments.missing.body':
+    'Todo cobro y toda recarga dejan un movimiento con su fecha y su referencia. Si no está ahí, no se registró.',
+  'citizen.help.opt.payments.missing.action': 'Ver movimientos',
+  'citizen.help.opt.payments.movements.title': 'Quiero revisar mis movimientos',
+  'citizen.help.opt.payments.movements.body':
+    'El detalle de cada entrada y cada salida de la billetera, de la más reciente a la más vieja.',
+  'citizen.help.opt.payments.movements.action': 'Ver movimientos',
+  'citizen.help.opt.payments.unknownCharge.title': 'No reconozco un cobro',
+  'citizen.help.opt.payments.unknownCharge.body':
+    'Buscá el movimiento por su fecha: dice qué lo originó. Si la placa está compartida, puede haberla usado otra persona.',
+  'citizen.help.opt.payments.unknownCharge.action': 'Ver movimientos',
+  'citizen.help.opt.payments.walletHelp.title': 'Necesito ayuda con mi billetera',
+  'citizen.help.opt.payments.walletHelp.body':
+    'Se recarga en los puntos habilitados o con tarjeta. El saldo es el que paga las estadías.',
+  'citizen.help.opt.payments.walletHelp.action': 'Ver billetera',
+  'citizen.help.opt.fines.got.title': 'Me llegó una boleta',
+  'citizen.help.opt.fines.got.body':
+    'Aparece con el motivo, la zona y la hora. Es un acto de la municipalidad: no desaparece sola, pero se puede apelar.',
+  'citizen.help.opt.fines.got.action': 'Ver multas',
+  'citizen.help.opt.fines.appeal.title': 'Quiero apelar una boleta',
+  'citizen.help.opt.fines.appeal.body':
+    'Se apela desde el detalle de la boleta, contando qué pasó. Mientras tanto la boleta sigue viva, así que ojo con dejar pasar el plazo.',
+  'citizen.help.opt.fines.appeal.action': 'Elegir la boleta',
+  'citizen.help.opt.fines.dontUnderstand.title': 'No entiendo una boleta',
+  'citizen.help.opt.fines.dontUnderstand.body':
+    'El detalle trae la infracción, dónde y cuándo fue, y la evidencia que se adjuntó al emitirla.',
+  'citizen.help.opt.fines.dontUnderstand.action': 'Ver el detalle',
+  'citizen.help.opt.fines.mine.title': 'Consultar mis boletas',
+  'citizen.help.opt.fines.mine.body': 'Todas las boletas de tus placas, pagadas y pendientes.',
+  'citizen.help.opt.fines.mine.action': 'Ver multas',
+  'citizen.help.opt.vehicles.add.title': 'Agregar un vehículo',
+  'citizen.help.opt.vehicles.add.body':
+    'Sólo se puede estacionar con una placa registrada. Se agrega una vez y queda disponible.',
+  'citizen.help.opt.vehicles.add.action': 'Ver vehículos',
+  'citizen.help.opt.vehicles.edit.title': 'Modificar un vehículo',
+  'citizen.help.opt.vehicles.edit.body':
+    'Se puede corregir el nombre con que lo reconocés. La placa no se edita: se agrega la correcta y se quita la otra.',
+  'citizen.help.opt.vehicles.edit.action': 'Ver vehículos',
+  'citizen.help.opt.vehicles.list.title': 'Consultar mis vehículos',
+  'citizen.help.opt.vehicles.list.body': 'Las placas registradas a tu nombre en esta municipalidad.',
+  'citizen.help.opt.vehicles.list.action': 'Ver vehículos',
+  'citizen.help.opt.vehicles.shared.title': 'Placas compartidas',
+  'citizen.help.opt.vehicles.shared.body':
+    'Una misma placa puede estar registrada por más de una persona. Si eso pasa, la boleta se ve, se paga y se apela desde las dos cuentas, y quien la pague primero la paga para todos.',
+  'citizen.help.opt.vehicles.shared.action': 'Ver vehículos',
+  'citizen.help.opt.app.offline.title': 'No tengo conexión',
+  'citizen.help.opt.app.offline.body':
+    'Sin conexión no se puede iniciar ni pagar una estadía: todo se confirma contra el servidor en el momento.',
+  'citizen.help.opt.app.offline.action': 'Ver diagnóstico',
+  'citizen.help.opt.app.location.title': 'Tengo un problema con mi ubicación',
+  'citizen.help.opt.app.location.body':
+    'La aplicación no necesita tu ubicación para nada: la zona y la bahía se eligen a mano.',
+  'citizen.help.opt.app.location.action': 'Ver diagnóstico',
+  'citizen.help.opt.app.notifications.title': 'No recibo notificaciones',
+  'citizen.help.opt.app.notifications.body':
+    'Los avisos llegan a esa pantalla siempre, y al correo según lo que tengás elegido en sus preferencias.',
+  'citizen.help.opt.app.notifications.action': 'Ver avisos',
+  'citizen.help.opt.app.error.title': 'La aplicación presenta un error',
+  'citizen.help.opt.app.error.body':
+    'Recargar la vuelve a montar desde cero y resuelve casi todos los errores de pantalla. No borra nada tuyo.',
+  'citizen.help.opt.app.error.action': 'Recargar',
+  'citizen.help.opt.app.diagnostic.title': 'Diagnóstico de la aplicación',
+  'citizen.help.opt.app.diagnostic.body':
+    'Revisa de una vez la conexión, tu sesión y si este dispositivo está guardando datos.',
+  'citizen.help.opt.app.diagnostic.action': 'Ver diagnóstico',
+  'citizen.help.diag.title': 'Diagnóstico de la aplicación',
+  'citizen.help.diag.allGood': 'Todo está funcionando correctamente.',
+  'citizen.help.diag.someWarning': 'Funciona, pero hay algo que conviene que sepás.',
+  'citizen.help.diag.someIssue': 'Encontramos algo que hay que resolver.',
+  'citizen.help.diag.tone.ok': 'correcto',
+  'citizen.help.diag.tone.warning': 'atención',
+  'citizen.help.diag.tone.problem': 'problema',
+  'citizen.help.diag.connection': 'Conexión',
+  'citizen.help.diag.connection.ok': 'En línea',
+  'citizen.help.diag.connection.off': 'Sin conexión',
+  'citizen.help.diag.connection.note':
+    'Sin conexión no se puede iniciar ni pagar una estadía. Revisá los datos o el wifi y volvé a intentarlo.',
+  'citizen.help.diag.session': 'Sesión',
+  'citizen.help.diag.session.ok': 'Sesión activa',
+  'citizen.help.diag.session.problem': 'Sesión no disponible',
+  'citizen.help.diag.session.note': 'Volvé a entrar con tu cuenta para seguir usando la aplicación.',
+  'citizen.help.diag.app': 'Aplicación',
+  'citizen.help.diag.app.ok': 'Funcionando correctamente',
+  'citizen.help.diag.app.problem': 'Este dispositivo no está guardando datos',
+  'citizen.help.diag.app.note':
+    'La aplicación va a pedirte que entres cada vez. Suele ser el modo privado del navegador o el almacenamiento lleno.',
+  'citizen.help.diag.app.reload': 'Recargar la aplicación',
   /* Cada tema lleva a la pantalla que de verdad lo resuelve (07-10-2026). Ninguna ruta es nueva:
      son las cinco pestañas y Multas, que ya existían. Lo que se agregó es el enlace. */
-  'citizen.help.park.action': 'Estacionar',
-  'citizen.help.extend.action': 'Ver estacionamiento activo',
-  'citizen.help.fine.action': 'Ver multas',
-  'citizen.help.appeal.action': 'Apelar boleta',
-  'citizen.help.wallet.action': 'Ver billetera',
-  'citizen.help.plate.action': 'Ver vehículos',
-  'citizen.help.park.title': 'Cómo estacionar',
-  'citizen.help.park.body':
-    'Elegí la zona, la placa y cuánto tiempo querés. El cobro sale de tu billetera al iniciar, así que revisá el saldo antes. El tiempo empieza a correr en ese momento, no cuando llegaste.',
-  'citizen.help.extend.title': 'Si necesitás más tiempo',
-  'citizen.help.extend.body':
-    'Podés extender desde el Inicio mientras la estadía siga activa. Si ya terminó, no se extiende: hay que iniciar una nueva, y entre una y otra el carro está sin cubrir.',
-  'citizen.help.fine.title': 'Si te llega una boleta',
-  'citizen.help.fine.body':
-    'Aparece en «Multas» con el motivo, la zona y la hora. Una boleta es un acto de la municipalidad: no desaparece sola, pero sí se puede apelar.',
-  'citizen.help.appeal.title': 'Apelar una boleta',
-  'citizen.help.appeal.body':
-    'Desde el detalle de la boleta, contando qué pasó. La municipalidad la revisa y te avisa el resultado; mientras tanto la boleta sigue viva, así que apelá sin dejar pasar el plazo.',
-  'citizen.help.wallet.title': 'La billetera',
-  'citizen.help.wallet.body':
-    'Se recarga en los puntos habilitados o con tarjeta. Cada movimiento queda en «Movimientos» con su fecha y su referencia, que es lo que sirve para reclamar si algo no cuadra.',
-  'citizen.help.plate.title': 'Placas compartidas',
-  'citizen.help.plate.body':
-    'Una misma placa puede estar registrada por más de una persona. Si eso pasa, la boleta se ve, se paga y se apela desde las dos cuentas, y quien la pague primero la paga para todos.',
 
   // ---- v0.38 — la campana ---------------------------------------------------------------------
   // El servidor manda un tipo estable y parámetros crudos; la oración se arma acá. Una frase ya

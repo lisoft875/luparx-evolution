@@ -4,11 +4,10 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@luparx/auth';
 import { useTranslation, type TranslationKey } from '@luparx/i18n';
 import {
-  Alert,
   Badge,
-  Button,
   Card,
   CardStack,
+  DiagnosticList,
   IconCheck,
   IconChevronRight,
   IconEye,
@@ -21,6 +20,7 @@ import {
   IconUser,
   Modal,
 } from '@luparx/ui';
+import type { DiagnosticCheck } from '@luparx/ui';
 import { InspectorShell } from '../components/InspectorShell';
 import {
   cameraPermissionState,
@@ -99,35 +99,12 @@ const EVENTUALIDADES: { clave: ClaveEventualidad; icono: React.ReactNode; ruta: 
 const ENTRADAS: Entrada[] = [...EVENTUALIDADES, { clave: 'diag', icono: <IconGauge />, ruta: null }];
 
 /**
- * El tono de una comprobación.
+ * Lo que mide esta pantalla.
  *
- * <p>`aviso` no es un `problema` flojo. `problema` es algo que ahora mismo impide trabajar o puede
- * perder datos; `aviso` es algo que conviene saber y con lo que se trabaja igual —la ubicación
- * denegada, por ejemplo: una boleta sin coordenadas es una boleta perfectamente válida, y pintarla
- * de rojo enseñaría a no creerle al rojo.</p>
+ * <p>La forma —tono, icono, estado, nota, acción— y su dibujo viven en `DiagnosticList`, del
+ * paquete compartido. Acá queda sólo lo que el fiscalizador comprueba, que no se parece a lo que
+ * comprueba el ciudadano.</p>
  */
-type Tono = 'ok' | 'aviso' | 'problema';
-
-interface Comprobacion {
-  clave: string;
-  tono: Tono;
-  icono: React.ReactNode;
-  titulo: string;
-  estado: string;
-  /** Sólo cuando el tono no es `ok`: qué significa y qué se puede hacer. */
-  nota?: string;
-  /**
-   * Sólo cuando existe algo que de verdad resuelve. Nunca un botón decorativo.
-   *
-   * <p>`tipo` distingue las dos clases de acción, y la distinción importa: un `remedio` aparece
-   * únicamente ante un problema detectado —ésa es la regla del 06-10— mientras que un `permiso` es
-   * una oportunidad, no una falla: la aplicación funciona sin él y pedirlo antes del turno es mejor
-   * que pedirlo frente a un carro. Las pruebas comprueban por separado que con todo en orden no
-   * haya ni un `remedio`.</p>
-   */
-  accion?: { etiqueta: string; onClick: () => void; ocupado?: boolean; tipo: 'remedio' | 'permiso' };
-}
-
 /** Lo que las comprobaciones asíncronas devuelven. `null` mientras se están midiendo. */
 interface Medicion {
   camara: PermissionReadiness;
@@ -249,96 +226,97 @@ export function HelpPage(): React.JSX.Element {
    * «Pendientes» como acceso: §4 lo prohíbe en letra, y además sería volver a la lista que esto
    * vino a borrar. Una ruta sólo aparece cuando ES el remedio del problema detectado.</p>
    */
-  function comprobaciones(): Comprobacion[] {
-    const lista: Comprobacion[] = [];
+  function comprobaciones(): DiagnosticCheck[] {
+    const lista: DiagnosticCheck[] = [];
 
     // 1. Conexión.
     lista.push({
-      clave: 'connection',
-      tono: online ? 'ok' : 'problema',
-      icono: <IconOffline />,
-      titulo: t('inspector.help.diag.connection'),
-      estado: online ? t('inspector.home.online') : t('inspector.offline.badge'),
-      nota: online ? undefined : t('inspector.help.diag.connection.note'),
-      accion: online
+      key: 'connection',
+      tone: online ? 'ok' : 'problem',
+      icon: <IconOffline />,
+      title: t('inspector.help.diag.connection'),
+      state: online ? t('inspector.home.online') : t('inspector.offline.badge'),
+      note: online ? undefined : t('inspector.help.diag.connection.note'),
+      action: online
         ? undefined
-        : { etiqueta: t('inspector.help.offline.action'), onClick: () => setVerConexion(true), tipo: 'remedio' },
+        : { label: t('inspector.help.offline.action'), onClick: () => setVerConexion(true), kind: 'remedy' },
     });
 
     // 2. Sincronización. Un solo dato y una sola fila: «sincronización» y «operaciones pendientes»
     //    son la misma cola leída dos veces, y dos filas que siempre dicen lo mismo son ruido.
     if (fallidas > 0) {
       lista.push({
-        clave: 'sync',
-        tono: 'problema',
-        icono: <IconCheck />,
-        titulo: t('inspector.help.diag.sync'),
-        estado: tPlural('inspector.help.diag.sync.failed', fallidas),
-        nota: t('inspector.help.diag.sync.failedNote'),
+        key: 'sync',
+        tone: 'problem',
+        icon: <IconCheck />,
+        title: t('inspector.help.diag.sync'),
+        state: tPlural('inspector.help.diag.sync.failed', fallidas),
+        note: t('inspector.help.diag.sync.failedNote'),
         // Reintentar sin señal no reintenta nada: el botón aparece sólo cuando puede funcionar.
-        accion: online
-          ? { etiqueta: t('inspector.help.diag.sync.retry'), onClick: () => retryAll(), tipo: 'remedio' }
+        action: online
+          ? { label: t('inspector.help.diag.sync.retry'), onClick: () => retryAll(), kind: 'remedy' }
           : undefined,
       });
     } else if (pending > 0) {
       lista.push({
-        clave: 'sync',
-        tono: 'aviso',
-        icono: <IconCheck />,
-        titulo: t('inspector.help.diag.sync'),
-        estado: tPlural('inspector.help.diag.sync.pending', pending),
-        nota: online ? t('inspector.help.diag.sync.note') : t('inspector.help.diag.sync.offlineNote'),
-        accion: online
+        key: 'sync',
+        tone: 'warning',
+        icon: <IconCheck />,
+        title: t('inspector.help.diag.sync'),
+        state: tPlural('inspector.help.diag.sync.pending', pending),
+        note: online ? t('inspector.help.diag.sync.note') : t('inspector.help.diag.sync.offlineNote'),
+        action: online
           ? {
-              etiqueta: t('inspector.help.diag.sync.action'),
+              label: t('inspector.help.diag.sync.action'),
               onClick: () => void sincronizarAhora(),
-              ocupado: sincronizando,
-              tipo: 'remedio',
+              busy: sincronizando,
+              busyLabel: t('inspector.help.diag.sync.working'),
+              kind: 'remedy',
             }
           : undefined,
       });
     } else {
       lista.push({
-        clave: 'sync',
-        tono: 'ok',
-        icono: <IconCheck />,
-        titulo: t('inspector.help.diag.sync'),
-        estado: t('inspector.help.diag.sync.ok'),
+        key: 'sync',
+        tone: 'ok',
+        icon: <IconCheck />,
+        title: t('inspector.help.diag.sync'),
+        state: t('inspector.help.diag.sync.ok'),
       });
     }
 
     // 3. Sesión.
     if (status !== 'authenticated') {
       lista.push({
-        clave: 'session',
-        tono: 'problema',
-        icono: <IconUser />,
-        titulo: t('inspector.help.diag.session'),
-        estado: t('inspector.help.diag.session.problem'),
-        nota: t('inspector.help.diag.session.note'),
-        accion: { etiqueta: t('inspector.help.diag.session.action'), onClick: () => navigate('/login'), tipo: 'remedio' },
+        key: 'session',
+        tone: 'problem',
+        icon: <IconUser />,
+        title: t('inspector.help.diag.session'),
+        state: t('inspector.help.diag.session.problem'),
+        note: t('inspector.help.diag.session.note'),
+        action: { label: t('inspector.help.diag.session.action'), onClick: () => navigate('/login'), kind: 'remedy' },
       });
     } else if (!activeTenant) {
       lista.push({
-        clave: 'session',
-        tono: 'problema',
-        icono: <IconUser />,
-        titulo: t('inspector.help.diag.session'),
-        estado: t('inspector.help.diag.session.noTenant'),
-        nota: t('inspector.help.diag.session.noTenantNote'),
-        accion: {
-          etiqueta: t('inspector.help.diag.session.chooseTenant'),
+        key: 'session',
+        tone: 'problem',
+        icon: <IconUser />,
+        title: t('inspector.help.diag.session'),
+        state: t('inspector.help.diag.session.noTenant'),
+        note: t('inspector.help.diag.session.noTenantNote'),
+        action: {
+          label: t('inspector.help.diag.session.chooseTenant'),
           onClick: () => navigate('/select-tenant'),
-          tipo: 'remedio',
+          kind: 'remedy',
         },
       });
     } else {
       lista.push({
-        clave: 'session',
-        tono: 'ok',
-        icono: <IconUser />,
-        titulo: t('inspector.help.diag.session'),
-        estado: t('inspector.help.diag.session.ok'),
+        key: 'session',
+        tone: 'ok',
+        icon: <IconUser />,
+        title: t('inspector.help.diag.session'),
+        state: t('inspector.help.diag.session.ok'),
       });
     }
 
@@ -347,37 +325,38 @@ export function HelpPage(): React.JSX.Element {
     //        muerto, que es precisamente lo que este PDF vino a quitar.
     const camara = medicion?.camara ?? 'asksOnUse';
     lista.push({
-      clave: 'camera',
-      tono: camara === 'denied' ? 'aviso' : 'ok',
-      icono: <IconEye />,
-      titulo: t('inspector.help.diag.camera'),
-      estado: textoPermiso(camara),
-      nota: camara === 'denied' ? t('inspector.help.diag.camera.deniedNote') : undefined,
+      key: 'camera',
+      tone: camara === 'denied' ? 'warning' : 'ok',
+      icon: <IconEye />,
+      title: t('inspector.help.diag.camera'),
+      state: textoPermiso(camara),
+      note: camara === 'denied' ? t('inspector.help.diag.camera.deniedNote') : undefined,
       /*
         El botón sólo donde de verdad abre un diálogo: `asksOnUse` Y con cámara nativa. En el
         navegador no hay permiso de cámara que pedir —la foto sale del selector del sistema, y
         `requestCameraPermission()` devuelve `granted` sin preguntar nada—, así que ahí un
         «Permitir acceso» pintaría la fila de verde sin que nadie hubiera concedido nada.
       */
-      accion:
+      action:
         camara === 'asksOnUse' && hasNativeCamera()
           ? {
-              etiqueta: t('inspector.help.diag.camera.allow'),
+              label: t('inspector.help.diag.camera.allow'),
               onClick: () => void permitirCamara(),
-              ocupado: pidiendo === 'camera',
-              tipo: 'permiso',
+              busy: pidiendo === 'camera',
+              busyLabel: t('inspector.help.diag.permission.working'),
+              kind: 'permission',
             }
           : undefined,
     });
 
     const ubicacion = medicion?.ubicacion ?? 'asksOnUse';
     lista.push({
-      clave: 'location',
-      tono: ubicacion === 'denied' ? 'aviso' : 'ok',
-      icono: <IconPin />,
-      titulo: t('inspector.help.diag.location'),
-      estado: textoPermiso(ubicacion),
-      nota:
+      key: 'location',
+      tone: ubicacion === 'denied' ? 'warning' : 'ok',
+      icon: <IconPin />,
+      title: t('inspector.help.diag.location'),
+      state: textoPermiso(ubicacion),
+      note:
         ubicacion === 'denied'
           ? t('inspector.help.diag.location.deniedNote')
           : ubicacion === 'asksOnUse'
@@ -385,13 +364,14 @@ export function HelpPage(): React.JSX.Element {
             : undefined,
       // Acá sí funciona en los dos sitios, porque la lectura de posición dispara el aviso del
       // sistema tanto en el teléfono como en el navegador.
-      accion:
+      action:
         ubicacion === 'asksOnUse'
           ? {
-              etiqueta: t('inspector.help.diag.location.allow'),
+              label: t('inspector.help.diag.location.allow'),
               onClick: () => void permitirUbicacion(),
-              ocupado: pidiendo === 'location',
-              tipo: 'permiso',
+              busy: pidiendo === 'location',
+              busyLabel: t('inspector.help.diag.permission.working'),
+              kind: 'permission',
             }
           : undefined,
     });
@@ -399,18 +379,18 @@ export function HelpPage(): React.JSX.Element {
     // 6. La aplicación. Lo que de verdad se puede medir acá es si este dispositivo guarda.
     const guarda = medicion?.almacenamiento ?? true;
     lista.push({
-      clave: 'app',
-      tono: guarda ? 'ok' : 'problema',
-      icono: <IconSystem />,
-      titulo: t('inspector.help.diag.app'),
-      estado: guarda ? t('inspector.help.diag.app.ok') : t('inspector.help.diag.app.problem'),
-      nota: guarda ? undefined : t('inspector.help.diag.app.note'),
-      accion: guarda
+      key: 'app',
+      tone: guarda ? 'ok' : 'problem',
+      icon: <IconSystem />,
+      title: t('inspector.help.diag.app'),
+      state: guarda ? t('inspector.help.diag.app.ok') : t('inspector.help.diag.app.problem'),
+      note: guarda ? undefined : t('inspector.help.diag.app.note'),
+      action: guarda
         ? undefined
         : {
-            etiqueta: t('inspector.help.diag.app.reload'),
+            label: t('inspector.help.diag.app.reload'),
             onClick: () => window.location.reload(),
-            tipo: 'remedio',
+            kind: 'remedy',
           },
     });
 
@@ -418,8 +398,6 @@ export function HelpPage(): React.JSX.Element {
   }
 
   const filas = comprobaciones();
-  const hayProblema = filas.some((fila) => fila.tono === 'problema');
-  const hayAviso = filas.some((fila) => fila.tono === 'aviso');
 
   return (
     <InspectorShell title={t('inspector.help.title')} onBack={() => navigate('/more')}>
@@ -496,76 +474,26 @@ export function HelpPage(): React.JSX.Element {
         title={t('inspector.help.diag.title')}
         closeLabel={t('common.close')}
       >
-        <div className="lx-diag">
-          {medicion === null ? (
-            <p className="lx-text-meta" style={{ margin: 0 }}>
-              {t('inspector.help.diag.checking')}
-            </p>
-          ) : (
-            <>
-              <Alert
-                tone={hayProblema ? 'warning' : hayAviso ? 'info' : 'success'}
-                testId="inspector-diagnostico-resumen"
-              >
-                {hayProblema
-                  ? t('inspector.help.diag.someIssue')
-                  : hayAviso
-                    ? t('inspector.help.diag.someWarning')
-                    : t('inspector.help.diag.allGood')}
-              </Alert>
-              <ul className="lx-diag__list">
-                {filas.map((fila) => (
-                  <li
-                    key={fila.clave}
-                    className="lx-diag__row"
-                    data-tono={fila.tono}
-                    data-check={fila.clave}
-                    data-accion={fila.accion?.tipo}
-                  >
-                    <span className="lx-diag__icon" aria-hidden="true">
-                      {fila.icono}
-                    </span>
-                    <div className="lx-diag__body">
-                      <p className="lx-diag__title">
-                        {fila.titulo}
-                        {/* El tono se dice también en palabras: el color no es información para
-                            quien no lo distingue, y una fila con problema tiene que leerse como tal
-                            en un lector de pantalla. */}
-                        <span className="lx-visually-hidden">
-                          {' · '}
-                          {fila.tono === 'ok'
-                            ? t('inspector.help.diag.tone.ok')
-                            : fila.tono === 'aviso'
-                              ? t('inspector.help.diag.tone.warning')
-                              : t('inspector.help.diag.tone.problem')}
-                        </span>
-                      </p>
-                      <p className="lx-diag__state">{fila.estado}</p>
-                      {fila.nota ? <p className="lx-diag__note">{fila.nota}</p> : null}
-                      {fila.accion ? (
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          className="lx-diag__action"
-                          loading={fila.accion.ocupado}
-                          onClick={fila.accion.onClick}
-                        >
-                          {fila.accion.ocupado
-                            ? t(
-                                fila.accion.tipo === 'permiso'
-                                  ? 'inspector.help.diag.permission.working'
-                                  : 'inspector.help.diag.sync.working',
-                              )
-                            : fila.accion.etiqueta}
-                        </Button>
-                      ) : null}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
-        </div>
+        {/* La pintura la pone `DiagnosticList`, del paquete compartido: acá sólo se MIDE.
+            Cuando el Ciudadano pidió su diagnóstico el 07-10, la alternativa era copiar ochenta
+            líneas de `<li>`; lo que las dos pantallas comparten es la forma de una comprobación,
+            no lo que comprueban —el ciudadano no tiene cola de boletas, ni cámara, ni GPS—. */}
+        <DiagnosticList
+          loading={medicion === null}
+          loadingLabel={t('inspector.help.diag.checking')}
+          summaryTestId="inspector-diagnostico-resumen"
+          summary={{
+            allGood: t('inspector.help.diag.allGood'),
+            warning: t('inspector.help.diag.someWarning'),
+            problem: t('inspector.help.diag.someIssue'),
+          }}
+          toneLabels={{
+            ok: t('inspector.help.diag.tone.ok'),
+            warning: t('inspector.help.diag.tone.warning'),
+            problem: t('inspector.help.diag.tone.problem'),
+          }}
+          checks={filas}
+        />
       </Modal>
     </InspectorShell>
   );
