@@ -77,7 +77,33 @@ async function estadoDeLaCabecera(page) {
       // Visible de verdad: dentro del viewport, no sólo presente en el DOM.
       tituloVisible: caja ? caja.top >= -1 && caja.bottom <= window.innerHeight : false,
       topDelTitulo: caja ? Math.round(caja.top) : null,
-      posicion: barra ? getComputedStyle(barra).position : null,
+      /*
+        Quién pega NO es necesariamente la barra. En el fiscalizador la que pega es su envoltorio
+        `.lx-top-chrome`, que lleva la barra Y la franja de estadía en curso como un solo bloque
+        —si pegara sólo la barra, la franja se le despegaría al desplazarse—. Preguntarle
+        `position` únicamente a `.lx-app-bar` contesta `static` de una cabecera que sí se queda:
+        eso es un fallo del arnés, no de la pantalla, y el 06-10-2026 lo dio por tres sesiones
+        mientras los criterios 3, 4 y 6 pasaban en la misma corrida. Se busca desde la barra hacia
+        arriba y se informa también CUÁL es, que es lo que faltaba para verlo de un vistazo.
+      */
+      posicion: (() => {
+        let nodo = barra;
+        while (nodo && nodo !== document.body) {
+          const p = getComputedStyle(nodo).position;
+          if (p === 'sticky' || p === 'fixed') return p;
+          nodo = nodo.parentElement;
+        }
+        return barra ? getComputedStyle(barra).position : null;
+      })(),
+      quienPega: (() => {
+        let nodo = barra;
+        while (nodo && nodo !== document.body) {
+          const p = getComputedStyle(nodo).position;
+          if (p === 'sticky' || p === 'fixed') return nodo.className || nodo.tagName;
+          nodo = nodo.parentElement;
+        }
+        return 'nadie';
+      })(),
       scrollY: Math.round(window.scrollY),
       alturaDocumento: doc.scrollHeight,
       // Una segunda barra de desplazamiento sería un contenedor interno que desplaza además del
@@ -130,8 +156,8 @@ async function estadoDeLaCabecera(page) {
   );
   comprobar(alCargar.tituloVisible, 'criterio 2 · visible en la parte superior', `top=${alCargar.topDelTitulo}`);
   comprobar(
-    alCargar.posicion === 'sticky',
-    `criterio 4 · la barra está declarada como sticky (${alCargar.posicion})`,
+    alCargar.posicion === 'sticky' || alCargar.posicion === 'fixed',
+    `criterio 4 · la cabecera está declarada para quedarse (${alCargar.posicion} · ${alCargar.quienPega})`,
   );
 
   // La pantalla tiene que dar para desplazarse; si no, el criterio no se puede probar y decirlo es
@@ -343,9 +369,18 @@ async function estadoDeLaCabecera(page) {
   */
   console.log('── Diagnóstico: que detecte de verdad ──');
 
-  async function abrirDiagnostico(p) {
-    await p.goto(`${BASE}/inspector/help`, { waitUntil: 'domcontentloaded' });
-    await p.waitForTimeout(2200);
+  /*
+    `navegar: false` existe por un error que costó la corrida del 06-10-2026: el escenario sin
+    señal cortaba el contexto ANTES de pedir la pantalla, así que el `goto` moría con
+    ERR_INTERNET_DISCONNECTED y se llevaba el script entero por delante. Una aplicación offline no
+    es una aplicación que se pueda DESCARGAR offline: primero se carga, después se corta. Es
+    exactamente lo que le pasa a un fiscalizador en la calle.
+  */
+  async function abrirDiagnostico(p, navegar = true) {
+    if (navegar) {
+      await p.goto(`${BASE}/inspector/help`, { waitUntil: 'domcontentloaded' });
+      await p.waitForTimeout(2200);
+    }
     await p.getByRole('button').filter({ hasText: 'Diagnóstico de la aplicación' }).first().click();
     await p.waitForSelector('.lx-diag__row', { timeout: 8000 }).catch(() => {});
     await p.waitForTimeout(400);
@@ -360,9 +395,14 @@ async function estadoDeLaCabecera(page) {
   }
 
   // --- Sin señal -------------------------------------------------------------------------------
-  await context.setOffline(true);
   {
-    const filas = await abrirDiagnostico(page);
+    // La pantalla primero, el corte después: `useIsOnline` escucha el evento `offline`, así que el
+    // diagnóstico se entera sin recargar nada —que es justo lo que tiene que pasar en la calle.
+    await page.goto(`${BASE}/inspector/help`, { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(2200);
+    await context.setOffline(true);
+    await page.waitForTimeout(800);
+    const filas = await abrirDiagnostico(page, false);
     const conexion = filas.find((f) => f.clave === 'connection');
     comprobar(
       conexion?.tono === 'problema',
@@ -387,9 +427,9 @@ async function estadoDeLaCabecera(page) {
       texto.slice(0, 140),
     );
     await page.keyboard.press('Escape');
+    await context.setOffline(false);
+    await page.waitForTimeout(800);
   }
-  await context.setOffline(false);
-  await page.waitForTimeout(600);
 
   // --- Con algo esperando ------------------------------------------------------------------------
   /*
