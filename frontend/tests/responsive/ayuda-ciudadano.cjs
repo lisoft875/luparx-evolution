@@ -272,23 +272,27 @@ async function entrar(context) {
       await page.waitForTimeout(1800);
       const antes = page.url();
       /*
-        El reloj del documento, para distinguir la tercera clase de acción.
+        Una marca en el documento, para distinguir la tercera clase de acción.
 
-        Hay tres: navegar, abrir el diagnóstico y RECARGAR. La primera versión de esto sólo
-        contemplaba las dos primeras, así que «La aplicación presenta un error» —cuya acción es
-        recargar— salió como botón muerto: no cambia la URL y no abre ningún diálogo. Hacía algo,
-        y era justo lo que tenía que hacer.
+        Hay tres: navegar, abrir el diagnóstico y RECARGAR. «La aplicación presenta un error»
+        recarga, así que no cambia la URL ni abre diálogo, y las dos primeras versiones de esto la
+        dieron por botón muerto.
 
-        `performance.now()` cuenta desde que se creó el documento, así que si BAJA es que hay un
-        documento nuevo. Es el mismo truco con el que el Inicio comprueba lo contrario —que una
-        tarjeta NO recargue la aplicación— y acá sirve para comprobar que ésta sí.
+        La segunda versión usaba `performance.now()`, razonando que si BAJA es que hay un documento
+        nuevo. El razonamiento es correcto y la medición no servía: el documento viejo llevaba
+        ~1.8s de vida cuando se leía, y el nuevo ~2s cuando se volvía a leer. Dos números casi
+        iguales decidiendo una comparación — una moneda al aire, y salió cruz.
+
+        Una marca en `window` no tiene ese problema: una recarga la borra y nada más la borra. No
+        depende de cuánto tardó nada.
       */
-      const relojAntes = await page.evaluate(() => window.performance.now());
+      await page.evaluate(() => {
+        window.__marcaDeRecarga = true;
+      });
       await page.locator(`[data-opcion="${clave}"]`).first().click();
       await page.waitForTimeout(2000);
       const despues = page.url();
-      const relojDespues = await page.evaluate(() => window.performance.now());
-      const recargo = relojDespues < relojAntes;
+      const recargo = await page.evaluate(() => window.__marcaDeRecarga !== true);
       const dialogo = await page.getByRole('dialog').isVisible().catch(() => false);
       if (dialogo) {
         // La acción era el diagnóstico: que de verdad haya medido algo.
