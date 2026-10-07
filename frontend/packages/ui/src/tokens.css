@@ -2509,10 +2509,36 @@ a.lx-list-row {
   text-align: center;
 }
 
+/* La barra inferior vive en el plano del CROMO, no en el de las tarjetas (07-10-2026).
+
+   El reporte decía «las opciones inferiores hoy apenas se ven». No era la safe-area: el relleno
+   `env(safe-area-inset-bottom)` estaba desde el 19-09 y los destinos ya pasaban los 44px. Era el
+   color. La barra usaba `--lx-surface`, que es EXACTAMENTE el color de las tarjetas que pasan
+   desplazándose por encima de ella; con 1px de borde entre dos planos idénticos, la barra no
+   terminaba en ningún sitio — se leía como una tarjeta más que resultó quedar abajo.
+
+   `--lx-chrome` es el plano que ya existe para esto y que la barra superior usa desde siempre.
+   Medido contra `--lx-surface` da una separación propia, y contra `--lx-bg` sigue siendo un plano
+   distinto, así que la barra se recorta tanto sobre el fondo vacío como sobre una tarjeta.
+
+   La altura la manda la especificación: 64-72px de barra VISIBLE, más la safe-area aparte. Va en
+   el destino y no en la barra porque el destino es lo que se toca; 64px de alto con 24px de icono
+   y 11px de etiqueta es lo que da la referencia aprobada. */
 .lx-bottom-tab-bar {
   display: flex;
   border-top: 1px solid var(--lx-border);
-  background: var(--lx-surface);
+  background: var(--lx-chrome);
+  /* Lo que de verdad separa esta barra del contenido NO es el relleno, y conviene dejarlo escrito
+     porque es contraintuitivo: medido, `--lx-chrome` contra `--lx-surface` da 1.09 y contra
+     `--lx-bg` da 1.05. En esta paleta no hay ningún plano oscuro que se recorte contra otro plano
+     oscuro — cambiar el hexadecimal no iba a arreglar nada.
+
+     Lo que sí la separa son dos cosas medibles: el ALTO (64px de destino, abajo) y esta sombra
+     hacia arriba, que es la única señal que funciona igual sobre el fondo vacío y sobre una
+     tarjeta pasando por debajo. Negativa en la Y porque la barra está pegada al borde inferior y
+     la luz tiene que caer hacia el contenido; el `-12px` de extensión la recoge para que no sea un
+     halo sino un borde con profundidad. */
+  box-shadow: 0 -10px 28px -12px rgba(0, 0, 0, 0.8);
   padding-bottom: env(safe-area-inset-bottom);
 }
 .lx-bottom-tab-bar__tab {
@@ -2522,7 +2548,10 @@ a.lx-list-row {
   align-items: center;
   justify-content: center;
   gap: 2px;
-  min-height: var(--lx-touch-target-min);
+  /* 64px, no 44. `--lx-touch-target-min` dice «esto se puede tocar», que es el piso de
+     accesibilidad; la especificación pide una barra de 64-72px, que es otra cosa — el alto que
+     hace que cinco destinos con icono y etiqueta se lean de pie, al sol, sin apuntar. */
+  min-height: 64px;
   padding: var(--lx-space-2) var(--lx-space-1);
   background: none;
   border: none;
@@ -5468,4 +5497,268 @@ a.lx-list-row {
 .lx-diag__action {
   margin-top: var(--lx-space-3);
   align-self: flex-start;
+}
+
+/* ============================================================================================
+   FISCALIZACIÓN · estructura responsive (07-10-2026)
+
+   De la especificación visual responsive: celular primero (375x812, funcionando desde 360), tablet
+   después, y nunca el portal administrativo reducido. Las medidas no son nuevas: `--lx-space-4` ya
+   vale 16px, `--lx-card-gap` 12px, `--lx-radius-md` 12px, el título de pantalla 28px y el auxiliar
+   13px — es decir, el «paso 2: crear tokens» del documento ya estaba hecho y no se creó ninguno.
+   Lo que faltaba era usarlos con consultas de medio, que es lo que hay aquí.
+   ============================================================================================ */
+
+.lx-inspector-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--lx-card-gap);
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+  /* 16px de margen lateral en celular, que es la medida de la tabla del documento. El relleno
+     inferior lo pone el shell con la altura medida de la barra fija. */
+  padding: var(--lx-space-4) var(--lx-space-4) 0;
+}
+
+/* Tablet (768px arriba): el margen sube a 24-32px y el ancho útil a 720px, que es lo que pide el
+   documento para el formulario de consulta centrado. No aparece barra lateral: Fiscalización
+   conserva el patrón de aplicación operativa a cualquier ancho. */
+@media (min-width: 768px) {
+  .lx-inspector-main {
+    max-width: 720px;
+    padding-right: var(--lx-space-6);
+    padding-left: var(--lx-space-6);
+  }
+}
+@media (min-width: 1024px) {
+  .lx-inspector-main {
+    padding-right: var(--lx-space-8);
+    padding-left: var(--lx-space-8);
+  }
+}
+
+/* ---- El saludo: lo primero que se lee, y no un título de pantalla genérico -------------------
+   El documento es explícito en los dos sentidos: «saludo corto: Hola, Inspector» y debajo
+   «Fiscalización · Escazú»; y «no repetir un gran título genérico como "Consulta de placa"
+   ocupando espacio antes de las acciones». Ese h1 estaba y se fue: el saludo ocupa su sitio y es
+   el encabezado de nivel 1 de la pantalla, así que no se pierde la estructura del documento ni el
+   punto de entrada de un lector de pantalla. */
+.lx-inspector-greeting {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--lx-space-3);
+}
+.lx-inspector-greeting__name {
+  margin: 0;
+  font-size: var(--lx-text-screen-title-size);
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+}
+.lx-inspector-greeting__where {
+  margin: 2px 0 0;
+  font-size: var(--lx-text-meta-size);
+  color: var(--lx-text-muted);
+}
+
+/* ---- Los cuatro accesos del turno, con la composición de la referencia aprobada ---------------
+   NO es una tarjeta nueva. Es `.lx-quick-tile`, que ya existe y ya trae el icono, el título y la
+   ayuda; lo que cambia es el reparto, porque la referencia apila icono → título → ayuda con el
+   chevron a la derecha, y la variante `--touch` que tenía el fiscalizador centraba icono y título
+   y no dibujaba la ayuda. Se completa, no se recrea.
+
+   Por qué volvió la ayuda: la variante táctil la quitó en octubre con un argumento razonable
+   («poco texto»), y la referencia la pide en las cuatro — «Verificar estado y permisos»,
+   «Infracción o advertencia», «Boletas por enviar», «Fotos y adjuntos»—. Con 12-13px y dos
+   renglones cabe de sobra en los 165px que da una columna a 375px. */
+.lx-quick-tile--inspector {
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'icono  flecha'
+    'titulo flecha'
+    'texto  flecha';
+  justify-items: start;
+  align-content: start;
+  gap: var(--lx-space-2) var(--lx-space-2);
+  /* La referencia da tarjetas de ~110px. El mínimo y no una altura fija: el grid ya estira las
+     cuatro a la más alta, y un alto fijo recortaría la ayuda cuando el idioma la alargue. */
+  min-height: 110px;
+  padding: var(--lx-space-3);
+  text-align: left;
+  position: relative;
+}
+@media (max-width: 380px) {
+  /* A 360px una columna da 156px; la tarjeta sigue en dos columnas (ésa es la regla del documento:
+     «360-479 px: cards 2 columnas») y lo que cede es el relleno. */
+  .lx-quick-tile--inspector {
+    padding: var(--lx-space-2) var(--lx-space-3);
+  }
+}
+.lx-quick-tile--inspector .lx-quick-tile__icon {
+  width: 36px;
+  height: 36px;
+  align-self: start;
+}
+.lx-quick-tile--inspector .lx-quick-tile__title {
+  /* 16-18px y peso 600-700 por la tabla de medidas; `--lx-text-card-title-size` vale 17px y ya es
+     el tamaño de «título de card» en toda la aplicación. */
+  font-size: var(--lx-text-card-title-size);
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: normal;
+  overflow: visible;
+  align-self: end;
+}
+/* La ayuda SÍ se parte en dos renglones acá, al revés que en el Inicio administrativo: allá son
+   cuatro tarjetas en una fila ancha y un segundo renglón las desalineaba; acá son dos columnas
+   estrechas y recortar con puntos suspensivos dejaría «Verificar estado y per…», que no dice nada. */
+.lx-quick-tile--inspector .lx-quick-tile__hint {
+  font-size: var(--lx-text-meta-size);
+  line-height: 1.25;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+}
+/* El chevron: sólo en las tarjetas que llevan a otra pantalla, como en la referencia. «Pendientes»
+   y «Evidencia» no lo llevan ahí, y no se les pone: una flecha que no distingue a nadie deja de
+   ser información. */
+.lx-quick-tile__go {
+  grid-area: flecha;
+  align-self: center;
+  display: inline-flex;
+  color: var(--lx-text-subtle);
+  flex-shrink: 0;
+}
+/* El conteo real de pendientes, arriba a la derecha. Mismo recuadro y mismo color que el de la
+   barra inferior y el de la campana: «hay algo esperándote» se lee igual en los tres sitios. */
+.lx-quick-tile__count {
+  position: absolute;
+  top: var(--lx-space-2);
+  right: var(--lx-space-2);
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: var(--lx-radius-pill);
+  background: var(--lx-danger);
+  color: var(--lx-danger-ink);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 20px;
+  text-align: center;
+}
+
+/* La acción prioritaria con fondo azul, que es lo que el documento permite y la referencia usa en
+   «Consultar placa». El relleno es `--lx-primary-fill` y no `--lx-primary`: sobre el azul claro el
+   texto blanco da 3.78 y no pasa — es la misma medición por la que la paleta tiene dos azules, uno
+   para tinta sobre superficie y otro para rellenar. */
+.lx-quick-tile--primary {
+  background: var(--lx-primary-fill);
+  border-color: var(--lx-primary-fill);
+  color: var(--lx-on-primary);
+}
+.lx-quick-tile--primary:hover {
+  background: var(--lx-primary-fill-hover, var(--lx-primary-fill));
+}
+.lx-quick-tile--primary .lx-quick-tile__title,
+.lx-quick-tile--primary .lx-quick-tile__hint,
+.lx-quick-tile--primary .lx-quick-tile__go {
+  color: var(--lx-on-primary);
+}
+/* El cuadro del icono, sobre azul, no puede seguir siendo `--lx-primary-soft`: es azul sobre azul.
+   Un velo blanco translúcido funciona sobre cualquier azul de la familia sin inventar un token. */
+.lx-quick-tile--primary .lx-quick-tile__icon {
+  background: rgba(255, 255, 255, 0.16);
+  color: var(--lx-on-primary);
+}
+
+/* ---- Consulta rápida: el campo de placa y un botón cuadrado, en una fila --------------------- */
+.lx-plate-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--lx-space-2);
+  align-items: stretch;
+}
+/* Cuadrado y compacto, como pide el documento: el mismo lado que el alto del campo, así que la
+   fila no tiene un botón más alto ni más bajo que el campo que lo acompaña. 56px entra en el
+   rango 48-56 de la tabla y supera los 44 de objetivo táctil con holgura. */
+.lx-plate-row__go {
+  width: 56px;
+  min-width: 56px;
+  height: 56px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--lx-radius-md);
+  background: var(--lx-primary-fill);
+  color: var(--lx-on-primary);
+  cursor: pointer;
+}
+.lx-plate-row__go:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.lx-plate-row__go:focus-visible {
+  outline: 2px solid var(--lx-focus-ring);
+  outline-offset: 2px;
+}
+
+/* ---- Última consulta ------------------------------------------------------------------------- */
+.lx-last-check {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--lx-space-3);
+  width: 100%;
+  padding: 0;
+  background: none;
+  border: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+}
+.lx-last-check:focus-visible {
+  outline: 2px solid var(--lx-focus-ring);
+  outline-offset: 4px;
+  border-radius: var(--lx-radius-sm);
+}
+.lx-last-check__head {
+  display: flex;
+  align-items: center;
+  gap: var(--lx-space-2);
+  flex-wrap: wrap;
+}
+.lx-last-check__plate {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+}
+.lx-last-check__facts {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: var(--lx-space-2);
+}
+.lx-last-check__fact {
+  display: flex;
+  align-items: center;
+  gap: var(--lx-space-2);
+  font-size: var(--lx-text-meta-size);
+  color: var(--lx-text-muted);
+  min-width: 0;
+}
+.lx-last-check__fact > svg {
+  flex-shrink: 0;
+  color: var(--lx-text-subtle);
+}
+.lx-last-check__fact > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

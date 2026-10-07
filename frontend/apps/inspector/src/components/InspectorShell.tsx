@@ -282,21 +282,16 @@ export function InspectorShell({
           }
         />
       </div>
-      <main
-        style={{
-          flex: 1,
-          paddingTop: 'var(--lx-space-4)',
-          paddingRight: 'var(--lx-space-4)',
-          paddingLeft: 'var(--lx-space-4)',
-          paddingBottom: `calc(var(--lx-space-4) + ${footerHeight}px)`,
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 'var(--lx-card-gap)',
-          maxWidth: 640,
-          width: '100%',
-          margin: '0 auto',
-        }}
-      >
+      {/*
+        El área que se desplaza (07-10-2026).
+
+        Deja de llevar sus medidas en `style` y pasa a `.lx-inspector-main`, por un motivo concreto
+        y no por limpieza: la especificación responsive pide 16px de margen lateral en celular y
+        24-32px en tablet, con el ancho útil subiendo a ~720px. Eso son consultas de medio, y un
+        objeto `style` en línea no puede tenerlas. Lo único que sigue viajando desde aquí es el
+        relleno inferior, porque depende de la altura MEDIDA de la barra y ningún CSS puede saberla.
+      */}
+      <main className="lx-inspector-main" style={{ paddingBottom: `calc(var(--lx-space-4) + ${footerHeight}px)` }}>
         {children}
       </main>
       <div

@@ -130,11 +130,21 @@ export function MorePage(): React.JSX.Element {
 
         <Card>
           {/* El icono de ayuda, no el escudo (07-10-2026): en el admin ese mismo escudo es
-              «Roles y permisos», que es lo que un escudo significa. */}
+              «Roles y permisos», que es lo que un escudo significa.
+
+              Y sin segundo renglón (07-10-2026, segunda pasada). El encargo del acceso a Ayuda es
+              explícito en los dos sentidos: «NO utilizar textos largos» y «el botón debe decir
+              simplemente: Ayuda». La fila llevaba «Cómo trabajar un turno.» debajo, que es
+              exactamente el texto largo que el documento no quiere — y que además no agrega nada,
+              porque lo que hay detrás ya se llama Ayuda.
+
+              El componente NO cambia: es el mismo `ListRow` con el mismo icono y los mismos
+              estilos que el ciudadano, que es lo que el documento pide reutilizar. Lo único que se
+              va es el `meta`. La fila del ciudadano se queda como está: el encargo acota el cambio
+              a Fiscalización y dice, con todas las letras, no tocar Ciudadano. */}
           <ListRow
             icon={<IconHelp size={18} />}
             title={t('inspector.more.help')}
-            meta={t('inspector.more.help.meta')}
             value={<IconChevronRight size={16} />}
             onClick={() => navigate('/help')}
           />

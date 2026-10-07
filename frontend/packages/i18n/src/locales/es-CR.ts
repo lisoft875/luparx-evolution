@@ -1725,6 +1725,21 @@ export const esCR = {
   'inspector.home.quick.evidence': 'Evidencia',
   'inspector.home.quick.queue': 'Pendientes',
   'inspector.home.quick.label': 'Acciones del turno',
+
+  /* --- Pantalla inicial de Fiscalización (07-10-2026, especificación visual responsive) ------ */
+  'inspector.home.greeting': 'Hola, Inspector',
+  'inspector.home.greeting.named': 'Hola, {{name}}',
+  'inspector.home.where': 'Fiscalización · {{tenant}}',
+  'inspector.home.where.noTenant': 'Fiscalización',
+  'inspector.home.quick.lookup.hint': 'Verificar estado y permisos',
+  'inspector.home.quick.cite.hint': 'Infracción o advertencia',
+  'inspector.home.quick.queue.hint': 'Boletas por enviar',
+  'inspector.home.quick.evidence.hint': 'Fotos y adjuntos',
+  'inspector.home.fast.go': 'Buscar',
+  'inspector.home.last.title': 'Última consulta',
+  'inspector.home.last.empty': 'Todavía no consultaste ninguna placa en este turno.',
+  'inspector.home.last.again': 'Volver a consultar {{plate}}',
+  'inspector.home.last.checkedAt': 'Consultada a las {{time}}',
   // Cuatro claves que la pantalla de inicio del inspector ya usaba sin que existieran: el tipo
   // `TranslationKey` se genera desde este archivo, así que su ausencia rompía `typecheck` en toda
   // la app. Se agregan tal cual las pide la pantalla en vez de renombrarlas ahí, porque la deuda
@@ -2147,7 +2162,10 @@ export const esCR = {
   'inspector.nav.queue': 'Pendientes',
   'inspector.nav.more': 'Más',
 
-  'inspector.lookup.title': 'Consulta de placa',
+  'inspector.lookup.title': 'Consultar placa',
+  'inspector.lookup.help': 'Verifica permisos, infracciones y datos disponibles del vehículo.',
+  'inspector.lookup.offline': 'Sin señal: la consulta necesita conexión. La boleta sí se puede levantar y sale sola cuando vuelva.',
+  'inspector.lookup.checking': 'Consultando la placa…',
   'inspector.lookup.plateLabel': 'Placa',
   'inspector.lookup.platePlaceholder': 'SJP123',
   'inspector.lookup.zoneLabel': 'Zona',

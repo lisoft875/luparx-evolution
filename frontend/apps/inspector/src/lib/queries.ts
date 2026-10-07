@@ -25,6 +25,7 @@ import {
   subscribeToZones,
   type KnownZone,
 } from './zoneDirectory';
+import { lastLookup, rememberLookup, subscribeToLastLookup, type LastLookup } from './lastLookup';
 
 /**
  * TanStack Query hooks over the inspector's v0.7 surface (CONTRACT.md §"API del fiscalizador").
@@ -124,8 +125,33 @@ export function usePlateLookup() {
         ...(status.coveringStay ? [status.coveringStay] : []),
         ...status.otherStays,
       ]);
+      /*
+        Y la respuesta misma, para el bloque «Última consulta» del inicio (07-10-2026).
+
+        Va acá, junto al aprendizaje de zonas, porque es el mismo gesto y por el mismo motivo: el
+        teléfono guarda lo que el servidor acaba de decirle. No hay endpoint de historial de
+        consultas —la bitácora de fiscalización se escribe pero no se publica de vuelta—, así que
+        ésta es la única fuente REAL para ese bloque. Ver ./lastLookup.
+      */
+      rememberLookup(tenantId, status);
     },
   });
+}
+
+/**
+ * Lo último que este aparato consultó en esta municipalidad, o `null`.
+ *
+ * <p>`useSyncExternalStore` y no un estado de React: el almacén vive fuera del árbol —lo escribe
+ * `usePlateLookup` al recibir la respuesta— y es el mismo mecanismo con el que la pantalla ya lee
+ * las zonas y la cola de boletas. Así el bloque se actualiza solo en cuanto llega un veredicto, sin
+ * que nadie tenga que acordarse de avisarle.</p>
+ */
+export function useLastLookup(): LastLookup | null {
+  const { activeTenant } = useAuth();
+  const tenantId = activeTenant?.id ?? null;
+  const subscribe = useCallback((listener: () => void) => subscribeToLastLookup(listener), []);
+  const getSnapshot = useCallback(() => lastLookup(tenantId), [tenantId]);
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }
 
 /**
