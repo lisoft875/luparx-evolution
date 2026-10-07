@@ -123,11 +123,22 @@
      `--lx-bg` (el mismo color que el contenido, o sea ninguna presencia) y la barra lateral usaba
      `--lx-surface` (el mismo color que las tarjetas, o sea una tarjeta gigante). */
   --lx-chrome: #0A1D2D;
-  /* Mismo valor que `surface` a propósito: su único uso es el fondo de la primera columna fija de
-     una tabla, que tiene que ser opaco y coincidir con el de la fila. Que fuera más oscuro hacía
-     que esa columna se leyera como una banda aparte. */
-  --lx-bg-elevated: #102033;
   --lx-surface: #102536;
+  /*
+    El fondo de las columnas fijas de una tabla: opaco, para tapar lo que pasa por debajo al
+    desplazar, y del MISMO color de la fila, porque si fuera más oscuro esa columna se leería como
+    una banda aparte.
+
+    Es `var(--lx-surface)` y no una copia de su valor. Lo era hasta el 07-10-2026 —decía
+    «mismo valor que surface a propósito» y tenía el hexadecimal escrito al lado— y en cuanto
+    `--lx-surface` se movió a la paleta nueva, los dos se separaron en silencio: las columnas fijas
+    de Tarifas, Funcionarios y Auditoría siguieron pintándose del color de ayer. Lo encontró el
+    arnés de paleta, que para eso tiene una lista de colores prohibidos.
+
+    La lección es del token, no del valor: dos tokens que DEBEN ser iguales se escriben uno en
+    función del otro. Un comentario que dice «mismo valor a propósito» no lo impone; `var()` sí.
+  */
+  --lx-bg-elevated: var(--lx-surface);
   --lx-surface-2: #142D40;
   /*
     06-10-2026: sube de #1A3047 a #183B56, que es el valor que pide la especificación del Inicio.
@@ -341,8 +352,9 @@
      blanco, que es el plano más alto. Queda escrito como token para que la cabecera y la barra
      lateral no tengan que nombrar `--lx-surface` —el color de las tarjetas— para conseguirlo. */
   --lx-chrome: #ffffff;
-  --lx-bg-elevated: #ffffff;
   --lx-surface: #ffffff;
+  /* Por lo mismo que en el tema oscuro: una referencia, no una copia. */
+  --lx-bg-elevated: var(--lx-surface);
   --lx-surface-2: #eef1f8;
   --lx-border: rgba(15, 23, 42, 0.09);
   --lx-text: #0b1220;

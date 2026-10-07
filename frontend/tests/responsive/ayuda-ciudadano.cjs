@@ -271,9 +271,24 @@ async function entrar(context) {
       await page.goto(`${BASE}/help/${categoria.clave}`, { waitUntil: 'domcontentloaded' });
       await page.waitForTimeout(1800);
       const antes = page.url();
+      /*
+        El reloj del documento, para distinguir la tercera clase de acción.
+
+        Hay tres: navegar, abrir el diagnóstico y RECARGAR. La primera versión de esto sólo
+        contemplaba las dos primeras, así que «La aplicación presenta un error» —cuya acción es
+        recargar— salió como botón muerto: no cambia la URL y no abre ningún diálogo. Hacía algo,
+        y era justo lo que tenía que hacer.
+
+        `performance.now()` cuenta desde que se creó el documento, así que si BAJA es que hay un
+        documento nuevo. Es el mismo truco con el que el Inicio comprueba lo contrario —que una
+        tarjeta NO recargue la aplicación— y acá sirve para comprobar que ésta sí.
+      */
+      const relojAntes = await page.evaluate(() => window.performance.now());
       await page.locator(`[data-opcion="${clave}"]`).first().click();
       await page.waitForTimeout(2000);
       const despues = page.url();
+      const relojDespues = await page.evaluate(() => window.performance.now());
+      const recargo = relojDespues < relojAntes;
       const dialogo = await page.getByRole('dialog').isVisible().catch(() => false);
       if (dialogo) {
         // La acción era el diagnóstico: que de verdad haya medido algo.
@@ -281,6 +296,8 @@ async function entrar(context) {
         comprobar(filas > 0, `«${categoria.clave}/${clave}» abre el diagnóstico con sus filas`, `${filas}`);
         await page.keyboard.press('Escape');
         await page.waitForTimeout(400);
+      } else if (recargo) {
+        comprobar(true, `«${categoria.clave}/${clave}» recarga la aplicación, que es su acción`);
       } else {
         const salioDeAyuda = !/\/help/.test(despues);
         const titulo = await page.evaluate(
