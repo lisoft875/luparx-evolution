@@ -4940,8 +4940,10 @@ a.lx-list-row {
 }
 
 @media (min-width: 1000px) {
-  /* 65/35 para analítica y 60/40 para operación. En una sola regla con variable para no repetir
-     el corte y que los dos bloques se muevan juntos el día que cambie. */
+  /* El reparto lo pone cada fila con su variable; esta regla sólo fija el corte, en un sitio, para
+     que los bloques se muevan juntos el día que cambie. Por omisión 65/35 (la fila de operación
+     baja a 60/40); la fila de analítica lo invierte a 58/42 desde el 08-10-2026, cuando la
+     ocupación pasó a ser la columna ancha y el gráfico de ingresos la angosta. */
   .lx-home-grid {
     grid-template-columns: minmax(0, var(--lx-home-grid-main, 65fr)) minmax(0, var(--lx-home-grid-side, 35fr));
   }
@@ -5007,13 +5009,22 @@ a.lx-list-row {
   margin: 0;
 }
 
-/* El nombre de la municipalidad y su fecha comparten línea de base. Apilados eran dos renglones;
-   al lado son uno, y la fecha se lee igual porque va a media luz y pegada al título. */
+/* El saludo y debajo dónde estás (reescrito el 08-10-2026).
+
+   Hasta hoy esto era una FILA: el nombre de la municipalidad como título y la fecha a su lado, en
+   la misma línea de base, con el argumento —bueno entonces— de que apilados eran dos renglones y
+   al lado uno. La referencia visual aprobada pide otra cosa y por eso la regla cambia: «Hola,
+   [nombre]» arriba y «Administración municipal · Escazú» debajo, con la fecha y la hora en su
+   propia columna a la derecha. Son dos renglones de nuevo, y los paga el alto que se recuperó al
+   sacar la franja de estado de este mismo bloque.
+
+   Un defecto real y mío: con la regla vieja los dos textos nuevos salían uno al lado del otro
+   —«Hola, Verónica Administración municipal · Escazú»— porque heredaban `display: flex` con
+   `align-items: baseline`. Detectado leyendo la hoja de estilos después de escribir el marcado. */
 .lx-home__title {
   display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--lx-space-1) var(--lx-space-3);
+  flex-direction: column;
+  gap: 2px;
   min-width: 0;
 }
 
@@ -5026,8 +5037,10 @@ a.lx-list-row {
   margin: 0;
 }
 
-/* Debajo de 900px el estado vuelve a su propio renglón: apretarlo contra el título deja los
-   cuatro indicadores partidos en cuatro líneas, que es más alto que tenerlos aparte. */
+/* La franja de estado de los servicios. Su colocación la define el bloque del 08-10-2026 al final
+   de esta hoja: desde entonces NO comparte renglón con el título —la sección 6 del documento de
+   referencia pide que los estados técnicos no dominen la cabecera— y vive al pie del tablero.
+   Esto es lo que queda de su forma: una fila que envuelve. */
 .lx-home__status {
   display: flex;
   flex-wrap: wrap;
@@ -5853,10 +5866,8 @@ a.lx-list-row {
   font-variant-numeric: tabular-nums;
 }
 @media (max-width: 520px) {
-  /* En un teléfono el reloj no vale una columna: el saludo manda y la fecha pasa debajo. */
-  .lx-home__top {
-    flex-wrap: wrap;
-  }
+  /* En un teléfono el reloj no vale una columna: el saludo manda y la fecha pasa debajo, alineada
+     con él. `.lx-home__top` ya envuelve de antes, así que acá sólo cambia la alineación. */
   .lx-home__clock {
     align-items: flex-start;
     text-align: left;
@@ -6144,4 +6155,30 @@ a.lx-list-row {
   display: flex;
   flex-wrap: wrap;
   gap: var(--lx-space-2);
+}
+
+/* ---- «Ver detalle ›»: el enlace del renglón del título, con su flecha (08-10-2026) -----------
+   `.lx-linklike` es `display: inline` con un subrayado punteado, y eso está bien para un enlace de
+   texto. Con un `<svg>` dentro —que es lo que pide la referencia— se rompe de dos maneras: el
+   icono se apoya en la línea de base y queda colgando por debajo del texto, y el punteado pasa
+   también por debajo del icono. Era un defecto mío, de este mismo cambio.
+
+   `inline-flex` alinea el icono con el centro de la mayúscula y el punteado se va: lo que marca
+   que esto se puede pulsar es el azul MÁS la flecha, así que no queda informando sólo por color. */
+.lx-linklike--go {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  border-bottom: 0;
+  color: var(--lx-primary);
+  font-size: var(--lx-text-meta-size);
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.lx-linklike--go > svg {
+  flex-shrink: 0;
+}
+.lx-linklike--go:hover {
+  color: var(--lx-primary-strong);
 }

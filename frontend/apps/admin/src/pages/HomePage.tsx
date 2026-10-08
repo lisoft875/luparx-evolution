@@ -86,24 +86,32 @@ function isoDate(date: Date): string {
 }
 
 /**
- * La portada del portal de administración (especificación v3, 23-09-2026).
+ * La portada del portal de administración (referencia visual exacta, 08-10-2026).
  *
- * <h2>Qué cambió respecto de la v2, y por qué no alcanzaba con «agregar datos»</h2>
+ * <h2>Qué compone esta pantalla, en orden</h2>
  *
- * <p>La v2 puso las cifras correctas en la pantalla y aun así se leía como la original: cuatro
- * tarjetas de texto plano en fila, un gráfico que desaparecía cuando no había recaudación, un vacío
- * de actividad que ocupaba media pantalla y los accesos en una columna de botones. Los datos
- * estaban; la composición no.</p>
+ * <p>Saludo con la fecha y la hora a la derecha; cuatro KPI —estacionamientos activos, usuarios
+ * registrados, multas emitidas e ingresos del día—; una fila con la ocupación en tiempo real
+ * (dónut y zonas) a lo ancho y los ingresos de la semana al lado; y una fila con la actividad
+ * reciente a la izquierda y, apilados a la derecha, los accesos rápidos y el ranking de zonas más
+ * utilizadas. El estado de los servicios cierra la página en un renglón.</p>
  *
- * <p>Lo que hace la v3 es estructura: cada métrica tiene icono y acento propios —se reconoce antes
- * de leerla—, la analítica y la operación viven en dos columnas de proporción distinta, la
- * actividad es un feed y los accesos una cuadrícula. El fondo, los tokens y los endpoints son los
- * mismos.</p>
+ * <h2>Por qué la composición y no la paleta</h2>
+ *
+ * <p>El encargo decía que la pantalla se percibía «demasiado azul-gris y uniforme» y pedía
+ * superficies «más oscuras y contrastadas». Eso se midió antes de tocar un hexadecimal: la propia
+ * referencia aprobada tiene una separación fondo↔superficie de 1.15, la MISMA que ya estaba
+ * desplegada. La sensación no venía del color sino del reparto —un gráfico de recaudación con el
+ * 65% del ancho, los estados técnicos encabezando la pantalla, cuatro KPI de los que uno no se
+ * podía abrir—, y es el reparto lo que cambió.</p>
  *
  * <h2>Las tres reglas que no se negocian</h2>
  *
- * <p><b>Ninguna cifra es inventada.</b> Los montos de la referencia visual —₡1.248.350, 342, 28,
- * 78%— no están en este archivo ni en ningún otro: cada número sale de su endpoint. El arnés
+ * <p><b>Ninguna cifra es inventada.</b> Los montos de la referencia visual —342, 8.524, 56,
+ * ₡1.428.500, 78%— no están en este archivo ni en ningún otro: cada número sale de su endpoint. Y
+ * donde no hay endpoint no hay número: el documento pide «dejar el bloque pendiente de integración
+ * en vez de simular producción», y por eso no existe acá ninguna tarjeta de las que la referencia
+ * dibuja sin que el servidor las sepa contestar. El arnés
  * `inicio-admin.cjs` lo comprueba en cada corrida.</p>
  *
  * <p><b>La variación sólo aparece si existe.</b> Se muestra en recaudación, donde hay un ayer con
@@ -502,7 +510,7 @@ export function HomePage(): React.JSX.Element {
                 <SectionHeader
                   title={t('admin.home.zones.title')}
                   aside={
-                    <Link to="/dashboard" className="lx-linklike">
+                    <Link to="/dashboard" className="lx-linklike lx-linklike--go">
                       {t('admin.home.occupancy.detail')}
                       <IconChevronRight size={14} />
                     </Link>
@@ -586,7 +594,7 @@ export function HomePage(): React.JSX.Element {
                   // lista: ahí cuesta 0px de alto en vez de 30, y queda al lado de lo que nombra.
                   aside={
                     eventos.length > 0 ? (
-                      <Link to="/audit" className="lx-linklike">
+                      <Link to="/audit" className="lx-linklike lx-linklike--go">
                         {t('admin.home.activity.seeAll')}
                         <IconChevronRight size={14} />
                       </Link>
@@ -645,7 +653,7 @@ export function HomePage(): React.JSX.Element {
                   <SectionHeader
                     title={t('admin.home.rank.title')}
                     aside={
-                      <Link to="/zones" className="lx-linklike">
+                      <Link to="/zones" className="lx-linklike lx-linklike--go">
                         {t('admin.home.rank.detail')}
                         <IconChevronRight size={14} />
                       </Link>

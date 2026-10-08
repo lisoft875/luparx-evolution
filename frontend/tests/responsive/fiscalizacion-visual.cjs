@@ -306,6 +306,85 @@ async function sinCortes(page, tamano) {
   }
 }
 
+/** El riel de avance de la boleta y la compacidad de Pendientes (pasos 6 y 7 del documento). */
+async function boletaYPendientes(page, tamano, ancho) {
+  await page.goto(`${BASE}/inspector/cite`, { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(1500);
+
+  const riel = await page.evaluate(() => {
+    const nodo = document.querySelector('.lx-step-track');
+    if (!nodo) return null;
+    const visible = (n) => Boolean(n) && getComputedStyle(n).display !== 'none';
+    const pasos = [...nodo.querySelectorAll('.lx-step-track__step')].map((p) => ({
+      texto: (p.querySelector('.lx-step-track__label')?.textContent || '').trim(),
+      estado: p.getAttribute('data-estado'),
+      actual: p.getAttribute('aria-current') === 'step',
+    }));
+    return {
+      nombreAccesible: nodo.getAttribute('aria-label') || '',
+      compactoVisible: visible(nodo.querySelector('.lx-step-track__compact')),
+      rielVisible: visible(nodo.querySelector('.lx-step-track__rail')),
+      compacto: (nodo.querySelector('.lx-step-track__compact-count')?.textContent || '').trim(),
+      pasos,
+    };
+  });
+
+  ok(riel !== null, `${tamano}: la boleta muestra su avance`);
+  if (riel) {
+    ok(riel.nombreAccesible.length > 0, `${tamano}: el indicador de avance tiene nombre accesible`);
+    ok(
+      riel.pasos.map((p) => p.texto).join(' · ') === 'Vehículo · Infracción · Evidencia · Revisar',
+      `${tamano}: los cuatro pasos son los del documento`,
+      riel.pasos.map((p) => p.texto).join(' · '),
+    );
+    ok(
+      riel.pasos.filter((p) => p.actual).length === 1,
+      `${tamano}: exactamente un paso queda marcado como el actual`,
+    );
+    // Una presentación o la otra, nunca las dos: el documento pide riel en tablet y «Paso X de 4»
+    // en celular, y dos indicadores a la vez serían dos respuestas a la misma pregunta.
+    const esTablet = ancho >= 768;
+    ok(
+      riel.rielVisible === esTablet && riel.compactoVisible === !esTablet,
+      `${tamano}: se ve ${esTablet ? 'el riel horizontal' : 'el renglón «Paso X de 4»'} y sólo ése`,
+      `riel=${riel.rielVisible} compacto=${riel.compactoVisible}`,
+    );
+    if (!esTablet) {
+      ok(/^Paso \d+ de 4$/.test(riel.compacto), `${tamano}: el renglón dice «Paso X de 4»`, `«${riel.compacto}»`);
+    }
+  }
+
+  // Pendientes: la fila compacta no puede volver a ser una ficha. Se mide el alto de la fila, que
+  // es lo que el documento pide («listas compactas»), y sólo cuando hay algo en cola.
+  await page.goto(`${BASE}/inspector/queue`, { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(1500);
+  const cola = await page.evaluate(() => {
+    const filas = [...document.querySelectorAll('.lx-queue-item')];
+    return {
+      cuantas: filas.length,
+      vacio: Boolean(document.querySelector('.lx-empty-state')),
+      altos: filas.map((f) => Math.round(f.getBoundingClientRect().height)),
+      desplegables: filas.filter((f) => f.querySelector('details')).length,
+      // El resumen del desplegable tiene que ser tocable: es un control.
+      resumenes: [...document.querySelectorAll('.lx-queue-item__more > summary')].map((s) =>
+        Math.round(s.getBoundingClientRect().height),
+      ),
+    };
+  });
+  ok(cola.cuantas > 0 || cola.vacio, `${tamano}: Pendientes muestra la cola o su estado vacío`);
+  if (cola.cuantas > 0) {
+    const altas = cola.altos.filter((a) => a > 200);
+    ok(altas.length === 0, `${tamano}: ninguna fila de la cola vuelve a ser una ficha`, `altos: ${cola.altos.join(', ')}`);
+    ok(
+      cola.desplegables === cola.cuantas,
+      `${tamano}: cada fila conserva lo técnico en su desplegable`,
+      `${cola.desplegables} de ${cola.cuantas}`,
+    );
+    const chicos = cola.resumenes.filter((h) => h < 44);
+    ok(chicos.length === 0, `${tamano}: el desplegable se puede tocar`, `altos: ${cola.resumenes.join(', ')}`);
+  }
+}
+
 (async () => {
   const navegador = await chromium.launch();
   const context = await navegador.newContext({ viewport: TAMANOS[1] });
@@ -323,6 +402,7 @@ async function sinCortes(page, tamano) {
       path: `tests/responsive/capturas/fiscalizacion-${tamano.width}x${tamano.height}.png`,
       fullPage: true,
     });
+    await boletaYPendientes(page, tamano.nombre, tamano.width);
   }
 
   await navegador.close();
