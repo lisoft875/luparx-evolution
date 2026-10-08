@@ -231,138 +231,22 @@ async function estadoDeLaCabecera(page) {
   }
 
   // ===============================================================================================
-  // AYUDA — las cinco opciones llevan a algún lado
+  // AYUDA — el bloque de las cinco opciones se fue (08-10-2026)
   // ===============================================================================================
-  console.log('── Ayuda: cada tarjeta es la acción ──');
-  const OPCIONES = [
-    { titulo: 'Si te quedás sin señal', destino: null },
-    { titulo: 'Consultar una placa', destino: /\/inspector\/?$/ },
-    { titulo: 'Levantar una boleta', destino: /\/cite/ },
-    { titulo: 'Fotos y evidencia', destino: /\/cite/ },
-    { titulo: 'Pendientes', destino: /\/queue/ },
-    // La sexta, del 06-10-2026: no lleva a una ruta, abre el diagnóstico de la aplicación.
-    { titulo: 'Diagnóstico de la aplicación', destino: null, diagnostico: true },
-  ];
+  /*
+    Acá vivía el recorrido de las cinco tarjetas de la Ayuda vieja: se pulsaba cada una, se
+    comprobaba a qué ruta llevaba y que la pantalla de destino tuviera su título.
 
-  for (const opcion of OPCIONES) {
-    await page.goto(`${BASE}/inspector/help`, { waitUntil: 'domcontentloaded' });
-    await page.waitForTimeout(2200);
+    Se borra porque esas tarjetas ya no existen. El encargo de reestructuración las quitó —las
+    cuatro llevaban a destinos que la barra inferior ya tiene— y lo que ahora hay que comprobar es
+    lo contrario: que NO estén. Eso se mide más abajo, en el bloque «Ayuda: cuatro accesos», junto
+    con que los cuatro paneles abran contenido real.
 
-    const tarjeta = page.getByRole('button').filter({ hasText: opcion.titulo }).first();
-    if ((await tarjeta.count()) === 0) {
-      comprobar(false, `«${opcion.titulo}» está en Ayuda y se puede pulsar`, 'no se encontró la tarjeta');
-      continue;
-    }
-    comprobar(true, `«${opcion.titulo}» es un botón, no un párrafo`);
-    await tarjeta.click();
-    await page.waitForTimeout(1800);
-
-    if (opcion.destino === null) {
-      // El prompt pide un panel breve, NO una pantalla nueva.
-      const dialogo = page.getByRole('dialog');
-      const abierto = await dialogo.isVisible().catch(() => false);
-      comprobar(abierto, '  abre un panel corto y no una pantalla nueva');
-      if (abierto && opcion.diagnostico) {
-        /*
-          La sexta opción ya no es un triaje: MIDE. Lo que hay que comprobar, entonces, no es que
-          estén las siete filas de antes —esas eran el defecto— sino tres cosas distintas:
-
-            1. que diga el estado de las seis comprobaciones del PDF;
-            2. que NO vuelva a ofrecer «Consultar una placa», «Levantar una boleta», «Fotos y
-               evidencia» ni «Pendientes», que es literalmente lo que §4 prohíbe;
-            3. que con todo en orden no haya ni un botón de recuperación. Ésta es la que de verdad
-               distingue un diagnóstico de otra lista de accesos, y la que se rompería primero si
-               alguien «mejorara» la pantalla agregándole un botón fijo.
-        */
-        await page.waitForSelector('.lx-diag__row', { timeout: 8000 }).catch(() => {});
-        const filas = await page.$$eval('.lx-diag__row', (nodos) =>
-          nodos.map((n) => ({
-            clave: n.getAttribute('data-check'),
-            tono: n.getAttribute('data-tono'),
-            accion: n.getAttribute('data-accion'),
-            texto: (n.textContent ?? '').replace(/\s+/g, ' ').trim(),
-            botones: n.querySelectorAll('button').length,
-          })),
-        );
-        const ESPERADAS = ['connection', 'sync', 'session', 'camera', 'location', 'app'];
-        comprobar(
-          filas.map((f) => f.clave).join(',') === ESPERADAS.join(','),
-          '    diagnostica las seis cosas del PDF, en su orden',
-          filas.map((f) => f.clave).join(',') || 'no se pintó ninguna fila',
-        );
-
-        const textoPanel = (await dialogo.textContent().catch(() => '')) ?? '';
-        for (const repetida of ['Consultar una placa', 'Levantar una boleta', 'Fotos y evidencia']) {
-          comprobar(!textoPanel.includes(repetida), `    ya no repite «${repetida}»`);
-        }
-        // Los títulos de arriba y también las acciones cortas del 07-10: si alguna reaparece acá,
-        // el diagnóstico volvió a ser un menú.
-        comprobar(
-          !/Ver pendientes|Consultar placa|Levantar boleta|Ver evidencia/.test(textoPanel),
-          '    y no quedó ningún acceso de los de Ayuda',
-          textoPanel.slice(0, 200),
-        );
-
-        /*
-          Con conexión y la cola al día, el panel no ofrece ni un REMEDIO. La distinción es del
-          07-10: un botón de «Permitir la ubicación» no es un botón de recuperación —no hay nada
-          que recuperar— sino la oportunidad de conceder un permiso que todavía no se dio, y en el
-          navegador del arnés ése es el estado normal. Contar «botones» a secas haría fallar la
-          comprobación por lo único que el diagnóstico tiene derecho a ofrecer estando sano.
-        */
-        const problemas = filas.filter((f) => f.tono !== 'ok');
-        const remedios = filas.filter((f) => f.accion === 'remedio').length;
-        if (problemas.length === 0) {
-          comprobar(
-            remedios === 0 && /Todo está funcionando correctamente/.test(textoPanel),
-            '    todo en orden: lo dice y no muestra ni un botón de recuperación',
-            `${remedios} remedio(s); resumen: ${textoPanel.slice(0, 120)}`,
-          );
-        } else {
-          // El entorno llegó con algo pendiente: entonces lo que toca comprobar es lo contrario,
-          // que el problema traiga su acción y las filas sanas sigan sin botones.
-          const sanasConRemedio = filas.filter((f) => f.tono === 'ok' && f.accion === 'remedio').length;
-          comprobar(
-            sanasConRemedio === 0,
-            '    las comprobaciones en orden no muestran botones de recuperación',
-            `${sanasConRemedio} fila(s) correctas con remedio`,
-          );
-          console.log(`  ·       el entorno trae ${problemas.map((f) => f.clave).join(', ')} con aviso; se verifican abajo`);
-        }
-        await page.keyboard.press('Escape');
-        await page.waitForTimeout(400);
-      } else if (abierto) {
-        const texto = (await dialogo.textContent()) ?? '';
-        comprobar(
-          /conexión|sin conexión|sincroniz/i.test(texto),
-          '  y dice el estado de la conexión y de lo que está esperando',
-          texto.slice(0, 140),
-        );
-        await page.keyboard.press('Escape');
-        await page.waitForTimeout(400);
-      }
-    } else {
-      comprobar(
-        opcion.destino.test(page.url()),
-        `  lleva a la ruta que ya existía (${page.url().replace(BASE, '')})`,
-      );
-      const contenido = await page.evaluate(() => ({
-        titulo: (document.querySelector('h1')?.textContent ?? '').trim(),
-        largo: (document.body.textContent ?? '').trim().length,
-        barra: document.querySelectorAll('.lx-bottom-tab-bar').length,
-      }));
-      // Contar caracteres era el criterio equivocado, y el 02-10-2026 lo demostró: «Pendientes»
-      // con la cola al día son 116 caracteres —el título y «no hay nada esperando»— y eso NO es
-      // una pantalla vacía, es la buena noticia. Lo que de verdad hay que comprobar es que la
-      // ruta pintó su propia pantalla y no un hueco: que tiene su título.
-      comprobar(
-        contenido.titulo.length > 0,
-        `  y la pantalla de destino es la suya («${contenido.titulo}»)`,
-        `sin <h1>; ${contenido.largo} caracteres en total`,
-      );
-      comprobar(contenido.barra === 1, '  con la navegación inferior intacta', `${contenido.barra} barra(s)`);
-    }
-  }
+    Vale la pena anotar un falso APROBADO que este bloque daba y que sólo se vio al quitarlo: su
+    comprobación de «Pendientes» buscaba un botón por su texto en toda la página, y pasaba
+    encontrando la PESTAÑA «Pendientes» de la barra inferior. Medía la barra creyendo medir la
+    Ayuda. El bloque nuevo busca dentro de las filas de la pantalla, no en todo el documento.
+  */
 
   // ===============================================================================================
   // DIAGNÓSTICO — los dos problemas que sí se pueden provocar
@@ -410,15 +294,18 @@ async function estadoDeLaCabecera(page) {
       JSON.stringify(cabecera),
     );
     comprobar(cabecera.tactil >= 44, '  con su blanco táctil de 44px', `${cabecera.tactil}px`);
-    /* Con señal, «En línea» ya no vive en la barra sino junto al saludo del inicio (08-10-2026):
-       en Ayuda, que es una pantalla de detalle, no hay indicador y es correcto que no haya. Lo que
-       esta línea cuida sigue siendo lo mismo —que no se duplique— sólo que el número esperado es
-       cero. El reparto completo lo mide `barras-fijas.cjs`. */
-    comprobar(cabecera.enLinea === 0, '  y «En línea» no se duplica acá', `encontré ${cabecera.enLinea}`);
+    /* Una, y en la barra (08-10-2026, tarde).
+
+       Esta línea esperó una, luego cero, y vuelve a una. El reparto final es por si la pantalla
+       tiene SALUDO: el inicio lo lleva en el saludo, y Ayuda —que no tiene— lo lleva en la barra
+       fija, que es lo que pide el punto 10 del encargo de reestructuración. Lo que esta línea
+       cuida es lo de siempre: que haya exactamente uno, ni cero ni dos. El reparto completo lo
+       mide `barras-fijas.cjs`. */
+    comprobar(cabecera.enLinea === 1, '  y «En línea» está una sola vez', `encontré ${cabecera.enLinea}`);
     comprobar(cabecera.cabeceras === 1, '  sin una segunda cabecera', `${cabecera.cabeceras}`);
 
     // Con el diagnóstico abierto: el modal no reemplaza el header.
-    await page.getByRole('button').filter({ hasText: 'Diagnóstico de la aplicación' }).first().click();
+    await page.locator('.lx-list-row').filter({ hasText: 'Diagnóstico' }).first().click();
     await page.waitForSelector('.lx-diag__row', { timeout: 8000 }).catch(() => {});
     const conModal = await page.evaluate(() => ({
       campanas: document.querySelectorAll('.lx-app-bar__icon-btn').length,
@@ -559,7 +446,7 @@ async function estadoDeLaCabecera(page) {
       await p.goto(`${BASE}/inspector/help`, { waitUntil: 'domcontentloaded' });
       await p.waitForTimeout(2200);
     }
-    await p.getByRole('button').filter({ hasText: 'Diagnóstico de la aplicación' }).first().click();
+    await p.locator('.lx-list-row').filter({ hasText: 'Diagnóstico' }).first().click();
     await p.waitForSelector('.lx-diag__row', { timeout: 8000 }).catch(() => {});
     await p.waitForTimeout(400);
     return p.$$eval('.lx-diag__row', (nodos) =>
@@ -699,7 +586,7 @@ async function estadoDeLaCabecera(page) {
     const p2 = await ctx.newPage();
     await p2.goto(`${BASE}/inspector/help`, { waitUntil: 'domcontentloaded' });
     await p2.waitForTimeout(2200);
-    await p2.getByRole('button').filter({ hasText: 'Diagnóstico de la aplicación' }).first().click();
+    await p2.locator('.lx-list-row').filter({ hasText: 'Diagnóstico' }).first().click();
     await p2.waitForSelector('.lx-diag__row', { timeout: 8000 }).catch(() => {});
     await p2.waitForTimeout(500);
     const medida = await p2.evaluate(() => {
