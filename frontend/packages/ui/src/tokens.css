@@ -2573,6 +2573,23 @@ a.lx-list-row {
   width: 24px;
   height: 24px;
 }
+/* El DIBUJO, no la caja (08-10-2026). Acá estaba el defecto: estos 24px son del `span` que
+   envuelve el icono, y el `<svg>` de dentro venía a 20px —el valor por omisión de `iconFactory`—,
+   así que la barra tenía cinco iconos de 20 en cajas de 24. La especificación pide «icono 22-24
+   px» y `fiscalizacion-visual.cjs` lo midió: 20px en los cinco destinos y en los cinco tamaños.
+
+   22 y no 24: la insignia de pendientes se dibuja en `top: -4px; right: -8px` respecto de esta
+   caja de 24, y un dibujo que toca los bordes la deja encima de sus propios trazos. Con 22 queda
+   un píxel de aire por lado y el número se lee entero.
+
+   Se fija acá y no en las cinco llamadas de `InspectorShell`: el tamaño de un icono de navegación
+   es una decisión del sistema visual, y repartida en cinco `size={22}` la próxima persona cambia
+   cuatro y se le escapa uno. Es el mismo criterio con el que `.lx-nav-link__icon svg` lo fija para
+   el menú lateral. */
+.lx-bottom-tab-bar__icon svg {
+  width: 22px;
+  height: 22px;
+}
 .lx-bottom-tab-bar__icon {
   position: relative;
 }

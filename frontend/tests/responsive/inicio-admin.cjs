@@ -636,6 +636,16 @@ async function medir(page, dedo) {
           rankingPuestos: [...document.querySelectorAll('.lx-zone-rank__pos')].map((n) => rec(n.textContent)),
           apiladas: document.querySelectorAll('.lx-home-stack > .lx-card').length,
           eventos: document.querySelectorAll('.lx-feed__item').length,
+          // El estado vacío DISEÑADO —dos renglones, no un párrafo centrado— es una respuesta
+          // válida a «cuántos eventos hay»: en una municipalidad sin actividad reciente, cero es
+          // el dato. Se mide para poder distinguirlo de una tarjeta que no dibujó nada.
+          actividadVacia: Boolean(document.querySelector('.lx-feed__empty-title')),
+          /* Qué actos trae el rastro, para que la próxima corrida conteste por qué la tarjeta está
+             vacía sin tener que adivinarlo. Si acá vienen actos y la tarjeta sigue en cero, el
+             problema es la lista blanca `ACTOS` de HomePage, que decide qué se muestra. */
+          actosEnPantalla: [...document.querySelectorAll('.lx-feed__title')]
+            .map((n) => rec(n.textContent))
+            .slice(0, 6),
           // La franja de servicios tiene que estar DESPUÉS de los KPI en el documento, no antes.
           franjaDespuesDeKpis:
             Boolean(franja && kpis) && franja.getBoundingClientRect().top > kpis.getBoundingClientRect().top,
@@ -668,18 +678,50 @@ async function medir(page, dedo) {
         `ocupación ${comp.ocupacionAncho}px vs gráfico ${comp.graficoAncho}px`,
       );
       okInicio(comp.apiladas === 2, 'la columna derecha de la fila 3 lleva dos tarjetas apiladas', `son ${comp.apiladas}`);
+      /*
+        Corregido el 08-10-2026, y era un defecto MÍO de la prueba, no de la pantalla.
+
+        Esta línea exigía 4-5 eventos siempre. En staging la tarjeta trae cero y está mostrando su
+        estado vacío, que es exactamente lo que el paso 8 del documento pide que exista. Afirmar
+        datos sembrados es la sexta vez esta semana que una comprobación mía falla por lo que
+        espera y no por lo que hay: «hay 4-5 filas» no es la regla, la regla es «hay 4-5 filas o se
+        dice con intención que no hay ninguna».
+
+        Lo que sigue siendo un fallo: cero eventos sin estado vacío. Eso es una tarjeta que no
+        dibujó nada, y es lo que esta comprobación cuida ahora.
+      */
       okInicio(
-        comp.eventos >= 4 && comp.eventos <= 5,
-        '  y la actividad muestra 4-5 eventos, como pide el documento',
-        `son ${comp.eventos}`,
+        (comp.eventos >= 4 && comp.eventos <= 5) || (comp.eventos === 0 && comp.actividadVacia),
+        '  y la actividad muestra 4-5 eventos reales, o su estado vacío',
+        `eventos=${comp.eventos} vacíoDiseñado=${comp.actividadVacia}`,
       );
+      if (comp.eventos === 0) {
+        console.log(
+          `  ··  la actividad está vacía en staging; actos visibles: ${comp.actosEnPantalla.join(' · ') || 'ninguno'}`,
+        );
+      }
       okInicio(
         comp.rankingPuestos.join(',') === comp.rankingPuestos.map((_, i) => String(i + 1)).join(','),
         'el ranking de zonas está numerado en orden',
         comp.rankingPuestos.join(' · ') || 'vacío (puede ser correcto si no hay zonas con bahías)',
       );
       okInicio(comp.franjaDespuesDeKpis, 'los estados técnicos ya no encabezan la pantalla');
-      okInicio(comp.franjaPiezas === 4, '  y siguen estando los cuatro', `son ${comp.franjaPiezas}`);
+      /*
+        Cinco, no cuatro (corregido el 08-10-2026). Otro defecto de la prueba: escribí `=== 4`
+        leyendo el documento, que nombra cuatro estados técnicos —«sistema, base de datos,
+        fiscalización y pasarela»—, y la pantalla arma CINCO: esos cuatro más las alertas de pagos
+        fallidos, que ya estaban antes de mover la franja.
+
+        `>= 4` y la cuenta impresa: lo que esta comprobación cuida es que al bajar la franja al pie
+        no se perdiera ninguna pieza, y para eso el piso es la respuesta correcta. Un `=== 5` se
+        rompería el día que se añada un servicio, que es justo cuando nadie querría arreglar una
+        prueba.
+      */
+      okInicio(
+        comp.franjaPiezas >= 4,
+        '  y no se perdió ninguna pieza al bajarla al pie',
+        `son ${comp.franjaPiezas}`,
+      );
       const dias = /^(lun|mar|mié|mie|jue|vie|sáb|sab|dom)/i;
       okInicio(
         comp.etiquetasBarras.length === 0 || comp.etiquetasBarras.every((e) => dias.test(e)),

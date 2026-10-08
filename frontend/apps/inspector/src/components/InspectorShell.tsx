@@ -71,6 +71,31 @@ export function InspectorShell({
   // empty on a device that has already worked a shift.
   useZoneDirectorySeed();
 
+  /*
+    Al cambiar de pantalla, arriba (08-10-2026).
+
+    `barras-fijas.cjs` lo encontró: con la pantalla desplazada al fondo y tocando un destino de la
+    barra inferior, la pantalla nueva aparecía a `scrollY=183` — a media altura, con su título
+    fuera de la vista. React Router no reposiciona el desplazamiento al navegar, y el navegador
+    conserva el que tenía.
+
+    No es una regresión de esta tanda, y conviene decirlo con precisión: el defecto estaba desde
+    siempre y lo que cambió es que ahora SE VE. Antes la pantalla de destino era más corta que el
+    desplazamiento heredado, así que el navegador lo recortaba a cero y parecía correcto; la
+    pantalla de inicio creció —saludo, cuatro tarjetas con ayuda, consulta rápida y última
+    consulta— y 183 pasó a ser una posición válida.
+
+    Por `pathname` y no por la ubicación completa: cambiar un parámetro de búsqueda en la misma
+    pantalla —un filtro, por ejemplo— no es llegar a otra parte y no debería mover la vista.
+
+    No se pierde ninguna restauración: hoy no hay ninguna. React Router no la hace, así que esto no
+    reemplaza a nada. El día que se quiera recordar la posición al volver atrás, el sitio de esa
+    decisión es éste.
+  */
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [location.pathname]);
+
   // The bottom bar is fixed, so it reserves no space in flow; its height is measured and applied as
   // the main region's bottom padding so it can never cover the last row of a list.
   const footerRef = useRef<HTMLDivElement>(null);

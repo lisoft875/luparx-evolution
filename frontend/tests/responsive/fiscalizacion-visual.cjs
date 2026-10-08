@@ -203,9 +203,22 @@ async function pantallaInicial(page, tamano, ancho) {
   });
 
   ok(Boolean(vista.saludo) && /^hola,/i.test(vista.saludo), `${tamano}: el saludo encabeza la pantalla`, `«${vista.saludo}»`);
+  /*
+    24-30, y el margen de arriba tiene nombre (08-10-2026).
+
+    La tabla del documento pide 24-28px en celular y 24-30 en tablet. Medido en staging da 30 en
+    los cinco tamaños, también en el teléfono: dos píxeles por encima de lo que pide la tabla para
+    celular. No es un descuido — es `:root[data-density='outdoor']`, que el portal del fiscalizador
+    activa y que sube el título de pantalla de 28 a 30 para que se lea de pie y al sol. Esa decisión
+    es anterior a este documento y persigue el mismo objetivo que su tabla, así que gana ella.
+
+    Se deja escrito en vez de sólo ensanchar el rango: una prueba que acepta 24-30 sin decir por
+    qué esconde la pregunta, y dentro de un mes nadie sabe si los 30px son la densidad de exteriores
+    o una regla que se escapó.
+  */
   ok(
     vista.saludoPx >= 24 && vista.saludoPx <= 30,
-    `${tamano}: el saludo mide ${vista.saludoPx}px (el documento pide 24-28, 24-30 en tablet)`,
+    `${tamano}: el saludo mide ${vista.saludoPx}px (24-28 por tabla; 30 con densidad de exteriores)`,
   );
   ok(Number(vista.saludoPeso) >= 700, `${tamano}: el saludo va en peso 700`, `peso=${vista.saludoPeso}`);
   ok(/^fiscalización/i.test(vista.donde ?? ''), `${tamano}: debajo dice «Fiscalización · municipalidad»`, `«${vista.donde}»`);
