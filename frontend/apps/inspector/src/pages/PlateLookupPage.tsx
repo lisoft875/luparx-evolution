@@ -144,6 +144,24 @@ export function PlateLookupPage(): React.JSX.Element {
               : t('inspector.home.where.noTenant')}
           </p>
         </div>
+        {/*
+          La ficha verde de «En línea», junto al saludo, como en la referencia aprobada
+          (08-10-2026).
+
+          SÓLO cuando hay señal, y eso es el reparto con la barra superior, no un descuido. Con
+          señal, «En línea» es una confirmación: vive acá, donde la referencia la pone, y si se va
+          al desplazarse no se pierde nada porque no había nada que decidir. Sin señal es una
+          ADVERTENCIA —un fiscalizador que no lo sabe da por presentada una boleta que está en el
+          teléfono—, y entonces la dibuja la barra fija, que no se va de la pantalla y está en
+          todas. Ver la nota larga en InspectorShell.
+
+          Nunca las dos a la vez: un solo indicador en pantalla.
+        */}
+        {online ? (
+          <Badge className="lx-inspector-greeting__state" tone="success">
+            {t('inspector.home.online')}
+          </Badge>
+        ) : null}
       </header>
 
       {/*

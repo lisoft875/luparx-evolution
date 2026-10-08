@@ -254,32 +254,38 @@ export function InspectorShell({
                 ]
           }
           end={
-            /* Nunca el color solo: la insignia lleva la palabra además del tono.
+            /*
+              El estado de conexión, resuelto en dos sitios y no en uno (08-10-2026).
 
-               Y lleva SÓLO la palabra. Antes decía «Sin conexión · 3 pendientes» porque tenía una
-               franja de 320px de ancho para ella sola; en la esquina de una barra que ya carga el
-               logo y la municipalidad, esa frase no cabe en un teléfono de 320px sin recortarse a
-               «Sin conexión · 3 pend…», y un recuadro recortado en la esquina es justo el defecto
-               que el PDF pide no reintroducir. El recuento no se pierde: la pestaña «Pendientes»
-               lo lleva como número desde siempre (`badgeCount`, más abajo), que es un sitio donde
-               cabe y donde además se puede tocar para ir a verlas. */
-            <Badge
-              /* El gancho estable para medir desde fuera: una sola insignia de conexión en la
-                 pantalla, y dentro de la barra. Buscarla por su texto obligaría a las pruebas a
-                 conocer las traducciones.
+              Hubo un choque real entre dos encargos. El del 06-10 pidió «En línea» arriba a la
+              derecha y se hizo; la referencia visual del 07-10 lo dibuja junto al saludo, en la
+              pantalla de inicio. Los dos tienen razón en algo distinto, y por eso no se elige: se
+              parte por lo que cada caso necesita.
 
-                 Compacta y sin icono desde que la fila tiene campana (06-10-2026). El icono estaba
-                 cuando esta insignia tenía una franja entera para ella sola; en una esquina que
-                 ahora también lleva un botón de 44px son 20px que se pagan con el nombre de la
-                 municipalidad. Medido: con el icono, a 390px ese nombre quedaba en 34px y a 430 con
-                 «M. de Oca» en 39. La palabra es lo que dice el estado —el tono nunca viaja solo— y
-                 es exactamente la misma decisión que el Ciudadano ya tomó por el mismo motivo. */
-              className="lx-connection-badge lx-connection-badge--compact"
-              tone={online ? 'success' : 'warning'}
-            >
-              {online ? t('inspector.home.online') : t('inspector.offline.badge')}
-            </Badge>
-          }
+              Cuando hay señal, «En línea» es una confirmación. Vive junto al saludo, que es donde
+              la referencia la pone y donde se lee al entrar; si se va al desplazarse no se pierde
+              nada, porque no había nada que decidir.
+
+              Cuando NO hay señal, es una advertencia, y cambia de naturaleza: un fiscalizador que
+              no sabe que está sin señal da por presentada una boleta que todavía está en el
+              teléfono. Esa advertencia tiene que estar en todas las pantallas y no puede
+              desplazarse fuera de la vista, así que aparece acá, en la barra fija.
+
+              Y nunca las dos a la vez: sin señal, la pantalla de inicio no dibuja su ficha. Un solo
+              indicador en pantalla, que es lo que el encargo del 06-10 pedía al quitar la franja
+              duplicada.
+            */
+            !online ? (
+              <Badge
+                /* El mismo gancho estable para medir desde fuera: buscarla por su texto obligaría
+                   a las pruebas a conocer las traducciones. */
+                className="lx-connection-badge lx-connection-badge--compact"
+                tone="warning"
+              >
+                {t('inspector.offline.badge')}
+              </Badge>
+            ) : undefined
+                    }
         />
       </div>
       {/*

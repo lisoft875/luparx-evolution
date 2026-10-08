@@ -6240,3 +6240,10 @@ a.lx-list-row {
 .lx-app-bar--inspector {
   min-height: 64px;
 }
+
+/* La ficha de «En línea» junto al saludo del fiscalizador: no se encoge y no se parte, porque es
+   dos palabras y el saludo de al lado ya tiene `min-width: 0` para ceder él. */
+.lx-inspector-greeting__state {
+  flex-shrink: 0;
+  white-space: nowrap;
+}

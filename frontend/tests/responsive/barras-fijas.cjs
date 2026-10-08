@@ -78,9 +78,24 @@ const PORTALES = {
       a quedar al borde: lo que mide es que esté dentro del grupo derecho, que es verdad en los dos
       casos. Una regla que vale para los dos estados es mejor que dos reglas que hay que mantener.
     */
-    conexion: 'grupo',
-    // En Fiscalización la insignia va en TODAS, también en las de detalle con flecha: el estado de
-    // conexión es el motivo por el que la barra existe para quien está de pie poniendo una boleta.
+    /*
+      `solo-sin-senal` desde el 08-10-2026, y hay que contar por qué, porque es el tercer criterio
+      que tiene esta línea en cuatro días.
+
+      El encargo del 06-10 pidió un único «En línea» arriba a la derecha y así se midió. La
+      referencia visual del 07-10 lo dibuja junto al saludo, en el inicio. Los dos tienen razón en
+      algo distinto, así que la implementación se partió por lo que cada caso necesita: con señal,
+      «En línea» es una CONFIRMACIÓN y vive junto al saludo —donde la referencia la pone, y donde
+      si se desplaza no se pierde nada—; sin señal es una ADVERTENCIA, porque quien no lo sabe da
+      por presentada una boleta que está en el teléfono, y entonces vive en la barra fija, en todas
+      las pantallas.
+
+      Lo que este arnés exige, por tanto: con señal, NINGUNA insignia en la barra del fiscalizador
+      y exactamente una ficha junto al saludo; sin señal, la insignia en la barra. Y nunca las dos
+      a la vez — un solo indicador en pantalla, que es lo que el 06-10 pedía al borrar la franja
+      duplicada.
+    */
+    conexion: 'solo-sin-senal',
     conexionSoloRaiz: false,
     pantallas: [
       { ruta: '/', nombre: 'Consulta' },
@@ -304,6 +319,10 @@ async function medir(page) {
       conexion: caja(document.querySelector('.lx-connection-badge')),
       conexionAlcanzable: alcanzable(document.querySelector('.lx-connection-badge')),
       conexionEnBarra: Boolean(document.querySelector('.lx-connection-badge')?.closest('.lx-app-bar')),
+      // La ficha verde junto al saludo del fiscalizador (08-10-2026): el otro sitio donde el estado
+      // de conexión puede estar, y el único cuando hay señal.
+      estadoEnSaludo: document.querySelectorAll('.lx-inspector-greeting__state').length,
+      estadoEnSaludoAlcanzable: alcanzable(document.querySelector('.lx-inspector-greeting__state')),
       grupoDerecho: caja(document.querySelector('.lx-app-bar__end')),
       // Primera del grupo derecho: con campana, significa que la campana queda a su derecha y nada
       // más entre las dos.
@@ -373,7 +392,34 @@ function revisar(etiqueta, arriba, abajo, exigeCabecera, conexion, soloRaiz = fa
     `${etiqueta} · la segunda franja de «En línea» no existe en el árbol`,
     `quedan ${arriba.franjaVieja} .lx-inspector-status-bar — esconderla con CSS no cuenta`,
   );
-  const exigeConexion = conexion !== 'no' && arriba.barras === 1 && !(soloRaiz && arriba.tieneVolver);
+  /*
+    El fiscalizador con señal: la insignia NO va en la barra, y es correcto que no esté.
+
+    Se comprueba lo contrario de lo que se comprobaba —que no haya ninguna— más lo que sí tiene que
+    haber: la ficha junto al saludo, en la pantalla de inicio, legible. En las otras pantallas del
+    portal no hay indicador con señal, y tampoco hace falta: no hay nada que decidir mientras la
+    boleta sale sola.
+  */
+  if (conexion === 'solo-sin-senal') {
+    comprobar(
+      arriba.conexiones === 0,
+      `${etiqueta} · con señal no hay insignia de conexión en la barra fija`,
+      `encontré ${arriba.conexiones}`,
+    );
+    if (etiqueta.includes('Consulta')) {
+      comprobar(
+        arriba.estadoEnSaludo === 1,
+        `${etiqueta} · y el estado está junto al saludo, como la referencia`,
+        `encontré ${arriba.estadoEnSaludo}`,
+      );
+      comprobar(
+        arriba.estadoEnSaludoAlcanzable === true,
+        `${etiqueta} · y se puede leer, no está tapado`,
+      );
+    }
+  }
+  const exigeConexion =
+    conexion !== 'no' && conexion !== 'solo-sin-senal' && arriba.barras === 1 && !(soloRaiz && arriba.tieneVolver);
   if (soloRaiz && arriba.tieneVolver) {
     dato(`${etiqueta} · pantalla de detalle: la insignia de conexión no va acá, por diseño`);
   }

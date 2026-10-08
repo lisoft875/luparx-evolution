@@ -152,7 +152,20 @@ async function medirCabecera(page) {
     }
     const etiqueta = `${tam.nombre} ${tam.width}px`;
     comprobar(m.campanas === 1, `${etiqueta} · una campana, y una sola`, `encontré ${m.campanas}`);
-    comprobar(m.conexiones === 1, `${etiqueta} · y un solo «En línea»`, `encontré ${m.conexiones}`);
+    /*
+      Con señal, CERO insignias en la barra (08-10-2026).
+
+      Esta línea exigía una. El reparto cambió: con señal el estado vive junto al saludo del inicio
+      —donde lo pone la referencia visual aprobada— y la barra fija lo dibuja sólo cuando NO hay
+      señal, que es cuando deja de ser una confirmación y pasa a ser una advertencia que no puede
+      desplazarse fuera de la vista. `barras-fijas.cjs` mide el reparto completo; acá sólo se
+      comprueba que la campana no quedó compartiendo sitio con una insignia que ya no está.
+    */
+    comprobar(
+      m.conexiones === 0,
+      `${etiqueta} · con señal la barra no lleva «En línea»`,
+      `encontré ${m.conexiones}`,
+    );
     comprobar(m.franjaVieja === 0, `${etiqueta} · sin la franja de estado de antes`);
     comprobar(m.barras === 1, `${etiqueta} · una sola cabecera`, `hay ${m.barras}`);
     comprobar(
@@ -171,7 +184,12 @@ async function medirCabecera(page) {
       `${etiqueta} · y queda en la esquina`,
       `a ${m.campanaAlBorde}px del borde`,
     );
-    comprobar(m.estadoAntes, `${etiqueta} · con «En línea» a su lado, antes de ella`);
+    // Sin insignia al lado, la campana es lo único del grupo derecho y le toca la esquina entera.
+    comprobar(
+      m.campanaAlBorde !== null && m.campanaAlBorde <= 24,
+      `${etiqueta} · y la campana se queda la esquina`,
+      `quedan ${m.campanaAlBorde}px hasta el borde`,
+    );
     comprobar(m.pestanas === 5, `${etiqueta} · la barra inferior sigue con sus cinco destinos`, `hay ${m.pestanas}`);
     if (tam.width === 390) {
       dato(`contador en la campana: «${m.contador || 'sin contador'}»`);

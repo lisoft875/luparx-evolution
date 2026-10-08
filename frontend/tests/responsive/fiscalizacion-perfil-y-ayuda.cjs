@@ -410,7 +410,11 @@ async function estadoDeLaCabecera(page) {
       JSON.stringify(cabecera),
     );
     comprobar(cabecera.tactil >= 44, '  con su blanco táctil de 44px', `${cabecera.tactil}px`);
-    comprobar(cabecera.enLinea === 1, '  y «En línea» sigue a su lado, sin duplicarse');
+    /* Con señal, «En línea» ya no vive en la barra sino junto al saludo del inicio (08-10-2026):
+       en Ayuda, que es una pantalla de detalle, no hay indicador y es correcto que no haya. Lo que
+       esta línea cuida sigue siendo lo mismo —que no se duplique— sólo que el número esperado es
+       cero. El reparto completo lo mide `barras-fijas.cjs`. */
+    comprobar(cabecera.enLinea === 0, '  y «En línea» no se duplica acá', `encontré ${cabecera.enLinea}`);
     comprobar(cabecera.cabeceras === 1, '  sin una segunda cabecera', `${cabecera.cabeceras}`);
 
     // Con el diagnóstico abierto: el modal no reemplaza el header.
