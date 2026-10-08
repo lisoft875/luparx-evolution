@@ -5670,7 +5670,7 @@ a.lx-list-row {
 .lx-quick-tile--primary {
   background: var(--lx-primary-fill);
   border-color: var(--lx-primary-fill);
-  color: var(--lx-on-primary);
+  color: var(--lx-primary-contrast);
 }
 .lx-quick-tile--primary:hover {
   background: var(--lx-primary-fill-hover, var(--lx-primary-fill));
@@ -5678,13 +5678,13 @@ a.lx-list-row {
 .lx-quick-tile--primary .lx-quick-tile__title,
 .lx-quick-tile--primary .lx-quick-tile__hint,
 .lx-quick-tile--primary .lx-quick-tile__go {
-  color: var(--lx-on-primary);
+  color: var(--lx-primary-contrast);
 }
 /* El cuadro del icono, sobre azul, no puede seguir siendo `--lx-primary-soft`: es azul sobre azul.
    Un velo blanco translúcido funciona sobre cualquier azul de la familia sin inventar un token. */
 .lx-quick-tile--primary .lx-quick-tile__icon {
   background: rgba(255, 255, 255, 0.16);
-  color: var(--lx-on-primary);
+  color: var(--lx-primary-contrast);
 }
 
 /* ---- Consulta rápida: el campo de placa y un botón cuadrado, en una fila --------------------- */
@@ -5708,7 +5708,7 @@ a.lx-list-row {
   border: none;
   border-radius: var(--lx-radius-md);
   background: var(--lx-primary-fill);
-  color: var(--lx-on-primary);
+  color: var(--lx-primary-contrast);
   cursor: pointer;
 }
 .lx-plate-row__go:disabled {
@@ -6090,7 +6090,7 @@ a.lx-list-row {
 .lx-step-track__step[data-estado='hecho'] .lx-step-track__mark {
   background: var(--lx-primary-fill);
   border-color: var(--lx-primary-fill);
-  color: var(--lx-on-primary);
+  color: var(--lx-primary-contrast);
 }
 .lx-step-track__step[data-estado='actual'] .lx-step-track__mark {
   border-color: var(--lx-primary);
