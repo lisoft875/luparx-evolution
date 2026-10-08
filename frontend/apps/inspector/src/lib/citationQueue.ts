@@ -85,6 +85,48 @@ export interface QueuedCitation {
 const STORAGE_PREFIX = 'luparx.inspector.citationQueue';
 /** Sent rows linger this long so the officer sees what happened, then stop being clutter. */
 const SENT_RETENTION_MS = 15 * 60 * 1000;
+
+/**
+ * Cuándo salió del teléfono la última boleta, de verdad.
+ *
+ * <p>Lo pide el panel de Sincronización de la Ayuda. Primero se intentó sin guardar nada: cada
+ * fila ya lleva su `sentAt`, así que la más reciente parecía bastar. No basta — `prune` borra las
+ * enviadas a los quince minutos, así que ese máximo sólo cubre el último cuarto de hora y después
+ * dice «nunca», que es falso.</p>
+ *
+ * <p>Una sola marca, fuera de la lista de filas y por municipalidad. No es un dato inventado: es
+ * el instante en que el servidor aceptó algo, anotado cuando pasa.</p>
+ */
+const SYNC_PREFIX = 'luparx.inspector.lastSync';
+
+function syncKey(tenantId: string): string {
+  return `${SYNC_PREFIX}.${tenantId}`;
+}
+
+/** Lo anota el envío, en el mismo punto en que la fila pasa a `SENT`. */
+function markSynced(tenantId: string, whenIso: string): void {
+  try {
+    window.localStorage.setItem(syncKey(tenantId), whenIso);
+  } catch {
+    /* Modo privado o almacenamiento lleno: el envío ya ocurrió; sólo no se recuerda cuándo. */
+  }
+}
+
+/**
+ * El instante ISO del último envío que llegó al servidor desde este aparato, o `null`.
+ *
+ * <p>`null` significa «este aparato no ha enviado nada todavía», que es un estado real y distinto
+ * de «hace mucho»: un teléfono recién entregado no tiene una última sincronización, y la pantalla
+ * tiene que decir eso y no una fecha.</p>
+ */
+export function lastSyncAt(tenantId: string | null): string | null {
+  if (!tenantId) return null;
+  try {
+    return window.localStorage.getItem(syncKey(tenantId));
+  } catch {
+    return null;
+  }
+}
 /** Deployment default (`luparx.enforcement.maxEvidenceBytes`); the server is the authority. */
 export const MAX_EVIDENCE_BYTES = 10 * 1024 * 1024;
 export const MAX_PHOTOS_PER_CITATION = 6;
@@ -357,13 +399,18 @@ async function send(apiClient: ApiClient, tenantId: string, id: string): Promise
     }
 
     await deletePhotos(photos.map((photo) => photo.key));
+    const sentAt = new Date().toISOString();
     update(tenantId, id, {
       state: 'SENT',
       status,
       number,
-      sentAt: new Date().toISOString(),
+      sentAt,
       attempts: current.attempts + 1,
     });
+    // La marca de «última sincronización», acá y no en `flushQueue`: lo que cuenta es que algo
+    // LLEGÓ, no que se intentó. Un barrido cada veinte segundos con la cola vacía no es una
+    // sincronización, y anotarlo haría que el panel dijera «hace 3 segundos» para siempre.
+    markSynced(tenantId, sentAt);
   } catch (error) {
     const described = describe(error);
     const attempts = current.attempts + 1;

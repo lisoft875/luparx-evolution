@@ -439,40 +439,109 @@ async function estadoDeLaCabecera(page) {
     comprobar(enAvisos === 0, 'en la pantalla de avisos la campana no se dibuja', `${enAvisos}`);
   }
 
-  // --- El patrón de las seis tarjetas ------------------------------------------------------------
+  // --- Ayuda: cuatro accesos, y ninguno que repita la barra inferior ----------------------------
+  //
+  // Reescrito el 08-10-2026. Antes se medía el patrón de las SEIS tarjetas —icono, acción y flecha
+  // en cada una—; el encargo de hoy quita cuatro de ellas porque llevaban a destinos que la barra
+  // inferior ya tiene, y deja cuatro accesos que no navegan: abren paneles que miden o actúan.
+  //
+  // Lo que se comprueba cambia con ellas: antes «las seis siguen ahí», ahora «estas cuatro y
+  // NINGUNA de las que se fueron», que es lo que el encargo pide en su punto 13.
   await page.goto(`${BASE}/inspector/help`, { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(2400);
   {
-    const tarjetas = await page.$$eval('.lx-help-card', (nodos) =>
-      nodos.map((n) => {
-        const accion = n.querySelector('.lx-help-card__action');
+    const ayuda = await page.evaluate(() => {
+      const rec = (s) => String(s || '').replace(/\s+/g, ' ').trim();
+      const filas = [...document.querySelectorAll('.lx-list-row')].map((n) => {
         const caja = n.getBoundingClientRect();
         return {
-          titulo: (n.querySelector('.lx-help-card__title')?.textContent ?? '').trim(),
-          icono: n.querySelectorAll('.lx-help-card__icon').length,
-          accion: (accion?.textContent ?? '').trim(),
-          flecha: n.querySelectorAll('.lx-help-card__go').length,
+          titulo: rec(n.querySelector('.lx-list-row__title')?.textContent),
+          icono: n.querySelectorAll('.lx-list-row__icon svg').length,
+          flecha: n.querySelectorAll('.lx-list-row__value svg').length,
           alto: Math.round(caja.height),
-          // Texto cortado de verdad dentro de la acción: la frase corta no debe necesitar elipsis.
-          accionCortada: accion ? accion.scrollWidth > accion.clientWidth + 1 : false,
         };
-      }),
+      });
+      return {
+        filas,
+        // Las tarjetas de la Ayuda vieja, por su clase: tienen que haber desaparecido del árbol.
+        tarjetasViejas: document.querySelectorAll('.lx-help-card').length,
+        lead: rec(document.querySelector('main p')?.textContent),
+        // El texto entero de la pantalla, para buscar en él los accesos que el encargo prohíbe.
+        texto: rec(document.querySelector('main')?.textContent),
+      };
+    });
+
+    comprobar(ayuda.tarjetasViejas === 0, 'las tarjetas largas de la Ayuda vieja ya no están', `${ayuda.tarjetasViejas}`);
+    comprobar(
+      /En qué podemos ayudarte/i.test(ayuda.lead),
+      'debajo del título dice «¿En qué podemos ayudarte?»',
+      `«${ayuda.lead}»`,
     );
-    comprobar(tarjetas.length === 6, 'las seis tarjetas de Ayuda siguen ahí', `${tarjetas.length}`);
-    for (const tarjeta of tarjetas) {
+
+    const esperados = ['Diagnóstico', 'Permisos del dispositivo', 'Sincronización', 'Reportar un problema'];
+    const titulos = ayuda.filas.map((f) => f.titulo);
+    comprobar(
+      esperados.every((e) => titulos.includes(e)) && ayuda.filas.length === esperados.length,
+      'Ayuda tiene exactamente los cuatro accesos del encargo',
+      titulos.join(' · ') || 'ninguno',
+    );
+
+    // Los cuatro que el punto 13 manda comprobar que YA NO estén. Se buscan como títulos de fila y
+    // no en el texto suelto: «Sincronización» contiene «sincroniza», y el diagnóstico menciona la
+    // cámara — buscar subcadenas daría falsos positivos sobre texto legítimo.
+    for (const prohibido of ['Consultar una placa', 'Levantar una boleta', 'Fotos y evidencia', 'Pendientes']) {
       comprobar(
-        tarjeta.icono === 1 && tarjeta.accion.length > 0 && tarjeta.flecha === 1,
-        `  «${tarjeta.titulo}» tiene icono, acción y flecha de dirección`,
-        JSON.stringify(tarjeta),
+        !titulos.includes(prohibido),
+        `  y ya no ofrece «${prohibido}», que vive en la barra inferior`,
+        titulos.join(' · '),
       );
-      // «Ir a consultar una placa» son 24 caracteres; «Consultar placa» son 15. El corte en 22 deja
-      // pasar las seis nuevas y no deja pasar ninguna de las viejas.
+    }
+
+    for (const fila of ayuda.filas) {
       comprobar(
-        tarjeta.accion.length <= 22 && !tarjeta.accionCortada,
-        `  y su acción es corta y entera («${tarjeta.accion}»)`,
-        `${tarjeta.accion.length} caracteres · cortada=${tarjeta.accionCortada}`,
+        fila.icono === 1 && fila.flecha === 1,
+        `  «${fila.titulo}»: icono + nombre + flecha`,
+        JSON.stringify(fila),
       );
-      comprobar(tarjeta.alto >= 44, '  con blanco táctil suficiente', `${tarjeta.alto}px`);
+      comprobar(fila.alto >= 44, '  con blanco táctil suficiente', `${fila.alto}px`);
+    }
+  }
+
+  // --- Los cuatro paneles abren algo REAL (punto 13 del encargo) --------------------------------
+  {
+    const paneles = [
+      { nombre: 'Diagnóstico', espera: '.lx-diag__row' },
+      { nombre: 'Permisos del dispositivo', espera: '.lx-diag__row' },
+      { nombre: 'Sincronización', espera: '.lx-summary__row' },
+      { nombre: 'Reportar un problema', espera: '.lx-report-state' },
+    ];
+    for (const panel of paneles) {
+      await page.goto(`${BASE}/inspector/help`, { waitUntil: 'domcontentloaded' });
+      await page.waitForTimeout(1600);
+      await page.locator('.lx-list-row').filter({ hasText: panel.nombre }).first().click();
+      const abrio = await page
+        .waitForSelector(`.lx-modal ${panel.espera}`, { timeout: 8000 })
+        .then(() => true)
+        .catch(() => false);
+      comprobar(abrio, `«${panel.nombre}» abre un panel con contenido real`, `esperaba ${panel.espera}`);
+      if (abrio && panel.nombre === 'Permisos del dispositivo') {
+        // La cámara es la prioritaria del encargo: tiene que estar y decir en qué estado está.
+        const camara = await page.evaluate(() => {
+          const fila = [...document.querySelectorAll('.lx-modal .lx-diag__row')].find((n) =>
+            /cámara/i.test(n.textContent || ''),
+          );
+          return fila ? String(fila.textContent).replace(/\s+/g, ' ').trim() : null;
+        });
+        comprobar(camara !== null, '  y la cámara aparece con su estado', camara ?? 'no está');
+      }
+      if (abrio && panel.nombre === 'Reportar un problema') {
+        // Y no finge que envió nada: no hay backend, y el panel tiene que decirlo.
+        const texto = await page.evaluate(() => String(document.querySelector('.lx-modal')?.textContent || ''));
+        comprobar(
+          /no se puede enviar|todavía no/i.test(texto),
+          '  y dice que todavía no se puede enviar, en vez de fingirlo',
+        );
+      }
     }
   }
 

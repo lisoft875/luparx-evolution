@@ -67,6 +67,8 @@ export function InspectorShell({
   const avisos = (sinLeer.data?.unread ?? 0) + pending;
   /** La única pantalla sin campana: la de los avisos. Un botón hacia donde ya estás. */
   const enAvisos = location.pathname.startsWith('/notifications');
+  /** La única pantalla con saludo, que es la que puede llevar el estado de conexión en el cuerpo. */
+  const enInicio = location.pathname === '/';
   // One request per session, on whatever screen the officer lands on, so the zone picker is not
   // empty on a device that has already worked a shift.
   useZoneDirectorySeed();
@@ -300,14 +302,33 @@ export function InspectorShell({
               indicador en pantalla, que es lo que el encargo del 06-10 pedía al quitar la franja
               duplicada.
             */
-            !online ? (
+            /*
+              Afinado el 08-10-2026, y es el tercer criterio de esta línea en tres días: conviene
+              contar por qué, porque cada uno corrigió algo real del anterior.
+
+              El encargo del 06-10 pidió «En línea» arriba a la derecha. La referencia visual del
+              07-10 lo dibuja junto al saludo. Ayer lo partí por estado —confirmación junto al
+              saludo, advertencia en la barra— y eso dejó un hueco que el encargo de hoy señala en
+              su punto 10: en Ayuda, que no tiene saludo, con señal no quedaba ningún indicador.
+
+              El reparto correcto no es por estado sino por si la pantalla TIENE saludo. En el
+              inicio lo lleva el saludo, que es donde la referencia lo pone. En todas las demás
+              —Boleta, Mis boletas, Pendientes, Más, Ayuda, Perfil— lo lleva la barra, que es fija
+              y no se va al desplazarse. Sin señal lo lleva la barra siempre, también en el inicio,
+              porque entonces es una advertencia y no puede depender de dónde esté uno.
+
+              Sigue habiendo UN solo indicador en pantalla, que es lo que el 06-10 pedía al borrar
+              la franja duplicada. `enInicio` es la ruta y no `onBack`: lo que decide es si hay un
+              saludo debajo, y eso lo sabe la ruta.
+            */
+            !online || !enInicio ? (
               <Badge
                 /* El mismo gancho estable para medir desde fuera: buscarla por su texto obligaría
                    a las pruebas a conocer las traducciones. */
                 className="lx-connection-badge lx-connection-badge--compact"
-                tone="warning"
+                tone={online ? 'success' : 'warning'}
               >
-                {t('inspector.offline.badge')}
+                {online ? t('inspector.home.online') : t('inspector.offline.badge')}
               </Badge>
             ) : undefined
                     }

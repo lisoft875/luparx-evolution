@@ -6264,3 +6264,26 @@ a.lx-list-row {
   flex-shrink: 0;
   white-space: nowrap;
 }
+
+/* El estado de la aplicación en texto plano, para copiarlo a soporte (08-10-2026).
+   `pre` y no `p`: son líneas de clave y valor y los saltos son parte del dato. Se puede
+   seleccionar con el dedo aunque el portapapeles falle, que es el motivo de que esté a la vista y
+   no escondido detrás del botón. */
+.lx-report-state {
+  margin: 0;
+  padding: var(--lx-space-3);
+  border: 1px solid var(--lx-border);
+  border-radius: var(--lx-radius-sm);
+  background: var(--lx-surface-2);
+  color: var(--lx-text-muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+  /* El agente de usuario es una línea larguísima: la caja se desplaza en vez de estirar el panel. */
+  max-height: 180px;
+  overflow: auto;
+  -webkit-user-select: text;
+  user-select: text;
+}

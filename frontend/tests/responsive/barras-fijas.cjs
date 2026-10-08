@@ -79,23 +79,22 @@ const PORTALES = {
       casos. Una regla que vale para los dos estados es mejor que dos reglas que hay que mantener.
     */
     /*
-      `solo-sin-senal` desde el 08-10-2026, y hay que contar por qué, porque es el tercer criterio
-      que tiene esta línea en cuatro días.
+      `saludo-o-barra`, el tercer criterio de esta línea en tres días. Conviene contar la cadena
+      entera porque cada paso corrigió algo real del anterior:
 
-      El encargo del 06-10 pidió un único «En línea» arriba a la derecha y así se midió. La
-      referencia visual del 07-10 lo dibuja junto al saludo, en el inicio. Los dos tienen razón en
-      algo distinto, así que la implementación se partió por lo que cada caso necesita: con señal,
-      «En línea» es una CONFIRMACIÓN y vive junto al saludo —donde la referencia la pone, y donde
-      si se desplaza no se pierde nada—; sin señal es una ADVERTENCIA, porque quien no lo sabe da
-      por presentada una boleta que está en el teléfono, y entonces vive en la barra fija, en todas
-      las pantallas.
+      · 06-10: «un único En línea arriba a la derecha». Se midió así.
+      · 07-10: la referencia visual lo dibuja junto al saludo del inicio.
+      · 08-10 (mañana): lo partí por ESTADO —confirmación junto al saludo, advertencia en la barra—
+        y eso dejó un hueco que el encargo de la tarde señala en su punto 10: en Ayuda, que no
+        tiene saludo, con señal no quedaba ningún indicador.
+      · 08-10 (tarde): el reparto correcto no es por estado sino por si la pantalla TIENE saludo.
+        El inicio lo lleva en el saludo; todas las demás, en la barra fija. Sin señal lo lleva la
+        barra siempre.
 
-      Lo que este arnés exige, por tanto: con señal, NINGUNA insignia en la barra del fiscalizador
-      y exactamente una ficha junto al saludo; sin señal, la insignia en la barra. Y nunca las dos
-      a la vez — un solo indicador en pantalla, que es lo que el 06-10 pedía al borrar la franja
-      duplicada.
+      Lo que este arnés exige: en el inicio, cero insignias en la barra y una ficha junto al
+      saludo; en cualquier otra pantalla, la insignia en la barra. Nunca las dos, nunca ninguna.
     */
-    conexion: 'solo-sin-senal',
+    conexion: 'saludo-o-barra',
     conexionSoloRaiz: false,
     pantallas: [
       { ruta: '/', nombre: 'Consulta' },
@@ -400,26 +399,39 @@ function revisar(etiqueta, arriba, abajo, exigeCabecera, conexion, soloRaiz = fa
     portal no hay indicador con señal, y tampoco hace falta: no hay nada que decidir mientras la
     boleta sale sola.
   */
-  if (conexion === 'solo-sin-senal') {
+  if (conexion === 'saludo-o-barra') {
+    // El inicio es la única pantalla con saludo, y se reconoce por eso mismo: la ficha está ahí.
+    const esInicio = arriba.estadoEnSaludo > 0;
+    const indicadores = arriba.conexiones + arriba.estadoEnSaludo;
     comprobar(
-      arriba.conexiones === 0,
-      `${etiqueta} · con señal no hay insignia de conexión en la barra fija`,
-      `encontré ${arriba.conexiones}`,
+      indicadores === 1,
+      `${etiqueta} · hay exactamente un indicador de conexión en pantalla`,
+      `barra=${arriba.conexiones} saludo=${arriba.estadoEnSaludo}`,
     );
-    if (etiqueta.includes('Consulta')) {
+    if (esInicio) {
       comprobar(
-        arriba.estadoEnSaludo === 1,
-        `${etiqueta} · y el estado está junto al saludo, como la referencia`,
-        `encontré ${arriba.estadoEnSaludo}`,
+        arriba.conexiones === 0,
+        `${etiqueta} · en el inicio lo lleva el saludo, no la barra`,
+        `en la barra hay ${arriba.conexiones}`,
       );
       comprobar(
         arriba.estadoEnSaludoAlcanzable === true,
         `${etiqueta} · y se puede leer, no está tapado`,
       );
+    } else {
+      comprobar(
+        arriba.conexiones === 1 && arriba.conexionEnBarra === true,
+        `${etiqueta} · sin saludo, el estado lo lleva la barra fija`,
+        `conexiones=${arriba.conexiones} enBarra=${arriba.conexionEnBarra}`,
+      );
+      comprobar(
+        arriba.conexionAlcanzable === true,
+        `${etiqueta} · y se puede leer`,
+      );
     }
   }
   const exigeConexion =
-    conexion !== 'no' && conexion !== 'solo-sin-senal' && arriba.barras === 1 && !(soloRaiz && arriba.tieneVolver);
+    conexion !== 'no' && conexion !== 'saludo-o-barra' && arriba.barras === 1 && !(soloRaiz && arriba.tieneVolver);
   if (soloRaiz && arriba.tieneVolver) {
     dato(`${etiqueta} · pantalla de detalle: la insignia de conexión no va acá, por diseño`);
   }

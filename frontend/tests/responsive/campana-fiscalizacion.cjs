@@ -161,9 +161,17 @@ async function medirCabecera(page) {
       desplazarse fuera de la vista. `barras-fijas.cjs` mide el reparto completo; acá sólo se
       comprueba que la campana no quedó compartiendo sitio con una insignia que ya no está.
     */
+    /*
+      Una sola insignia en la barra, de nuevo (08-10-2026, tarde).
+
+      Esta línea exigió una, luego cero, y vuelve a una. No es indecisión: el reparto final es por
+      si la pantalla tiene saludo, y este arnés recorre pantallas de Fiscalización que no lo
+      tienen, así que ahí el estado SÍ vive en la barra. `barras-fijas.cjs` mide el reparto
+      completo, inicio incluido; acá sólo importa que la campana no comparta sitio con dos.
+    */
     comprobar(
-      m.conexiones === 0,
-      `${etiqueta} · con señal la barra no lleva «En línea»`,
+      m.conexiones <= 1,
+      `${etiqueta} · como mucho un «En línea» en la barra`,
       `encontré ${m.conexiones}`,
     );
     comprobar(m.franjaVieja === 0, `${etiqueta} · sin la franja de estado de antes`);
@@ -184,12 +192,16 @@ async function medirCabecera(page) {
       `${etiqueta} · y queda en la esquina`,
       `a ${m.campanaAlBorde}px del borde`,
     );
-    // Sin insignia al lado, la campana es lo único del grupo derecho y le toca la esquina entera.
+    // La campana se queda la esquina: lo pulsable es lo que tiene que alcanzar el pulgar. Con
+    // insignia al lado, ésta queda antes; sin ella, la campana está sola. Las dos formas cumplen.
     comprobar(
       m.campanaAlBorde !== null && m.campanaAlBorde <= 24,
       `${etiqueta} · y la campana se queda la esquina`,
       `quedan ${m.campanaAlBorde}px hasta el borde`,
     );
+    if (m.conexiones === 1) {
+      comprobar(m.estadoAntes, `${etiqueta} · con «En línea» a su lado, antes de ella`);
+    }
     comprobar(m.pestanas === 5, `${etiqueta} · la barra inferior sigue con sus cinco destinos`, `hay ${m.pestanas}`);
     if (tam.width === 390) {
       dato(`contador en la campana: «${m.contador || 'sin contador'}»`);

@@ -1211,36 +1211,36 @@ export const esCR = {
   'inspector.more.about.meta': 'Abre el sitio oficial.',
   // --- Ayuda: lo que de verdad pasa en un turno --------------------------------------------------
   'inspector.help.offline.action': 'Ver conexión',
-  'inspector.help.offline.nothingPending': 'No hay nada esperando a sincronizarse.',
-  'inspector.help.plate.action': 'Consultar placa',
-  'inspector.help.citation.action': 'Levantar boleta',
-  'inspector.help.evidence.action': 'Ver evidencia',
-  'inspector.help.queue.action': 'Ver pendientes',
+  /* --- Ayuda del fiscalizador, reestructurada (08-10-2026) ---------------------------------- */
+  'inspector.help.lead': '¿En qué podemos ayudarte?',
+  'inspector.help.entry.diag': 'Diagnóstico',
+  'inspector.help.entry.permissions': 'Permisos del dispositivo',
+  'inspector.help.entry.sync': 'Sincronización',
+  'inspector.help.entry.report': 'Reportar un problema',
+  'inspector.help.permissions.title': 'Permisos del dispositivo',
+  'inspector.help.permissions.lead':
+    'La cámara es la que más importa: sin ella no se puede adjuntar evidencia a una boleta.',
+  'inspector.help.permissions.none': 'Esta aplicación no pide ningún otro permiso del aparato.',
+  'inspector.help.sync.title': 'Sincronización',
+  'inspector.help.sync.state': 'Estado',
+  'inspector.help.sync.pendingLabel': 'Operaciones esperando',
+  'inspector.help.sync.lastLabel': 'Última sincronización',
+  'inspector.help.sync.never': 'Este aparato no ha enviado nada todavía.',
+  'inspector.help.sync.errorsLabel': 'Errores',
+  'inspector.help.sync.noErrors': 'Ninguno.',
+  'inspector.help.report.title': 'Reportar un problema',
+  'inspector.help.report.noBackend':
+    'Todavía no se puede enviar un reporte desde la aplicación: no existe ese canal. Lo que sí podés hacer es copiar el estado de la aplicación y pasárselo a quien te da soporte.',
+  'inspector.help.report.copy': 'Copiar el estado',
+  'inspector.help.report.copied': 'Copiado. Pegalo en el mensaje a soporte.',
+  'inspector.help.report.failed': 'No se pudo copiar. El estado está acá abajo para leerlo.',
   'inspector.help.title': 'Ayuda',
-  'inspector.help.offline.title': 'Si te quedás sin señal',
-  'inspector.help.offline.body':
-    'Seguí trabajando igual. La boleta se guarda en el teléfono y se envía sola cuando vuelve la señal. La barra de arriba dice cuántas están esperando; mientras ese número no sea cero, no cierres sesión.',
-  'inspector.help.plate.title': 'Consultar una placa',
-  'inspector.help.plate.body':
-    'La zona y la bahía son opcionales, pero cambian la respuesta: sin bahía el sistema nunca dice que está cubierta. La bahía es lo que distingue el carro que pagó del que no.',
-  'inspector.help.citation.title': 'Levantar una boleta',
-  'inspector.help.citation.body':
-    'Una boleta es un acto administrativo: una vez emitida no se borra, se anula, y anularla no es tu permiso. Revisá la placa y la infracción antes de emitir.',
-  'inspector.help.evidence.title': 'Fotos y evidencia',
-  'inspector.help.evidence.body':
-    'Agregá la evidencia antes de emitir. Es lo que responde por vos cuando alguien reclama semanas después, y es más fácil sacarla ahora que volver al lugar.',
-  'inspector.help.queue.title': 'Pendientes',
-  'inspector.help.queue.body':
-    'Ahí están las boletas que todavía no llegaron al servidor. Si alguna se queda trabada, abrila: te dice por qué.',
   /* --- Sexta opción: el diagnóstico (06-10-2026) ----------------------------------------------
      Antes era «Resolver un problema» y abría una lista de siete filas que repetía, casi exacta, las
      cinco tarjetas de arriba. Ahora mide: contesta «¿mi aplicación está funcionando?» y sólo ofrece
      un botón donde hay algo que arreglar. Las claves del triaje —`triage.*`, `error.*`, `back.*`—
      se borraron con él: una cadena que ya nadie muestra es una cadena que alguien traduce de más. */
   'inspector.help.diag.title': 'Diagnóstico de la aplicación',
-  'inspector.help.diag.body':
-    'Revisa la conexión, lo que falta por enviar, tu sesión y los permisos de este teléfono. Te dice en una pantalla si algo no está funcionando.',
-  'inspector.help.diag.action': 'Ver diagnóstico',
   'inspector.help.diag.checking': 'Revisando el estado…',
   'inspector.help.diag.allGood': 'Todo está funcionando correctamente.',
   'inspector.help.diag.someWarning': 'Funciona, pero hay algo que conviene que sepás.',

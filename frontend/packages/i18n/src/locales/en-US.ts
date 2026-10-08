@@ -1178,31 +1178,30 @@ export const enUS: Record<TranslationKey, string> = {
   'inspector.more.about.meta': 'Opens the official site.',
   // --- Help ---------------------------------------------------------------------------------------
   'inspector.help.offline.action': 'See connection',
-  'inspector.help.offline.nothingPending': 'Nothing is waiting to sync.',
-  'inspector.help.plate.action': 'Check a plate',
-  'inspector.help.citation.action': 'Issue a citation',
-  'inspector.help.evidence.action': 'Add evidence',
-  'inspector.help.queue.action': 'See pending',
+  'inspector.help.lead': 'How can we help?',
+  'inspector.help.entry.diag': 'Diagnostics',
+  'inspector.help.entry.permissions': 'Device permissions',
+  'inspector.help.entry.sync': 'Sync',
+  'inspector.help.entry.report': 'Report a problem',
+  'inspector.help.permissions.title': 'Device permissions',
+  'inspector.help.permissions.lead':
+    'The camera matters most: without it no evidence can be attached to a citation.',
+  'inspector.help.permissions.none': 'This app asks for no other device permission.',
+  'inspector.help.sync.title': 'Sync',
+  'inspector.help.sync.state': 'State',
+  'inspector.help.sync.pendingLabel': 'Operations waiting',
+  'inspector.help.sync.lastLabel': 'Last sync',
+  'inspector.help.sync.never': 'This device has not sent anything yet.',
+  'inspector.help.sync.errorsLabel': 'Errors',
+  'inspector.help.sync.noErrors': 'None.',
+  'inspector.help.report.title': 'Report a problem',
+  'inspector.help.report.noBackend':
+    'Reports cannot be sent from the app yet: that channel does not exist. What you can do is copy the app state and pass it to whoever supports you.',
+  'inspector.help.report.copy': 'Copy the state',
+  'inspector.help.report.copied': 'Copied. Paste it into your message to support.',
+  'inspector.help.report.failed': 'Could not copy. The state is below so you can read it.',
   'inspector.help.title': 'Help',
-  'inspector.help.offline.title': 'If you lose signal',
-  'inspector.help.offline.body':
-    'Carry on as usual. The citation is stored on the phone and sent on its own once signal returns. The top bar says how many are waiting; while that number is not zero, do not sign out.',
-  'inspector.help.plate.title': 'Checking a plate',
-  'inspector.help.plate.body':
-    'Zone and bay are optional, but they change the answer: without a bay the system never says the bay is covered. The bay is what tells a car that paid from one that did not.',
-  'inspector.help.citation.title': 'Filing a citation',
-  'inspector.help.citation.body':
-    'A citation is an administrative act: once issued it is not deleted, it is annulled, and annulling it is not your permission. Check the plate and the infraction before issuing.',
-  'inspector.help.evidence.title': 'Photos and evidence',
-  'inspector.help.evidence.body':
-    'Add the evidence before issuing. It is what answers for you when somebody appeals weeks later, and it is easier to take now than to go back.',
-  'inspector.help.queue.title': 'Pending',
-  'inspector.help.queue.body':
-    'Those are the citations that have not reached the server yet. If one gets stuck, open it: it says why.',
   'inspector.help.diag.title': 'App diagnostics',
-  'inspector.help.diag.body':
-    'Checks the connection, what is still to be sent, your session and this phone\'s permissions. One screen tells you whether something is not working.',
-  'inspector.help.diag.action': 'See diagnostics',
   'inspector.help.diag.checking': 'Checking…',
   'inspector.help.diag.allGood': 'Everything is working correctly.',
   'inspector.help.diag.someWarning': 'It works, but there is something you should know.',

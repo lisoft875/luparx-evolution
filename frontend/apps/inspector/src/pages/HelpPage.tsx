@@ -2,23 +2,27 @@ import * as React from 'react';
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@luparx/auth';
-import { useTranslation, type TranslationKey } from '@luparx/i18n';
+import { formatDateTime, useTranslation, type TranslationKey } from '@luparx/i18n';
 import {
+  Alert,
   Badge,
+  Button,
   Card,
-  CardStack,
   DiagnosticList,
   IconCheck,
   IconChevronRight,
   IconEye,
-  IconFine,
   IconGauge,
+  IconMail,
   IconOffline,
   IconPin,
-  IconSearch,
+  IconShield,
   IconSystem,
   IconUser,
+  ListRow,
   Modal,
+  SummaryList,
+  SummaryRow,
 } from '@luparx/ui';
 import type { DiagnosticCheck } from '@luparx/ui';
 import { InspectorShell } from '../components/InspectorShell';
@@ -31,6 +35,7 @@ import {
   type PermissionReadiness,
 } from '../lib/capture';
 import { useCitationQueue, useIsOnline } from '../lib/queries';
+import { lastSyncAt } from '../lib/citationQueue';
 
 /**
  * Ayuda: cinco eventualidades del turno y, la sexta, el diagnóstico de la aplicación.
@@ -73,30 +78,29 @@ import { useCitationQueue, useIsOnline } from '../lib/queries';
  *       propio PDF prohíbe inventar.</li>
  * </ul>
  */
-type ClaveEventualidad = 'offline' | 'plate' | 'citation' | 'evidence' | 'queue';
+/**
+ * Las cuatro cosas que Ayuda resuelve (reestructurada el 08-10-2026).
+ *
+ * <p>Eran seis tarjetas y cuatro de ellas —«Consultar una placa», «Levantar una boleta», «Fotos y
+ * evidencia» y «Pendientes»— llevaban a destinos que la barra inferior ya tiene a un toque. El
+ * encargo lo dice con todas las letras: «Ayuda NO es una segunda barra de navegación». Las
+ * funciones no se tocan; lo que se va es su acceso duplicado desde acá.</p>
+ *
+ * <p>Lo que queda no navega a ninguna parte: cada una abre un panel que MIDE o ACTÚA sobre el
+ * aparato. Ése es el criterio y por eso ninguna lleva ruta.</p>
+ */
+type ClavePanel = 'diag' | 'permissions' | 'sync' | 'report';
 
-interface Entrada {
-  clave: ClaveEventualidad | 'diag';
-  icono: React.ReactNode;
-  /**
-   * Adónde lleva. `null` = abre un panel, no una pantalla: la conexión para `offline`, el
-   * diagnóstico para `diag`.
-   */
-  ruta: string | null;
-}
-
-/** Las cinco eventualidades, en el orden en que se leen. */
-const EVENTUALIDADES: { clave: ClaveEventualidad; icono: React.ReactNode; ruta: string | null }[] = [
-  { clave: 'offline', icono: <IconOffline />, ruta: null },
-  { clave: 'plate', icono: <IconSearch />, ruta: '/' },
-  { clave: 'citation', icono: <IconFine />, ruta: '/cite' },
-  // La evidencia vive dentro de la boleta: llevar al mismo sitio es lo correcto, no un descuido.
-  { clave: 'evidence', icono: <IconEye />, ruta: '/cite' },
-  { clave: 'queue', icono: <IconCheck />, ruta: '/queue' },
+const ACCIONES: { clave: ClavePanel; icono: React.ReactNode }[] = [
+  { clave: 'diag', icono: <IconGauge /> },
+  // El escudo SÍ es el icono correcto acá, al revés que en el acceso a Ayuda: esto son permisos de
+  // verdad, que es justo lo que un escudo significa en el resto del sistema.
+  { clave: 'permissions', icono: <IconShield /> },
+  // El mismo icono que la pestaña «Pendientes» de la barra inferior, porque es la misma cola: si
+  // el panel de sincronización se dibujara con otro símbolo, parecerían dos cosas distintas.
+  { clave: 'sync', icono: <IconCheck /> },
+  { clave: 'report', icono: <IconMail /> },
 ];
-
-/** Las seis tarjetas: las cinco de siempre y el diagnóstico, que es la sexta. */
-const ENTRADAS: Entrada[] = [...EVENTUALIDADES, { clave: 'diag', icono: <IconGauge />, ruta: null }];
 
 /**
  * Lo que mide esta pantalla.
@@ -133,19 +137,32 @@ function almacenamientoDisponible(): boolean {
 }
 
 export function HelpPage(): React.JSX.Element {
-  const { t, tPlural } = useTranslation();
+  const { t, tPlural, locale } = useTranslation();
   const navigate = useNavigate();
   const online = useIsOnline();
   const { rows, pending, flush, retryAll } = useCitationQueue();
   const { status, activeTenant } = useAuth();
-  const [verConexion, setVerConexion] = useState(false);
-  const [verDiagnostico, setVerDiagnostico] = useState(false);
+  /*
+    Un solo estado para los cuatro paneles, en vez de un booleano por panel. Con cuatro, cuatro
+    booleanos abren la puerta a dos paneles a la vez; con una clave, abrir uno cierra el otro por
+    construcción. `null` es «ninguno».
+  */
+  const [panel, setPanel] = useState<ClavePanel | null>(null);
+  /** Si el estado ya se copió al portapapeles, para decirlo en vez de dejar la duda. */
+  const [copiado, setCopiado] = useState<'ok' | 'error' | null>(null);
   const [medicion, setMedicion] = useState<Medicion | null>(null);
   const [sincronizando, setSincronizando] = useState(false);
   /** Qué permiso se está pidiendo ahora mismo, para que su botón diga «Pidiendo…» y no dos veces. */
   const [pidiendo, setPidiendo] = useState<'camera' | 'location' | null>(null);
 
   const fallidas = rows.filter((row) => row.state === 'FAILED').length;
+  /*
+    La última sincronización de ESTE aparato. Se lee en cada pintada y no hace falta suscribirse:
+    el único momento en que cambia es cuando una boleta pasa a `SENT`, y eso ya mueve las filas de
+    la cola, que sí son reactivas. Así que cuando este valor cambia, el componente ya se está
+    volviendo a pintar por el otro camino.
+  */
+  const ultimaSync = lastSyncAt(activeTenant?.id ?? null);
 
   /**
    * Mide lo que hay que preguntar y esperar. Se vuelve a correr cada vez que se abre el panel y
@@ -158,18 +175,22 @@ export function HelpPage(): React.JSX.Element {
   }, []);
 
   useEffect(() => {
-    if (!verDiagnostico) return;
+    if (panel !== 'diag' && panel !== 'permissions') return;
     void medir();
-  }, [verDiagnostico, medir]);
+  }, [panel, medir]);
 
-  /** Abre lo que esa tarjeta abre: la conexión, o el diagnóstico. */
-  function abrirPanel(clave: Entrada['clave']): void {
-    if (clave === 'diag') {
-      setMedicion(null);
-      setVerDiagnostico(true);
-    } else {
-      setVerConexion(true);
-    }
+  /**
+   * Abre un panel.
+   *
+   * <p>El diagnóstico y los permisos vuelven a medir al abrirse —`setMedicion(null)` los deja en
+   * su estado de carga y el efecto de abajo dispara la medición—, porque los dos informan de algo
+   * que la persona pudo haber cambiado en los ajustes del sistema mientras la aplicación estaba
+   * abierta. La sincronización no mide nada: lee la cola, que ya es reactiva.</p>
+   */
+  function abrirPanel(clave: ClavePanel): void {
+    if (clave === 'diag' || clave === 'permissions') setMedicion(null);
+    if (clave === 'report') setCopiado(null);
+    setPanel(clave);
   }
 
   async function sincronizarAhora(): Promise<void> {
@@ -220,6 +241,82 @@ export function HelpPage(): React.JSX.Element {
   }
 
   /**
+   * Cámara y ubicación: los dos permisos que esta aplicación usa de verdad.
+   *
+   * <p>Extraídas a su propia función el 08-10-2026 porque ahora las leen DOS sitios —el
+   * diagnóstico y el panel de «Permisos del dispositivo»— y el encargo pide los dos. Separar el
+   * código habría dejado dos listas que pueden discrepar: una diciendo «Permitido» y la otra
+   * «Bloqueado» sobre el mismo permiso, en la misma pantalla, a un toque de distancia.</p>
+   *
+   * <p>La cámara va primera, y no es alfabético: el encargo la llama prioritaria porque sin ella
+   * no se puede adjuntar evidencia a una boleta.</p>
+   *
+   * <p>No hay fila de notificaciones. El encargo la pide «si la app las utiliza», y no las
+   * utiliza: esta aplicación nunca llama a `Notification.requestPermission` —los avisos de la
+   * campana los sirve el servidor, que es otra cosa— así que una fila de permiso de
+   * notificaciones mediría algo que el aparato no le concede a nadie.</p>
+   */
+  function comprobacionesPermisos(): DiagnosticCheck[] {
+    const filas: DiagnosticCheck[] = [];
+    // 4 y 5. Cámara y ubicación. Un permiso denegado no trae botón: en el teléfono se activa en los
+    //        ajustes del sistema, y volver a pedirlo desde acá no abre nada —sería un control
+    //        muerto, que es precisamente lo que este PDF vino a quitar.
+    const camara = medicion?.camara ?? 'asksOnUse';
+    filas.push({
+      key: 'camera',
+      tone: camara === 'denied' ? 'warning' : 'ok',
+      icon: <IconEye />,
+      title: t('inspector.help.diag.camera'),
+      state: textoPermiso(camara),
+      note: camara === 'denied' ? t('inspector.help.diag.camera.deniedNote') : undefined,
+      /*
+        El botón sólo donde de verdad abre un diálogo: `asksOnUse` Y con cámara nativa. En el
+        navegador no hay permiso de cámara que pedir —la foto sale del selector del sistema, y
+        `requestCameraPermission()` devuelve `granted` sin preguntar nada—, así que ahí un
+        «Permitir acceso» pintaría la fila de verde sin que nadie hubiera concedido nada.
+      */
+      action:
+        camara === 'asksOnUse' && hasNativeCamera()
+          ? {
+              label: t('inspector.help.diag.camera.allow'),
+              onClick: () => void permitirCamara(),
+              busy: pidiendo === 'camera',
+              busyLabel: t('inspector.help.diag.permission.working'),
+              kind: 'permission',
+            }
+          : undefined,
+    });
+
+    const ubicacion = medicion?.ubicacion ?? 'asksOnUse';
+    filas.push({
+      key: 'location',
+      tone: ubicacion === 'denied' ? 'warning' : 'ok',
+      icon: <IconPin />,
+      title: t('inspector.help.diag.location'),
+      state: textoPermiso(ubicacion),
+      note:
+        ubicacion === 'denied'
+          ? t('inspector.help.diag.location.deniedNote')
+          : ubicacion === 'asksOnUse'
+            ? t('inspector.help.diag.location.allowNote')
+            : undefined,
+      // Acá sí funciona en los dos sitios, porque la lectura de posición dispara el aviso del
+      // sistema tanto en el teléfono como en el navegador.
+      action:
+        ubicacion === 'asksOnUse'
+          ? {
+              label: t('inspector.help.diag.location.allow'),
+              onClick: () => void permitirUbicacion(),
+              busy: pidiendo === 'location',
+              busyLabel: t('inspector.help.diag.permission.working'),
+              kind: 'permission',
+            }
+          : undefined,
+    });
+    return filas;
+  }
+
+  /**
    * Las seis comprobaciones, en el orden del PDF.
    *
    * <p>Ninguna fila lleva a «Consultar una placa», «Levantar una boleta», «Fotos y evidencia» ni
@@ -239,7 +336,14 @@ export function HelpPage(): React.JSX.Element {
       note: online ? undefined : t('inspector.help.diag.connection.note'),
       action: online
         ? undefined
-        : { label: t('inspector.help.offline.action'), onClick: () => setVerConexion(true), kind: 'remedy' },
+        : {
+            label: t('inspector.help.offline.action'),
+            // Lleva al panel de Sincronización, que es donde ahora viven el estado de la conexión
+            // y lo que está esperando. Antes abría un panel propio de «Si te quedás sin señal»,
+            // que decía lo mismo con otras palabras.
+            onClick: () => setPanel('sync'),
+            kind: 'remedy',
+          },
     });
 
     // 2. Sincronización. Un solo dato y una sola fila: «sincronización» y «operaciones pendientes»
@@ -320,61 +424,7 @@ export function HelpPage(): React.JSX.Element {
       });
     }
 
-    // 4 y 5. Cámara y ubicación. Un permiso denegado no trae botón: en el teléfono se activa en los
-    //        ajustes del sistema, y volver a pedirlo desde acá no abre nada —sería un control
-    //        muerto, que es precisamente lo que este PDF vino a quitar.
-    const camara = medicion?.camara ?? 'asksOnUse';
-    lista.push({
-      key: 'camera',
-      tone: camara === 'denied' ? 'warning' : 'ok',
-      icon: <IconEye />,
-      title: t('inspector.help.diag.camera'),
-      state: textoPermiso(camara),
-      note: camara === 'denied' ? t('inspector.help.diag.camera.deniedNote') : undefined,
-      /*
-        El botón sólo donde de verdad abre un diálogo: `asksOnUse` Y con cámara nativa. En el
-        navegador no hay permiso de cámara que pedir —la foto sale del selector del sistema, y
-        `requestCameraPermission()` devuelve `granted` sin preguntar nada—, así que ahí un
-        «Permitir acceso» pintaría la fila de verde sin que nadie hubiera concedido nada.
-      */
-      action:
-        camara === 'asksOnUse' && hasNativeCamera()
-          ? {
-              label: t('inspector.help.diag.camera.allow'),
-              onClick: () => void permitirCamara(),
-              busy: pidiendo === 'camera',
-              busyLabel: t('inspector.help.diag.permission.working'),
-              kind: 'permission',
-            }
-          : undefined,
-    });
-
-    const ubicacion = medicion?.ubicacion ?? 'asksOnUse';
-    lista.push({
-      key: 'location',
-      tone: ubicacion === 'denied' ? 'warning' : 'ok',
-      icon: <IconPin />,
-      title: t('inspector.help.diag.location'),
-      state: textoPermiso(ubicacion),
-      note:
-        ubicacion === 'denied'
-          ? t('inspector.help.diag.location.deniedNote')
-          : ubicacion === 'asksOnUse'
-            ? t('inspector.help.diag.location.allowNote')
-            : undefined,
-      // Acá sí funciona en los dos sitios, porque la lectura de posición dispara el aviso del
-      // sistema tanto en el teléfono como en el navegador.
-      action:
-        ubicacion === 'asksOnUse'
-          ? {
-              label: t('inspector.help.diag.location.allow'),
-              onClick: () => void permitirUbicacion(),
-              busy: pidiendo === 'location',
-              busyLabel: t('inspector.help.diag.permission.working'),
-              kind: 'permission',
-            }
-          : undefined,
-    });
+    lista.push(...comprobacionesPermisos());
 
     // 6. La aplicación. Lo que de verdad se puede medir acá es si este dispositivo guarda.
     const guarda = medicion?.almacenamiento ?? true;
@@ -397,87 +447,83 @@ export function HelpPage(): React.JSX.Element {
     return lista;
   }
 
+  /**
+   * El estado de la aplicación en texto plano, para pegarlo en un mensaje a soporte.
+   *
+   * <p>Sale de las mismas mediciones que el diagnóstico, no de una plantilla: si el diagnóstico
+   * dice que la cámara está bloqueada, esto también. Sin datos personales —ni placas, ni nombres,
+   * ni la municipalidad— porque esto se pega en un WhatsApp y no hay razón para que lleve nada
+   * de eso. Lo que soporte necesita es el estado del aparato.</p>
+   */
+  function resumenDelEstado(): string {
+    const lineas = [
+      `LuParX · Fiscalización`,
+      `Fecha: ${new Date().toISOString()}`,
+      `Conexión: ${online ? 'en línea' : 'sin conexión'}`,
+      `Pendientes: ${pending}`,
+      `Con error: ${fallidas}`,
+      `Última sincronización: ${ultimaSync ?? 'nunca'}`,
+      `Cámara: ${medicion ? medicion.camara : 'sin medir'}`,
+      `Ubicación: ${medicion ? medicion.ubicacion : 'sin medir'}`,
+      `Almacenamiento: ${medicion ? (medicion.almacenamiento ? 'ok' : 'no disponible') : 'sin medir'}`,
+      `Sesión: ${status}`,
+      `Pantalla: ${window.innerWidth}x${window.innerHeight}`,
+      `Navegador: ${navigator.userAgent}`,
+    ];
+    return lineas.join('\n');
+  }
+
+  /** Copia ese texto. Si el portapapeles no está disponible, se dice; el texto sigue a la vista. */
+  async function copiarEstado(): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(resumenDelEstado());
+      setCopiado('ok');
+    } catch {
+      setCopiado('error');
+    }
+  }
+
   const filas = comprobaciones();
+  const permisos = comprobacionesPermisos();
 
   return (
     <InspectorShell title={t('inspector.help.title')} onBack={() => navigate('/more')}>
-      <CardStack>
-        {ENTRADAS.map((entrada) => (
-          <Card key={entrada.clave}>
-            {/* La tarjeta entera es el botón, no un enlace pequeño dentro de ella: esto se pulsa de
-                pie, con una mano, a veces con guantes. Un `<button>` de verdad —y no un `div` con
-                `onClick`— para que el teclado lo alcance y un lector de pantalla lo anuncie como
-                acción. */}
-            <button
-              type="button"
-              className="lx-help-card"
-              onClick={() => (entrada.ruta === null ? abrirPanel(entrada.clave) : navigate(entrada.ruta))}
-            >
-              <span className="lx-help-card__icon" aria-hidden="true">
-                {entrada.icono}
-              </span>
-              <span className="lx-help-card__text">
-                <span className="lx-help-card__title">
-                  {t(`inspector.help.${entrada.clave}.title` as TranslationKey)}
-                </span>
-                <span className="lx-text-meta">
-                  {t(`inspector.help.${entrada.clave}.body` as TranslationKey)}
-                </span>
-                {/* Frase corta y flecha: lo que antes era «Ir a consultar una placa» ahora es
-                    «Consultar placa ›». La flecha no es decorativa —dice que esto lleva a algún
-                    lado— pero se marca `aria-hidden` porque eso ya lo dice el texto, y un lector de
-                    pantalla anunciando «chevron derecha» después de cada acción es ruido. */}
-                <span className="lx-help-card__action">
-                  {t(`inspector.help.${entrada.clave}.action` as TranslationKey)}
-                  <span className="lx-help-card__go" aria-hidden="true">
-                    <IconChevronRight size={14} />
-                  </span>
-                </span>
-              </span>
-            </button>
-          </Card>
+      {/* «¿En qué podemos ayudarte?», y después sólo botones. Sin párrafos: el encargo pide
+          «texto corto, una acción por botón, poco desplazamiento», y esto se lee de pie. */}
+      <p className="lx-text-body" style={{ margin: 0 }}>
+        {t('inspector.help.lead')}
+      </p>
+
+      <Card>
+        {/*
+          Icono + nombre + chevron, que es el formato exacto que pide el encargo, y con `ListRow`,
+          que ya dibuja esa fila en los dos portales. No se creó ninguna tarjeta nueva: lo que había
+          —`.lx-help-card`, con su título, su párrafo y su frase de acción— era el formato de la
+          Ayuda VIEJA, la de las explicaciones largas, y es justo lo que este encargo quita.
+        */}
+        {ACCIONES.map((accion) => (
+          <ListRow
+            key={accion.clave}
+            icon={accion.icono}
+            title={t(`inspector.help.entry.${accion.clave}` as TranslationKey)}
+            value={<IconChevronRight size={16} />}
+            onClick={() => abrirPanel(accion.clave)}
+          />
         ))}
-      </CardStack>
+      </Card>
 
-      {/* Un panel corto, no una pantalla: la especificación lo pide así y además es lo honesto.
-          Acá no hay nada que configurar — sólo el estado de ahora mismo y qué va a pasar con lo
-          que está esperando. */}
+      {/*
+        Diagnóstico: estado → problema → solución, en ese orden y sin una fila de más. El resumen
+        va arriba para que «¿está funcionando?» se conteste sin desplazarse, que es como se mira
+        esto: de pie y con prisa. Es EL diagnóstico que ya existía — no hay un segundo.
+      */}
       <Modal
-        open={verConexion}
-        onClose={() => setVerConexion(false)}
-        title={t('inspector.help.offline.title')}
-        closeLabel={t('common.close')}
-      >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--lx-space-4)' }}>
-          {/* El mismo dato que la insignia de la cabecera, del mismo sitio: si discreparan, uno de
-              los dos estaría mintiendo. */}
-          <Badge tone={online ? 'success' : 'warning'} icon={<IconOffline size={16} />}>
-            {online ? t('inspector.home.online') : t('inspector.offline.badge')}
-          </Badge>
-          <p className="lx-text-body" style={{ margin: 0 }}>
-            {t('inspector.help.offline.body')}
-          </p>
-          <p className="lx-text-meta" style={{ margin: 0 }}>
-            {pending > 0
-              ? tPlural('inspector.offline.queued', pending)
-              : t('inspector.help.offline.nothingPending')}
-          </p>
-        </div>
-      </Modal>
-
-      {/* El diagnóstico: estado → problema → solución, en ese orden y sin una sola fila de más.
-          El resumen va arriba para que la respuesta a «¿está funcionando?» se lea sin desplazarse,
-          que es como se mira esto: de pie y con prisa. */}
-      <Modal
-        open={verDiagnostico}
-        onClose={() => setVerDiagnostico(false)}
+        open={panel === 'diag'}
+        onClose={() => setPanel(null)}
         title={t('inspector.help.diag.title')}
         closeLabel={t('common.close')}
       >
-        {/* La pintura la pone `DiagnosticList`, del paquete compartido: acá sólo se MIDE.
-            Cuando el Ciudadano pidió su diagnóstico el 07-10, la alternativa era copiar ochenta
-            líneas de `<li>`; lo que las dos pantallas comparten es la forma de una comprobación,
-            no lo que comprueban —el ciudadano no tiene cola de boletas, ni cámara, ni GPS—. */}
+        {/* La pintura la pone `DiagnosticList`, del paquete compartido: acá sólo se MIDE. */}
         <DiagnosticList
           loading={medicion === null}
           loadingLabel={t('inspector.help.diag.checking')}
@@ -495,6 +541,133 @@ export function HelpPage(): React.JSX.Element {
           checks={filas}
         />
       </Modal>
+
+      {/*
+        Permisos del dispositivo. El mismo componente y las MISMAS comprobaciones que el
+        diagnóstico —`comprobacionesPermisos()`—, filtradas a lo que este panel trata. Que sean la
+        misma función no es ahorro de código: es la garantía de que las dos pantallas no puedan
+        decir cosas distintas del mismo permiso.
+      */}
+      <Modal
+        open={panel === 'permissions'}
+        onClose={() => setPanel(null)}
+        title={t('inspector.help.permissions.title')}
+        closeLabel={t('common.close')}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--lx-space-3)' }}>
+          <p className="lx-text-meta" style={{ margin: 0 }}>
+            {t('inspector.help.permissions.lead')}
+          </p>
+          <DiagnosticList
+            loading={medicion === null}
+            loadingLabel={t('inspector.help.diag.checking')}
+            summary={{
+              allGood: t('inspector.help.diag.allGood'),
+              warning: t('inspector.help.diag.someWarning'),
+              problem: t('inspector.help.diag.someIssue'),
+            }}
+            toneLabels={{
+              ok: t('inspector.help.diag.tone.ok'),
+              warning: t('inspector.help.diag.tone.warning'),
+              problem: t('inspector.help.diag.tone.problem'),
+            }}
+            checks={permisos}
+          />
+          <p className="lx-text-meta" style={{ margin: 0 }}>
+            {t('inspector.help.permissions.none')}
+          </p>
+        </div>
+      </Modal>
+
+      {/*
+        Sincronización. Todo lo que muestra sale de la cola de este aparato —la misma que alimenta
+        el número de la pestaña «Pendientes» y el de la campana—, así que no puede discrepar con
+        ellos. Ningún dato es inventado y lo que no existe se dice: un teléfono que nunca envió
+        nada no tiene una última sincronización, y eso se escribe en palabras en vez de con una
+        fecha cualquiera.
+      */}
+      <Modal
+        open={panel === 'sync'}
+        onClose={() => setPanel(null)}
+        title={t('inspector.help.sync.title')}
+        closeLabel={t('common.close')}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--lx-space-4)' }}>
+          <Badge tone={online ? 'success' : 'warning'} icon={<IconOffline size={16} />}>
+            {online ? t('inspector.home.online') : t('inspector.offline.badge')}
+          </Badge>
+          <SummaryList>
+            <SummaryRow
+              label={t('inspector.help.sync.pendingLabel')}
+              value={pending > 0 ? String(pending) : t('inspector.help.diag.sync.ok')}
+            />
+            <SummaryRow
+              label={t('inspector.help.sync.lastLabel')}
+              value={ultimaSync ? formatDateTime(ultimaSync, locale) : t('inspector.help.sync.never')}
+            />
+            <SummaryRow
+              label={t('inspector.help.sync.errorsLabel')}
+              value={
+                fallidas > 0
+                  ? tPlural('inspector.help.diag.sync.failed', fallidas)
+                  : t('inspector.help.sync.noErrors')
+              }
+            />
+          </SummaryList>
+          {!online ? (
+            <p className="lx-text-meta" style={{ margin: 0 }}>
+              {t('inspector.help.diag.sync.offlineNote')}
+            </p>
+          ) : null}
+          {/* El botón sólo cuando puede hacer algo: sin señal no envía, y con la cola vacía no hay
+              nada que enviar. Un control que no hace nada es el defecto que este encargo vino a
+              quitar de esta pantalla. */}
+          {online && (pending > 0 || fallidas > 0) ? (
+            <Button
+              type="button"
+              fullWidth
+              loading={sincronizando}
+              onClick={() => void sincronizarAhora()}
+            >
+              {t('inspector.help.diag.sync.action')}
+            </Button>
+          ) : null}
+        </div>
+      </Modal>
+
+      {/*
+        Reportar un problema — y acá hay que decir la verdad, que es lo que el encargo pide
+        explícitamente: NO EXISTE canal para enviarlo. Se auditaron las rutas del servidor y no hay
+        ninguna de soporte, reporte ni incidencias.
+
+        Así que este panel no finge. Dice que no se puede enviar y ofrece lo único que sí funciona
+        de verdad: copiar el estado de la aplicación para pegarlo en el mensaje a quien da soporte.
+        El texto que copia sale de las mismas mediciones que el diagnóstico, no de una plantilla.
+
+        Cuando exista el endpoint, lo que cambia es este panel y nada más.
+      */}
+      <Modal
+        open={panel === 'report'}
+        onClose={() => setPanel(null)}
+        title={t('inspector.help.report.title')}
+        closeLabel={t('common.close')}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--lx-space-4)' }}>
+          <Alert tone="info">{t('inspector.help.report.noBackend')}</Alert>
+          <Button type="button" variant="secondary" fullWidth onClick={() => void copiarEstado()}>
+            {t('inspector.help.report.copy')}
+          </Button>
+          {copiado ? (
+            <p className="lx-text-meta" role="status" style={{ margin: 0 }}>
+              {copiado === 'ok' ? t('inspector.help.report.copied') : t('inspector.help.report.failed')}
+            </p>
+          ) : null}
+          {/* El texto, siempre a la vista: si el portapapeles falla —y falla, en contextos sin
+              HTTPS y en algunos WebView— la persona todavía puede leerlo y escribirlo. */}
+          <pre className="lx-report-state">{resumenDelEstado()}</pre>
+        </div>
+      </Modal>
+
     </InspectorShell>
   );
 }
