@@ -375,11 +375,13 @@ async function medir(page, dedo) {
     }
   }
 
+  /* Los cuatro KPI de la referencia aprobada, en su orden (08-10-2026). «Ocupación actual» salió
+     de la fila —pasó a ser el dónut del bloque de ocupación— y entró «Usuarios registrados». */
   const DESTINOS = [
-    { etiqueta: 'Recaudación hoy', ruta: /\/admin\/billing/ },
-    { etiqueta: 'Estadías activas', ruta: /\/admin\/dashboard/ },
-    { etiqueta: 'Boletas hoy', ruta: /\/admin\/enforcement\/citations\?from=/ },
-    { etiqueta: 'Ocupación actual', ruta: /\/admin\/dashboard/ },
+    { etiqueta: 'Estacionamientos activos', ruta: /\/admin\/dashboard/ },
+    { etiqueta: 'Usuarios registrados', ruta: /\/admin\/users/ },
+    { etiqueta: 'Multas emitidas', ruta: /\/admin\/enforcement\/citations\?from=/ },
+    { etiqueta: 'Ingresos del día', ruta: /\/admin\/billing/ },
   ];
 
   {
@@ -602,6 +604,143 @@ async function medir(page, dedo) {
       );
       const conTitulo = zonas.every((z) => z.titulo.length > 0);
       okInicio(conTitulo, '  y cada nombre conserva su texto completo como respaldo');
+    }
+
+    // --- 5. La composición de la referencia aprobada, a 1536x960 (paso 9 del documento) ----------
+    //
+    // Se mide la ESTRUCTURA, no el parecido: qué bloques hay, en qué orden y con qué proporción.
+    // «Se parece» no es comprobable; «la ocupación es más ancha que el gráfico» sí.
+    {
+      await page.setViewportSize({ width: 1536, height: 960 });
+      await page.goto(`${BASE}/admin/`, { waitUntil: 'domcontentloaded' });
+      await page.waitForTimeout(2600);
+
+      const comp = await page.evaluate(() => {
+        const rec = (s) => String(s || '').replace(/\s+/g, ' ').trim();
+        const caja = (sel) => {
+          const n = document.querySelector(sel);
+          return n ? { x: Math.round(n.getBoundingClientRect().x), ancho: Math.round(n.getBoundingClientRect().width), alto: Math.round(n.getBoundingClientRect().height) } : null;
+        };
+        const analitica = [...document.querySelectorAll('.lx-home-grid--analytics > .lx-card')];
+        const franja = document.querySelector('.lx-home__status');
+        const kpis = document.querySelector('.lx-home-kpis');
+        return {
+          saludo: rec(document.querySelector('.lx-home__title h1')?.textContent),
+          donde: rec(document.querySelector('.lx-home__when')?.textContent),
+          reloj: Boolean(document.querySelector('.lx-home__hour')),
+          donut: caja('.lx-donut'),
+          donutNumero: rec(document.querySelector('.lx-donut__number')?.textContent),
+          ocupacionAncho: analitica[0] ? Math.round(analitica[0].getBoundingClientRect().width) : 0,
+          graficoAncho: analitica[1] ? Math.round(analitica[1].getBoundingClientRect().width) : 0,
+          ranking: document.querySelectorAll('.lx-zone-rank__row').length,
+          rankingPuestos: [...document.querySelectorAll('.lx-zone-rank__pos')].map((n) => rec(n.textContent)),
+          apiladas: document.querySelectorAll('.lx-home-stack > .lx-card').length,
+          eventos: document.querySelectorAll('.lx-feed__item').length,
+          // La franja de servicios tiene que estar DESPUÉS de los KPI en el documento, no antes.
+          franjaDespuesDeKpis:
+            Boolean(franja && kpis) && franja.getBoundingClientRect().top > kpis.getBoundingClientRect().top,
+          franjaPiezas: document.querySelectorAll('.lx-home__status .lx-status-bar__item').length,
+          // Las etiquetas del gráfico semanal: días de la semana, no fechas.
+          etiquetasBarras: [...document.querySelectorAll('.lx-bars__col-label')].map((n) => rec(n.textContent)),
+          altoTotal: document.documentElement.scrollHeight,
+          desborde: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
+        };
+      });
+
+      console.log('\n-- composición a 1536x960 --');
+      okInicio(/^Hola/.test(comp.saludo), 'el saludo encabeza el tablero', `«${comp.saludo}»`);
+      okInicio(
+        /^Administración municipal ·/.test(comp.donde),
+        '  y debajo dice «Administración municipal · municipalidad»',
+        `«${comp.donde}»`,
+      );
+      okInicio(comp.reloj, '  con la fecha y la hora a la derecha');
+      okInicio(comp.donut !== null, 'el dónut de ocupación existe');
+      okInicio(
+        comp.donut !== null && comp.donut.ancho >= 140,
+        '  y es grande, como en la referencia',
+        comp.donut ? `${comp.donut.ancho}px` : 'sin dónut',
+      );
+      // La inversión que pide la sección 6: la ocupación pasa a ser la columna ancha.
+      okInicio(
+        comp.ocupacionAncho > comp.graficoAncho,
+        'la ocupación es más ancha que el gráfico de ingresos',
+        `ocupación ${comp.ocupacionAncho}px vs gráfico ${comp.graficoAncho}px`,
+      );
+      okInicio(comp.apiladas === 2, 'la columna derecha de la fila 3 lleva dos tarjetas apiladas', `son ${comp.apiladas}`);
+      okInicio(
+        comp.eventos >= 4 && comp.eventos <= 5,
+        '  y la actividad muestra 4-5 eventos, como pide el documento',
+        `son ${comp.eventos}`,
+      );
+      okInicio(
+        comp.rankingPuestos.join(',') === comp.rankingPuestos.map((_, i) => String(i + 1)).join(','),
+        'el ranking de zonas está numerado en orden',
+        comp.rankingPuestos.join(' · ') || 'vacío (puede ser correcto si no hay zonas con bahías)',
+      );
+      okInicio(comp.franjaDespuesDeKpis, 'los estados técnicos ya no encabezan la pantalla');
+      okInicio(comp.franjaPiezas === 4, '  y siguen estando los cuatro', `son ${comp.franjaPiezas}`);
+      const dias = /^(lun|mar|mié|mie|jue|vie|sáb|sab|dom)/i;
+      okInicio(
+        comp.etiquetasBarras.length === 0 || comp.etiquetasBarras.every((e) => dias.test(e)),
+        'el gráfico semanal se rotula con días de la semana',
+        comp.etiquetasBarras.join(' · '),
+      );
+      okInicio(!comp.desborde, 'no hay desplazamiento horizontal a 1536px');
+    }
+
+    // --- 6. Los estados del paso 8: cargando, error y cero --------------------------------------
+    //
+    // Se provocan de verdad interceptando la red, no se simulan con una clase de CSS: el estado que
+    // importa es el que la pantalla compone cuando el servidor no contesta lo que esperaba.
+    {
+      // Error: el panel falla y la pantalla tiene que decirlo sin romperse.
+      const ctxError = await browser.newContext({
+        storageState: estado,
+        viewport: { width: 1536, height: 960 },
+        locale: 'es-CR',
+        ignoreHTTPSErrors: true,
+      });
+      const pe = await ctxError.newPage();
+      await pe.route('**/api/v1/admin/dashboard/revenue-series**', (ruta) => ruta.fulfill({ status: 500, body: '{}' }));
+      await pe.goto(`${BASE}/admin/`, { waitUntil: 'domcontentloaded' });
+      await pe.waitForTimeout(2400);
+      const conError = await pe.evaluate(() => ({
+        reintentar: Boolean(document.querySelector('.lx-inline-error')),
+        sigueViva: document.querySelectorAll('.lx-home-kpis .lx-metric').length,
+        desborde: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
+      }));
+      console.log('\n-- estados (paso 8) --');
+      okInicio(conError.reintentar, 'con el gráfico caído aparece el error con su botón de reintentar');
+      okInicio(conError.sigueViva === 4, '  y las cuatro tarjetas siguen en pie', `son ${conError.sigueViva}`);
+      okInicio(!conError.desborde, '  y no se desborda');
+      await ctxError.close();
+
+      // Cero: el panel contesta vacío. Un cero medido se escribe 0; un gráfico sin serie no se
+      // inventa una.
+      const ctxCero = await browser.newContext({
+        storageState: estado,
+        viewport: { width: 1536, height: 960 },
+        locale: 'es-CR',
+        ignoreHTTPSErrors: true,
+      });
+      const pc = await ctxCero.newPage();
+      await pc.route('**/api/v1/admin/users**', (ruta) =>
+        ruta.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ items: [], page: 0, size: 1, totalElements: 0, totalPages: 0 }),
+        }),
+      );
+      await pc.goto(`${BASE}/admin/`, { waitUntil: 'domcontentloaded' });
+      await pc.waitForTimeout(2400);
+      const cero = await pc.evaluate(() => {
+        const tarjetas = [...document.querySelectorAll('.lx-home-kpis .lx-metric')];
+        const usuarios = tarjetas.find((n) => /Usuarios registrados/.test(n.textContent || ''));
+        return { valor: (usuarios?.querySelector('.lx-metric__value')?.textContent || '').trim() };
+      });
+      okInicio(cero.valor === '0', 'un cero real se escribe 0, no «sin dato»', `dice «${cero.valor}»`);
+      await ctxCero.close();
     }
     await ctx.close();
   }

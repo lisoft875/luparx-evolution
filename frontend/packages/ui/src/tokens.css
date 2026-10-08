@@ -5762,3 +5762,330 @@ a.lx-list-row {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* ---- El anillo de ocupación (08-10-2026) ------------------------------------------------------
+   La referencia aprobada del Inicio pide un dónut grande con el porcentaje al centro. No había
+   ninguno en el sistema: `BarChart` dibuja series y `.lx-zone-row` dibuja una proporción por fila,
+   y ninguna de las dos sabe dibujar una sola magnitud sobre su total. */
+.lx-donut {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+.lx-donut__ring {
+  display: block;
+}
+/* La pista es el total y se dibuja siempre: un anillo sin pista no dice sobre qué es el arco. */
+.lx-donut__track {
+  stroke: var(--lx-surface-2);
+}
+.lx-donut__value {
+  stroke: var(--lx-primary);
+  /* El arco crece cuando el dato cambia en vez de saltar. 320ms y no más: esto se mira de reojo
+     en un tablero que se refresca cada minuto, no es una animación de entrada. */
+  transition: stroke-dasharray 320ms ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .lx-donut__value {
+    transition: none;
+  }
+}
+/* El centro va en el flujo del documento, no pintado dentro del SVG: así se puede seleccionar y
+   crece con el zoom del navegador en vez de escalar con el dibujo y salirse del anillo. */
+.lx-donut__center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  text-align: center;
+  padding: 0 18%;
+}
+.lx-donut__number {
+  font-size: 34px;
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.lx-donut__caption,
+.lx-donut__empty {
+  font-size: var(--lx-text-meta-size);
+  color: var(--lx-text-muted);
+  line-height: 1.2;
+}
+
+/* ---- Referencia visual exacta del Inicio (08-10-2026) ----------------------------------------
+   Los cinco colores de serie: los puntos que la referencia pone delante de cada zona. NO son
+   colores nuevos — son los acentos que la paleta ya tiene, nombrados por su puesto en una serie,
+   para que un gráfico de cinco categorías no los elija a mano uno por uno. Se eligen en este orden
+   porque es el que más separa un punto del siguiente: azul, azul claro, violeta, ámbar y gris.
+
+   El color NUNCA es la única señal: cada fila lleva su porcentaje escrito al lado y su nombre. */
+:root {
+  --lx-series-1: var(--lx-primary);
+  --lx-series-2: var(--lx-primary-2);
+  --lx-series-3: var(--lx-accent-violet);
+  --lx-series-4: var(--lx-accent-amber);
+  --lx-series-5: var(--lx-text-subtle);
+}
+
+/* La fecha y la hora, a la derecha del saludo. */
+.lx-home__clock {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  flex-shrink: 0;
+  text-align: right;
+}
+.lx-home__date {
+  font-size: var(--lx-text-meta-size);
+  color: var(--lx-text-muted);
+}
+.lx-home__hour {
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 520px) {
+  /* En un teléfono el reloj no vale una columna: el saludo manda y la fecha pasa debajo. */
+  .lx-home__top {
+    flex-wrap: wrap;
+  }
+  .lx-home__clock {
+    align-items: flex-start;
+    text-align: left;
+  }
+}
+
+/* Fila 2: la ocupación es la ANCHA y el gráfico la angosta. Es la inversión que pide la sección 6
+   del documento —«reducir drásticamente el protagonismo del gráfico de recaudación»— y se hace con
+   las dos variables que `.lx-home-grid` ya publica, sin una cuadrícula nueva. */
+.lx-home-grid--analytics {
+  --lx-home-grid-main: 58fr;
+  --lx-home-grid-side: 42fr;
+}
+
+/* El dónut y la lista de zonas, uno al lado del otro. */
+.lx-occupancy {
+  display: flex;
+  align-items: center;
+  gap: var(--lx-space-5);
+}
+.lx-occupancy__zones {
+  flex: 1;
+  min-width: 0;
+}
+@media (max-width: 720px) {
+  /* Por debajo de eso, el dónut y cinco filas de zona no caben en una fila sin que el nombre de la
+     zona se recorte: se apilan y el dónut se centra. */
+  .lx-occupancy {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .lx-occupancy .lx-donut {
+    align-self: center;
+  }
+}
+
+/* El punto de color delante del nombre de la zona. */
+.lx-zone-row__dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: var(--lx-space-2);
+  border-radius: var(--lx-radius-pill);
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
+/* La columna derecha de la fila 3, con dos tarjetas apiladas. */
+.lx-home-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lx-card-gap);
+  min-width: 0;
+}
+
+/* ---- «Zonas más utilizadas»: una clasificación, no una medición --------------------------------
+   Se lee por posición, así que es una `<ol>` de verdad: el orden es el dato. */
+.lx-zone-rank {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lx-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.lx-zone-rank__row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1.4fr) minmax(48px, 1fr) auto;
+  align-items: center;
+  gap: var(--lx-space-2);
+}
+.lx-zone-rank__pos {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--lx-radius-sm);
+  background: var(--lx-surface-2);
+  color: var(--lx-text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.lx-zone-rank__name {
+  font-size: var(--lx-text-meta-size);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lx-zone-rank__track {
+  height: 6px;
+  border-radius: var(--lx-radius-pill);
+  background: var(--lx-surface-2);
+  overflow: hidden;
+}
+.lx-zone-rank__fill {
+  display: block;
+  height: 100%;
+  border-radius: var(--lx-radius-pill);
+  background: var(--lx-primary);
+}
+.lx-zone-rank__value {
+  font-size: var(--lx-text-meta-size);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--lx-text-muted);
+}
+
+/* La franja de servicios, ahora al pie y secundaria (sección 6 del documento). Era parte de
+   `.lx-home__top`, donde compartía renglón con el título; sus reglas de entonces la alineaban a la
+   derecha de esa fila, así que se redefine acá como lo que es: una línea al final. */
+.lx-home__status {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--lx-space-2) var(--lx-space-4);
+  padding-top: var(--lx-space-2);
+  border-top: 1px solid var(--lx-border);
+  font-size: var(--lx-text-meta-size);
+  color: var(--lx-text-muted);
+}
+/* El título de la sección existe para que la franja no sea cuatro frases sueltas al final de la
+   página para quien la recorre con un lector de pantalla. Visualmente es una etiqueta más. */
+.lx-home__status-title {
+  margin: 0;
+  font-size: var(--lx-text-meta-size);
+  font-weight: 600;
+  color: var(--lx-text-subtle);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* ---- El avance de la boleta: riel en tablet, un renglón en celular (08-10-2026) --------------
+   Las dos presentaciones salen del mismo marcado. CSS elige cuál se ve: así el nombre accesible es
+   uno solo y no hay dos árboles que se puedan desincronizar. */
+.lx-step-track {
+  display: block;
+}
+/* Celular: «Paso 2 de 4 · Infracción». El riel con cuatro nombres no entra en 360px sin recortar
+   ninguno, y un nombre de paso recortado no dice en qué paso vas. */
+.lx-step-track__rail {
+  display: none;
+}
+.lx-step-track__compact {
+  display: flex;
+  align-items: baseline;
+  gap: var(--lx-space-2);
+  margin: 0;
+}
+.lx-step-track__compact-count {
+  font-size: var(--lx-text-meta-size);
+  font-weight: 700;
+  color: var(--lx-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.lx-step-track__compact-name {
+  font-size: var(--lx-text-card-title-size);
+  font-weight: 700;
+}
+
+/* Tablet arriba: el riel horizontal de la referencia, con los cuatro nombres y su conector. */
+@media (min-width: 768px) {
+  .lx-step-track__compact {
+    display: none;
+  }
+  .lx-step-track__rail {
+    display: flex;
+    align-items: center;
+    gap: var(--lx-space-2);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .lx-step-track__step {
+    display: flex;
+    align-items: center;
+    gap: var(--lx-space-2);
+    min-width: 0;
+  }
+  /* El conector entre dos pasos. Es un `::after` y no un elemento porque no es información: la
+     posición ya la dicen el número y `aria-current`. */
+  .lx-step-track__step:not(:last-child)::after {
+    content: '';
+    width: 28px;
+    height: 2px;
+    border-radius: var(--lx-radius-pill);
+    background: var(--lx-border);
+    flex-shrink: 0;
+  }
+  .lx-step-track__step[data-estado='hecho']::after {
+    background: var(--lx-primary);
+  }
+}
+.lx-step-track__mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--lx-radius-pill);
+  border: 1px solid var(--lx-border);
+  background: var(--lx-surface-2);
+  color: var(--lx-text-muted);
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+.lx-step-track__label {
+  font-size: var(--lx-text-meta-size);
+  color: var(--lx-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Hecho y actual se distinguen entre sí y del pendiente, y no sólo por color: el actual va en
+   negrita y el hecho lleva el relleno azul. */
+.lx-step-track__step[data-estado='hecho'] .lx-step-track__mark {
+  background: var(--lx-primary-fill);
+  border-color: var(--lx-primary-fill);
+  color: var(--lx-on-primary);
+}
+.lx-step-track__step[data-estado='actual'] .lx-step-track__mark {
+  border-color: var(--lx-primary);
+  color: var(--lx-primary);
+}
+.lx-step-track__step[data-estado='actual'] .lx-step-track__label {
+  color: var(--lx-text);
+  font-weight: 700;
+}

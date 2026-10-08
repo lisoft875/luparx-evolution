@@ -18,6 +18,7 @@ import {
   Modal,
   SectionHeader,
   Select,
+  StepTrack,
   Textarea,
 } from '@luparx/ui';
 import { InspectorShell } from '../components/InspectorShell';
@@ -134,6 +135,34 @@ export function NewCitationPage(): React.JSX.Element {
   );
 
   const photoMissing = Boolean(selectedType?.requiresPhoto) && photos.length === 0;
+
+  /**
+   * En qué punto va la boleta.
+   *
+   * <p>Los cuatro pasos son los de la referencia. «Hecho» significa que el paso tiene lo que
+   * necesita, no que alguien pasó por encima: la placa escrita, un tipo elegido, y la evidencia
+   * que ese tipo exija —si el tipo no pide foto, el paso está hecho sin foto, porque entonces no
+   * falta nada—. «Revisar» no se marca hecho nunca: se cierra al emitir, no antes.</p>
+   *
+   * <p>El paso actual es el PRIMERO que no está hecho, y no un contador que sube al desplazarse:
+   * alguien que vuelve a corregir la placa está en el paso uno, que es donde está el trabajo.</p>
+   */
+  const avance = useMemo(() => {
+    const hechos = [
+      plate.trim().length > 0,
+      typeId.length > 0,
+      typeId.length > 0 && !photoMissing,
+      false,
+    ];
+    const pasos = [
+      { label: t('inspector.cite.track.vehicle'), done: hechos[0] },
+      { label: t('inspector.cite.track.infraction'), done: hechos[1] },
+      { label: t('inspector.cite.track.evidence'), done: hechos[2] },
+      { label: t('inspector.cite.track.review'), done: hechos[3] },
+    ];
+    const primeroPendiente = hechos.findIndex((hecho) => !hecho);
+    return { pasos, actual: primeroPendiente === -1 ? pasos.length - 1 : primeroPendiente };
+  }, [plate, typeId, photoMissing, t]);
   const canSubmit = Boolean(typeId) && plate.trim().length > 0 && !photoMissing && !busy;
 
   // The bay and the zone travel together for the citation too: sending one without the other
@@ -326,6 +355,32 @@ export function NewCitationPage(): React.JSX.Element {
   return (
     <InspectorShell>
       <h1 className="lx-text-screen-title">{t('inspector.cite.title')}</h1>
+
+      {/*
+        El avance de la boleta (08-10-2026, paso 6 de la especificación visual responsive).
+
+        El documento pide «stepper horizontal en tablet: 1 Vehículo, 2 Infracción, 3 Evidencia,
+        4 Revisar» y «en celular, stepper compacto o encabezado Paso X de 4». Es exactamente lo que
+        hace `StepTrack`, con las dos presentaciones desde el mismo marcado.
+
+        Lo que NO hace es partir este formulario en cuatro pantallas. Sigue siendo un solo
+        desplazamiento con sus tarjetas, y eso es deliberado: un asistente cambiaría la validación,
+        el borrador y el camino de la cola sin conexión, y el documento pide no reescribir lógica
+        que ya funciona. Lo que faltaba era decir en qué punto va uno.
+
+        Y el avance es REAL, no decorativo: cada paso está «hecho» cuando tiene lo que necesita
+        —placa escrita, tipo elegido, la foto que ese tipo exija— y el paso actual es el primero que
+        todavía no lo está. Un riel que avanza por desplazarse no informa de nada.
+      */}
+      <StepTrack
+        title={t('inspector.cite.track.title')}
+        steps={avance.pasos}
+        current={avance.actual}
+        compactLabel={t('inspector.cite.track.compact', {
+          current: avance.actual + 1,
+          total: avance.pasos.length,
+        })}
+      />
 
       <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--lx-card-gap)' }}>
         <Card>

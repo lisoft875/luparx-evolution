@@ -19,17 +19,19 @@ import {
   IconCar,
   IconChart,
   IconFine,
-  IconGauge,
   IconPark,
   IconPin,
   IconReports,
   IconSearch,
   IconTopUp,
+  IconChevronRight,
+  IconUsers,
   MetricCard,
+  OccupancyDonut,
   SectionHeader,
   Skeleton,
 } from '@luparx/ui';
-import type { BarChartDatum, MetricTone } from '@luparx/ui';
+import type { BarChartDatum } from '@luparx/ui';
 import { AdminShell } from '../components/AdminShell';
 
 /**
@@ -63,10 +65,18 @@ const EVENTOS_A_PEDIR = 40;
  * completa debajo. Con cinco, la tarjeta de actividad medía 434px —más que el gráfico y la
  * ocupación juntos— y era ella sola la que decidía el alto de la fila inferior.</p>
  */
-const EVENTOS_A_MOSTRAR = 3;
+/* Cinco desde el 08-10-2026, y el motivo es estructural y no de gusto. Eran tres porque la fila
+   inferior tenía dos tarjetas —actividad y accesos— y con cinco eventos la de actividad medía
+   434px y decidía ella sola el alto de la fila. La referencia aprobada reparte esa fila en tres
+   bloques: actividad a la izquierda y DOS tarjetas apiladas a la derecha (accesos rápidos y el
+   ranking de zonas). Con la derecha apilada, la izquierda necesita el alto, y el documento pide
+   «4-5 eventos reales con hora». */
+const EVENTOS_A_MOSTRAR = 5;
 const OCUPACION_ALTA = 85;
 const OCUPACION_MEDIA = 70;
-const ZONAS_EN_PORTADA = 6;
+const ZONAS_EN_PORTADA = 5;
+/** Cuántas zonas entran en el ranking «Zonas más utilizadas». La referencia muestra cuatro. */
+const ZONAS_EN_RANKING = 4;
 const DIAS_DEL_GRAFICO = 7;
 
 function isoDate(date: Date): string {
@@ -106,13 +116,14 @@ function isoDate(date: Date): string {
  */
 export function HomePage(): React.JSX.Element {
   const { t, locale } = useTranslation();
-  const { activeTenant, apiClient } = useAuth();
+  const { activeTenant, apiClient, me } = useAuth();
   const permissions = usePermissions();
   const navigate = useNavigate();
   const puedeVerCifras = permissions.has('AUDIT_READ');
 
   const ahora = new Date();
   const desdeHoy = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
+  const desdeAyer = new Date(desdeHoy.getFullYear(), desdeHoy.getMonth(), desdeHoy.getDate() - 1);
 
   const panel = useQuery({
     queryKey: ['admin', 'home', 'panel', isoDate(desdeHoy)],
@@ -129,6 +140,48 @@ export function HomePage(): React.JSX.Element {
       return apiClient.adminDashboard.revenueSeries({ from: isoDate(inicio), to: isoDate(desdeHoy) });
     },
     enabled: puedeVerCifras,
+  });
+
+  /*
+    «Usuarios registrados» (08-10-2026), el KPI nuevo de la referencia.
+
+    No hay endpoint de conteo, y no hace falta inventarlo: `/api/v1/admin/users` es una respuesta
+    paginada y trae `totalElements`, que es el total REAL de cuentas de esta municipalidad. Se pide
+    `size: 1` a propósito —se quiere el total, no la lista—, así que la página viaja con una fila y
+    el número es el del servidor.
+
+    Sin filtro de portal: el rótulo dice «usuarios registrados», que es toda la gente con cuenta
+    acá. Filtrar por `CITIZEN` daría otro número y otro nombre.
+
+    Cinco minutos de `staleTime`: un total de cuentas no cambia de un minuto a otro, y esta
+    pantalla se refresca cada sesenta segundos por el panel.
+  */
+  const usuarios = useQuery({
+    queryKey: ['admin', 'home', 'usuarios'],
+    queryFn: () => apiClient.adminUsers.list({ page: 0, size: 1 }),
+    enabled: puedeVerCifras,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  /*
+    El panel de AYER, sólo para la variación de multas emitidas.
+
+    La referencia pone «↓ 8% vs. ayer» en esa tarjeta y hasta hoy no había con qué: el panel sólo
+    se pedía para hoy. Esto es una llamada más, una sola vez por sesión —`staleTime: Infinity`,
+    porque ayer ya no cambia— y sin refresco periódico. Las otras dos tarjetas siguen sin
+    variación y eso es deliberado: estacionamientos activos es un valor de AHORA sin historia, y el
+    total de usuarios registrados no tiene un «ayer» que el servidor sepa contar. La regla 7 del
+    documento es explícita: si no hay comparación real, se omite el porcentaje.
+  */
+  const panelAyer = useQuery({
+    queryKey: ['admin', 'home', 'panel-ayer', isoDate(desdeAyer)],
+    queryFn: () =>
+      apiClient.adminDashboard.get({
+        from: desdeAyer.toISOString(),
+        to: new Date(desdeHoy.getTime() - 1).toISOString(),
+      }),
+    enabled: puedeVerCifras,
+    staleTime: Infinity,
   });
 
   const actividad = useQuery({
@@ -188,6 +241,40 @@ export function HomePage(): React.JSX.Element {
     [panel.data],
   );
 
+  /**
+   * La variación de multas contra ayer (08-10-2026).
+   *
+   * <p>`null` —y entonces la tarjeta no muestra porcentaje— en los dos casos en que un porcentaje
+   * no significaría nada: mientras la respuesta de ayer viaja, y cuando ayer hubo cero. Dividir
+   * entre cero da infinito, y «+∞%» no es un dato; de dos a cero tampoco es «−200%». El documento
+   * lo dice en su regla 7: si no hay comparación real, se omite.</p>
+   */
+  const multasVariacion = useMemo(() => {
+    if (!panelAyer.data) return null;
+    const ayer = panelAyer.data.citations.reduce((suma, grupo) => suma + grupo.count, 0);
+    if (ayer === 0) return null;
+    return Math.round(((boletasHoy - ayer) / ayer) * 100);
+  }, [panelAyer.data, boletasHoy]);
+
+  /**
+   * Las zonas ordenadas por ocupación, que alimentan los dos bloques de la referencia: la lista del
+   * dónut y el ranking «Zonas más utilizadas».
+   *
+   * <p>Se calculan una vez y se reparten: son la misma pregunta hecha dos veces, y tener dos
+   * ordenaciones distintas del mismo dato en la misma pantalla es cómo se termina con la zona más
+   * llena en segundo lugar en una tarjeta y en primero en la otra.</p>
+   *
+   * <p>Sólo las que tienen porcentaje. Una zona sin bahías numeradas no está vacía: no tiene con
+   * qué medirse, y meterla en un ranking de «más utilizadas» la pondría última por una ausencia.</p>
+   */
+  const zonasPorUso = useMemo(
+    () =>
+      (panel.data?.occupancy.zones ?? [])
+        .filter((zona) => zona.percent !== null)
+        .sort((a, b) => (b.percent ?? 0) - (a.percent ?? 0)),
+    [panel.data],
+  );
+
   const ocupacion = useMemo(() => {
     const zones = (panel.data?.occupancy.zones ?? []).filter((zona) => zona.percent !== null);
     if (zones.length === 0) return null;
@@ -202,7 +289,12 @@ export function HomePage(): React.JSX.Element {
     const currency = serie.data?.currencyCode ?? 'CRC';
     return days.map((day) => ({
       key: day.date,
-      label: formatDate(`${day.date}T12:00:00`, locale, { day: 'numeric', month: 'numeric' }),
+      /* Lun, Mar, Mié… y no «5/10» (08-10-2026). La referencia rotula el bloque «Ingresos esta
+         semana» con los días de la semana, y para siete barras es la etiqueta correcta: dice qué
+         día de la semana fue sin hacer la cuenta. La fecha completa no se pierde —va en
+         `labelLong` y en `ariaLabel`, que es lo que se lee al pasar por encima y lo que anuncia un
+         lector de pantalla. */
+      label: formatDate(`${day.date}T12:00:00`, locale, { weekday: 'short' }),
       labelLong: formatDate(`${day.date}T12:00:00`, locale, { day: 'numeric', month: 'long' }),
       value: day.totalMinor,
       valueLabel: formatCurrencyMinor(day.totalMinor, currency, locale),
@@ -264,6 +356,7 @@ export function HomePage(): React.JSX.Element {
   }, [panel.isSuccess, panel.isError, panel.data, t]);
 
   const municipalidad = activeTenant?.name ?? t('app.name');
+  const nombre = me?.user.givenName ?? null;
   const pie = (
     <>
       <span>{t('admin.home.footer.product')}</span>
@@ -274,80 +367,44 @@ export function HomePage(): React.JSX.Element {
   return (
     <AdminShell footer={pie}>
       <div className="lx-home">
-        {/* --- A. encabezado Y estado del sistema, en un renglón -------------------------------
-            La v4 §1 pide que el contenido operativo entre sin scroll en una laptop. Medido en
-            staging, el encabezado apilado sobre la franja de estado gastaba ~160px antes del
-            primer número: más que la fila entera de KPI. Ninguno de los dos es un dato del
-            negocio —uno dice dónde estás, el otro si los servicios responden—, así que comparten
-            renglón y el alto recuperado se lo queda el gráfico. Nada se eliminó: están los
-            cuatro indicadores, el nombre, la fecha y la hora. */}
+        {/* --- B. el saludo ----------------------------------------------------------------
+            La referencia usa este bloque como entrada humana al tablero: «Hola, [nombre]» y
+            debajo «Administración municipal · Escazú», con la fecha y la hora a la derecha.
+
+            Antes acá estaba el nombre de la municipalidad como `h1` y, en el mismo renglón, la
+            franja de estado de los servicios. La franja se fue al final de la página: la sección 6
+            del documento pide que los estados técnicos «no dominen la cabecera» y que, si se
+            mantienen, sean «secundarios y compactos». Ninguno se eliminó — están los cuatro, en
+            una línea, donde se consultan cuando se buscan y no cuando no.
+
+            El nombre es el de verdad cuando la sesión lo trae. La municipalidad no se pierde: pasa
+            al renglón de abajo, que es donde la referencia la pone. */}
         <header className="lx-home__top">
           <div className="lx-home__title">
-            <h1>{municipalidad}</h1>
-            <p className="lx-text-meta lx-home__when">
-              {t('admin.home.subtitle', { date: formatDate(ahora, locale, { dateStyle: 'long' }) })}
-              {' · '}
-              {formatTime(ahora, locale)}
-            </p>
+            <h1>
+              {nombre ? t('admin.home.greeting', { name: nombre }) : t('admin.home.greeting.plain')}
+            </h1>
+            <p className="lx-text-meta lx-home__when">{t('admin.home.where', { tenant: municipalidad })}</p>
           </div>
-          {puedeVerCifras ? (
-            <div className="lx-home__status" aria-busy={panel.isLoading}>
-              {servicios.map((servicio) => (
-                <span key={servicio.clave} className="lx-status-bar__item">
-                  <span
-                    className={`lx-status-strip__dot lx-status-strip__dot--${servicio.estado}`}
-                    aria-hidden="true"
-                  />
-                  <span>
-                    {servicio.etiqueta}: <strong>{servicio.texto}</strong>
-                  </span>
-                </span>
-              ))}
-            </div>
-          ) : null}
+          <div className="lx-home__clock">
+            <span className="lx-home__date">{formatDate(ahora, locale, { dateStyle: 'full' })}</span>
+            <span className="lx-home__hour">{formatTime(ahora, locale)}</span>
+          </div>
         </header>
 
         {puedeVerCifras ? (
           <>
-            {/* --- C. los cuatro KPIs --------------------------------------------------------- */}
+            {/* --- C. los cuatro KPI de la referencia, en su orden -----------------------------
+                Cambia el reparto, no el componente: siguen siendo cuatro `MetricCard`, que ya
+                traía icono con acento, número grande, variación y chevron. Lo que cambia es QUÉ
+                miden. «Ocupación» sale de la fila —pasa a ser el dónut de la fila siguiente, que
+                es lo que el documento pide— y entra «Usuarios registrados».
+
+                La variación aparece en dos de las cuatro, y eso es a propósito: recaudación tiene
+                la serie de días e ingresos de ayer, y multas tiene el panel de ayer. Los
+                estacionamientos activos son un valor de AHORA y el total de cuentas no tiene un
+                ayer que el servidor sepa contar; ahí no se dibuja un porcentaje. */}
             <div className="lx-home-kpis">
-              <MetricCard
-                icon={<IconChart size={20} />}
-                tone="primary"
-                label={t('admin.home.kpi.revenue')}
-                value={
-                  serie.isLoading ? (
-                    <Skeleton height="1.5rem" width="70%" />
-                  ) : recaudacion ? (
-                    dinero(recaudacion.totalMinor, recaudacion.currencyCode)
-                  ) : (
-                    t('admin.dashboard.noData')
-                  )
-                }
-                // La variación existe SÓLO acá, que es donde hay un ayer con el cual comparar.
-                delta={
-                  recaudacion?.variacion != null
-                    ? t('admin.home.kpi.vsYesterday', {
-                        delta: `${recaudacion.variacion > 0 ? '+' : ''}${recaudacion.variacion}%`,
-                      })
-                    : undefined
-                }
-                // v4 §5: sin un ayer contra el cual comparar NO se calcula un porcentaje. Decirlo
-                // cuesta un renglón que igual está reservado; inventarlo cuesta que alguien repita
-                // la cifra en una reunión.
-                hint={recaudacion?.variacion == null ? t('admin.home.kpi.noComparison') : undefined}
-                trend={
-                  recaudacion?.variacion == null
-                    ? 'flat'
-                    : recaudacion.variacion > 0
-                      ? 'up'
-                      : recaudacion.variacion < 0
-                        ? 'down'
-                        : 'flat'
-                }
-                onOpen={() => navigate('/billing')}
-                openLabel={t('admin.home.kpi.open', { label: t('admin.home.kpi.revenue') })}
-              />
               <MetricCard
                 icon={<IconCar size={20} />}
                 tone="info"
@@ -364,40 +421,123 @@ export function HomePage(): React.JSX.Element {
                 openLabel={t('admin.home.kpi.open', { label: t('admin.home.kpi.activeSessions') })}
               />
               <MetricCard
+                icon={<IconUsers size={20} />}
+                tone="primary"
+                label={t('admin.home.kpi.registeredUsers')}
+                value={
+                  usuarios.isLoading ? (
+                    <Skeleton height="1.5rem" width="60%" />
+                  ) : usuarios.isError ? (
+                    t('admin.dashboard.noData')
+                  ) : (
+                    String(usuarios.data?.totalElements ?? 0)
+                  )
+                }
+                hint={t('admin.home.kpi.registered')}
+                onOpen={() => navigate('/users')}
+                openLabel={t('admin.home.kpi.open', { label: t('admin.home.kpi.registeredUsers') })}
+              />
+              <MetricCard
                 icon={<IconFine size={20} />}
                 tone="warning"
                 label={t('admin.home.kpi.citations')}
                 value={panel.isLoading ? <Skeleton height="1.5rem" width="40%" /> : String(boletasHoy)}
-                hint={t('admin.home.kpi.inPeriod')}
+                delta={
+                  multasVariacion != null
+                    ? t('admin.home.kpi.vsYesterday', {
+                        delta: `${multasVariacion > 0 ? '+' : ''}${multasVariacion}%`,
+                      })
+                    : undefined
+                }
+                trend={
+                  multasVariacion == null ? 'flat' : multasVariacion > 0 ? 'up' : multasVariacion < 0 ? 'down' : 'flat'
+                }
+                hint={multasVariacion == null ? t('admin.home.kpi.inPeriod') : undefined}
                 onOpen={irALasBoletasDeHoy}
                 openLabel={t('admin.home.kpi.open', { label: t('admin.home.kpi.citations') })}
               />
               <MetricCard
-                icon={<IconGauge size={20} />}
-                tone={ocupacionTone(ocupacion)}
-                label={t('admin.home.kpi.occupancy')}
+                icon={<IconChart size={20} />}
+                tone="success"
+                label={t('admin.home.kpi.revenue')}
                 value={
-                  panel.isLoading ? (
-                    <Skeleton height="1.5rem" width="40%" />
-                  ) : ocupacion != null ? (
-                    `${ocupacion}%`
+                  serie.isLoading ? (
+                    <Skeleton height="1.5rem" width="70%" />
+                  ) : recaudacion ? (
+                    dinero(recaudacion.totalMinor, recaudacion.currencyCode)
                   ) : (
                     t('admin.dashboard.noData')
                   )
                 }
-                hint={ocupacion != null ? t('admin.home.kpi.rightNow') : t('admin.home.kpi.noBaysHint')}
-                onOpen={() => navigate('/dashboard')}
-                openLabel={t('admin.home.kpi.open', { label: t('admin.home.kpi.occupancy') })}
+                delta={
+                  recaudacion?.variacion != null
+                    ? t('admin.home.kpi.vsYesterday', {
+                        delta: `${recaudacion.variacion > 0 ? '+' : ''}${recaudacion.variacion}%`,
+                      })
+                    : undefined
+                }
+                hint={recaudacion?.variacion == null ? t('admin.home.kpi.noComparison') : undefined}
+                trend={
+                  recaudacion?.variacion == null
+                    ? 'flat'
+                    : recaudacion.variacion > 0
+                      ? 'up'
+                      : recaudacion.variacion < 0
+                        ? 'down'
+                        : 'flat'
+                }
+                onOpen={() => navigate('/billing')}
+                openLabel={t('admin.home.kpi.open', { label: t('admin.home.kpi.revenue') })}
               />
             </div>
 
-            {/* --- D. analítica: gráfico 65% + ocupación 35% ---------------------------------- */}
-            <div className="lx-home-grid">
+            {/* --- D. fila 2: ocupación (ancha) + ingresos de la semana -------------------------
+                La inversión que pide la sección 6 del documento: el gráfico de recaudación tenía
+                el 65% del ancho y la ocupación el 35%; ahora es al revés. «Reducir drásticamente
+                su protagonismo» y «llevar la ocupación por zona al bloque de Ocupación en tiempo
+                real: dónut + lista de zonas». El gráfico no se elimina ni se reemplaza: es el
+                mismo `BarChart` con la misma serie, en la columna angosta. */}
+            <div className="lx-home-grid lx-home-grid--analytics">
               <Card className="lx-card--dense">
                 <SectionHeader
-                  title={t('admin.home.revenue.title')}
-                  description={t('admin.home.revenue.description')}
+                  title={t('admin.home.zones.title')}
+                  aside={
+                    <Link to="/dashboard" className="lx-linklike">
+                      {t('admin.home.occupancy.detail')}
+                      <IconChevronRight size={14} />
+                    </Link>
+                  }
                 />
+                {panel.isLoading ? (
+                  <div className="lx-occupancy">
+                    <Skeleton height={168} width={168} shape="block" />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <Skeleton height="1.75rem" />
+                      <Skeleton height="1.75rem" />
+                      <Skeleton height="1.75rem" />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="lx-occupancy">
+                    <OccupancyDonut
+                      percent={ocupacion}
+                      caption={t('admin.home.occupancy.total')}
+                      emptyLabel={t('admin.home.occupancy.noBase')}
+                      title={t('admin.home.zones.title')}
+                    />
+                    <div className="lx-occupancy__zones">
+                      <ZonesOccupancy
+                        zones={panel.data?.occupancy.zones ?? []}
+                        emptyLabel={t('admin.home.zones.empty')}
+                        noBaysLabel={t('admin.home.zones.noBays')}
+                      />
+                    </div>
+                  </div>
+                )}
+              </Card>
+
+              <Card className="lx-card--dense">
+                <SectionHeader title={t('admin.home.revenue.title')} />
                 {serie.isLoading ? (
                   // Un bloque del tamaño del gráfico, no la palabra «Cargando»: así la pantalla no
                   // se reacomoda cuando el dato llega.
@@ -432,40 +572,23 @@ export function HomePage(): React.JSX.Element {
                   </>
                 )}
               </Card>
-
-              <Card className="lx-card--dense">
-                <SectionHeader
-                  title={t('admin.home.zones.title')}
-                  description={t('admin.home.zones.description')}
-                />
-                {panel.isLoading ? (
-                  <>
-                    <Skeleton height="2.5rem" />
-                    <Skeleton height="2.5rem" />
-                    <Skeleton height="2.5rem" />
-                  </>
-                ) : (
-                  <ZonesOccupancy
-                    zones={panel.data?.occupancy.zones ?? []}
-                    emptyLabel={t('admin.home.zones.empty')}
-                    noBaysLabel={t('admin.home.zones.noBays')}
-                  />
-                )}
-              </Card>
             </div>
 
-            {/* --- E. operación: actividad 60% + accesos 40% ---------------------------------- */}
+            {/* --- E. fila 3: actividad | (accesos rápidos + zonas más utilizadas) --------------
+                La columna derecha lleva DOS tarjetas apiladas, que es la composición de la
+                referencia. Es también lo que justifica subir la actividad de tres eventos a cinco:
+                con la derecha apilada, la izquierda tiene el alto para gastarlo. */}
             <div className="lx-home-grid lx-home-grid--operation">
               <Card className="lx-card--dense">
                 <SectionHeader
                   title={t('admin.home.activity.title')}
-                  description={t('admin.home.activity.description')}
                   // El enlace al registro completo va en el renglón del título y no debajo de la
                   // lista: ahí cuesta 0px de alto en vez de 30, y queda al lado de lo que nombra.
                   aside={
                     eventos.length > 0 ? (
                       <Link to="/audit" className="lx-linklike">
                         {t('admin.home.activity.seeAll')}
+                        <IconChevronRight size={14} />
                       </Link>
                     ) : undefined
                   }
@@ -483,38 +606,83 @@ export function HomePage(): React.JSX.Element {
                     <span className="lx-feed__empty-body">{t('admin.home.activity.emptyBody')}</span>
                   </p>
                 ) : (
-                  <>
-                    <div className="lx-feed">
-                      {eventos.map((evento) => {
-                        const acto = ACTOS[evento.action];
-                        return (
-                          <div key={evento.id} className="lx-feed__item">
-                            <span className="lx-feed__icon" aria-hidden="true">
-                              {acto?.icon}
+                  <div className="lx-feed">
+                    {eventos.map((evento) => {
+                      const acto = ACTOS[evento.action];
+                      return (
+                        <div key={evento.id} className="lx-feed__item">
+                          <span className="lx-feed__icon" aria-hidden="true">
+                            {acto?.icon}
+                          </span>
+                          <span className="lx-feed__what">
+                            <span className="lx-feed__title">{t(acto?.key as TranslationKey)}</span>
+                            <span className="lx-feed__context">
+                              {evento.actorName ?? t('admin.home.activity.system')}
                             </span>
-                            <span className="lx-feed__what">
-                              <span className="lx-feed__title">{t(acto?.key as TranslationKey)}</span>
-                              <span className="lx-feed__context">
-                                {evento.actorName ?? t('admin.home.activity.system')}
-                              </span>
-                            </span>
-                            <span className="lx-feed__when">
-                              {formatRelativeTime(evento.occurredAt, locale, ahora) ??
-                                formatDate(evento.occurredAt, locale)}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </>
+                          </span>
+                          <span className="lx-feed__when">
+                            {formatRelativeTime(evento.occurredAt, locale, ahora) ??
+                              formatDate(evento.occurredAt, locale)}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
                 )}
               </Card>
 
-              <Card className="lx-card--dense">
-                <SectionHeader title={t('admin.home.quick.title')} />
-                <QuickActions />
-              </Card>
+              <div className="lx-home-stack">
+                <Card className="lx-card--dense">
+                  <SectionHeader title={t('admin.home.quick.title')} />
+                  <QuickActions />
+                </Card>
+
+                {/* «Zonas más utilizadas»: el bloque nuevo de la referencia. Mismo dato que la
+                    lista del dónut —`occupancy.zones`, ordenado una sola vez más arriba— leído de
+                    otra manera: ahí es «cuán llena está cada una», acá es «cuáles son las que más
+                    se usan». Las dos salen de la misma ordenación a propósito. */}
+                <Card className="lx-card--dense">
+                  <SectionHeader
+                    title={t('admin.home.rank.title')}
+                    aside={
+                      <Link to="/zones" className="lx-linklike">
+                        {t('admin.home.rank.detail')}
+                        <IconChevronRight size={14} />
+                      </Link>
+                    }
+                  />
+                  {panel.isLoading ? (
+                    <>
+                      <Skeleton height="1.75rem" />
+                      <Skeleton height="1.75rem" />
+                      <Skeleton height="1.75rem" />
+                    </>
+                  ) : (
+                    <ZoneRanking zonas={zonasPorUso} emptyLabel={t('admin.home.rank.empty')} />
+                  )}
+                </Card>
+              </div>
             </div>
+
+            {/* --- Estado de los servicios, al final y en un renglón ---------------------------
+                Estaba en la cabecera, compartiendo fila con el título. La sección 6 del documento
+                pide que los estados técnicos no dominen la cabecera y que, si se mantienen, sean
+                secundarios y compactos: están los cuatro, en una línea, al pie del tablero.
+                Ninguno se eliminó — lo que cambió es el orden de lectura de la pantalla. */}
+            <section className="lx-home__status" aria-busy={panel.isLoading}>
+              <h2 className="lx-home__status-title">{t('admin.home.system.title')}</h2>
+              {servicios.map((servicio) => (
+                <span key={servicio.clave} className="lx-status-bar__item">
+                  <span
+                    className={`lx-status-strip__dot lx-status-strip__dot--${servicio.estado}`}
+                    aria-hidden="true"
+                  />
+                  <span>
+                    {servicio.etiqueta}: <strong>{servicio.texto}</strong>
+                  </span>
+                </span>
+              ))}
+            </section>
           </>
         ) : (
           <>
@@ -535,12 +703,6 @@ export function HomePage(): React.JSX.Element {
   );
 }
 
-/** El acento del KPI de ocupación: es la única métrica cuyo valor sí tiene estado. */
-function ocupacionTone(percent: number | null): MetricTone {
-  if (percent == null) return 'primary';
-  if (percent >= OCUPACION_ALTA) return 'warning';
-  return 'success';
-}
 /**
  * Una fila por zona: nombre a la izquierda, porcentaje a la derecha, barra fina debajo.
  *
@@ -575,7 +737,7 @@ function ZonesOccupancy({
 
   return (
     <div>
-      {ordenadas.map((zona) => {
+      {ordenadas.map((zona, indice) => {
         const pct = zona.percent;
         const tono =
           pct == null
@@ -588,6 +750,15 @@ function ZonesOccupancy({
         return (
           <div key={zona.zoneId} className="lx-zone-row">
             <span className="lx-zone-row__name" title={zona.name}>
+              {/* El punto de color delante del nombre, como en la referencia. Es decoración y por
+                  eso está oculto para un lector de pantalla: el porcentaje de la derecha es lo que
+                  informa, y el color no distingue a una zona de otra por sí solo — sirve para
+                  seguir una fila con la vista en una lista de cinco. */}
+              <span
+                className="lx-zone-row__dot"
+                style={{ background: `var(--lx-series-${(indice % 5) + 1})` }}
+                aria-hidden="true"
+              />
               {zona.name}
             </span>
             <span className="lx-zone-row__value">{pct == null ? noBaysLabel : `${pct}%`}</span>
@@ -676,5 +847,53 @@ function QuickActions(): React.JSX.Element {
         </Link>
       ))}
     </div>
+  );
+}
+
+/**
+ * «Zonas más utilizadas»: el mismo dato que la lista del dónut, leído como clasificación.
+ *
+ * <p>Por qué dos bloques y no uno: son dos preguntas distintas con la misma materia prima. La lista
+ * del dónut contesta «cuán llena está cada zona» —y por eso lleva el color de severidad y las zonas
+ * sin bahías numeradas al final—; esto contesta «cuáles son las que más se usan», que es una
+ * clasificación y se lee por posición. La referencia aprobada las muestra como dos tarjetas
+ * separadas, y la ordenación es UNA, calculada en `zonasPorUso`, para que la zona que está primera
+ * acá no esté segunda allá.</p>
+ *
+ * <p>El número de posición va en el marcado y no como un `::before` de CSS: es información —el
+ * puesto— y tiene que leerse en voz alta junto al nombre.</p>
+ */
+function ZoneRanking({
+  zonas,
+  emptyLabel,
+}: {
+  zonas: readonly { zoneId: string; name: string; percent: number | null }[];
+  emptyLabel: string;
+}): React.JSX.Element {
+  if (zonas.length === 0) return <p className="lx-text-meta">{emptyLabel}</p>;
+  // La barra se mide contra la PRIMERA, no contra 100: en una municipalidad cuya zona más usada va
+  // al 42%, cuatro barras contra 100 son cuatro muñones casi iguales y la clasificación no se ve.
+  // El porcentaje real va siempre escrito al lado, que es de donde se lee el valor.
+  const techo = Math.max(...zonas.map((z) => z.percent ?? 0), 1);
+  return (
+    <ol className="lx-zone-rank">
+      {zonas.slice(0, ZONAS_EN_RANKING).map((zona, indice) => (
+        <li key={zona.zoneId} className="lx-zone-rank__row">
+          <span className="lx-zone-rank__pos" aria-hidden="true">
+            {indice + 1}
+          </span>
+          <span className="lx-zone-rank__name" title={zona.name}>
+            {zona.name}
+          </span>
+          <span className="lx-zone-rank__track">
+            <span
+              className="lx-zone-rank__fill"
+              style={{ width: `${Math.round(((zona.percent ?? 0) / techo) * 100)}%` }}
+            />
+          </span>
+          <span className="lx-zone-rank__value">{zona.percent ?? 0}%</span>
+        </li>
+      ))}
+    </ol>
   );
 }
