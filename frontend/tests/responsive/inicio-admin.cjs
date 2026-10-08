@@ -696,8 +696,17 @@ async function medir(page, dedo) {
         `eventos=${comp.eventos} vacíoDiseñado=${comp.actividadVacia}`,
       );
       if (comp.eventos === 0) {
+        /*
+          La línea que contestó la pregunta (08-10-2026).
+
+          Imprimió «actos visibles: ninguno» y eso mandó a comparar la lista blanca de la portada
+          —doce actos— contra `AuditAction` del servidor, que tiene ochenta y ocho. Faltaba
+          `PARKING_SESSION_STARTED`, el acto más frecuente de una municipalidad de
+          estacionamiento. Se deja la línea: si la tarjeta vuelve a vaciarse, lo primero que hay
+          que saber es si el rastro no trae nada o si trae algo que la pantalla descarta.
+        */
         console.log(
-          `  ··  la actividad está vacía en staging; actos visibles: ${comp.actosEnPantalla.join(' · ') || 'ninguno'}`,
+          `  ··  la actividad está vacía; actos visibles: ${comp.actosEnPantalla.join(' · ') || 'ninguno'}`,
         );
       }
       okInicio(

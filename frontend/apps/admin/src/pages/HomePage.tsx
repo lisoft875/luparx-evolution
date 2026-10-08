@@ -18,13 +18,15 @@ import {
   Card,
   IconCar,
   IconChart,
+  IconChevronRight,
+  IconClock,
   IconFine,
   IconPark,
   IconPin,
   IconReports,
   IconSearch,
+  IconShield,
   IconTopUp,
-  IconChevronRight,
   IconUsers,
   MetricCard,
   OccupancyDonut,
@@ -42,6 +44,34 @@ import { AdminShell } from '../components/AdminShell';
  * que no esté acá no puede colarse sin traducir ni sin icono.</p>
  */
 const ACTOS: Readonly<Record<string, { key: TranslationKey; icon: React.ReactNode }>> = {
+  /*
+    Los cinco de abajo entraron el 08-10-2026, y el motivo es un defecto medido, no una opinión.
+
+    La tarjeta «Actividad reciente» salía VACÍA en staging. El arnés lo imprimió —«actos visibles:
+    ninguno»— y la causa estaba acá: la lista blanca tenía doce actos y el servidor escribe
+    ochenta y ocho, y entre los setenta y seis que faltaban estaba `PARKING_SESSION_STARTED`, que
+    es el acto MÁS frecuente de una municipalidad de estacionamiento. Una portada que no puede
+    mostrar que alguien se estacionó no es una portada de actividad.
+
+    Y no es una suposición sobre qué debería salir: la referencia visual aprobada dibuja cinco
+    filas, y cuatro de ellas —«Nuevo estacionamiento iniciado», «Multa emitida», «Usuario
+    registrado» y «Restablecer acceso»— necesitan tres actos que la lista no aceptaba. Se
+    comprobó además que los cinco EXISTEN en `AuditAction` del servidor y que hay código que los
+    graba; añadir un nombre que nadie escribe habría dejado la tarjeta igual de vacía.
+
+    Lo que sigue fuera, y a propósito: inicios de sesión, fallos de contraseña, reutilización de
+    refresco, exportaciones, purgas y todo lo de plataforma. La lista blanca existe para que el
+    rastro de sistema no inunde la portada, y eso no cambia — lo que cambia es que los actos del
+    NEGOCIO ahora están todos.
+  */
+  PARKING_SESSION_STARTED: { key: 'admin.home.activity.PARKING_SESSION_STARTED', icon: <IconPark size={16} /> },
+  PARKING_SESSION_FINISHED: { key: 'admin.home.activity.PARKING_SESSION_FINISHED', icon: <IconClock size={16} /> },
+  PARKING_ZONE_CREATED: { key: 'admin.home.activity.PARKING_ZONE_CREATED', icon: <IconPin size={16} /> },
+  USER_REGISTERED: { key: 'admin.home.activity.USER_REGISTERED', icon: <IconUsers size={16} /> },
+  USER_PASSWORD_RESET_REQUESTED: {
+    key: 'admin.home.activity.USER_PASSWORD_RESET_REQUESTED',
+    icon: <IconShield size={16} />,
+  },
   WALLET_TOPUP_RECORDED: { key: 'admin.home.activity.WALLET_TOPUP_RECORDED', icon: <IconTopUp size={16} /> },
   CITATION_ISSUED: { key: 'admin.home.activity.CITATION_ISSUED', icon: <IconFine size={16} /> },
   CITATION_PAID: { key: 'admin.home.activity.CITATION_PAID', icon: <IconFine size={16} /> },

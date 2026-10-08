@@ -458,6 +458,14 @@ export const esCR = {
     'Apenas se emita una boleta, se registre una recarga o alguien cambie una tarifa, va a aparecer acá.',
   'admin.home.activity.system': 'Sistema',
   'admin.home.activity.seeAll': 'Ver todas',
+  /* --- Actos que faltaban en la portada (08-10-2026) ----------------------------------------
+     Los cuatro primeros son los que la referencia visual aprobada dibuja en «Actividad reciente»
+     y que la lista blanca no aceptaba. Ver la nota en HomePage. */
+  'admin.home.activity.PARKING_SESSION_STARTED': 'Nuevo estacionamiento iniciado',
+  'admin.home.activity.PARKING_SESSION_FINISHED': 'Estacionamiento finalizado',
+  'admin.home.activity.USER_REGISTERED': 'Usuario registrado',
+  'admin.home.activity.USER_PASSWORD_RESET_REQUESTED': 'Restablecer acceso',
+  'admin.home.activity.PARKING_ZONE_CREATED': 'Zona creada',
   'admin.home.activity.WALLET_TOPUP_RECORDED': 'Recarga registrada',
   'admin.home.activity.CITATION_ISSUED': 'Boleta emitida',
   'admin.home.activity.CITATION_PAID': 'Boleta pagada',
