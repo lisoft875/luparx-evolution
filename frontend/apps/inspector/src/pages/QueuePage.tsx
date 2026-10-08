@@ -52,50 +52,68 @@ export function QueuePage(): React.JSX.Element {
       ) : (
         <>
           <Alert tone="info">{t('inspector.queue.duplicateSafe')}</Alert>
+          {/*
+            Una fila compacta por boleta, no una ficha (08-10-2026, paso 7 de la especificación
+            visual responsive: «listas compactas»).
+
+            Antes cada boleta en cola era una tarjeta con cuatro filas de `SummaryList` —infracción,
+            fecha, fotos pendientes y el identificador del aparato— más dos botones: unos 220px cada
+            una. Con cinco pendientes eso son 1.100px de desplazamiento para contestar una pregunta
+            que se contesta de un vistazo: ¿cuáles no salieron y cuál está trabada?
+
+            No se pierde NADA. Lo que se lee de un vistazo queda arriba: placa, estado, infracción y
+            hora. El error de la que está trabada sigue visible y a la vista, porque es lo único que
+            pide una acción. Y el identificador del aparato —el valor que hace seguro reenviar y que
+            se puede dictar a la oficina— sigue estando, en un desplegable: a un toque, no borrado.
+          */}
           {queue.rows.map((row) => {
             const pendingPhotos = row.photos.filter((photo) => !photo.uploaded).length;
             return (
-              <Card key={row.id} tone={row.state === 'SENT' ? 'success' : 'default'}>
-                <div className="flex flex-wrap items-center gap-2 mb-3">
-                  <strong className="lx-text-card-title tabular-nums">
-                    {row.payload.plate}
-                  </strong>
-                  <Badge tone={STATE_TONES[row.state]}>{t(STATE_KEYS[row.state])}</Badge>
-                  {row.number ? <Badge tone="neutral">{row.number}</Badge> : null}
-                  <span className="lx-text-meta">{tPlural('inspector.queue.attempts', row.attempts)}</span>
-                </div>
-                <SummaryList>
-                  <SummaryRow label={t('citation.field.infraction')} value={row.infractionName} />
-                  <SummaryRow label={t('citation.field.occurredAt')} value={formatDateTime(row.createdAt, locale)} />
-                  {pendingPhotos > 0 ? (
-                    <SummaryRow
-                      label={t('citation.evidence.title')}
-                      value={tPlural('inspector.queue.photosPending', pendingPhotos)}
-                    />
+              <Card key={row.id} tone={row.state === 'SENT' ? 'success' : 'default'} className="lx-card--dense">
+                <div className="lx-queue-item">
+                  <div className="lx-queue-item__head">
+                    <strong className="lx-queue-item__plate">{row.payload.plate}</strong>
+                    <Badge tone={STATE_TONES[row.state]}>{t(STATE_KEYS[row.state])}</Badge>
+                    {row.number ? <Badge tone="neutral">{row.number}</Badge> : null}
+                    <span className="lx-queue-item__when">{formatDateTime(row.createdAt, locale)}</span>
+                  </div>
+                  <p className="lx-queue-item__meta">
+                    {row.infractionName}
+                    {' · '}
+                    {tPlural('inspector.queue.attempts', row.attempts)}
+                    {pendingPhotos > 0 ? ` · ${tPlural('inspector.queue.photosPending', pendingPhotos)}` : ''}
+                  </p>
+                  {/* El error se queda a la vista: es lo único de esta fila que pide una decisión. */}
+                  {row.state === 'FAILED' && row.lastErrorCode ? (
+                    <Alert tone="danger">{codeMessage(row.lastErrorCode, t)}</Alert>
                   ) : null}
-                  {/* Shown deliberately: this is the value that makes a resend safe, and an officer
-                      who can read it can also quote it to the office. */}
-                  <SummaryRow label={t('inspector.queue.deviceId')} value={row.deviceCitationId} />
-                </SummaryList>
-                {row.state === 'FAILED' && row.lastErrorCode ? (
-                  <Alert tone="danger">{codeMessage(row.lastErrorCode, t)}</Alert>
-                ) : null}
-                <div className="flex gap-3 mt-3">
-                  {row.citationId ? (
-                    <Button type="button" variant="secondary" onClick={() => navigate(`/citations/${row.citationId}`)}>
-                      {t('inspector.cite.viewCitation')}
-                    </Button>
-                  ) : null}
-                  {row.state !== 'SENT' ? (
-                    <Button type="button" variant="ghost" onClick={() => setConfirmDiscard(row.id)}>
-                      {t('inspector.queue.discard')}
-                    </Button>
+                  <details className="lx-queue-item__more">
+                    <summary>{t('inspector.queue.technical')}</summary>
+                    <SummaryList>
+                      <SummaryRow label={t('citation.field.occurredAt')} value={formatDateTime(row.createdAt, locale)} />
+                      {/* Mostrado a propósito: es el valor que hace seguro un reenvío, y quien lo
+                          puede leer lo puede dictar a la oficina. */}
+                      <SummaryRow label={t('inspector.queue.deviceId')} value={row.deviceCitationId} />
+                    </SummaryList>
+                  </details>
+                  {row.citationId || row.state !== 'SENT' ? (
+                    <div className="lx-queue-item__actions">
+                      {row.citationId ? (
+                        <Button type="button" variant="secondary" onClick={() => navigate(`/citations/${row.citationId}`)}>
+                          {t('inspector.cite.viewCitation')}
+                        </Button>
+                      ) : null}
+                      {row.state !== 'SENT' ? (
+                        <Button type="button" variant="ghost" onClick={() => setConfirmDiscard(row.id)}>
+                          {t('inspector.queue.discard')}
+                        </Button>
+                      ) : null}
+                    </div>
                   ) : null}
                 </div>
               </Card>
             );
           })}
-
           <Button
             type="button"
             fullWidth

@@ -2235,6 +2235,7 @@ export const enUS: Record<TranslationKey, string> = {
   'inspector.queue.state.sent': 'Sent',
   'inspector.queue.attempts.one': '1 attempt',
   'inspector.queue.attempts.other': '{{count}} attempts',
+  'inspector.queue.technical': 'Technical details',
   'inspector.queue.deviceId': 'Device identifier',
   'inspector.queue.duplicateSafe':
     'Resending never duplicates: the citation carries its own device identifier, generated exactly once.',

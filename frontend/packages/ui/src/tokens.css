@@ -6089,3 +6089,59 @@ a.lx-list-row {
   color: var(--lx-text);
   font-weight: 700;
 }
+
+/* ---- Una boleta en cola, compacta (08-10-2026) -----------------------------------------------
+   Era una ficha de ~220px con cuatro filas de resumen; con cinco pendientes eran 1.100px de
+   desplazamiento para contestar «¿cuáles no salieron y cuál está trabada?». Lo que se lee de un
+   vistazo va arriba; lo técnico queda en un desplegable, a un toque y no borrado. */
+.lx-queue-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lx-space-2);
+}
+.lx-queue-item__head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--lx-space-2);
+}
+.lx-queue-item__plate {
+  font-size: var(--lx-text-card-title-size);
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  font-variant-numeric: tabular-nums;
+}
+/* La hora se va a la derecha del renglón y cede primero cuando no hay ancho: la placa y el estado
+   son lo que distingue una fila de otra. */
+.lx-queue-item__when {
+  margin-left: auto;
+  font-size: var(--lx-text-meta-size);
+  color: var(--lx-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.lx-queue-item__meta {
+  margin: 0;
+  font-size: var(--lx-text-meta-size);
+  color: var(--lx-text-muted);
+}
+/* El desplegable de lo técnico. `<details>` y no un estado de React: el navegador ya sabe abrirlo,
+   anunciarlo y recordar que está abierto mientras no se repinte, y no hace falta estado para eso. */
+.lx-queue-item__more > summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--lx-touch-target-min);
+  font-size: var(--lx-text-meta-size);
+  font-weight: 600;
+  color: var(--lx-primary);
+  cursor: pointer;
+}
+.lx-queue-item__more > summary:focus-visible {
+  outline: 2px solid var(--lx-focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--lx-radius-sm);
+}
+.lx-queue-item__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--lx-space-2);
+}

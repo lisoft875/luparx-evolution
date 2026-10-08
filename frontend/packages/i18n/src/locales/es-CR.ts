@@ -2309,6 +2309,7 @@ export const esCR = {
   'inspector.queue.state.sent': 'Enviada',
   'inspector.queue.attempts.one': '1 intento',
   'inspector.queue.attempts.other': '{{count}} intentos',
+  'inspector.queue.technical': 'Detalles técnicos',
   'inspector.queue.deviceId': 'Identificador del dispositivo',
   'inspector.queue.duplicateSafe':
     'Reenviar no duplica: la boleta lleva un identificador propio del dispositivo, generado una sola vez.',
