@@ -6225,3 +6225,18 @@ a.lx-list-row {
     columns: 3;
   }
 }
+
+/* ---- El alto de la barra superior del fiscalizador (08-10-2026) ------------------------------
+   La especificación responsive lo pide por su número: «altura aproximada 64-72 px + safe-area
+   superior». `.lx-app-bar` mide 56px de mínimo, que es correcto para una barra de aplicación
+   genérica y 8px menos de lo que pide este portal.
+
+   Va en el modificador del fiscalizador y NO en `.lx-app-bar`, a propósito: esa clase la comparte
+   el portal del ciudadano, cuya cabecera no está en este encargo y cuyo cronómetro de estadía se
+   apoya en el alto actual. Subirla ahí sería cambiar dos portales para arreglar uno.
+
+   El relleno superior sigue siendo `max(..., env(safe-area-inset-top))`, así que los 64px son de
+   barra VISIBLE y la franja del notch se paga aparte, que es lo que dice el documento. */
+.lx-app-bar--inspector {
+  min-height: 64px;
+}

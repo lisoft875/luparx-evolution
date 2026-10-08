@@ -545,7 +545,21 @@ export function HomePage(): React.JSX.Element {
               </Card>
 
               <Card className="lx-card--dense">
-                <SectionHeader title={t('admin.home.revenue.title')} />
+                {/* El «rango compacto» que pide la sección 3.D, al lado del título. La referencia
+                    lo dibuja como un desplegable; acá es un rótulo, y eso no es una simplificación
+                    perezosa: esta tarjeta pide SIEMPRE los mismos siete días
+                    (`DIAS_DEL_GRAFICO`), así que un desplegable ofrecería opciones que no cambian
+                    nada. Lo que el rótulo hace es decir qué ventana se está mirando, que es la
+                    información que faltaba. El selector de período de verdad vive en el Panel, que
+                    es la pantalla que lo sabe usar. */}
+                <SectionHeader
+                  title={t('admin.home.revenue.title')}
+                  aside={
+                    <span className="lx-text-meta">
+                      {t('admin.home.revenue.range', { days: DIAS_DEL_GRAFICO })}
+                    </span>
+                  }
+                />
                 {serie.isLoading ? (
                   // Un bloque del tamaño del gráfico, no la palabra «Cargando»: así la pantalla no
                   // se reacomoda cuando el dato llega.

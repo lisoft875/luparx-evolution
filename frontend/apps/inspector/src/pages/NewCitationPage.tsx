@@ -38,6 +38,15 @@ import {
 } from '../lib/capture';
 import { preparePhoto, type PreparedPhoto } from '../lib/evidencePreparation';
 
+/**
+ * Desde cuántos tipos de infracción el catálogo deja de verse entero y conviene poder filtrarlo.
+ *
+ * <p>Ocho: es lo que entra en la lista desplegable de un teléfono de 812px sin desplazarse dentro
+ * de ella. Por debajo de eso la lista se lee completa de un vistazo y un buscador encima sólo
+ * añadiría un paso para llegar a algo que ya está a la vista.</p>
+ */
+const CATALOGO_LARGO = 8;
+
 interface PrefilledLocation {
   plate?: string;
   zoneId?: string;
@@ -88,6 +97,15 @@ export function NewCitationPage(): React.JSX.Element {
   const queue = useCitationQueue();
 
   const [typeId, setTypeId] = useState('');
+  /*
+    El filtro del catálogo de infracciones (08-10-2026).
+
+    La sección 6 del documento lo pide con una condición dentro: «seleccionar infracción desde
+    catálogo real; incluir búsqueda SI EL CATÁLOGO ES LARGO». La condición es la parte importante y
+    se respeta: el campo sólo se dibuja cuando el catálogo pasa de `CATALOGO_LARGO`. Una
+    municipalidad con cinco tipos no necesita un buscador encima de cinco opciones.
+  */
+  const [typeQuery, setTypeQuery] = useState('');
   const [plate, setPlate] = useState(prefilled.plate ?? '');
   const [zoneId, setZoneId] = useState(prefilled.zoneId ?? '');
   const [spaceCode, setSpaceCode] = useState(prefilled.spaceCode ?? '');
@@ -128,6 +146,40 @@ export function NewCitationPage(): React.JSX.Element {
       })),
     [locale, t, types.data],
   );
+
+  /** Si el catálogo es largo, hay buscador. Si no, no: ver `CATALOGO_LARGO`. */
+  const catalogoLargo = typeOptions.length > CATALOGO_LARGO;
+
+  /**
+   * El catálogo filtrado por lo que se escribió.
+   *
+   * <p>Filtra por nombre Y por el detalle —el importe y los días—, porque «5000» es una forma
+   * legítima de buscar la infracción de cinco mil colones. Sin acentos y sin mayúsculas, que es
+   * cómo se escribe de pie y con una mano: `NFD` separa la tilde de la letra y se descarta.</p>
+   *
+   * <p>El tipo ya elegido NUNCA se filtra fuera. Es la trampa de este patrón: el `Select` dejaría
+   * de tener entre sus opciones el valor que tiene puesto, y una lista desplegable sin su propio
+   * valor se dibuja vacía — parecería que la infracción se borró al escribir en el buscador.</p>
+   */
+  const typeOptionsFiltradas = useMemo(() => {
+    const aguja = typeQuery
+      .trim()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase();
+    if (!aguja) return typeOptions;
+    const sinTildes = (texto: string): string =>
+      texto
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase();
+    return typeOptions.filter(
+      (opcion) =>
+        opcion.value === typeId
+        || sinTildes(opcion.label).includes(aguja)
+        || sinTildes(opcion.detail ?? '').includes(aguja),
+    );
+  }, [typeOptions, typeQuery, typeId]);
 
   const zoneOptions = useMemo(
     () => zones.map((zone) => ({ value: zone.id, label: zone.name, detail: zone.code })),
@@ -399,19 +451,47 @@ export function NewCitationPage(): React.JSX.Element {
               {t('common.loading')}
             </p>
           ) : (
-            <FormField label={t('inspector.cite.typeLabel')}>
-              {({ inputId }) => (
-                <Select
-                  id={inputId}
-                  value={typeId}
-                  onChange={setTypeId}
-                  options={typeOptions}
-                  placeholder={t('inspector.cite.typePlaceholder')}
-                  aria-label={t('inspector.cite.typeLabel')}
-                  required
-                />
-              )}
-            </FormField>
+            <>
+              {/* El buscador, SÓLO cuando el catálogo es largo. Ver `CATALOGO_LARGO`. */}
+              {catalogoLargo ? (
+                <FormField label={t('inspector.cite.typeSearch')}>
+                  {({ inputId }) => (
+                    <Input
+                      id={inputId}
+                      type="search"
+                      value={typeQuery}
+                      onChange={(event) => setTypeQuery(event.target.value)}
+                      placeholder={t('inspector.cite.typeSearchPlaceholder')}
+                      autoCorrect="off"
+                      spellCheck={false}
+                    />
+                  )}
+                </FormField>
+              ) : null}
+              <FormField label={t('inspector.cite.typeLabel')}>
+                {({ inputId }) => (
+                  <Select
+                    id={inputId}
+                    value={typeId}
+                    onChange={setTypeId}
+                    options={typeOptionsFiltradas}
+                    placeholder={t('inspector.cite.typePlaceholder')}
+                    aria-label={t('inspector.cite.typeLabel')}
+                    required
+                  />
+                )}
+              </FormField>
+              {/* Lo que el filtro dejó fuera, dicho en voz alta: una lista que se acortó sin
+                  explicación se lee como un catálogo incompleto. */}
+              {catalogoLargo && typeQuery.trim().length > 0 ? (
+                <p className="lx-text-meta" style={{ margin: 'var(--lx-space-2) 0 0' }} role="status">
+                  {t('inspector.cite.typeSearchCount', {
+                    shown: typeOptionsFiltradas.length,
+                    total: typeOptions.length,
+                  })}
+                </p>
+              ) : null}
+            </>
           )}
           {selectedType ? (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--lx-space-2)', marginTop: 'var(--lx-space-3)' }}>
