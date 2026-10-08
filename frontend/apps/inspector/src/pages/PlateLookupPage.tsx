@@ -225,16 +225,29 @@ export function PlateLookupPage(): React.JSX.Element {
                 <VerdictMark verdict={result.verdict} />
               </span>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--lx-space-2)', minWidth: 0 }}>
-                <p
-                  style={{
-                    margin: 0,
-                    fontSize: 24,
-                    fontWeight: 700,
-                    lineHeight: 1.2,
-                    color: `var(--lx-${verdictTone(result.verdict)})`,
-                  }}
-                >
-                  {t(plateVerdictKey(result.verdict))}
+                {/*
+                  La placa arriba y el estado como ficha a su lado (08-10-2026).
+
+                  La sección 5 del documento pide «placa prominente, estado con chip», y hasta hoy
+                  era al revés: el veredicto ocupaba el renglón grande a 24px y la placa iba en el
+                  renglón de metadatos, a 13px, junto a la hora.
+
+                  Las dos lecturas tenían razón y ahora conviven. La placa manda porque es la
+                  identidad de lo que se está mirando y es lo que se dicta en voz alta cuando
+                  alguien reclama en la bahía. El veredicto NO pierde peso: lo dice la ficha de
+                  color a su lado, lo dice la marca de la izquierda —una forma legible a un metro,
+                  que es la distancia entre los ojos de un fiscalizador y un teléfono a la altura
+                  de la cintura— y lo dice la frase completa debajo. Tres señales, ninguna de ellas
+                  sólo color.
+
+                  La hora de la consulta se queda donde estaba, en el renglón de metadatos, sin la
+                  placa al lado porque la placa ya está arriba.
+                */}
+                <p className="lx-verdict__plate">
+                  <strong>{result.plateNormalized}</strong>
+                  <Badge tone={verdictTone(result.verdict) === 'success' ? 'success' : 'warning'}>
+                    {t(plateVerdictKey(result.verdict))}
+                  </Badge>
                 </p>
                 <p className="lx-text-body" style={{ margin: 0 }}>
                   {t(VERDICT_DETAIL_KEYS[result.verdict], {
@@ -243,13 +256,19 @@ export function PlateLookupPage(): React.JSX.Element {
                   })}
                 </p>
                 <p className="lx-text-meta" style={{ margin: 0, fontVariantNumeric: 'tabular-nums' }}>
-                  {result.plateNormalized} · {t('inspector.lookup.checkedAt', { time: formatTime(result.checkedAt, locale) })}
+                  {t('inspector.lookup.checkedAt', { time: formatTime(result.checkedAt, locale) })}
                 </p>
                 {/* The stay itself, spelled out. Until v0.28 the start time was never shown and the
                     expiry was rendered time-only, so a stay that ran out yesterday at 14:30 and one
                     running until 14:30 today looked identical on screen. */}
                 {stay ? (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  /* En dos o tres columnas cuando hay ancho, una debajo de otra en el teléfono.
+                     Lo pide la sección 4 para tablet —«datos secundarios pueden organizarse en 2-3
+                     columnas»— y lo hace CSS con `columns`, no una cuadrícula: estas filas son
+                     cuatro o cinco líneas de texto suelto cuyo número cambia con la respuesta
+                     (puede no haber pago, puede no haber transacción), y una cuadrícula con un
+                     número fijo de columnas deja huecos cuando faltan. */
+                  <div className="lx-verdict__facts">
                     <span className="lx-text-meta">
                       {t('inspector.lookup.stay.zone', { zone: stay.zoneName ?? '', bay: stay.spaceCode ?? '' })}
                     </span>
@@ -402,6 +421,34 @@ export function PlateLookupPage(): React.JSX.Element {
           ) : null}
         </>
       ) : null}
+      {/*
+        La fila de cuatro métricas de tablet, y por qué NO está (08-10-2026).
+
+        La sección 4 del documento la pide así: «en la pantalla principal usar una fila de 4
+        métricas SI EXISTEN DATOS REALES: Consultas hoy, Boletas emitidas, Pendientes, Evidencias.
+        Si una métrica no existe en backend, no simularla.»
+
+        Se auditaron las cuatro contra lo que el servidor contesta:
+
+        · «Consultas hoy» — no hay fuente. El servidor registra cada consulta en la bitácora de
+          fiscalización (`checkId`, contrato v0.29) pero no publica ninguna ruta para contarlas.
+        · «Evidencias» — no hay fuente. Las fotos viven dentro de cada boleta; no hay conteo.
+        · «Boletas emitidas» — hay fuente: `inspectorEnforcement.list` es paginada y trae
+          `totalElements`. Pero es el total histórico de esta persona, no las de hoy, y puesto en
+          una fila donde la vecina dice «hoy» se leería como «hoy».
+        · «Pendientes» — hay fuente, y ya está en pantalla: la baldosa del lanzador lleva el
+          conteo real de la cola.
+
+        O sea: de las cuatro, una no tiene fuente honesta para el rótulo que le toca, otra ya está
+        dibujada, y dos no existen en el servidor. Una fila de métricas con una sola métrica no es
+        una fila, y rellenarla sería exactamente lo que el documento prohíbe. Queda PENDIENTE DE
+        INTEGRACIÓN, que es lo que la regla 7 pide hacer en este caso en vez de simular.
+
+        Lo que hace falta del lado del servidor para poder dibujarla: un conteo de consultas del día
+        por fiscalizador, y un conteo de boletas del día (o un filtro de fechas en el listado que
+        ya existe).
+      */}
+
       {/*
         El formulario, con la fila de la referencia: la placa y un botón cuadrado al lado.
 

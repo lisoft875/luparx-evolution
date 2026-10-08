@@ -6182,3 +6182,46 @@ a.lx-list-row {
 .lx-linklike--go:hover {
   color: var(--lx-primary-strong);
 }
+
+/* ---- La respuesta de una consulta de placa (08-10-2026) --------------------------------------
+   «Placa prominente, estado con chip» (sección 5 de la especificación de Fiscalización). */
+.lx-verdict__plate {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--lx-space-2);
+  margin: 0;
+}
+.lx-verdict__plate > strong {
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: 0.05em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Los datos de la estadía: una columna en el teléfono, dos o tres cuando hay ancho.
+   `columns` y no `grid`: el número de filas cambia con la respuesta —puede no haber pago, puede no
+   haber transacción— y una cuadrícula de columnas fijas deja huecos cuando faltan. `break-inside`
+   para que una fila no se corte por la mitad entre dos columnas. */
+.lx-verdict__facts {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+@media (min-width: 600px) {
+  .lx-verdict__facts {
+    display: block;
+    columns: 2;
+    column-gap: var(--lx-space-5);
+  }
+  .lx-verdict__facts > * {
+    display: block;
+    break-inside: avoid;
+  }
+}
+@media (min-width: 900px) {
+  .lx-verdict__facts {
+    columns: 3;
+  }
+}
