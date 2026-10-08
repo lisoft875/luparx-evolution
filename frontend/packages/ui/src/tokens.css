@@ -2547,7 +2547,8 @@ a.lx-list-row {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
+  /* 4px, el valor que da el documento v2: «separación icono-etiqueta 4 px». Eran 2. */
+  gap: 4px;
   /* 64px, no 44. `--lx-touch-target-min` dice «esto se puede tocar», que es el piso de
      accesibilidad; la especificación pide una barra de 64-72px, que es otra cosa — el alto que
      hace que cinco destinos con icono y etiqueta se lean de pie, al sol, sin apuntar. */
@@ -5557,7 +5558,12 @@ a.lx-list-row {
    conserva el patrón de aplicación operativa a cualquier ancho. */
 @media (min-width: 768px) {
   .lx-inspector-main {
-    max-width: 720px;
+    /* 920 y no 720 (08-10-2026, v2 del documento): «área central max-width 920 px en
+       tablet/escritorio de prueba». El 720 venía de la v1, que lo pedía para el FORMULARIO de
+       consulta; la v2 habla del área central entera. A 768 no cambia nada —el ancho disponible ya
+       es menor— y a 1024 o más deja de sobrar lienzo a los lados sin estirar los controles, que es
+       lo que su punto 4 pide: «no estirar los botones del celular a bloques gigantes». */
+    max-width: 920px;
     padding-right: var(--lx-space-6);
     padding-left: var(--lx-space-6);
   }
@@ -5613,9 +5619,11 @@ a.lx-list-row {
   justify-items: start;
   align-content: start;
   gap: var(--lx-space-2) var(--lx-space-2);
-  /* La referencia da tarjetas de ~110px. El mínimo y no una altura fija: el grid ya estira las
-     cuatro a la más alta, y un alto fijo recortaría la ayuda cuando el idioma la alargue. */
-  min-height: 110px;
+  /* 132px (08-10-2026, v2): el documento da el rango medido, «132-150 px a 375 px de ancho», y
+     las tarjetas quedaban en 110. El mínimo y no una altura fija: el grid ya estira las cuatro a
+     la más alta, y un alto fijo recortaría la ayuda cuando el idioma la alargue — con 132 de piso
+     y el tope en el contenido, el rango se cumple por los dos lados. */
+  min-height: 132px;
   padding: var(--lx-space-3);
   text-align: left;
   position: relative;

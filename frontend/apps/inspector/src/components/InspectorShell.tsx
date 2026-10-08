@@ -343,7 +343,23 @@ export function InspectorShell({
         objeto `style` en línea no puede tenerlas. Lo único que sigue viajando desde aquí es el
         relleno inferior, porque depende de la altura MEDIDA de la barra y ningún CSS puede saberla.
       */}
-      <main className="lx-inspector-main" style={{ paddingBottom: `calc(var(--lx-space-4) + ${footerHeight}px)` }}>
+      <main
+        className="lx-inspector-main"
+        /*
+          El relleno inferior: la altura MEDIDA de la barra más un respiro, con un PISO (08-10-2026).
+
+          La v2 del documento lo pide por su número: «padding inferior obligatorio 88-100 px» y «al
+          menos calc(72px + env(safe-area-inset-bottom) + 16px)». Con la barra en 65px y 16 de
+          respiro salían 81 — por debajo del mínimo, y el último elemento quedaba justo pegado.
+
+          El `max` conserva lo que ya funcionaba: en un aparato con safe-area la barra mide más y
+          la medición manda; en uno sin ella, el piso de 88 es el que manda. No se sustituye una
+          medida real por un número fijo, se le pone suelo.
+        */
+        style={{
+          paddingBottom: `max(88px, calc(var(--lx-space-4) + ${footerHeight}px))`,
+        }}
+      >
         {children}
       </main>
       <div

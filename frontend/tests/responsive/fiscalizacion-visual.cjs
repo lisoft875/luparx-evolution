@@ -97,6 +97,9 @@ async function barraInferior(page, tamano) {
       fondo: estilo.backgroundColor,
       bordeArriba: estilo.borderTopWidth,
       sombra: estilo.boxShadow,
+      separacion: Math.round(
+        parseFloat(getComputedStyle(nodo.querySelector('.lx-bottom-tab-bar__tab')).rowGap || '0'),
+      ),
       opaco: !/rgba\(.*,\s*0(\.\d+)?\)$/.test(estilo.backgroundColor),
       destinos,
     };
@@ -138,6 +141,20 @@ async function barraInferior(page, tamano) {
     etiquetasMal.length === 0,
     `${tamano}: las etiquetas miden 10-11px`,
     etiquetasMal.map((d) => `${d.texto} ${d.etiquetaPx}px`).join(', '),
+  );
+  /* «Cada item ocupa 20% del ancho» (v2, punto 3). Con cinco destinos en `flex: 1` sale solo; se
+     mide para que un sexto destino o un ancho a mano se note el día que alguien lo intente. */
+  const anchoEsperado = Math.round(barra.destinos.reduce((suma, d) => suma + d.ancho, 0) / 5);
+  const desiguales = barra.destinos.filter((d) => Math.abs(d.ancho - anchoEsperado) > 2);
+  ok(
+    desiguales.length === 0,
+    `${tamano}: los cinco destinos se reparten el ancho por igual`,
+    barra.destinos.map((d) => `${d.texto} ${d.ancho}px`).join(' · '),
+  );
+  ok(
+    barra.separacion === 4,
+    `${tamano}: hay 4px entre el icono y su etiqueta, como pide la v2`,
+    `son ${barra.separacion}px`,
   );
   const iconosMal = barra.destinos.filter((d) => d.iconoPx < 22 || d.iconoPx > 24);
   ok(
@@ -228,6 +245,14 @@ async function pantallaInicial(page, tamano, ancho) {
   );
   ok(vista.tituloGenerico === 0, `${tamano}: ya no hay un «Consulta de placa» genérico encabezando`);
 
+  /* El ancho útil: nunca más de 920 (v2, punto 1) y nunca estirado al borde en un escritorio.
+     Se comprueba el TOPE y no un valor exacto, porque por debajo de 920 el ancho lo manda el
+     viewport y exigir una cifra sería exigir un tamaño de pantalla. */
+  ok(
+    vista.anchoMain <= 920,
+    `${tamano}: el área central no pasa de 920px`,
+    `mide ${vista.anchoMain}px`,
+  );
   const margenEsperado = ancho >= 768 ? [24, 32] : [16, 16];
   ok(
     vista.margenIzq >= margenEsperado[0] && vista.margenIzq <= margenEsperado[1] && vista.margenIzq === vista.margenDer,
@@ -252,6 +277,16 @@ async function pantallaInicial(page, tamano, ancho) {
     ok(
       vista.tarjetas.every((t) => t.ancho >= 44 && t.alto >= 44),
       `${tamano}: ninguna tarjeta baja del objetivo táctil`,
+    );
+    /* El alto que da la v2 del documento: «cards aprox. 141-150 x 132-150 px a 375 px de ancho».
+       Se mide el ALTO y no el ancho: el ancho lo decide la columna —a 375 con 16 de margen y 12 de
+       separación salen 165, y a 768 salen más— así que exigirle 141-150 sería exigir un viewport,
+       no un diseño. El alto sí es una decisión, y es la que el documento quiere ver cambiada. */
+    const bajas = vista.tarjetas.filter((t) => t.alto < 132);
+    ok(
+      bajas.length === 0,
+      `${tamano}: las tarjetas miden al menos 132px de alto, como pide la v2`,
+      bajas.map((t) => `${t.titulo} ${t.alto}px`).join(', '),
     );
   }
 
@@ -296,6 +331,13 @@ async function sinCortes(page, tamano) {
   ok(
     medida.relleno >= medida.altoBarra,
     `${tamano}: el contenido reserva ${medida.relleno}px bajo la barra de ${medida.altoBarra}px`,
+  );
+  /* Y el piso que la v2 exige por su número: «padding inferior obligatorio 88-100 px». Con la
+     barra en 65 y 16 de respiro salían 81, que cumplía lo de arriba y no esto. */
+  ok(
+    medida.relleno >= 88,
+    `${tamano}: y ese relleno llega a los 88px que pide la v2`,
+    `son ${medida.relleno}px`,
   );
 
   // Y se comprueba de verdad: se baja hasta el final y se mira si lo último queda bajo la barra.
