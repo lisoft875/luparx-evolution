@@ -8,10 +8,12 @@ import {
   FormField,
   IconCheck,
   IconChevronRight,
+  IconEye,
   Input,
 } from '@luparx/ui';
 import { CitizenShell } from '../components/CitizenShell';
 import { CitizenDiagnostic } from '../components/CitizenDiagnostic';
+import { CitizenDevicePermissions } from '../components/CitizenDevicePermissions';
 import {
   CATEGORIAS,
   clavesOpcion,
@@ -49,6 +51,7 @@ export function HelpPage(): React.JSX.Element {
   const navigate = useNavigate();
   const [consulta, setConsulta] = useState('');
   const [verDiagnostico, setVerDiagnostico] = useState(false);
+  const [verPermisos, setVerPermisos] = useState(false);
 
   /** Las opciones que coinciden con lo escrito, con su categoría a cuestas para poder llevar ahí. */
   const coincidencias = useMemo(() => {
@@ -150,6 +153,33 @@ export function HelpPage(): React.JSX.Element {
               </Card>
             ))}
 
+            {/* Permisos del dispositivo, junto al estado y no entre las categorías: las cinco de
+                arriba son PROBLEMAS que resolver («no puedo pagar»), y esto es el aparato. Va
+                antes del estado porque es más específico —una pregunta concreta sobre la cámara—
+                y el estado es el cajón de lo que no entró en ninguna otra parte. */}
+            <Card>
+              <button
+                type="button"
+                className="lx-help-card"
+                data-categoria="permisos"
+                onClick={() => setVerPermisos(true)}
+              >
+                <span className="lx-help-card__icon" aria-hidden="true">
+                  <IconEye />
+                </span>
+                <span className="lx-help-card__text">
+                  <span className="lx-help-card__title">{t('citizen.help.permissions.title')}</span>
+                  <span className="lx-text-meta">{t('citizen.help.permissions.body')}</span>
+                  <span className="lx-help-card__action">
+                    {t('citizen.help.permissions.action')}
+                    <span className="lx-help-card__go" aria-hidden="true">
+                      <IconChevronRight size={14} />
+                    </span>
+                  </span>
+                </span>
+              </button>
+            </Card>
+
             {/* El estado, al final: es lo que se mira cuando nada de lo de arriba aplica. */}
             <Card>
               <button
@@ -178,6 +208,7 @@ export function HelpPage(): React.JSX.Element {
       </CardStack>
 
       <CitizenDiagnostic open={verDiagnostico} onClose={() => setVerDiagnostico(false)} />
+      <CitizenDevicePermissions open={verPermisos} onClose={() => setVerPermisos(false)} />
     </CitizenShell>
   );
 }

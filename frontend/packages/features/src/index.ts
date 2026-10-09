@@ -69,3 +69,20 @@ export type { EvidenceGalleryProps } from './enforcement/EvidenceGallery';
 export { CitationFacts } from './enforcement/CitationFacts';
 export type { CitationFactsProps } from './enforcement/CitationFacts';
 export { formatDurationLabel, formatDurationWithMinutes } from './parking/duration';
+
+/* ---- El aparato ----
+   La cámara del navegador y su ventana de captura, compartidas por Ciudadano y Fiscalización. Lo
+   que NO se comparte es qué permisos pide cada portal: esa es su política, y vive en cada uno. */
+export {
+  soporteDeCamara,
+  estadoDeCamara,
+  abrirCamara,
+  detenerCamara,
+  probarCamara,
+  fotoDelFotograma,
+} from './device/webCamera';
+export type { EstadoDeCamara, ProblemaDeCamara, FotoTomada } from './device/webCamera';
+export { useCamaraDelAparato } from './device/useCamaraDelAparato';
+export type { CamaraDelAparato } from './device/useCamaraDelAparato';
+export { CameraCaptureModal } from './device/CameraCaptureModal';
+export type { CameraCaptureModalProps } from './device/CameraCaptureModal';

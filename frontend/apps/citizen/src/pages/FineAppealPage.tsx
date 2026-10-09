@@ -4,6 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@luparx/auth';
 import { formatDateTime, useTranslation, type TranslationKey } from '@luparx/i18n';
+import { CameraCaptureModal, soporteDeCamara } from '@luparx/features';
 import { Alert, Badge, Button, Card, SectionHeader, Textarea } from '@luparx/ui';
 import { CitizenShell } from '../components/CitizenShell';
 import { QueryBoundary } from '../components/QueryBoundary';
@@ -52,6 +53,21 @@ export function FineAppealPage(): React.JSX.Element {
   const [body, setBody] = useState('');
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  /*
+    La cámara, en el único flujo del ciudadano que adjunta evidencia (09-10-2026).
+
+    Hasta ahora el único camino era `<input type="file">`: en un teléfono eso ofrece la cámara
+    entre otras cosas, y en una computadora abre un selector de archivos y nada más. Quien impugna
+    una multa desde una laptop con cámara no tenía cómo usarla.
+
+    El botón sólo aparece donde la cámara puede existir —`soporteDeCamara()` responde sin pedirle
+    nada a nadie—, y el de adjuntar un archivo sigue estando siempre: es la alternativa cuando el
+    permiso se deniega, cuando no hay cámara y cuando la foto ya estaba tomada, que es el caso más
+    común de todos.
+  */
+  const [camaraAbierta, setCamaraAbierta] = useState(false);
+  const hayCamara = soporteDeCamara() === 'ok';
 
   const attachMutation = useMutation({
     mutationFn: (file: File) => apiClient.citizenFines.attachAppealImage(id as string, file, file.name),
@@ -208,16 +224,40 @@ export function FineAppealPage(): React.JSX.Element {
                           if (file) attachMutation.mutate(file);
                         }}
                       />
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        fullWidth
-                        loading={attachMutation.isPending}
-                        disabled={appeal.images.length >= appeal.maxImages}
-                        onClick={() => fileInputRef.current?.click()}
-                      >
-                        {t('citizen.appeal.images.add')}
-                      </Button>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--lx-space-2)' }}>
+                        {hayCamara ? (
+                          <Button
+                            type="button"
+                            fullWidth
+                            disabled={
+                              appeal.images.length >= appeal.maxImages || attachMutation.isPending
+                            }
+                            onClick={() => setCamaraAbierta(true)}
+                          >
+                            {t('citizen.appeal.images.camera')}
+                          </Button>
+                        ) : null}
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          fullWidth
+                          loading={attachMutation.isPending}
+                          disabled={appeal.images.length >= appeal.maxImages}
+                          onClick={() => fileInputRef.current?.click()}
+                        >
+                          {t('citizen.appeal.images.add')}
+                        </Button>
+                      </div>
+                      <CameraCaptureModal
+                        open={camaraAbierta}
+                        onClose={() => setCamaraAbierta(false)}
+                        onAttachFile={() => fileInputRef.current?.click()}
+                        onCapture={(foto) =>
+                          attachMutation.mutate(
+                            new File([foto.blob], foto.fileName, { type: foto.blob.type }),
+                          )
+                        }
+                      />
                     </Card>
                   </>
                 )}

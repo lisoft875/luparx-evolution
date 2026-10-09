@@ -1,4 +1,5 @@
 import { Capacitor, registerPlugin } from '@capacitor/core';
+import { estadoDeCamara } from '@luparx/features';
 
 /**
  * Camera and location, on a native build and in a browser, behind one shape.
@@ -108,7 +109,10 @@ export function hasNativeGeolocation(): boolean {
  */
 export async function cameraPermissionState(): Promise<PermissionReadiness> {
   const plugin = nativeCamera();
-  if (!plugin?.checkPermissions) return webCameraPermissionState();
+  // Sin plugin nativo estamos en el navegador, y ahí lo contesta el módulo compartido: Ciudadano
+  // y Fiscalización leen el MISMO permiso del MISMO aparato, y dos lecturas distintas del mismo
+  // permiso es como se llega a que una pantalla diga «habilitada» y la otra «se pide al usarla».
+  if (!plugin?.checkPermissions) return estadoDeCamara();
   try {
     const status = await plugin.checkPermissions();
     if (status?.camera === 'granted' || status?.camera === 'limited') return 'granted';
@@ -281,134 +285,3 @@ export async function takePosition(timeoutMs = 10_000): Promise<CapturedPosition
 }
 
 
-// =================================================================================================
-// La cámara en el navegador (09-10-2026)
-//
-// Hasta hoy la web tenía UN camino: `<input type="file" capture>`. En un teléfono eso abre la
-// cámara del sistema y es correcto. En un escritorio abre un selector de archivos —no hay cámara
-// por ningún lado—, que es exactamente lo que se reportó: «la cámara aparece como "Se pide al
-// usarla"» y al pulsar no pasa nada parecido a tomar una foto.
-//
-// `getUserMedia` es la cámara de verdad del navegador: el aviso del sistema lo dispara ESTA
-// llamada y no antes, así que pedirla al pulsar el botón es pedirla en contexto, que es lo que el
-// documento exige. No reemplaza al camino nativo ni al del selector de archivos: se intercala
-// entre los dos, y cuando no está —navegador sin soporte, sin cámara, sin HTTPS o permiso
-// denegado— se cae al selector, que es lo que siempre hubo.
-// =================================================================================================
-
-/** Por qué no se pudo abrir la cámara. Cada uno se le dice al usuario distinto, porque cada uno se
- *  arregla distinto: uno se arregla en el navegador, otro conectando una cámara y otro no se
- *  arregla —hay que adjuntar un archivo. */
-export type WebCameraProblem =
-  /** El navegador no implementa `getUserMedia`. */
-  | 'unsupported'
-  /** La página no es segura (ni HTTPS ni localhost): el navegador no entrega la cámara, y hace bien. */
-  | 'insecure'
-  /** La persona dijo que no, o una política del navegador lo bloquea. */
-  | 'denied'
-  /** No hay ninguna cámara conectada. */
-  | 'notFound'
-  /** Hay cámara pero otra aplicación la tiene tomada. */
-  | 'busy'
-  /** Cualquier otra cosa. Se informa igual: lo que no se puede es callarla. */
-  | 'failed';
-
-/**
- * ¿Tiene sentido ofrecer la cámara del navegador en este aparato?
- *
- * <p>Se responde SIN pedir nada: mirar si la API existe y si el contexto es seguro no abre ningún
- * aviso. Lo que no se puede saber sin preguntar es si la persona va a conceder, y por eso esto no
- * dice «sí funciona» sino «se puede intentar».</p>
- */
-export function webCameraSupport(): 'ok' | WebCameraProblem {
-  if (typeof navigator === 'undefined' || typeof window === 'undefined') return 'unsupported';
-  if (!navigator.mediaDevices?.getUserMedia) {
-    // Un navegador sin HTTPS tampoco expone `mediaDevices`, y distinguirlo importa: «actualizá el
-    // navegador» y «entrá por HTTPS» son consejos distintos y sólo uno sirve.
-    return window.isSecureContext ? 'unsupported' : 'insecure';
-  }
-  if (!window.isSecureContext) return 'insecure';
-  return 'ok';
-}
-
-/**
- * El permiso de cámara del navegador, leído sin preguntar.
- *
- * <p>`navigator.permissions.query({name:'camera'})` lo contesta en Chromium. Safari y Firefox no
- * implementan ese nombre de permiso: lanzan, y entonces la respuesta honesta es `asksOnUse`, que
- * es la que había. Nunca devuelve `granted` por suposición.</p>
- */
-export async function webCameraPermissionState(): Promise<PermissionReadiness> {
-  if (webCameraSupport() !== 'ok') return 'asksOnUse';
-  try {
-    const estado = await navigator.permissions.query({ name: 'camera' as PermissionName });
-    if (estado.state === 'granted') return 'granted';
-    if (estado.state === 'denied') return 'denied';
-    return 'asksOnUse';
-  } catch {
-    return 'asksOnUse';
-  }
-}
-
-/**
- * Abre la cámara del navegador. ESTO es lo que dispara el aviso del sistema.
- *
- * <p>Se pide la cámara trasera por preferencia y no por obligación (`ideal`): en un escritorio no
- * hay trasera, y pedirla con `exact` haría fallar la apertura en la mitad de los aparatos donde
- * esto tiene que funcionar.</p>
- *
- * <p>Quien lo llama es el dueño del `MediaStream` y tiene que apagarlo —`detenerCamara`—: un
- * stream vivo deja la luz de la cámara encendida, y una aplicación de fiscalización que deja la
- * cámara encendida después de cerrar la ventana es un problema, no un descuido.</p>
- */
-export async function abrirCamaraWeb(): Promise<{ stream: MediaStream } | { problema: WebCameraProblem }> {
-  const soporte = webCameraSupport();
-  if (soporte !== 'ok') return { problema: soporte };
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } },
-      audio: false,
-    });
-    return { stream };
-  } catch (error) {
-    const nombre = (error as DOMException)?.name ?? '';
-    if (nombre === 'NotAllowedError' || nombre === 'SecurityError') return { problema: 'denied' };
-    if (nombre === 'NotFoundError' || nombre === 'OverconstrainedError') return { problema: 'notFound' };
-    if (nombre === 'NotReadableError' || nombre === 'AbortError') return { problema: 'busy' };
-    return { problema: 'failed' };
-  }
-}
-
-/** Apaga el stream. Idempotente: llamarla dos veces no rompe nada y no llamarla sí. */
-export function detenerCamara(stream: MediaStream | null): void {
-  stream?.getTracks().forEach((track) => track.stop());
-}
-
-/**
- * Un fotograma del vídeo, convertido en la misma `CapturedPhoto` que devuelve la cámara nativa.
- *
- * <p>Al tamaño real del sensor que el navegador entregó (`videoWidth`/`videoHeight`), no al tamaño
- * al que se está viendo en pantalla: lo que vale como evidencia es la resolución que la cámara
- * dio, y una foto reescalada al ancho de un modal no serviría para leer una placa.</p>
- *
- * <p>JPEG al 0.92. No es el 100 del camino nativo —ahí el archivo es el que produjo la cámara y no
- * se toca— porque acá el fotograma SIEMPRE hay que codificarlo: un PNG de 1920x1080 pesa varios
- * megabytes y la boleta tiene un tope de bytes. 0.92 es la calidad a la que el artefacto de
- * compresión no se ve en el texto de una placa.</p>
- */
-export async function fotoDelFotograma(video: HTMLVideoElement): Promise<CapturedPhoto | null> {
-  const ancho = video.videoWidth;
-  const alto = video.videoHeight;
-  if (!ancho || !alto) return null;
-  const lienzo = document.createElement('canvas');
-  lienzo.width = ancho;
-  lienzo.height = alto;
-  const ctx = lienzo.getContext('2d');
-  if (!ctx) return null;
-  ctx.drawImage(video, 0, 0, ancho, alto);
-  const blob = await new Promise<Blob | null>((resolve) => {
-    lienzo.toBlob((resultado) => resolve(resultado), 'image/jpeg', 0.92);
-  });
-  if (!blob) return null;
-  return { blob, fileName: 'evidencia.jpg', capturedAt: new Date().toISOString() };
-}

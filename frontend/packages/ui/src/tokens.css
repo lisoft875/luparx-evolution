@@ -6700,3 +6700,30 @@ a.lx-list-row {
   letter-spacing: -0.01em;
   font-variant-numeric: tabular-nums;
 }
+
+/* ---- La ventana de la cámara (09-10-2026) -------------------------------------------------
+   Compartida por el Ciudadano y Fiscalización. El vídeo y la foto tomada ocupan la MISMA caja
+   —misma proporción, mismo radio— porque si no la ventana da un salto al pasar de «lo que ve la
+   cámara» a «lo que se va a guardar», justo en el momento en que hay que comparar las dos. */
+.lx-camera {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lx-space-3);
+}
+.lx-camera__video,
+.lx-camera__shot {
+  display: block;
+  width: 100%;
+  /* 4:3, que es lo que entrega casi cualquier cámara; `object-fit: cover` recorta lo que sobre en
+     vez de deformar a nadie. */
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: var(--lx-radius-md);
+  background: #000;
+  border: 1px solid var(--lx-border);
+}
+.lx-camera__actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--lx-space-2);
+}
