@@ -738,6 +738,71 @@ async function medir(page, dedo) {
         comp.etiquetasBarras.join(' · '),
       );
       okInicio(!comp.desborde, 'no hay desplazamiento horizontal a 1536px');
+
+      /* --- Lo que la especificación cerrada del 09-10-2026 añade --------------------------------
+         Su regla principal es «NO ELIMINAR INFORMACIÓN EXISTENTE» y nombra los ocho bloques que
+         tienen que seguir en Inicio. Se comprueban por existencia, que es exactamente la forma de
+         esa regla: lo que importa no es cómo se ven sino que no hayan desaparecido al compactar. */
+      const cerrada = await page.evaluate(() => {
+        const rec = (s) => String(s || '').replace(/\s+/g, ' ').trim();
+        const px = (n, prop) => (n ? Math.round(parseFloat(getComputedStyle(n)[prop])) : 0);
+        const titulos = [...document.querySelectorAll('.lx-section-header__title, h2')].map((n) => rec(n.textContent));
+        return {
+          titulos,
+          kpiValorPx: px(document.querySelector('.lx-metric__value'), 'fontSize'),
+          tituloModuloPx: px(document.querySelector('.lx-section-header__title'), 'fontSize'),
+          radioTarjeta: px(document.querySelector('.lx-card'), 'borderTopLeftRadius'),
+          // §9: los títulos de los accesos NO pueden estar recortados en escritorio.
+          accesosRecortados: [...document.querySelectorAll('.lx-quick-tile__title')]
+            .filter((n) => n.scrollWidth > n.clientWidth + 1)
+            .map((n) => rec(n.textContent)),
+          espacios: rec(document.querySelector('.lx-donut')?.parentElement?.textContent).includes('espacios'),
+          totalSemana: Boolean(document.querySelector('.lx-home__week-total')),
+          // §12: el bloque de atención existe SÓLO con incidencias. Las dos salidas son correctas.
+          atencion: document.querySelectorAll('.lx-home-attention__item').length,
+          atencionVacia: document.querySelectorAll('.lx-home-attention').length === 0,
+        };
+      });
+
+      const OBLIGATORIOS = [
+        'Ocupación en tiempo real',
+        'Ingresos esta semana',
+        'Actividad reciente',
+        'Accesos rápidos',
+        'Zonas más utilizadas',
+        'Estado de los servicios',
+      ];
+      for (const bloque of OBLIGATORIOS) {
+        okInicio(
+          cerrada.titulos.some((titulo) => titulo.includes(bloque)),
+          `«${bloque}» sigue en Inicio`,
+          cerrada.titulos.join(' · '),
+        );
+      }
+      okInicio(
+        cerrada.accesosRecortados.length === 0,
+        'ningún título de acceso rápido queda recortado en escritorio',
+        cerrada.accesosRecortados.join(' · '),
+      );
+      okInicio(
+        cerrada.kpiValorPx >= 28 && cerrada.kpiValorPx <= 34,
+        `el número de un KPI mide ${cerrada.kpiValorPx}px (la especificación pide 28-34)`,
+      );
+      okInicio(
+        cerrada.tituloModuloPx >= 18 && cerrada.tituloModuloPx <= 20,
+        `los títulos de módulo miden ${cerrada.tituloModuloPx}px (pide 18-20)`,
+      );
+      okInicio(
+        cerrada.radioTarjeta >= 14 && cerrada.radioTarjeta <= 18,
+        `el radio de tarjeta es ${cerrada.radioTarjeta}px (pide 14-18)`,
+      );
+      okInicio(cerrada.espacios, 'bajo el dónut se dice de cuántos espacios sale el porcentaje');
+      okInicio(cerrada.totalSemana, 'el gráfico semanal lleva su total encima');
+      okInicio(
+        cerrada.atencion > 0 || cerrada.atencionVacia,
+        '«Atención requerida» aparece con incidencias reales, o no aparece',
+        `items=${cerrada.atencion} ausente=${cerrada.atencionVacia}`,
+      );
     }
 
     // --- 6. Los estados del paso 8: cargando, error y cero --------------------------------------

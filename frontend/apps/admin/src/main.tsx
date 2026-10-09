@@ -4,6 +4,13 @@ import '@luparx/ui/tailwind.css';
 import { App } from './App';
 import { assertEnvConfigured } from './env';
 
+/*
+  El portal, en la raíz del documento (09-10-2026). Mismo gancho que la plataforma y el ciudadano:
+  le da a ESTE portal su paleta sin tocar la de los otros tres, que es lo que el punto 16 pide
+  cuando dice «no hacer un rediseño general del Admin fuera de Inicio».
+*/
+document.documentElement.dataset.portal = 'admin';
+
 const container = document.getElementById('root');
 if (!container) throw new Error('Root element not found');
 

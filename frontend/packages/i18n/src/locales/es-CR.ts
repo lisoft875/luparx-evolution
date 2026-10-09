@@ -365,6 +365,14 @@ export const esCR = {
   'admin.home.rank.title': 'Zonas más utilizadas',
   'admin.home.rank.detail': 'Ver detalle',
   'admin.home.rank.empty': 'Todavía no hay zonas con bahías numeradas.',
+  /* --- Inicio municipal, referencia cerrada (09-10-2026) ------------------------------------ */
+  'admin.home.occupancy.spaces': '{{activas}} / {{bahias}} espacios',
+  'admin.home.revenue.weekTotal': 'Total de la semana',
+  'admin.home.attention.title': 'Atención requerida',
+  'admin.home.attention.review': 'Revisar',
+  'admin.home.attention.payments.one': '1 pago rechazado hoy',
+  'admin.home.attention.payments.other': '{{count}} pagos rechazados hoy',
+  'admin.home.attention.noZones': 'Ninguna zona tiene bahías numeradas',
   'admin.home.system.title': 'Estado de los servicios',
   // --- Roles y permisos (§3 de la guía funcional, 24-09-2026) -----------------------------------
   'nav.roles': 'Roles y permisos',

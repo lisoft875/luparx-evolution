@@ -153,7 +153,7 @@ function isoDate(date: Date): string {
  * dice que no la tiene.</p>
  */
 export function HomePage(): React.JSX.Element {
-  const { t, locale } = useTranslation();
+  const { t, tPlural, locale } = useTranslation();
   const { activeTenant, apiClient, me } = useAuth();
   const permissions = usePermissions();
   const navigate = useNavigate();
@@ -313,13 +313,20 @@ export function HomePage(): React.JSX.Element {
     [panel.data],
   );
 
+  /**
+   * La ocupación total, y de qué se compone.
+   *
+   * <p>Devuelve las tres cifras y no sólo el porcentaje: la referencia pone «1.402 / 2.000
+   * espacios» bajo el número del dónut, y ese reparto ya se calculaba acá para dividir — sólo se
+   * tiraba. Es dato real del panel, no una cifra nueva.</p>
+   */
   const ocupacion = useMemo(() => {
     const zones = (panel.data?.occupancy.zones ?? []).filter((zona) => zona.percent !== null);
     if (zones.length === 0) return null;
     const activas = zones.reduce((suma, zona) => suma + zona.activeSessions, 0);
     const bahias = zones.reduce((suma, zona) => suma + zona.baysInService, 0);
     if (bahias === 0) return null;
-    return Math.round((activas / bahias) * 100);
+    return { pct: Math.round((activas / bahias) * 100), activas, bahias };
   }, [panel.data]);
 
   const barras: BarChartDatum[] = useMemo(() => {
@@ -392,6 +399,43 @@ export function HomePage(): React.JSX.Element {
       },
     ] as const;
   }, [panel.isSuccess, panel.isError, panel.data, t]);
+
+  /**
+   * «Atención requerida» (§12): sólo con una condición REAL que pida acción del administrador.
+   *
+   * <p>El documento es explícito en los dos sentidos: «sólo aparece si existe una condición que
+   * requiere acción» y «si no hay nada que atender, no reservar un bloque vacío y no inventar
+   * alertas». Así que esta lista puede quedar en cero, y entonces el bloque no se dibuja.</p>
+   *
+   * <p>Las dos que el panel sabe contestar hoy, y ninguna más:</p>
+   * <ul>
+   *   <li><b>Pagos rechazados</b> — `paymentFailures` del panel. Pide acción: alguien no pudo
+   *       pagar y la municipalidad no cobró.</li>
+   *   <li><b>Ninguna zona con bahías numeradas</b> — es configuración incompleta, que el propio
+   *       documento nombra como ejemplo válido, y además es la causa de que la ocupación no se
+   *       pueda calcular. Lleva a Zonas, que es donde se arregla.</li>
+   * </ul>
+   *
+   * <p>Lo que la referencia dibuja y NO está: «5 boletas sin sincronizar» —la cola vive en el
+   * teléfono del fiscalizador, el servidor no la conoce— y «2 reportes de ciudadanos», que no
+   * existe como concepto en la plataforma. Inventarlas sería exactamente la alerta ficticia que el
+   * documento prohíbe.</p>
+   */
+  const atencion = useMemo(() => {
+    const items: { clave: string; texto: string; ruta: string }[] = [];
+    const fallos = panel.data?.paymentFailures.count ?? 0;
+    if (fallos > 0) {
+      items.push({
+        clave: 'payments',
+        texto: tPlural('admin.home.attention.payments', fallos),
+        ruta: '/billing',
+      });
+    }
+    if (panel.isSuccess && ocupacion === null) {
+      items.push({ clave: 'zones', texto: t('admin.home.attention.noZones'), ruta: '/zones' });
+    }
+    return items;
+  }, [panel.data, panel.isSuccess, ocupacion, t, tPlural]);
 
   const municipalidad = activeTenant?.name ?? t('app.name');
   const nombre = me?.user.givenName ?? null;
@@ -557,12 +601,25 @@ export function HomePage(): React.JSX.Element {
                   </div>
                 ) : (
                   <div className="lx-occupancy">
-                    <OccupancyDonut
-                      percent={ocupacion}
-                      caption={t('admin.home.occupancy.total')}
-                      emptyLabel={t('admin.home.occupancy.noBase')}
-                      title={t('admin.home.zones.title')}
-                    />
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--lx-space-2)' }}>
+                      <OccupancyDonut
+                        percent={ocupacion?.pct ?? null}
+                        caption={t('admin.home.occupancy.total')}
+                        emptyLabel={t('admin.home.occupancy.noBase')}
+                        title={t('admin.home.zones.title')}
+                      />
+                      {/* De qué se compone el porcentaje. La referencia lo pone bajo el número y
+                          son dos cifras que el panel ya daba: estadías corriendo sobre bahías en
+                          servicio. Sin ellas, «70%» es un número que hay que creerse. */}
+                      {ocupacion ? (
+                        <span className="lx-text-meta" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                          {t('admin.home.occupancy.spaces', {
+                            activas: ocupacion.activas,
+                            bahias: ocupacion.bahias,
+                          })}
+                        </span>
+                      ) : null}
+                    </div>
                     <div className="lx-occupancy__zones">
                       <ZonesOccupancy
                         zones={panel.data?.occupancy.zones ?? []}
@@ -590,6 +647,16 @@ export function HomePage(): React.JSX.Element {
                     </span>
                   }
                 />
+                {/* El total de la semana, encima del gráfico. La referencia lo pone grande junto
+                    al título, y es un dato que la serie ya trae sumado (`totalMinor`): hasta hoy
+                    había que leerlo barra por barra. En su propia línea y no dentro del
+                    `SectionHeader`, que es lo que el punto 7 pide al decir «no superponer fecha,
+                    total y título: cada elemento debe tener su propia zona de layout». */}
+                {serie.data && serie.data.totalMinor > 0 ? (
+                  <p className="lx-home__week-total">
+                    {dinero(serie.data.totalMinor, serie.data.currencyCode)}
+                  </p>
+                ) : null}
                 {serie.isLoading ? (
                   // Un bloque del tamaño del gráfico, no la palabra «Cargando»: así la pantalla no
                   // se reacomoda cuando el dato llega.
@@ -715,6 +782,40 @@ export function HomePage(): React.JSX.Element {
                 </Card>
               </div>
             </div>
+
+            {/* --- G. Atención requerida, SÓLO con incidencias reales --------------------------
+                El punto 12 lo acota en las dos direcciones: aparece si hay algo que atender, y si
+                no hay nada no se reserva un bloque vacío. Por eso esto es una lista que puede
+                quedar en cero y entonces no se dibuja nada — ni un «todo en orden», que sería un
+                bloque ocupando sitio para decir que no hace falta.
+
+                No reemplaza al estado de los servicios: son cosas distintas y van las dos. Éste
+                dice «hacé algo»; el de abajo dice «así están las piezas». */}
+            {atencion.length > 0 ? (
+              <section className="lx-home-attention" aria-label={t('admin.home.attention.title')}>
+                <h2 className="lx-home-attention__title">
+                  <span className="lx-home-attention__icon" aria-hidden="true">
+                    <IconFine size={16} />
+                  </span>
+                  {t('admin.home.attention.title')}
+                  <span className="lx-home-attention__count">{atencion.length}</span>
+                </h2>
+                {atencion.map((item) => (
+                  <button
+                    key={item.clave}
+                    type="button"
+                    className="lx-home-attention__item"
+                    onClick={() => navigate(item.ruta)}
+                  >
+                    <span>{item.texto}</span>
+                    <span className="lx-linklike lx-linklike--go">
+                      {t('admin.home.attention.review')}
+                      <IconChevronRight size={14} />
+                    </span>
+                  </button>
+                ))}
+              </section>
+            ) : null}
 
             {/* --- Estado de los servicios, al final y en un renglón ---------------------------
                 Estaba en la cabecera, compartiendo fila con el título. La sección 6 del documento

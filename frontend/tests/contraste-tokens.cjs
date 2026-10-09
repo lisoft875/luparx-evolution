@@ -62,6 +62,9 @@ const claro = { ...oscuro, ...tokensDe(":root[data-theme='light']") };
   existe para no dejar pasar: su CTA, con el azul que daba la especificación, tenía 3.51.
 */
 const ciudadano = { ...oscuro, ...tokensDe(":root[data-portal='citizen']") };
+/* Y el admin desde el 09-10-2026, por el mismo gancho. Sus dos azules fallaban igual que los de
+   los otros dos portales: blanco sobre #18A8FF da 2.60. */
+const admin = { ...oscuro, ...tokensDe(":root[data-portal='admin']") };
 
 /** Sigue la cadena de `var()`, con respaldo, hasta un hexadecimal. `null` si no llega. */
 function resolver(valor, tabla, profundidad = 0) {
@@ -167,12 +170,33 @@ const PARES_CIUDADANO = [
   ['el borde sobre la tarjeta', '--lx-border', '--lx-surface', 1.1],
 ];
 
+/* Los pares del Inicio municipal. Aparte de los del ciudadano porque las piezas son otras: acá
+   hay dónut, ranking de zonas, franja de servicios y «Atención requerida». */
+const PARES_ADMIN = [
+  ['saludo sobre el fondo', '--lx-text', '--lx-bg', 4.5],
+  ['fecha y hora', '--lx-text-muted', '--lx-bg', 4.5],
+  ['KPI: el número', '--lx-text', '--lx-surface', 4.5],
+  ['KPI: la etiqueta', '--lx-text-muted', '--lx-surface', 4.5],
+  ['acción o enlace sobre tarjeta', '--lx-primary', '--lx-surface', 4.5],
+  ['relleno azul con texto encima', '--lx-primary-contrast', '--lx-primary-fill', 4.5],
+  ['icono interactivo (gráfico)', '--lx-accent-icon', '--lx-surface', 3.0],
+  ['dónut: el arco sobre su pista', '--lx-primary', '--lx-surface-2', 3.0],
+  ['servicio operativo', '--lx-success', '--lx-bg', 4.5],
+  ['servicio con aviso', '--lx-warning', '--lx-bg', 4.5],
+  ['serie secundaria (morado)', '--lx-accent-violet', '--lx-surface', 4.5],
+  ['atención requerida: el conteo', '--lx-danger-ink', '--lx-danger', 4.5],
+  ['la tarjeta se distingue del fondo', '--lx-surface', '--lx-bg', 1.1],
+  ['la elevada se distingue de la tarjeta', '--lx-surface-2', '--lx-surface', 1.1],
+  ['el borde sobre la tarjeta', '--lx-border', '--lx-surface', 1.1],
+];
+
 let fallos = 0;
 let sinResolver = 0;
 for (const [nombreTema, tabla, lista] of [
   ['oscuro', oscuro, PARES],
   ['claro', claro, PARES],
   ['ciudadano', ciudadano, PARES_CIUDADANO],
+  ['admin', admin, PARES_ADMIN],
 ]) {
   console.log(`\n===== tema ${nombreTema} =====`);
   for (const [pieza, tinta, fondo, minimo] of lista) {

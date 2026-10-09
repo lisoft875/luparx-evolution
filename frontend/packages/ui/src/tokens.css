@@ -6550,3 +6550,137 @@ a.lx-list-row {
   /* «label 11-12 px» */
   font-size: 12px;
 }
+
+/* ==============================================================================================
+   ADMINISTRACIÓN · la paleta del Inicio municipal (09-10-2026)
+
+   El documento la llama «paleta visual obligatoria» y da doce colores. Diez entran tal cual; los
+   dos azules no, y es el tercer portal seguido en que pasa lo mismo:
+
+     · blanco sobre #18A8FF (el azul primario) → 2.60
+     · blanco sobre #0D8FE8 (el secundario)    → 3.44
+
+   Como ya se hizo en Fiscalización (#1382F6, 3.78) y en Ciudadano (#0788FF, 3.51), los dos papeles
+   se separan: #18A8FF es TINTA —5.68 sobre tarjeta, que es justo para lo que el documento lo pide,
+   «acciones, enlaces, gráfica principal»— y el RELLENO baja a #0B74BE, el mismo azul un escalón
+   más oscuro, con blanco a 4.93.
+
+   El #0D8FE8 se queda donde el documento lo manda y donde sí vale: «iconos y estados
+   interactivos», que son elementos gráficos y su mínimo es 3.0, no 4.5. Nunca como texto.
+   ============================================================================================== */
+:root[data-portal='admin'] {
+  --lx-bg: #071b2d;
+  --lx-chrome: #061626;
+  --lx-surface: #102a3e;
+  --lx-surface-2: #16364d;
+  --lx-surface-hover: #1c4160;
+  --lx-bg-elevated: var(--lx-surface);
+  --lx-border: #27465c;
+  --lx-border-strong: #35607d;
+  --lx-text: #f4f8fc;
+  --lx-text-muted: #91a7ba;
+
+  --lx-primary: #18a8ff;
+  --lx-primary-2: #5fc8ff;
+  --lx-primary-strong: #4cc0ff;
+  --lx-primary-fill: #0b74be;
+  --lx-primary-fill-hover: #0a66a7;
+  --lx-primary-soft: color-mix(in srgb, #18a8ff 14%, transparent);
+  --lx-focus-ring: #18a8ff;
+  /* «Iconos y estados interactivos» del documento. Gráfico, nunca texto: 4.30 sobre tarjeta. */
+  --lx-accent-icon: #0d8fe8;
+
+  --lx-success: #24d68a;
+  --lx-warning: #f4aa2a;
+  --lx-danger-text: #ff6268;
+  --lx-accent-violet: #a889f4;
+
+  /* §13: «KPI numérico aprox. 28-34 px; títulos de módulo aprox. 18-20 px». */
+  --lx-text-card-title-size: 19px;
+}
+
+/* El número de un KPI, con el tamaño que pide la composición de escritorio. Era 24px. */
+:root[data-portal='admin'] .lx-metric__value {
+  font-size: 30px;
+}
+
+/* ---- §9: los títulos de los accesos rápidos NO se truncan en escritorio --------------------
+   El documento lo señala por su nombre: «no truncar títulos como "Registrar esp..." o "Generar
+   repor...". Ajustar tipografía/ancho antes de usar ellipsis».
+
+   El título pasa a partirse en dos renglones en vez de recortarse. La pista de abajo conserva su
+   renglón único con puntos suspensivos: es texto secundario, y dejarla crecer descuadraría las
+   cuatro baldosas, que es el motivo por el que se recortó en su día. El cambio es sólo del título,
+   que es lo que el documento nombra. */
+:root[data-portal='admin'] .lx-quick-tile__title {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  line-height: 1.25;
+}
+
+/* ---- «Atención requerida» (09-10-2026) ------------------------------------------------------
+   Una fila compacta al final del tablero, antes del estado de los servicios. Sólo existe cuando
+   hay algo que atender: el componente no la dibuja vacía, así que acá no hay estado «sin
+   incidencias» que estilar — y eso es deliberado, no un olvido. */
+.lx-home-attention {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--lx-space-2) var(--lx-space-5);
+  padding: var(--lx-space-3) var(--lx-space-4);
+  border: 1px solid color-mix(in srgb, var(--lx-danger) 45%, var(--lx-border));
+  border-radius: var(--lx-radius-lg);
+  background: color-mix(in srgb, var(--lx-danger) 8%, var(--lx-surface));
+}
+.lx-home-attention__title {
+  display: flex;
+  align-items: center;
+  gap: var(--lx-space-2);
+  margin: 0;
+  font-size: var(--lx-text-body-size);
+  font-weight: 700;
+}
+.lx-home-attention__icon {
+  display: inline-flex;
+  color: var(--lx-danger-text);
+}
+.lx-home-attention__count {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: var(--lx-radius-pill);
+  background: var(--lx-danger);
+  color: var(--lx-danger-ink);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 20px;
+  text-align: center;
+}
+.lx-home-attention__item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--lx-space-3);
+  min-height: var(--lx-touch-target-min);
+  padding: 0;
+  background: none;
+  border: 0;
+  color: var(--lx-text);
+  font: inherit;
+  cursor: pointer;
+}
+.lx-home-attention__item:focus-visible {
+  outline: 2px solid var(--lx-focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--lx-radius-sm);
+}
+
+/* El total de la semana, en su propia línea sobre el gráfico (§7: cada elemento con su zona). */
+.lx-home__week-total {
+  margin: 0 0 var(--lx-space-2);
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}

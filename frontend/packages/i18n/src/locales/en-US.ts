@@ -348,6 +348,13 @@ export const enUS: Record<TranslationKey, string> = {
   'admin.home.rank.title': 'Most used zones',
   'admin.home.rank.detail': 'See detail',
   'admin.home.rank.empty': 'No zones with numbered bays yet.',
+  'admin.home.occupancy.spaces': '{{activas}} / {{bahias}} spaces',
+  'admin.home.revenue.weekTotal': 'Week total',
+  'admin.home.attention.title': 'Needs attention',
+  'admin.home.attention.review': 'Review',
+  'admin.home.attention.payments.one': '1 payment declined today',
+  'admin.home.attention.payments.other': '{{count}} payments declined today',
+  'admin.home.attention.noZones': 'No zone has numbered bays',
   'admin.home.system.title': 'Service status',
   // --- Roles and permissions (§3 of the functional guide, 24-09-2026) ---------------------------
   'nav.roles': 'Roles and permissions',
