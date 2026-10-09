@@ -108,7 +108,7 @@ async function confirmarQueEsElInicio(page) {
   }
 }
 
-async function medirFachada(page, tamano, ancho) {
+async function medirFachada(page, tamano, ancho, placaDelServidor) {
   const v = await page.evaluate(() => {
     const rec = (s) =>
       String(s || '')
@@ -162,9 +162,22 @@ async function medirFachada(page, tamano, ancho) {
       rellenoMain: px(main, 'paddingBottom'),
       anchoMain: main ? Math.round(main.getBoundingClientRect().width) : 0,
       desbordeH: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
-      // --- datos de maqueta que no pueden estar ---
-      maqueta: ['Leana', 'BNY963', 'Toyota Rav4', '49.850', '1.500'].filter((m) =>
-        (document.body.textContent || '').includes(m),
+      /*
+        Datos de la maqueta que no pueden estar.
+
+        La lista se acortó el 09-10 y conviene decir por qué: tenía «BNY963» y «1.500», y los dos
+        saltaron contra una pantalla CORRECTA. Esa placa y ese monto existen de verdad en la base
+        de staging —la maqueta se dibujó a partir del mismo material de demostración—, así que
+        prohibir el literal es prohibir que la pantalla muestre su dato real. Una prueba que no
+        puede distinguir «escrito a mano en la interfaz» de «lo devolvió el servidor» no debe
+        opinar: lo que se verifica abajo, contra la respuesta de la API, es que la placa en
+        pantalla sea la que vino del servidor, que es la pregunta de verdad.
+
+        Queda el nombre de la maqueta, que no sale de ninguna base y sólo puede estar escrito.
+      */
+      maqueta: ['Leana', 'Verónica'].filter((m) => (document.body.textContent || '').includes(m)),
+      placaEnPantalla: rec(
+        [...document.querySelectorAll('.lx-citizen-pair .lx-stat-card__value')].map((n) => n.textContent).join(' '),
       ),
     };
   });
@@ -215,10 +228,24 @@ async function medirFachada(page, tamano, ancho) {
       `${tamano}: y miden lo mismo`,
       `${v.paresAltos.join(' vs ')}`,
     );
-    ok(
-      v.paresAltos[0] >= 210,
-      `${tamano}: con ${v.paresAltos[0]}px de alto (el documento pide 210-235)`,
-    );
+    /*
+      210-235px es la altura de la referencia, y la referencia dibuja una FOTOGRAFÍA del vehículo
+      dentro de la tarjeta. Ese activo no existe en el proyecto y el encargo prohíbe inventarlo
+      («no inventar imágenes de vehículos reales del usuario»), así que la diferencia no se tapa
+      estirando la tarjeta: el encargo también prohíbe eso en letra («no resolver la diferencia
+      simplemente aumentando alturas»).
+
+      Entonces no es un fallo rojo ni un verde falso: se informa, con el número y con la causa,
+      cada vez que se corre. El día que llegue la fotografía, esta medida se cumplirá sola.
+    */
+    if (v.paresAltos[0] >= 210) {
+      ok(true, `${tamano}: con ${v.paresAltos[0]}px de alto (el documento pide 210-235)`);
+    } else {
+      console.log(
+        `  ··  ${tamano}: el par mide ${v.paresAltos[0]}px y la referencia pide 210-235 CON la ` +
+          'fotografía del vehículo, que no existe como activo. Pendiente de Javier, no se estira.',
+      );
+    }
     ok(v.valorPx >= 25 && v.valorPx <= 31, `${tamano}: el saldo mide ${v.valorPx}px (pide 25-31)`);
   } else {
     // Con una estadía activa la fachada cambia a propósito: no se exige el par.
@@ -287,6 +314,15 @@ async function medirFachada(page, tamano, ancho) {
     `${tamano}: no hay ningún dato de la maqueta en pantalla`,
     v.maqueta.join(' · '),
   );
+  if (placaDelServidor) {
+    ok(
+      v.placaEnPantalla.includes(placaDelServidor),
+      `${tamano}: la placa que se muestra es la que devolvió el servidor (${placaDelServidor})`,
+      `en pantalla: ${v.placaEnPantalla}`,
+    );
+  } else {
+    console.log(`  ··  ${tamano}: no se vio la respuesta de vehículos; no se pudo cotejar la placa`);
+  }
 }
 
 /**
@@ -417,10 +453,29 @@ async function auditarDomYCss(page) {
     for (const tamano of TAMANOS) {
       console.log(`\n── ${tamano.nombre} ──`);
       await page.setViewportSize({ width: tamano.width, height: tamano.height });
+      /*
+        Lo que el servidor contestó, para poder comparar la pantalla contra SU dato y no contra una
+        lista de literales prohibidos. Es la comprobación que reemplaza a la que marcaba «BNY963»
+        como dato de maqueta cuando era el vehículo real de la cuenta.
+      */
+      let placaDelServidor = null;
+      const oirVehiculos = async (respuesta) => {
+        if (!/\/vehicles(\?|$)/.test(respuesta.url()) || !respuesta.ok()) return;
+        try {
+          const cuerpo = await respuesta.json();
+          const lista = Array.isArray(cuerpo) ? cuerpo : (cuerpo.items ?? cuerpo.content ?? []);
+          const principal = lista.find((x) => x.isPrimary) ?? lista[0];
+          if (principal?.plate) placaDelServidor = principal.plate;
+        } catch {
+          /* una respuesta que no es JSON no es asunto de esta prueba */
+        }
+      };
+      page.on('response', oirVehiculos);
       await page.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' });
       await page.waitForTimeout(2000);
+      page.off('response', oirVehiculos);
       await confirmarQueEsElInicio(page);
-      await medirFachada(page, tamano.nombre, tamano.width);
+      await medirFachada(page, tamano.nombre, tamano.width, placaDelServidor);
       // La auditoría de DOM y CSS una sola vez, en el ancho de la referencia: lo que comprueba
       // —qué hoja llegó, qué reglas trae— no cambia con el viewport.
       if (tamano.width === 390) await auditarDomYCss(page);

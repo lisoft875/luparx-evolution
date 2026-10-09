@@ -6381,9 +6381,40 @@ a.lx-list-row {
   position: absolute;
   inset: 0;
   z-index: -2;
-  background-position: center right;
-  background-size: cover;
   background-repeat: no-repeat;
+  /*
+    Encuadre y luz, medidos sobre el activo real (09-10-2026).
+
+    `cover` dejaba el bloque NEGRO, y conviene explicar por qué para que nadie lo revierta: el
+    activo mide 1600x522 y la marca ocupa el 40-62% del ancho y el 43-95% del alto —está centrada,
+    con márgenes negros a los lados—. Un `cover` sobre una caja de 390x175 escala por ancho, deja
+    la marca minúscula en el centro, justo detrás del saludo, y el resto es el margen negro del
+    archivo. La referencia pide lo contrario: imagen integrada y visible a la derecha, saludo sobre
+    zona limpia a la izquierda.
+
+    Entonces se encuadra: `auto 130%` agranda hasta que la marca llena el alto, `bottom` alinea por
+    abajo —la marca vive en la mitad inferior del archivo— y el 16% horizontal la lleva al tercio
+    derecho. Y se ILUMINA: el archivo es azul sobre negro y, bajo el degradado navy, un azul
+    oscuro sobre un fondo oscuro no se ve. El brillo no inventa nada, revela lo que ya estaba.
+
+    Esto es encuadre de ESTE activo. El día que llegue la fotografía automotriz de la referencia,
+    lo que cambia son estos tres valores.
+  */
+  background-size: auto 130%;
+  background-position: 16% bottom;
+  filter: brightness(1.8);
+}
+/* El halo: la referencia no pide una imagen pegada sino una integrada y encendida. El degradado
+   radial nace donde está la marca y se apaga antes de llegar al saludo. */
+.lx-citizen-hero__photo::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    58% 80% at 78% 70%,
+    color-mix(in srgb, var(--lx-cta-bright) 22%, transparent),
+    transparent 70%
+  );
 }
 /* Dos degradados, no uno. El horizontal protege el texto —opaco a la izquierda, transparente a la
    derecha— y el vertical funde el pie de la imagen con lo que viene debajo, que es lo que hace que
@@ -6393,9 +6424,11 @@ a.lx-list-row {
   position: absolute;
   inset: 0;
   z-index: -1;
+  /* Más abiertos que en la primera pasada: eran 18%/55% y 30%, y entre los dos apagaban la imagen
+     entera. Lo que tienen que hacer es proteger el saludo, no borrar la fotografía. */
   background:
-    linear-gradient(to right, var(--lx-bg) 18%, color-mix(in srgb, var(--lx-bg) 55%, transparent) 62%, transparent 100%),
-    linear-gradient(to bottom, color-mix(in srgb, var(--lx-bg) 30%, transparent) 0%, transparent 35%, var(--lx-bg) 100%);
+    linear-gradient(to right, var(--lx-bg) 4%, color-mix(in srgb, var(--lx-bg) 40%, transparent) 55%, transparent 90%),
+    linear-gradient(to bottom, color-mix(in srgb, var(--lx-bg) 20%, transparent) 0%, transparent 42%, var(--lx-bg) 100%);
 }
 .lx-citizen-hero__greeting {
   margin: 0;
@@ -6726,4 +6759,136 @@ a.lx-list-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: var(--lx-space-2);
+}
+
+/* =================================================================================================
+   La fachada del Ciudadano, segunda pasada (09-10-2026)
+
+   La primera cumplió la tabla de medidas del documento y aun así no se parecía a la referencia, que
+   es un resultado que vale la pena entender: un arnés comprueba que el bloque existe y mide lo que
+   debe, y eso no es lo mismo que que se VEA como el boceto. Lo que faltaba era luz, profundidad y
+   tratamiento de icono —cosas que ningún número de la tabla nombra—.
+
+   Todo lo de acá abajo está acotado al Ciudadano: por sus clases propias o por `data-portal`. Las
+   otras dos fachadas se tocan en su propia tarea, no en ésta.
+   ================================================================================================= */
+
+/* ---- «Estacionar ahora»: que se lea encendida y pegada al héroe ------------------------------
+   La sombra azul no es decoración: es lo que hace que la tarjeta parezca apoyada sobre el héroe en
+   vez de puesta al lado. El margen negativo cierra el aire que quedaba entre las dos. */
+.lx-hero-card--citizen {
+  margin-top: calc(-1 * var(--lx-space-4));
+  box-shadow:
+    0 16px 36px -20px color-mix(in srgb, var(--lx-cta-bright) 90%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+.lx-hero-card--citizen .lx-hero-card__icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.34);
+}
+.lx-hero-card--citizen .lx-hero-card__go {
+  background: rgba(255, 255, 255, 0.22);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+}
+
+/* ---- Saldo y Vehículo: el icono tratado, y el botón al pie --------------------------------
+   El icono era un círculo apenas visible; en la referencia es un cuadrado redondeado teñido, y es
+   lo que le da peso a la tarjeta. `margin-top: auto` en la acción empuja los dos botones a la misma
+   línea: las dos tarjetas quedan parejas por el CONTENIDO y no por una altura escrita a mano, que
+   es justo lo que el encargo prohíbe. */
+.lx-citizen-pair .lx-list-row__icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--lx-primary) 18%, transparent);
+  border: 1px solid color-mix(in srgb, var(--lx-primary) 32%, transparent);
+  color: var(--lx-primary);
+}
+.lx-citizen-pair .lx-stat-card {
+  gap: 6px;
+  height: 100%;
+}
+.lx-citizen-pair .lx-stat-card__action {
+  margin-top: auto;
+}
+
+/* ---- Multas: profundidad y luz ámbar, sin perder legibilidad ------------------------------
+   El degradado entra por la esquina del icono y muere antes de la mitad, así que el monto de la
+   derecha conserva el fondo liso sobre el que se midió su contraste. */
+.lx-citizen-fines {
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--lx-warning) 14%, transparent) 0%, transparent 55%),
+    var(--lx-surface);
+  box-shadow: 0 10px 28px -18px color-mix(in srgb, var(--lx-warning) 70%, transparent);
+}
+
+/* ---- La barra inferior, flotante y redondeada -------------------------------------------------
+   Sólo en el Ciudadano: el fiscalizador trabaja de pie y al sol, su barra es un bloque anclado y
+   esa decisión tiene su propia tarea.
+
+   El margen inferior no rompe el espacio reservado para el contenido, y conviene dejarlo escrito
+   porque parece que sí: el contenedor de la barra es `position: fixed`, que establece un contexto
+   de formato de bloque, así que el margen del hijo NO se colapsa hacia afuera y entra en la altura
+   que el `ResizeObserver` del shell mide. El `padding-bottom` del contenido sale de esa medida, de
+   modo que la barra sigue sin tapar la última fila de actividad.
+
+   La safe-area se mueve del relleno interno al margen: flotando, lo que tiene que respetar la
+   franja del gesto es el hueco de abajo, no un relleno dentro de la píldora. */
+:root[data-portal='citizen'] .lx-bottom-tab-bar {
+  margin: 0 12px calc(12px + env(safe-area-inset-bottom));
+  padding-bottom: 0;
+  border: 1px solid var(--lx-border);
+  border-radius: 24px;
+  box-shadow: 0 18px 38px -16px rgba(0, 0, 0, 0.95);
+  overflow: hidden;
+}
+
+/* ---- El encabezado recupera el nombre de la municipalidad ------------------------------------
+   El 06-10 se ocultó por debajo de 430px, y la medición de entonces era correcta: con la marca, la
+   insignia de conexión con su texto y la campana, al nombre le quedaban 34px. La referencia
+   aprobada lo quiere visible, así que lo que cambia no es la medición sino QUÉ cede el espacio: por
+   debajo de 390px la insignia de conexión se queda en su punto —el color sigue diciendo lo mismo y
+   el texto completo sigue en el nombre accesible— y el nombre de la municipalidad se queda con la
+   fila. Nada se recorta: el nombre tiene nueve caracteres de ancho y sólo los más largos elíden.
+
+   El fiscalizador conserva su regla de 430px. Su encabezado es otro y su tarea es otra. */
+@media (min-width: 360px) {
+  .lx-app-bar--citizen .lx-tenant-badge__label {
+    display: inline;
+    max-width: 9ch;
+  }
+  .lx-app-bar--citizen .lx-tenant-badge {
+    padding-right: var(--lx-space-2);
+  }
+}
+@media (max-width: 389px) {
+  .lx-app-bar--citizen .lx-connection-badge--compact {
+    flex: none;
+    width: 10px;
+    min-width: 0;
+    height: 10px;
+    /* `min-height` y `aspect-ratio` porque la insignia trae un alto mínimo propio: sin anularlo el
+       punto sale ovalado, que se lee como un chip recortado y no como un indicador. */
+    min-height: 0;
+    aspect-ratio: 1;
+    padding: 0;
+    border-radius: 50%;
+    font-size: 0;
+    overflow: hidden;
+  }
+}
+/* El cursor del selector, que la referencia dibuja y nosotros no teníamos: un triángulo de bordes,
+   no un glifo, porque un carácter «⌄» cambia de forma y de línea base en cada tipografía. */
+.lx-app-bar--citizen .lx-tenant-badge--interactive::after {
+  content: '';
+  width: 0;
+  height: 0;
+  margin-left: 2px;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid currentColor;
+  opacity: 0.6;
 }
