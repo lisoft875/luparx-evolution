@@ -265,12 +265,13 @@ async function pantallaInicial(page, tamano, ancho) {
   );
   ok(vista.tituloGenerico === 0, `${tamano}: ya no hay un «Consulta de placa» genérico encabezando`);
 
-  /* El ancho útil: nunca más de 920 (v2, punto 1) y nunca estirado al borde en un escritorio.
-     Se comprueba el TOPE y no un valor exacto, porque por debajo de 920 el ancho lo manda el
-     viewport y exigir una cifra sería exigir un tamaño de pantalla. */
+  /* El ancho útil. El tope sube de 920 a 1100: el documento de iPad (09-10-2026) pide «ancho
+     máximo 1024-1100 px» para el área de contenido, y con cuatro acciones en una fila los 920 de
+     la v2 las dejaban angostas. Se comprueba el TOPE y no un valor exacto, porque por debajo del
+     máximo el ancho lo manda el viewport y exigir una cifra sería exigir un tamaño de pantalla. */
   ok(
-    vista.anchoMain <= 920,
-    `${tamano}: el área central no pasa de 920px`,
+    vista.anchoMain <= 1100,
+    `${tamano}: el área central no pasa de 1100px`,
     `mide ${vista.anchoMain}px`,
   );
   const margenEsperado = ancho >= 768 ? [24, 32] : [16, 16];
@@ -338,9 +339,23 @@ async function pantallaInicial(page, tamano, ancho) {
     vista.campoAlto >= 48 && vista.campoAlto <= 60,
     `${tamano}: el campo de placa mide ${vista.campoAlto}px (el documento pide 48-56)`,
   );
+  /*
+    El botón de buscar cambia de forma con el ancho, y las dos formas son correctas.
+
+    En teléfono es cuadrado y sólo icono: la palabra no cabe al lado de un campo de placa de 24px
+    centrado. Desde 768 dice «Buscar», que es como lo dibuja la referencia del iPad, y entonces
+    deja de ser cuadrado a propósito. Lo que no cambia en ninguno de los dos es lo que de verdad
+    importa: el alto, que sigue en el rango táctil.
+
+    Exigir «cuadrado» en los cinco anchos era exigir la versión de teléfono en la tablet, que es
+    justo lo que el documento vino a corregir.
+  */
+  const esperadoCuadrado = ancho < 768;
   ok(
-    vista.botonLado[0] === vista.botonLado[1] && vista.botonLado[0] >= 48 && vista.botonLado[0] <= 56,
-    `${tamano}: el botón de búsqueda es cuadrado de 48-56px`,
+    esperadoCuadrado
+      ? vista.botonLado[0] === vista.botonLado[1] && vista.botonLado[0] >= 48 && vista.botonLado[0] <= 56
+      : vista.botonLado[0] >= 96 && vista.botonLado[1] >= 48 && vista.botonLado[1] <= 60,
+    `${tamano}: el botón de búsqueda ${esperadoCuadrado ? 'es cuadrado de 48-56px' : 'lleva su palabra y conserva el alto táctil'}`,
     `mide ${vista.botonLado[0]}x${vista.botonLado[1]}`,
   );
   ok(vista.botonEnLinea, `${tamano}: el botón de búsqueda está en la misma fila que el campo`);
