@@ -128,7 +128,21 @@ async function medirFachada(page, tamano, ancho, placaDelServidor) {
     const pares = [...document.querySelectorAll('.lx-citizen-pair > *')];
     return {
       // --- orden de arriba abajo: cada bloque por su posición, que es lo que el documento fija ---
-      hero: caja('.lx-citizen-hero'),
+      hero: (() => {
+        const n = document.querySelector('.lx-citizen-hero');
+        if (!n) return null;
+        const c = n.getBoundingClientRect();
+        const saludo = n.querySelector('.lx-citizen-hero__greeting');
+        return {
+          top: Math.round(c.top),
+          alto: Math.round(c.height),
+          ancho: Math.round(c.width),
+          huecoSuperior: saludo ? Math.round(saludo.getBoundingClientRect().top - c.top) : 0,
+        };
+      })(),
+      /* Si hay fotografía de verdad. El contenedor sólo se monta cuando el activo existe: la K de
+         marca se quitó el 09-10 y no se sustituyó por nada, que es la orden. */
+      heroConFoto: Boolean(document.querySelector('.lx-citizen-hero__photo')),
       saludo: rec(document.querySelector('.lx-citizen-hero__greeting')?.textContent),
       saludoPx: px(document.querySelector('.lx-citizen-hero__greeting'), 'fontSize'),
       saludoPeso: document.querySelector('.lx-citizen-hero__greeting')
@@ -141,6 +155,20 @@ async function medirFachada(page, tamano, ancho, placaDelServidor) {
           'none',
       ),
       heroTieneImg: hero ? hero.querySelectorAll('img').length : -1,
+      /* Cualquier imagen de fondo dentro del héroe, venga del elemento o de sus pseudos. Lo que
+         se persigue es el sucedáneo: un `url(...)` acá sin contenedor de fotografía significa que
+         alguien volvió a poner la marca de agua. Los degradados no cuentan: son luz, no imagen. */
+      heroFondoDeMarca: hero
+        ? [hero, ...hero.querySelectorAll('*')]
+            .flatMap((n) => [
+              getComputedStyle(n).backgroundImage,
+              getComputedStyle(n, '::before').backgroundImage,
+              getComputedStyle(n, '::after').backgroundImage,
+            ])
+            .filter((fondo) => fondo && fondo.includes('url('))
+            .join(' ')
+            .slice(0, 160)
+        : '',
       degradado: hero
         ? getComputedStyle(hero, '::after').backgroundImage.includes('gradient')
         : false,
@@ -226,9 +254,25 @@ async function medirFachada(page, tamano, ancho, placaDelServidor) {
 
   ok(v.hero !== null, `${tamano}: el héroe existe`);
   if (v.hero) {
+    /*
+      175-215px es la altura de la referencia CON su fotografía. Mientras el activo no exista, esa
+      medida sólo se alcanza con relleno vacío, y la corrección del 09-10 lo prohíbe en letra:
+      «ajustar la altura total de la cabecera al contenido; no compensar añadiendo padding
+      vertical». Así que lo que se comprueba ahora es lo contrario de un mínimo: que el héroe NO
+      tenga una gran superficie oscura por encima del saludo. Se mide el hueco real —lo que hay
+      entre el borde del bloque y la primera letra— y se exige que sea relleno, no vacío.
+
+      Cuando la fotografía entre, el alto vuelve a 175-215 por tener algo dentro, y esta
+      comprobación se cambia por el mínimo otra vez.
+    */
     ok(
-      v.hero.alto >= 150,
-      `${tamano}: el héroe mide ${v.hero.alto}px (el documento pide ~175-215 con la cabecera)`,
+      v.hero.huecoSuperior <= 28,
+      `${tamano}: el héroe no deja superficie oscura sobre el saludo (${v.hero.huecoSuperior}px)`,
+    );
+    ok(
+      v.heroConFoto ? v.hero.alto >= 150 : true,
+      `${tamano}: el héroe mide ${v.hero.alto}px`,
+      v.heroConFoto ? 'con fotografía se esperan 175-215' : 'sin fotografía, la altura la da el contenido',
     );
     ok(/^hola/i.test(v.saludo), `${tamano}: empieza con el saludo`, `«${v.saludo}»`);
     ok(
@@ -237,7 +281,22 @@ async function medirFachada(page, tamano, ancho, placaDelServidor) {
     );
     ok(Number(v.saludoPeso) >= 700, `${tamano}: y va en peso 700-800`, `peso=${v.saludoPeso}`);
     // El punto 10 dice no aceptar «foto rectangular sin integración/degradado».
-    ok(v.fotoEsFondo, `${tamano}: la foto es fondo del bloque, no un recuadro pegado`);
+    if (v.heroConFoto) {
+      ok(v.fotoEsFondo, `${tamano}: la foto es fondo del bloque, no un recuadro pegado`);
+    } else {
+      console.log(
+        `  ··  ${tamano}: el héroe no lleva fotografía. Es el BLOQUEO declarado: falta el activo ` +
+          'nocturno de automóvil de la referencia, y la orden del 09-10 prohíbe sustituirlo.',
+      );
+    }
+    /* Y que no haya vuelto a entrar un sucedáneo: ni la marca de neón ni ninguna otra imagen de
+       fondo en el héroe mientras la fotografía no esté. «No intentar disimularla con más opacidad
+       ni cambiarla por otra marca de agua.» */
+    ok(
+      v.heroConFoto || !v.heroFondoDeMarca,
+      `${tamano}: y no se coló ningún sucedáneo de marca de agua en su lugar`,
+      v.heroFondoDeMarca,
+    );
     ok(
       v.heroTieneImg === 0,
       `${tamano}: y no hay ningún <img> suelto en el héroe`,
@@ -248,9 +307,13 @@ async function medirFachada(page, tamano, ancho, placaDelServidor) {
 
   ok(v.cta !== null, `${tamano}: «Estacionar ahora» existe`);
   if (v.cta) {
+    /* 150-165 era la medida con el héroe fotográfico detrás. La corrección del 09-10 pide
+       «reducir el alto excesivo actual y recuperar la proporción compacta de la referencia», y su
+       criterio rector dice que la imagen manda sobre el número cuando los dos no pueden ser
+       ciertos a la vez. */
     ok(
-      v.cta.alto >= 150 && v.cta.alto <= 190,
-      `${tamano}: el CTA mide ${v.cta.alto}px (pide 150-165)`,
+      v.cta.alto >= 118 && v.cta.alto <= 150,
+      `${tamano}: el CTA mide ${v.cta.alto}px (compacto: 118-150)`,
     );
     ok(v.ctaDegradado, `${tamano}: con degradado azul`);
     ok(v.ctaBoton, `${tamano}: y su botón circular a la derecha`);

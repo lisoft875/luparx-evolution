@@ -6369,8 +6369,20 @@ a.lx-list-row {
   /* De borde a borde: el degradado tiene que llegar hasta donde llega el fondo, o se vería el
      recorte que el encargo prohíbe. Los márgenes se los devuelve el contenido, abajo. */
   margin: calc(-1 * var(--lx-space-4)) calc(-1 * var(--lx-space-4)) 0;
-  padding: var(--lx-space-5) var(--lx-space-4) var(--lx-space-6);
-  min-height: 175px;
+  padding: var(--lx-space-4) var(--lx-space-4) var(--lx-space-5);
+  /*
+    Sin alto mínimo (09-10-2026, corrección del héroe).
+
+    Eran 175px, que es la medida de la referencia CON su fotografía. Sin fotografía esos 175px no
+    sostienen nada: producen la «gran superficie oscura antes de la acción principal» que se
+    reportó, porque el contenido —saludo y subtítulo— ocupa 60 y el resto es vacío. La orden es
+    explícita: «ajustar la altura total de la cabecera al contenido; no compensar añadiendo
+    padding vertical».
+
+    Así que la altura la decide el contenido. El día que entre la fotografía, el alto vuelve con
+    ella —una imagen de fondo necesita su caja— y este bloque recupera sus 175-215px por tener
+    algo dentro, que es la única razón legítima para ocuparlos.
+  */
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
@@ -6479,30 +6491,42 @@ a.lx-list-row {
   font-weight: 800;
   line-height: 1.12;
   letter-spacing: -0.02em;
-  /* La mitad: el saludo vive en la zona protegida y la foto respira en la otra. */
-  max-width: 62%;
+  /* 78% y no 62%: aquel ancho reservaba la mitad derecha a la fotografía, y mientras no esté no
+     hay nada que proteger. El saludo parte en dos líneas cuando el nombre es largo —«Hola,» y
+     después el nombre, como en la referencia— en vez de encogerse. Cuando la fotografía llegue,
+     esto vuelve a 62%. */
+  max-width: 78%;
+  text-wrap: balance;
 }
 .lx-citizen-hero__lead {
-  margin: var(--lx-space-2) 0 0;
+  margin: var(--lx-space-1) 0 0;
   font-size: 15px;
   color: var(--lx-text-muted);
-  max-width: 62%;
+  max-width: 78%;
 }
 @media (max-width: 380px) {
   /* «En pantallas pequeñas la imagen puede recortarse más; saludo y CTA tienen prioridad.» */
   .lx-citizen-hero__greeting {
     font-size: 26px;
-    max-width: 72%;
+    max-width: 88%;
   }
   .lx-citizen-hero__lead {
-    max-width: 72%;
+    max-width: 88%;
   }
 }
 
 /* ---- «Estacionar ahora»: el elemento dominante ---------------------------------------------- */
 .lx-hero-card--citizen {
   align-items: center;
-  min-height: 150px;
+  /*
+    124 y no 150. El número de la especificación anterior salía de la referencia CON su héroe
+    fotográfico detrás, donde la tarjeta se apoya sobre una imagen y necesita cuerpo para no
+    perderse. La corrección del 09-10 pide «reducir el alto excesivo actual y recuperar la
+    proporción compacta de la referencia», y el criterio rector de ese documento es que la imagen
+    aprobada manda sobre el número cuando los dos no pueden ser ciertos a la vez. Acá no pueden:
+    150px sobre un héroe sin imagen es una tarjeta que ocupa más que el saludo.
+  */
+  min-height: 124px;
   border-radius: var(--lx-radius-xl);
   /* El degradado del encargo, con los dos azules en el orden que impone el contraste: el oscuro
      donde está el texto y el luminoso donde sólo hay un icono. Ver la nota de la paleta. */
