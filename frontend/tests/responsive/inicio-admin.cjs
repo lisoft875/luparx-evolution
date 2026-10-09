@@ -20,6 +20,10 @@
  *      KPIs por fila, si hay desborde horizontal, si algo se encima, y si los blancos táctiles
  *      llegan a 44px en los tamaños de dedo.
  *
+ *   5. QUE QUEDEN LAS CAPTURAS DE LA ENTREGA. El documento del 09-10 se detiene en Inicio hasta
+ *      que las imágenes de escritorio y tablet/móvil estén revisadas, así que la corrida las deja
+ *      escritas en `tests/responsive/capturas/admin-inicio-*.png`.
+ *
  *   node tests/responsive/inicio-admin.cjs
  *   PASS='...' node tests/responsive/inicio-admin.cjs
  *   BASE=http://localhost:5183 node tests/responsive/inicio-admin.cjs
@@ -275,6 +279,31 @@ async function medir(page, dedo) {
       await page.goto(`${BASE}/admin/`, { waitUntil: 'domcontentloaded' });
       // El Inicio hace tres consultas; se espera a que las barras o el vacío del gráfico existan.
       await page.waitForTimeout(2600);
+
+      // -------------------------------------------------------------------------------------
+      // Las capturas que el documento pide entregar antes de seguir (§17: «detenerse y entregar
+      // capturas completas de escritorio y tablet/móvil»).
+      //
+      // Se guardan DOS archivos distintos para los tres tamaños de la entrega, porque miden cosas
+      // distintas y confundirlas cuesta una revisión entera:
+      //
+      //   -vista.png     lo que ve el ojo: un viewport, con la barra superior donde está pegada.
+      //   -completa.png  la página entera. Playwright, al capturar la página completa, dibuja los
+      //                  elementos `position: sticky` a media página en vez de arriba. Es un
+      //                  artefacto de la captura, NO un defecto de la pantalla: quien revise la
+      //                  imagen completa va a ver el encabezado flotando en el medio y no es real.
+      //
+      // Para los otros cinco tamaños alcanza la vista: existen para medir, no para mostrar.
+      // -------------------------------------------------------------------------------------
+      const ENTREGA = [390, 768, 1440];
+      const nombreCaptura = `admin-inicio-${tam.width}x${tam.height}`;
+      await page.screenshot({ path: `tests/responsive/capturas/${nombreCaptura}-vista.png` });
+      if (ENTREGA.includes(tam.width)) {
+        await page.screenshot({
+          path: `tests/responsive/capturas/${nombreCaptura}-completa.png`,
+          fullPage: true,
+        });
+      }
       const r = await medir(page, tam.dedo);
 
       // ---------------------------------------------------------------------------------------
