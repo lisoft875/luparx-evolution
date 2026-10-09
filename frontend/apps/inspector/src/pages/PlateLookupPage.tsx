@@ -523,6 +523,12 @@ export function PlateLookupPage(): React.JSX.Element {
               disabled={plate.trim().length === 0 || lookup.isPending}
             >
               <IconSearch size={22} />
+              {/* La palabra sólo aparece en tablet, donde cabe: la hoja la oculta en teléfono. No
+                  es un segundo botón ni un texto alternativo —el nombre accesible lo da el
+                  `aria-label` y es el mismo en los dos tamaños—, es la misma acción diciendo su
+                  nombre donde hay sitio para decirlo, que es como la dibuja la referencia del
+                  iPad. */}
+              <span className="lx-plate-row__go-text">{t('inspector.home.fast.go')}</span>
             </button>
           </div>
 

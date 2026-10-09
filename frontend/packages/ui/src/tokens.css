@@ -7184,3 +7184,102 @@ a.lx-list-row {
 
    Esto sólo pasa con la actividad vacía, que es el estado de staging hoy. Con los cuatro o cinco
    eventos de la referencia las dos columnas se emparejan solas y la discusión desaparece. */
+
+/* =================================================================================================
+   Fiscalización en iPad (09-10-2026)
+
+   El documento es de tablet vertical y su diagnóstico es de densidad, no de color: «las cuatro
+   tarjetas consumen demasiada altura en dos filas y dejan el formulario demasiado abajo», «la
+   consulta de placa debe aparecer en el primer pantallazo sin tener que desplazar dos filas de
+   tarjetas enormes».
+
+   En teléfono no cambia nada: todo lo de acá vive dentro de `min-width: 768px`, que es donde el
+   problema existe. Lo único que cambia en los dos es la barra inferior, porque su rango nuevo
+   —68-82— no se cumplía ni en uno ni en otro.
+   ================================================================================================= */
+
+@media (min-width: 768px) {
+  .lx-inspector-main {
+    /* 1060: el documento pide «ancho máximo 1024-1100 px» para el área de contenido. Eran 920,
+       que venían de la v2 de octubre; con cuatro acciones en una fila, 920 las deja angostas. */
+    max-width: 1060px;
+    /* 24, dentro de los 20-28 que pide la tabla. */
+    padding-right: var(--lx-space-6);
+    padding-left: var(--lx-space-6);
+  }
+
+  /* Las cuatro acciones en UNA fila, que es el cambio que recupera el primer pantallazo. En dos
+     filas de 132px más el hueco, el lanzador se comía 276px antes del formulario; en una fila son
+     132 y la consulta sube por encima del pliegue sin tocar una sola regla de negocio. */
+  .lx-quick-grid--touch {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    /* 12, dentro del 10-14 de la tabla. */
+    gap: var(--lx-space-3);
+  }
+
+  /* 124px, dentro del 112-145 que pide la tabla para la fila de acciones en tablet. Es menos que
+     los 132 del teléfono y no es una contradicción: aquel rango —132-150— lo medía el documento
+     anterior sobre una tarjeta de media pantalla con su ayuda en dos renglones; en una fila de
+     cuatro, cada tarjeta es más ancha y la misma ayuda entra en uno. */
+  .lx-quick-tile--inspector {
+    min-height: 124px;
+    /* A 768 —la tablet más angosta del documento— una columna de cuatro mide 170px y la ayuda
+       («Verificar estado y permisos») entra en dos renglones, no en uno: la tarjeta se iba a 161
+       contra los 112-145 de la tabla. Lo que cede es el aire interno, no el texto: el documento
+       dice en letra «no reducir texto para forzar tarjetas pequeñas». Desde 810 la ayuda entra
+       en un renglón y esto no se nota. */
+    gap: 6px var(--lx-space-2);
+    padding: var(--lx-space-3) var(--lx-space-3) var(--lx-space-2);
+  }
+  .lx-quick-tile--inspector .lx-quick-tile__icon {
+    width: 32px;
+    height: 32px;
+  }
+
+  /* El botón de buscar deja de ser sólo un icono: en la referencia dice «Buscar», y a este ancho
+     cabe la palabra. El cuadrado se queda en teléfono, donde no. */
+  .lx-plate-row__go {
+    width: auto;
+    min-width: 132px;
+    gap: var(--lx-space-2);
+    padding: 0 var(--lx-space-5);
+    font-size: var(--lx-text-body-size);
+    font-weight: 700;
+  }
+  .lx-plate-row__go .lx-plate-row__go-text {
+    display: inline;
+  }
+
+  /* El bloque del saludo: 72-96px de la tabla. Con el nombre y el rol suma unos 60, así que el
+     piso lo pone esta regla y el contenido decide hasta dónde sube. */
+  .lx-inspector-greeting {
+    min-height: 72px;
+    align-items: center;
+  }
+}
+
+/* En teléfono la palabra no cabe al lado de un campo de placa de 24px centrado: el botón se queda
+   cuadrado y con su nombre accesible, que es como estaba. */
+.lx-plate-row__go-text {
+  display: none;
+}
+
+/* ---- La barra inferior: 68-82px + safe area ------------------------------------------------
+   Eran 64 de destino, que venían del rango 64-72 del documento de octubre. El de iPad lo sube a
+   68-82 «+ safe area» y añade la razón en su lista de accesibilidad: esto se toca de pie, al sol
+   y a veces con guantes. Sube el destino, no la barra: el relleno de la safe-area sigue aparte y
+   el shell sigue midiendo la altura real para reservar el espacio del contenido. */
+:root[data-density='outdoor'] .lx-bottom-tab-bar__tab {
+  min-height: 70px;
+}
+
+/* La franja más angosta de la tabla, 768-819: ahí y sólo ahí la ayuda de la tarjeta ocupa dos
+   renglones y el bloque se pasa cuatro píxeles del tope de 145. Se quitan del relleno, que es lo
+   único que sobra; el texto no se toca —el documento prohíbe en letra «reducir texto para forzar
+   tarjetas pequeñas»—. */
+@media (min-width: 768px) and (max-width: 819px) {
+  .lx-quick-tile--inspector {
+    gap: 4px var(--lx-space-2);
+    padding: var(--lx-space-2) var(--lx-space-3);
+  }
+}

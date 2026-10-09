@@ -281,9 +281,28 @@ async function pantallaInicial(page, tamano, ancho) {
 
   ok(vista.tarjetas.length === 4, `${tamano}: el lanzador tiene cuatro accesos`, `son ${vista.tarjetas.length}`);
   if (vista.tarjetas.length === 4) {
-    // Dos columnas: dos filas de dos, o sea exactamente dos coordenadas X distintas.
+    /*
+      El reparto del lanzador depende del ancho desde el documento de iPad (09-10-2026): «en iPad
+      vertical las cuatro acciones deben ocupar una fila; en teléfono, pasar a 2×2». Antes eran
+      2×2 siempre, que es lo que dejaba el formulario de consulta debajo de dos filas de tarjetas
+      —el defecto que ese documento vino a corregir—.
+    */
     const columnas = new Set(vista.tarjetas.map((t) => t.x));
-    ok(columnas.size === 2, `${tamano}: el lanzador es una cuadrícula 2x2`, `columnas=${columnas.size}`);
+    const esperadas = ancho >= 768 ? 4 : 2;
+    ok(
+      columnas.size === esperadas,
+      `${tamano}: el lanzador va en ${esperadas} columna(s)`,
+      `son ${columnas.size}`,
+    );
+    if (ancho >= 768) {
+      const altos = vista.tarjetas.map((t) => t.alto);
+      const fuera = altos.filter((h) => h < 112 || h > 145);
+      ok(
+        fuera.length === 0,
+        `${tamano}: y las cuatro miden 112-145px, la fila de acciones de la tabla`,
+        `altos: ${altos.join(', ')}`,
+      );
+    }
     const titulosMal = vista.tarjetas.filter((t) => t.tituloPx < 16 || t.tituloPx > 19);
     ok(titulosMal.length === 0, `${tamano}: los títulos de tarjeta miden 16-18px`, titulosMal.map((t) => `${t.titulo} ${t.tituloPx}px`).join(', '));
     const ayudasMal = vista.tarjetas.filter((t) => !t.ayuda || t.ayudaPx < 12 || t.ayudaPx > 15);
@@ -302,12 +321,17 @@ async function pantallaInicial(page, tamano, ancho) {
        Se mide el ALTO y no el ancho: el ancho lo decide la columna —a 375 con 16 de margen y 12 de
        separación salen 165, y a 768 salen más— así que exigirle 141-150 sería exigir un viewport,
        no un diseño. El alto sí es una decisión, y es la que el documento quiere ver cambiada. */
-    const bajas = vista.tarjetas.filter((t) => t.alto < 132);
-    ok(
-      bajas.length === 0,
-      `${tamano}: las tarjetas miden al menos 132px de alto, como pide la v2`,
-      bajas.map((t) => `${t.titulo} ${t.alto}px`).join(', '),
-    );
+    /* El piso de 132 es el de la v2 y vale para el TELÉFONO, donde la tarjeta ocupa media
+       pantalla. En tablet la fila de cuatro tiene su propio rango —112-145, comprobado arriba— y
+       exigirle además 132 sería exigir las dos cosas a la vez. */
+    if (ancho < 768) {
+      const bajas = vista.tarjetas.filter((t) => t.alto < 132);
+      ok(
+        bajas.length === 0,
+        `${tamano}: las tarjetas miden al menos 132px de alto, como pide la v2`,
+        bajas.map((t) => `${t.titulo} ${t.alto}px`).join(', '),
+      );
+    }
   }
 
   ok(
