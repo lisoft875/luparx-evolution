@@ -163,6 +163,33 @@ async function medirFachada(page, tamano, ancho, placaDelServidor) {
         const linea = parseFloat(getComputedStyle(n).lineHeight) || 1;
         return { lineas: Math.round(n.getBoundingClientRect().height / linea), desborda: n.scrollWidth > n.clientWidth + 1 };
       })(),
+      cabecera: (() => {
+        const etiqueta = document.querySelector('.lx-app-bar--citizen .lx-tenant-badge__label');
+        const chip = document.querySelector('.lx-app-bar--citizen .lx-connection-badge');
+        const marca = document.querySelector('.lx-app-bar--citizen .lx-brand');
+        return {
+          nombreVisible: Boolean(etiqueta && etiqueta.getBoundingClientRect().width > 0),
+          nombreCortado: etiqueta ? etiqueta.scrollWidth > etiqueta.clientWidth + 1 : null,
+          nombre: rec(etiqueta?.textContent),
+          chipConTexto: chip ? rec(chip.textContent).length > 0 && parseFloat(getComputedStyle(chip).fontSize) > 0 : null,
+          marcaVisible: Boolean(marca && marca.getBoundingClientRect().width > 0),
+        };
+      })(),
+      /* El P0 pide revisar que la barra no quede `static` cuando debe permanecer fija. La barra
+         es `static` A PROPÓSITO: quien está fijo es su contenedor, que es el que el shell mide
+         para reservar el espacio del contenido. Lo que importa es que ALGUNO de los dos lo esté,
+         así que se informa el del contenedor y no sólo el de la barra. */
+      barraFijeza: (() => {
+        const barra = document.querySelector('.lx-bottom-tab-bar');
+        if (!barra) return null;
+        const padre = barra.parentElement;
+        return {
+          barra: getComputedStyle(barra).position,
+          contenedor: padre ? getComputedStyle(padre).position : null,
+          radio: Math.round(parseFloat(getComputedStyle(barra).borderTopLeftRadius)),
+          abajo: padre ? Math.round(window.innerHeight - padre.getBoundingClientRect().bottom) : null,
+        };
+      })(),
       iconosDelPar: document.querySelectorAll('.lx-citizen-pair .lx-list-row__icon').length,
       botonesDelPar: [...document.querySelectorAll('.lx-citizen-pair .lx-btn')].map((n) =>
         Math.round(n.getBoundingClientRect().height),
@@ -326,6 +353,27 @@ async function medirFachada(page, tamano, ancho, placaDelServidor) {
       `líneas=${v.tituloCtaEnUnaLinea.lineas} desborda=${v.tituloCtaEnUnaLinea.desborda}`,
     );
   }
+  if (v.cabecera) {
+    ok(v.cabecera.marcaVisible, `${tamano}: la marca LuParX se ve en la cabecera`);
+    ok(
+      v.cabecera.nombreVisible,
+      `${tamano}: la cabecera dice el nombre de la municipalidad («${v.cabecera.nombre}»)`,
+    );
+    ok(
+      v.cabecera.nombreCortado === false,
+      `${tamano}: y no queda recortado`,
+      `nombre="${v.cabecera.nombre}"`,
+    );
+    ok(v.cabecera.chipConTexto, `${tamano}: el chip «En línea» conserva su texto, no se miniaturiza`);
+  }
+  if (v.barraFijeza) {
+    ok(
+      v.barraFijeza.barra === 'fixed' || v.barraFijeza.contenedor === 'fixed',
+      `${tamano}: la barra inferior queda fija al borde del viewport`,
+      `barra=${v.barraFijeza.barra} contenedor=${v.barraFijeza.contenedor}`,
+    );
+    ok(v.barraFijeza.radio >= 16, `${tamano}: con su contenedor redondeado (${v.barraFijeza.radio}px)`);
+  }
   ok(v.iconosDelPar === 2, `${tamano}: Saldo y Vehículo llevan su icono`, `son ${v.iconosDelPar}`);
   const botonesChicos = v.botonesDelPar.filter((alto) => alto < 44);
   ok(
@@ -480,6 +528,93 @@ async function auditarDomYCss(page) {
   }
 }
 
+/**
+ * Lo que el contrato del 09-10 pide además de medir: que las cosas FUNCIONEN.
+ *
+ * <p>«Prueba funcional de Recargar, Cambiar, Estacionar, Multas, Ver todas y los cinco destinos
+ * inferiores». Se pulsa cada uno y se mira a dónde cayó, que es la única forma de distinguir un
+ * botón de un adorno. Después se vuelve al Inicio para que el siguiente parta de donde debe.</p>
+ */
+async function probarQueNavega(page) {
+  console.log('\n══ Que cada control lleve a alguna parte ══');
+  const destinos = [
+    { nombre: 'Estacionar ahora', selector: '.lx-hero-card--citizen', esperado: /\/park/ },
+    { nombre: 'Recargar', selector: '.lx-citizen-pair .lx-btn--solid', esperado: /\/wallet/ },
+    { nombre: 'Cambiar', selector: '.lx-citizen-pair .lx-btn--outline', esperado: /\/vehicles/ },
+    { nombre: 'Multas pendientes', selector: '.lx-citizen-fines .lx-list-row', esperado: /\/fines/ },
+    { nombre: 'Ver todas', selector: '.lx-section-header .lx-link-button', esperado: /\/movements/ },
+  ];
+  for (const destino of destinos) {
+    await page.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(1800);
+    const control = page.locator(destino.selector).first();
+    if ((await control.count()) === 0) {
+      console.log(`  ··  «${destino.nombre}» no está en esta pantalla (estado de datos), no se pudo probar`);
+      continue;
+    }
+    await control.click();
+    await page.waitForTimeout(1400);
+    const ruta = new URL(page.url()).pathname;
+    ok(destino.esperado.test(ruta), `«${destino.nombre}» lleva a su pantalla`, `cayó en ${ruta}`);
+  }
+
+  // Los cinco destinos de la barra.
+  await page.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(1800);
+  const pestanas = page.locator('.lx-bottom-tab-bar__tab');
+  const cuantas = await pestanas.count();
+  ok(cuantas === 5, `la barra inferior tiene sus cinco destinos`, `son ${cuantas}`);
+  for (let i = 0; i < cuantas; i += 1) {
+    const etiqueta = (await pestanas.nth(i).innerText()).replace(/\s+/g, ' ').trim();
+    await pestanas.nth(i).click();
+    await page.waitForTimeout(1200);
+    const ruta = new URL(page.url()).pathname;
+    const arriba = await page.evaluate(() => Math.round(window.scrollY));
+    ok(ruta.length > 0, `«${etiqueta}» navega (${ruta})`);
+    ok(arriba === 0, `  y la pantalla nueva empieza arriba`, `scrollY=${arriba}`);
+    await page.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(1000);
+  }
+}
+
+/**
+ * El P0 del saldo, probado con cifras que la cuenta de prueba no tiene.
+ *
+ * <p>«Probar saldos de 0, 5, 6 y 7 dígitos; conservar el valor real». Se sustituye el TEXTO en la
+ * pantalla ya pintada —no el dato, que sigue viniendo del servidor— y se mide si cabe. Es la
+ * única manera de comprobar un ancho contra montos que esta cuenta no va a tener nunca.</p>
+ */
+async function probarMontosLargos(page) {
+  console.log('\n══ El saldo en una sola línea, con 0, 5, 6 y 7 cifras ══');
+  const MONTOS = ['₡0', '₡9.850', '₡145.450', '₡1.450.000'];
+  for (const monto of MONTOS) {
+    const r = await page.evaluate((m) => {
+      const n = document.querySelector('.lx-citizen-pair .lx-stat-card__value');
+      if (!n) return null;
+      const original = n.textContent;
+      n.textContent = m;
+      const cs = getComputedStyle(n);
+      const linea = parseFloat(cs.lineHeight) || 1;
+      const salida = {
+        lineas: Math.round(n.getBoundingClientRect().height / linea),
+        desborda: n.scrollWidth > n.clientWidth + 1,
+        px: Math.round(parseFloat(cs.fontSize)),
+      };
+      n.textContent = original;
+      return salida;
+    }, monto);
+    if (!r) {
+      console.log('  ··  no hay tarjeta de saldo en pantalla; no se pudo probar');
+      return;
+    }
+    ok(
+      r.lineas === 1 && !r.desborda,
+      `${monto} cabe en una línea (${r.px}px)`,
+      `líneas=${r.lineas} desborda=${r.desborda}`,
+    );
+  }
+}
+
 (async () => {
   const navegador = await chromium.launch();
   const context = await navegador.newContext({ viewport: TAMANOS[1], locale: 'es-CR' });
@@ -530,6 +665,11 @@ async function auditarDomYCss(page) {
         fullPage: true,
       });
     }
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(1800);
+    await probarMontosLargos(page);
+    await probarQueNavega(page);
   } catch (e) {
     // Un arnés que no sabe dónde está no reporta: para. Lo contrario —seguir midiendo— es lo que
     // produjo 28 defectos inventados.

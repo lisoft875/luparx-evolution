@@ -4,7 +4,6 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation, formatCurrencyMinor, formatDateTime, formatTime } from '@luparx/i18n';
 import {
   AmountText,
-  BRAND_ASSETS,
   Button,
   Card,
   HeroCard,
@@ -164,6 +163,25 @@ function primaryVehicleOf(vehicles: Vehicle[] | undefined): Vehicle | undefined 
 }
 
 /** Cuántos movimientos entran en la portada. La fachada aprobada dibuja tres. */
+/**
+ * La fotografía nocturna del héroe. `null` mientras no exista.
+ *
+ * <h2>Por qué está en `null` y no apuntando a un activo de marca</h2>
+ *
+ * <p>La referencia aprobada muestra una fotografía nocturna de automóvil y calle al fondo
+ * derecho. Ese activo no existe en el proyecto. Durante dos días este hueco se llenó con
+ * `heroCitizenBg` —la marca de neón sobre negro, lo único de héroe que hay— y la revisión del
+ * 09-10 fue inequívoca: «la versión local usa un logo gigante; NO es equivalente […] si no existe
+ * el asset, señalarlo como único bloqueo explícito, no sustituirlo por un logo a criterio
+ * propio».</p>
+ *
+ * <p>Así que no se sustituye. El contenedor queda montado y con su ambiente de luz —el héroe
+ * sigue teniendo profundidad y el saludo sigue integrado—, y la fotografía es el único bloqueo
+ * declarado de esta pantalla. El día que llegue, esta constante es lo único que cambia: el
+ * encuadre, los degradados y la protección del saludo ya están escritos y medidos.</p>
+ */
+const FOTO_DEL_HEROE: string | null = null;
+
 const MOVIMIENTOS_EN_PORTADA = 3;
 
 export function HomePage(): React.JSX.Element {
@@ -202,11 +220,13 @@ export function HomePage(): React.JSX.Element {
         queda listo: cambiar la foto es cambiar esta constante y nada más.
       */}
       <header className="lx-citizen-hero">
-        <div
-          className="lx-citizen-hero__photo"
-          style={{ backgroundImage: `url(${BRAND_ASSETS.heroCitizenBg})` }}
-          aria-hidden="true"
-        />
+        {FOTO_DEL_HEROE ? (
+          <div
+            className="lx-citizen-hero__photo"
+            style={{ backgroundImage: `url(${FOTO_DEL_HEROE})` }}
+            aria-hidden="true"
+          />
+        ) : null}
         <h1 className="lx-citizen-hero__greeting">
           {t('citizen.home.greeting', { name: me?.user.givenName ?? '' })}
         </h1>

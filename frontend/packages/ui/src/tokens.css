@@ -6442,6 +6442,26 @@ a.lx-list-row {
 /* Dos degradados, no uno. El horizontal protege el texto —opaco a la izquierda, transparente a la
    derecha— y el vertical funde el pie de la imagen con lo que viene debajo, que es lo que hace que
    no se lea como un rectángulo pegado. */
+/* Sin fotografía, el bloque no puede quedar en un rectángulo liso: el ambiente lo sostiene. Dos
+   luces, ninguna figurativa —no dibujan un coche ni una calle, que sería inventar la fotografía
+   que falta—, y la profundidad sale de ahí hasta que el activo aprobado llegue. */
+.lx-citizen-hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  background:
+    radial-gradient(
+      70% 110% at 88% 18%,
+      color-mix(in srgb, var(--lx-cta-bright) 24%, transparent),
+      transparent 68%
+    ),
+    radial-gradient(
+      130% 70% at 46% 128%,
+      color-mix(in srgb, var(--lx-primary) 20%, transparent),
+      transparent 72%
+    );
+}
 .lx-citizen-hero::after {
   content: '';
   position: absolute;
@@ -6867,6 +6887,8 @@ a.lx-list-row {
    que no se cambia su marcado: se recoloca acá con una rejilla de áreas, que es exactamente para
    esto. El DOM, el orden de lectura y el componente quedan intactos. */
 .lx-citizen-pair .lx-stat-card {
+  /* El contenedor contra el que se mide la cifra. */
+  container-type: inline-size;
   display: grid;
   grid-template-columns: 1fr auto;
   grid-template-areas:
@@ -6887,6 +6909,24 @@ a.lx-list-row {
 }
 .lx-citizen-pair .lx-stat-card__value {
   grid-area: cifra;
+  /*
+    P0 del 09-10: «el monto debe quedar SIEMPRE en una sola línea, incluido ₡145.450 y cifras
+    mayores». Tres piezas, y las tres hacen falta:
+
+    1. `nowrap` prohíbe partirlo. Por sí solo convertiría el problema en un desborde, que es peor.
+    2. `min-width: 0` deja que la rejilla lo encoja en vez de ensanchar la columna.
+    3. El tamaño se mide contra la TARJETA (`cqw`) y no contra la ventana (`vw`), que es lo que
+       había. No es un matiz: la misma ventana da columnas de ancho distinto en móvil y en tablet,
+       y un tamaño atado a la ventana acierta en una y falla en la otra. Con `cqw` la cifra se
+       ajusta al sitio que de verdad tiene. El piso de 0.95rem entra con diez caracteres
+       —₡1.450.000— en la columna más angosta que esta pantalla admite.
+
+    Sin recortes: no hay `ellipsis` ni `overflow: hidden`. Un saldo a medias es peor que uno chico.
+  */
+  min-width: 0;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  font-size: clamp(0.95rem, 12.5cqw, 1.375rem);
 }
 .lx-citizen-pair .lx-stat-card__hint {
   grid-area: ayuda;
@@ -6944,20 +6984,28 @@ a.lx-list-row {
     padding-right: var(--lx-space-2);
   }
 }
+/* La orden del 09-10 es «distribuir sin miniaturizar elementos», así que el chip «En línea»
+   conserva su texto en todos los anchos. El espacio que el nombre necesita sale de los huecos y
+   del relleno de la fila, que es de donde se saca sin que nada pierda su forma: medido a 360px,
+   las cuatro piezas suman 296px y la fila tiene 360, así que lo que faltaba no era sitio sino
+   repartirlo. */
 @media (max-width: 389px) {
-  .lx-app-bar--citizen .lx-connection-badge--compact {
-    flex: none;
-    width: 10px;
-    min-width: 0;
-    height: 10px;
-    /* `min-height` y `aspect-ratio` porque la insignia trae un alto mínimo propio: sin anularlo el
-       punto sale ovalado, que se lee como un chip recortado y no como un indicador. */
-    min-height: 0;
-    aspect-ratio: 1;
-    padding: 0;
-    border-radius: 50%;
-    font-size: 0;
-    overflow: hidden;
+  .lx-app-bar--citizen {
+    /* 12 en vez de 16 a cada lado, y 8 entre los dos grupos: ocho más doce píxeles que van al
+       nombre. Es relleno, no tamaño: ninguna pieza se encoge. */
+    gap: var(--lx-space-2);
+    padding-left: var(--lx-space-3);
+    padding-right: var(--lx-space-3);
+  }
+  .lx-app-bar--citizen .lx-app-bar__start,
+  .lx-app-bar--citizen .lx-app-bar__end {
+    gap: var(--lx-space-2);
+  }
+  .lx-app-bar--citizen .lx-brand {
+    gap: var(--lx-space-2);
+  }
+  .lx-app-bar--citizen .lx-tenant-badge {
+    max-width: none;
   }
 }
 /* El cursor del selector, que la referencia dibuja y nosotros no teníamos: un triángulo de bordes,
