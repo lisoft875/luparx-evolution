@@ -6295,3 +6295,258 @@ a.lx-list-row {
   -webkit-user-select: text;
   user-select: text;
 }
+
+/* ==============================================================================================
+   CIUDADANO · la fachada (09-10-2026)
+
+   Paleta propia del portal, por el mismo gancho con el que la plataforma tiene la suya desde que
+   existe. El encargo la llama «paleta visual obligatoria» y da sus diez colores; tres de ellos no
+   pasaban contraste y están resueltos abajo, con el número al lado. Los demás portales no se
+   enteran de nada de esto.
+   ============================================================================================== */
+:root[data-portal='citizen'] {
+  --lx-bg: #031a2b;
+  /* El cromo —cabecera y barra inferior— en el color de las tarjetas, que es como la referencia
+     los dibuja: el plano que flota sobre el fondo. */
+  --lx-chrome: #0b2638;
+  --lx-surface: #0b2638;
+  --lx-surface-2: #102d40;
+  --lx-surface-hover: #16394f;
+  --lx-bg-elevated: var(--lx-surface);
+  --lx-border: #1e4258;
+  --lx-border-strong: #2a5876;
+  --lx-text: #f7fafc;
+  --lx-text-muted: #91a4b5;
+  --lx-text-subtle: #7e93a6;
+
+  /*
+    Los dos azules, y por qué son dos.
+
+    El encargo da `#0788FF` para «CTA, links, activo» y `#10A7FF` para «iconos/acento». Medido,
+    ese reparto no se sostiene: blanco sobre #0788FF da 3.51 y el subtítulo del CTA —«Selecciona
+    zona, vehículo y tiempo», 15-16px— necesita 4.5; y #0788FF como TEXTO sobre una tarjeta da
+    4.43, que se queda a siete centésimas.
+
+    Es exactamente el mismo caso que el azul de Fiscalización (#1382F6, 3.78) y se resuelve igual,
+    con los dos papeles separados y ambos tomados de la propia referencia:
+
+      · TINTA  → #10A7FF, el cian del encargo. 5.93 sobre tarjeta, 6.74 sobre el fondo.
+      · RELLENO → #0670D6, un escalón más oscuro del mismo azul. Blanco encima da 4.89.
+
+    El #0788FF no se pierde: es el extremo claro del degradado del CTA, donde sólo hay un icono
+    —elemento gráfico, mínimo 3.0— y ningún texto corrido.
+  */
+  --lx-primary: #10a7ff;
+  --lx-primary-2: #5fc8ff;
+  --lx-primary-strong: #4cc0ff;
+  --lx-primary-fill: #0670d6;
+  --lx-primary-fill-hover: #0561bb;
+  --lx-primary-soft: color-mix(in srgb, #10a7ff 14%, transparent);
+  --lx-focus-ring: #10a7ff;
+
+  --lx-success: #22d68a;
+  --lx-warning: #f7b32b;
+  --lx-danger-text: #ff6268;
+
+  /* El azul luminoso de la referencia, reservado para el degradado del CTA. */
+  --lx-cta-bright: #0788ff;
+}
+
+/* ---- El héroe: saludo a la izquierda, imagen fundida a la derecha ---------------------------
+   El encargo lo pide «integrado, no banner separado»: la foto se funde con el fondo y el saludo
+   nunca queda sobre una zona ruidosa. Eso NO se consigue poniendo una imagen al lado — se
+   consigue con la imagen de fondo del propio bloque y un degradado navy que la come por la
+   izquierda y por abajo. Así el borde de la foto no existe en ninguna parte. */
+.lx-citizen-hero {
+  position: relative;
+  /* De borde a borde: el degradado tiene que llegar hasta donde llega el fondo, o se vería el
+     recorte que el encargo prohíbe. Los márgenes se los devuelve el contenido, abajo. */
+  margin: calc(-1 * var(--lx-space-4)) calc(-1 * var(--lx-space-4)) 0;
+  padding: var(--lx-space-5) var(--lx-space-4) var(--lx-space-6);
+  min-height: 175px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  isolation: isolate;
+  overflow: hidden;
+}
+.lx-citizen-hero__photo {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  background-position: center right;
+  background-size: cover;
+  background-repeat: no-repeat;
+}
+/* Dos degradados, no uno. El horizontal protege el texto —opaco a la izquierda, transparente a la
+   derecha— y el vertical funde el pie de la imagen con lo que viene debajo, que es lo que hace que
+   no se lea como un rectángulo pegado. */
+.lx-citizen-hero::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    linear-gradient(to right, var(--lx-bg) 18%, color-mix(in srgb, var(--lx-bg) 55%, transparent) 62%, transparent 100%),
+    linear-gradient(to bottom, color-mix(in srgb, var(--lx-bg) 30%, transparent) 0%, transparent 35%, var(--lx-bg) 100%);
+}
+.lx-citizen-hero__greeting {
+  margin: 0;
+  font-size: 30px;
+  font-weight: 800;
+  line-height: 1.12;
+  letter-spacing: -0.02em;
+  /* La mitad: el saludo vive en la zona protegida y la foto respira en la otra. */
+  max-width: 62%;
+}
+.lx-citizen-hero__lead {
+  margin: var(--lx-space-2) 0 0;
+  font-size: 15px;
+  color: var(--lx-text-muted);
+  max-width: 62%;
+}
+@media (max-width: 380px) {
+  /* «En pantallas pequeñas la imagen puede recortarse más; saludo y CTA tienen prioridad.» */
+  .lx-citizen-hero__greeting {
+    font-size: 26px;
+    max-width: 72%;
+  }
+  .lx-citizen-hero__lead {
+    max-width: 72%;
+  }
+}
+
+/* ---- «Estacionar ahora»: el elemento dominante ---------------------------------------------- */
+.lx-hero-card--citizen {
+  align-items: center;
+  min-height: 150px;
+  border-radius: var(--lx-radius-xl);
+  /* El degradado del encargo, con los dos azules en el orden que impone el contraste: el oscuro
+     donde está el texto y el luminoso donde sólo hay un icono. Ver la nota de la paleta. */
+  background: linear-gradient(100deg, var(--lx-primary-fill) 0%, var(--lx-primary-fill) 42%, var(--lx-cta-bright) 100%);
+}
+.lx-hero-card--citizen .lx-hero-card__title {
+  font-size: 23px;
+}
+.lx-hero-card--citizen .lx-hero-card__subtitle {
+  font-size: 15px;
+}
+/* El botón circular de la derecha. No es un segundo control —toda la tarjeta es el botón, y esto
+   va dentro de ella— sino la señal de que lleva a algún lado, que es como la referencia lo usa. */
+.lx-hero-card__go {
+  margin-left: auto;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--lx-radius-pill);
+  background: rgba(255, 255, 255, 0.22);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--lx-primary-contrast);
+}
+
+/* ---- Saldo y Vehículo: dos columnas del mismo alto ------------------------------------------
+   El encargo pide 210-235px y «mismo alto». Lo segundo sale solo de que `.lx-grid-2` es una
+   cuadrícula —sus hijos se estiran—; lo primero es el mínimo de aquí. */
+.lx-citizen-pair > .lx-stat-card {
+  min-height: 210px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: var(--lx-space-5);
+  border-radius: var(--lx-radius-lg);
+}
+.lx-citizen-pair .lx-stat-card__value {
+  /* «saldo/placa 25-31 px, peso 700-800» */
+  font-size: 27px;
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+}
+/* El icono en su cuadrado redondeado, que es el lenguaje de la referencia para TODOS los iconos. */
+.lx-citizen-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--lx-radius-md);
+  background: var(--lx-primary-soft);
+  color: var(--lx-primary);
+  flex-shrink: 0;
+}
+.lx-citizen-badge--amber {
+  background: color-mix(in srgb, var(--lx-warning) 16%, transparent);
+  color: var(--lx-warning);
+}
+
+/* ---- Multas pendientes: ámbar, y sólo con multas reales ------------------------------------- */
+.lx-citizen-fines {
+  border-color: var(--lx-warning);
+  /* El «glow sutil» del encargo. Medido en opacidad baja: marca el borde sin encender la tarjeta,
+     que al lado de un CTA azul brillante competiría por la mirada. */
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--lx-warning) 35%, transparent),
+    0 6px 20px -10px color-mix(in srgb, var(--lx-warning) 45%, transparent);
+}
+
+/* ---- Actividad reciente: filas altas, con su zona y su monto -------------------------------- */
+.lx-citizen-activity__row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--lx-space-3);
+  padding: var(--lx-space-3) 0;
+  width: 100%;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--lx-border);
+  color: inherit;
+  text-align: left;
+  font-family: inherit;
+  cursor: pointer;
+  /* «filas 92-110 px» */
+  min-height: 92px;
+}
+.lx-citizen-activity__row:last-child {
+  border-bottom: 0;
+}
+.lx-citizen-activity__row:focus-visible {
+  outline: 2px solid var(--lx-focus-ring);
+  outline-offset: -2px;
+  border-radius: var(--lx-radius-sm);
+}
+.lx-citizen-activity__what {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.lx-citizen-activity__title {
+  font-size: var(--lx-text-body-size);
+  font-weight: 600;
+}
+.lx-citizen-activity__when,
+.lx-citizen-activity__where {
+  font-size: var(--lx-text-meta-size);
+  color: var(--lx-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---- La barra inferior del ciudadano, con las medidas de la fachada ------------------------- */
+:root[data-portal='citizen'] .lx-bottom-tab-bar__tab {
+  /* «70-78 px + safe-area» — la del sistema son 64. */
+  min-height: 72px;
+  gap: 4px;
+}
+:root[data-portal='citizen'] .lx-bottom-tab-bar__icon svg {
+  /* «icono 24-28 px» */
+  width: 26px;
+  height: 26px;
+}
+:root[data-portal='citizen'] .lx-bottom-tab-bar__label {
+  /* «label 11-12 px» */
+  font-size: 12px;
+}

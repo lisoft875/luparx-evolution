@@ -56,6 +56,12 @@ for (const m of css.matchAll(/(?:^|\n):root \{/g)) {
   }
 }
 const claro = { ...oscuro, ...tokensDe(":root[data-theme='light']") };
+/*
+  El ciudadano tiene su propia paleta desde el 09-10-2026, por el mismo gancho `data-portal` con
+  el que la plataforma tiene la suya. Una paleta nueva sin medir es exactamente lo que este arnés
+  existe para no dejar pasar: su CTA, con el azul que daba la especificación, tenía 3.51.
+*/
+const ciudadano = { ...oscuro, ...tokensDe(":root[data-portal='citizen']") };
 
 /** Sigue la cadena de `var()`, con respaldo, hasta un hexadecimal. `null` si no llega. */
 function resolver(valor, tabla, profundidad = 0) {
@@ -139,14 +145,37 @@ const PARES = [
   ['franja de servicios', '--lx-text-muted', '--lx-bg', 4.5],
 ];
 
+/* Los pares propios de la fachada del ciudadano. Se escriben aparte y no se reutilizan los de
+   arriba: aquellos nombran piezas del fiscalizador y del admin —el riel de la boleta, el dónut—
+   que en este portal no existen, y una prueba que mide parejas inexistentes informa de nada. */
+const PARES_CIUDADANO = [
+  ['héroe: el saludo sobre el fondo', '--lx-text', '--lx-bg', 4.5],
+  ['héroe: el subtítulo', '--lx-text-muted', '--lx-bg', 4.5],
+  ['CTA: el texto sobre el relleno azul', '--lx-primary-contrast', '--lx-primary-fill', 4.5],
+  ['CTA: el extremo claro del degradado (icono)', '--lx-primary-contrast', '--lx-cta-bright', 3.0],
+  ['saldo y placa sobre la tarjeta', '--lx-text', '--lx-surface', 4.5],
+  ['etiquetas de tarjeta', '--lx-text-muted', '--lx-surface', 4.5],
+  ['«Editar» y «Ver todas»', '--lx-primary', '--lx-surface', 4.5],
+  ['icono en su cuadrado', '--lx-primary', '--lx-surface', 3.0],
+  ['multas: el ámbar sobre la tarjeta', '--lx-warning', '--lx-surface', 4.5],
+  ['multas: el monto en rojo', '--lx-danger-text', '--lx-surface', 4.5],
+  ['«En línea» en verde', '--lx-success', '--lx-surface', 4.5],
+  ['barra inferior: destino activo', '--lx-primary', '--lx-chrome', 4.5],
+  ['barra inferior: destino inactivo', '--lx-text-muted', '--lx-chrome', 4.5],
+  ['la tarjeta se distingue del fondo', '--lx-surface', '--lx-bg', 1.1],
+  ['la superficie elevada también', '--lx-surface-2', '--lx-bg', 1.1],
+  ['el borde sobre la tarjeta', '--lx-border', '--lx-surface', 1.1],
+];
+
 let fallos = 0;
 let sinResolver = 0;
-for (const [nombreTema, tabla] of [
-  ['oscuro', oscuro],
-  ['claro', claro],
+for (const [nombreTema, tabla, lista] of [
+  ['oscuro', oscuro, PARES],
+  ['claro', claro, PARES],
+  ['ciudadano', ciudadano, PARES_CIUDADANO],
 ]) {
   console.log(`\n===== tema ${nombreTema} =====`);
-  for (const [pieza, tinta, fondo, minimo] of PARES) {
+  for (const [pieza, tinta, fondo, minimo] of lista) {
     const a = resolver(`var(${tinta})`, tabla);
     const b = resolver(`var(${fondo})`, tabla);
     if (!a || !b) {

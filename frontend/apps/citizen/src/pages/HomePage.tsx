@@ -4,10 +4,12 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation, formatCurrencyMinor, formatDateTime, formatTime } from '@luparx/i18n';
 import {
   AmountText,
+  BRAND_ASSETS,
   Button,
   Card,
   HeroCard,
   IconCar,
+  IconChevronRight,
   IconCheck,
   IconFine,
   IconPark,
@@ -23,7 +25,7 @@ import { CitizenShell } from '../components/CitizenShell';
 import { QueryBoundary } from '../components/QueryBoundary';
 import { ExtendSessionSheet } from '../components/ExtendSessionSheet';
 import { FinishSessionConfirm } from '../components/FinishSessionConfirm';
-import { MOVEMENT_ICON, MOVEMENT_ICON_TONE, MOVEMENT_TITLE_KEY } from '../lib/movementPresentation';
+import { MOVEMENT_ICON, MOVEMENT_TITLE_KEY } from '../lib/movementPresentation';
 import { resumenPorPagar } from '../lib/fineStatus';
 import { cardToneFor, urgencyMessageKey, urgencyOf } from '../lib/sessionUrgency';
 import { useAuth } from '@luparx/auth';
@@ -160,6 +162,9 @@ function primaryVehicleOf(vehicles: Vehicle[] | undefined): Vehicle | undefined 
   return vehicles?.find((v) => v.isPrimary) ?? vehicles?.[0];
 }
 
+/** Cuántos movimientos entran en la portada. La fachada aprobada dibuja tres. */
+const MOVIMIENTOS_EN_PORTADA = 3;
+
 export function HomePage(): React.JSX.Element {
   const { t, locale } = useTranslation();
   const navigate = useNavigate();
@@ -179,19 +184,41 @@ export function HomePage(): React.JSX.Element {
 
   return (
     <CitizenShell>
-      <div>
-        <h1 className="lx-text-greeting" style={{ margin: 0 }}>
+      {/*
+        El héroe: saludo a la izquierda, imagen fundida al fondo derecho (09-10-2026).
+
+        La fachada aprobada lo pide «integrado, no banner separado», y por eso la imagen NO es un
+        `<img>` al lado del texto sino el fondo del propio bloque, con dos degradados navy encima
+        —uno horizontal que protege el saludo y otro vertical que funde el pie con lo que sigue—.
+        Así no hay ningún borde de foto en ninguna parte, que es literalmente lo que el punto 10
+        dice no aceptar.
+
+        Sobre la imagen, y hay que decirlo claro: el único activo de héroe que el proyecto tiene es
+        la marca de neón sobre negro (`heroCitizenBg`, el recorte que `AuthScreen` ya usa de fondo).
+        NO es una fotografía automotriz. El encargo prevé exactamente este caso —«si no existe
+        asset automotriz aprobado, dejar el contenedor preparado y usar/solicitar un asset del
+        proyecto; no descargar imagen aleatoria»— así que se usa el del proyecto y el contenedor
+        queda listo: cambiar la foto es cambiar esta constante y nada más.
+      */}
+      <header className="lx-citizen-hero">
+        <div
+          className="lx-citizen-hero__photo"
+          style={{ backgroundImage: `url(${BRAND_ASSETS.heroCitizenBg})` }}
+          aria-hidden="true"
+        />
+        <h1 className="lx-citizen-hero__greeting">
           {t('citizen.home.greeting', { name: me?.user.givenName ?? '' })}
         </h1>
-        <p className="lx-text-meta" style={{ margin: 'var(--lx-space-1) 0 0 0' }}>
+        <p className="lx-citizen-hero__lead">
           {session ? t('citizen.home.subtitle.activeSession') : t('citizen.home.subtitle.noSession')}
         </p>
-      </div>
+      </header>
 
       {session ? (
         <ActiveSessionCard session={session} policy={policy} />
       ) : (
         <HeroCard
+          className="lx-hero-card--citizen"
           icon={<IconPark size={28} />}
           title={t('citizen.home.cta.title')}
           subtitle={t('citizen.home.cta.subtitle')}
@@ -218,7 +245,7 @@ export function HomePage(): React.JSX.Element {
         // absent value, which turned a failed wallet call and a citizen with no car into the same
         // permanent spinner; now a failure states itself and offers the retry, and "no vehicles
         // yet" says so and offers the way to add one.
-        <div className="lx-grid-2" style={{ gap: 'var(--lx-card-gap)' }}>
+        <div className="lx-grid-2 lx-citizen-pair" style={{ gap: 'var(--lx-card-gap)' }}>
           <QueryBoundary
             query={walletQuery}
             errorTitle={t('citizen.wallet.balanceLabel')}
@@ -305,7 +332,7 @@ export function HomePage(): React.JSX.Element {
         const cargando = finesQuery.isPending;
         const hayDeuda = !!deuda && deuda.cantidad > 0;
         return (
-          <Card tone={hayDeuda ? 'warning' : 'success'}>
+          <Card tone={hayDeuda ? 'warning' : 'success'} className={hayDeuda ? 'lx-citizen-fines' : undefined}>
             <ListRow
               icon={hayDeuda ? <IconFine size={18} /> : <IconCheck size={18} />}
               iconTone={hayDeuda ? 'warning' : 'success'}
@@ -371,26 +398,52 @@ export function HomePage(): React.JSX.Element {
               </p>
             }
           >
-            {(wallet) => {
-              const recentMovement = wallet.transactions[0];
-              if (!recentMovement) return null;
-              return (
-                <ListRow
-                  icon={MOVEMENT_ICON[recentMovement.type]}
-                  iconTone={MOVEMENT_ICON_TONE[recentMovement.type]}
-                  title={t(MOVEMENT_TITLE_KEY[recentMovement.type])}
-                  meta={formatDateTime(recentMovement.createdAt, locale, { timeZone })}
-                  value={
+            {(wallet) => (
+              /*
+                Tres filas, no una (09-10-2026). La fachada aprobada muestra tres movimientos y
+                hasta hoy se dibujaba sólo `transactions[0]` — una lista de un elemento, con su
+                encabezado y su «Ver todas», que es más cromo que contenido.
+
+                No cuesta ninguna consulta nueva: `GET /citizen/wallet` ya devuelve el saldo JUNTO
+                con la primera página de movimientos, y esta pantalla ya la pedía entera.
+
+                Lo que la referencia dibuja y NO se puede dibujar: «Zona SJ-CENTRO · 2 horas».
+                `WalletTransaction` trae id, tipo, monto, saldo posterior, `reference` y fecha — no
+                trae zona ni duración. Donde el movimiento tiene `reference` se muestra, que es el
+                dato real más cercano; donde no, el renglón no existe en vez de inventarse.
+              */
+              <div className="lx-citizen-activity">
+                {wallet.transactions.slice(0, MOVIMIENTOS_EN_PORTADA).map((movimiento) => (
+                  <button
+                    key={movimiento.id}
+                    type="button"
+                    className="lx-citizen-activity__row"
+                    onClick={() => navigate('/movements')}
+                  >
+                    <span className="lx-citizen-badge" aria-hidden="true">
+                      {MOVEMENT_ICON[movimiento.type]}
+                    </span>
+                    <span className="lx-citizen-activity__what">
+                      <span className="lx-citizen-activity__title">
+                        {t(MOVEMENT_TITLE_KEY[movimiento.type])}
+                      </span>
+                      <span className="lx-citizen-activity__when">
+                        {formatDateTime(movimiento.createdAt, locale, { timeZone })}
+                      </span>
+                      {movimiento.reference ? (
+                        <span className="lx-citizen-activity__where">{movimiento.reference}</span>
+                      ) : null}
+                    </span>
                     <AmountText
-                      amountMinor={recentMovement.amountMinor}
-                      currencyCode={recentMovement.currencyCode}
+                      amountMinor={movimiento.amountMinor}
+                      currencyCode={movimiento.currencyCode}
                       locale={locale}
                     />
-                  }
-                  onClick={() => navigate('/movements')}
-                />
-              );
-            }}
+                    <IconChevronRight size={16} aria-hidden="true" />
+                  </button>
+                ))}
+              </div>
+            )}
           </QueryBoundary>
         </Card>
       </div>

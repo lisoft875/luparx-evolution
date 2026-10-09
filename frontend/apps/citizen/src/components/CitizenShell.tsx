@@ -285,7 +285,18 @@ export function CitizenShell({
           paddingTop: 'var(--lx-space-4)',
           paddingRight: 'var(--lx-space-4)',
           paddingLeft: 'var(--lx-space-4)',
-          paddingBottom: `calc(var(--lx-space-4) + ${footerHeight}px)`,
+          /*
+            El piso de 100px (09-10-2026).
+
+            La fachada lo pide por su número —«main con 100-115 px de padding-bottom»— y abre ese
+            punto diciendo «no repetir el problema de Fiscalización». Con la barra en ~72 y 16 de
+            respiro salían 88: bastaba para no tapar y no llegaba a lo pedido.
+
+            `max` y no un número fijo: en un aparato con safe-area la barra mide más y la medición
+            manda; sin ella, manda el piso. No se sustituye una medida real por una constante, se
+            le pone suelo. Es el mismo arreglo que el fiscalizador lleva desde ayer.
+          */
+          paddingBottom: `max(100px, calc(var(--lx-space-4) + ${footerHeight}px))`,
           display: 'flex',
           flexDirection: 'column',
           gap: 'var(--lx-card-gap)',

@@ -4,6 +4,17 @@ import '@luparx/ui/tailwind.css';
 import { App } from './App';
 import { assertEnvConfigured } from './env';
 
+/*
+  El portal, declarado en la raíz del documento (09-10-2026).
+
+  Es el mismo gancho que la plataforma usa desde que existe —`:root[data-portal='platform']`— y
+  sirve para lo mismo: darle a UN portal su paleta sin tocar la de los otros tres. La fachada del
+  ciudadano pide un navy más profundo que el del sistema, y los documentos de Fiscalización y
+  Administración piden explícitamente no tocar sus pantallas en esta tarea. Con esto, el ciudadano
+  cambia y los demás no se enteran.
+*/
+document.documentElement.dataset.portal = 'citizen';
+
 const container = document.getElementById('root');
 if (!container) throw new Error('Root element not found');
 

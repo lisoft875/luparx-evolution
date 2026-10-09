@@ -25,6 +25,15 @@ export function HeroCard({ icon, title, subtitle, onClick, className }: HeroCard
         <span className="lx-hero-card__title">{title}</span>
         {subtitle ? <span className="lx-hero-card__subtitle">{subtitle}</span> : null}
       </span>
+      {/* El botón circular de la derecha (09-10-2026). NO es un segundo control: toda la tarjeta
+          ya es el botón y esto vive dentro de ella. Es la señal de que lleva a algún lado, que es
+          como la fachada aprobada del ciudadano lo usa, y por eso va oculto para un lector de
+          pantalla — el nombre del botón ya lo dice el título. */}
+      <span className="lx-hero-card__go" aria-hidden="true">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+          <path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </span>
     </button>
   );
 }
