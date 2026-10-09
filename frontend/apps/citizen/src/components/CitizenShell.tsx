@@ -79,6 +79,26 @@ export function CitizenShell({
   /** La única pantalla sin campana: la de los avisos. Un botón hacia donde ya estás. */
   const enAvisos = location.pathname.startsWith('/notifications');
 
+  /*
+    Al cambiar de pantalla, arriba (09-10-2026).
+
+    El mismo defecto que el fiscalizador tenía el 08-10 y que se corrigió entonces en su shell:
+    con la pantalla desplazada al fondo y tocando un destino de la barra inferior, la pantalla
+    nueva aparecía a media altura —acá `scrollY=221`—, con su título fuera de la vista. React
+    Router no reposiciona el desplazamiento al navegar y el navegador conserva el que traía.
+
+    Que apareciera un día después no es casualidad ni una regresión de la fachada: el 08-10 quedó
+    anotado que el ciudadano tenía el mismo defecto latente y que sólo faltaba que su Inicio
+    creciera lo suficiente para que el desplazamiento heredado fuese una posición válida. El
+    héroe lo hizo crecer.
+
+    Por `pathname` y no por la ubicación completa: cambiar un parámetro de búsqueda en la misma
+    pantalla no es llegar a otra parte y no debería mover la vista.
+  */
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [location.pathname]);
+
   // The footer (the tab bar) is `position: fixed`, so it never reserves space in normal flow on
   // its own — measured here and applied as `main`'s bottom padding so it can never cover page
   // content. A plain `position: sticky` footer looked equivalent but only "sticks" once its static

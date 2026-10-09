@@ -787,6 +787,32 @@ async function medir(page, dedo) {
             .map((n) => rec(n.textContent)),
           espacios: rec(document.querySelector('.lx-donut')?.parentElement?.textContent).includes('espacios'),
           totalSemana: Boolean(document.querySelector('.lx-home__week-total')),
+          // La semana puede sumar cero de verdad, y entonces el total NO se dibuja: la tarjeta lo
+          // dice con todas las letras debajo del gráfico. Sin esto la prueba exigía un número que
+          // la pantalla tiene razón en no tener.
+          semanaEnCero: rec(document.body.textContent).includes('Sin recaudación registrada'),
+          // §7, «cada elemento debe tener su propia zona de layout»: el rótulo del día y el monto
+          // que dibuja el gráfico salían del flujo para apoyarse en el renglón del título, y ahí
+          // ya vivía el rango. Superponer no desborda, así que ninguna regla genérica lo ve: hay
+          // que medir el cruce de las dos cajas.
+          encabezadoCruzado: (() => {
+            const callout = document.querySelector('.lx-bars__callout');
+            const card = callout?.closest('.lx-card');
+            const rotulo = card?.querySelector('.lx-section-header__aside');
+            const titulo = card?.querySelector('.lx-section-header__title');
+            if (!callout || !rotulo) return null;
+            const a = callout.getBoundingClientRect();
+            const cruza = (b) =>
+              b && a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+            const r = rotulo.getBoundingClientRect();
+            const t = titulo?.getBoundingClientRect();
+            if (!cruza(r) && !cruza(t)) return null;
+            return `«${rec(callout.textContent)}» se imprime encima de «${rec((cruza(r) ? rotulo : titulo).textContent)}»`;
+          })(),
+          // La otra mitad del §9: la ayuda del acceso rápido tampoco puede quedar con «…».
+          ayudasRecortadas: [...document.querySelectorAll('.lx-quick-tile__hint')]
+            .filter((n) => n.scrollWidth > n.clientWidth + 1)
+            .map((n) => rec(n.textContent)),
           // §12: el bloque de atención existe SÓLO con incidencias. Las dos salidas son correctas.
           atencion: document.querySelectorAll('.lx-home-attention__item').length,
           atencionVacia: document.querySelectorAll('.lx-home-attention').length === 0,
@@ -826,7 +852,21 @@ async function medir(page, dedo) {
         `el radio de tarjeta es ${cerrada.radioTarjeta}px (pide 14-18)`,
       );
       okInicio(cerrada.espacios, 'bajo el dónut se dice de cuántos espacios sale el porcentaje');
-      okInicio(cerrada.totalSemana, 'el gráfico semanal lleva su total encima');
+      okInicio(
+        cerrada.totalSemana || cerrada.semanaEnCero,
+        'el gráfico semanal lleva su total encima, o la semana sumó cero y lo dice',
+        `total=${cerrada.totalSemana} semanaEnCero=${cerrada.semanaEnCero}`,
+      );
+      okInicio(
+        cerrada.encabezadoCruzado === null,
+        'nada se imprime encima del encabezado del gráfico',
+        cerrada.encabezadoCruzado ?? '',
+      );
+      okInicio(
+        cerrada.ayudasRecortadas.length === 0,
+        'ninguna ayuda de acceso rápido queda recortada en escritorio',
+        cerrada.ayudasRecortadas.join(' · '),
+      );
       okInicio(
         cerrada.atencion > 0 || cerrada.atencionVacia,
         '«Atención requerida» aparece con incidencias reales, o no aparece',

@@ -43,9 +43,12 @@ async function entrar(context) {
   await page.fill('input[type="email"]', CUENTA);
   await page.fill('input[type="password"]', PASS);
   const respuesta = page
-    .waitForResponse((r) => !r.url().includes('/password') && /\/auth\/[a-z]+\/login$/.test(r.url()), {
-      timeout: 20000,
-    })
+    .waitForResponse(
+      (r) => !r.url().includes('/password') && /\/auth\/[a-z]+\/login$/.test(r.url()),
+      {
+        timeout: 20000,
+      },
+    )
     .catch(() => null);
   await page.click('button[type="submit"]');
   const login = await respuesta;
@@ -54,12 +57,63 @@ async function entrar(context) {
     process.exit(3);
   }
   await page.waitForTimeout(2200);
+
+  /*
+    El ciudadano NO entra a su Inicio al iniciar sesión: entra al selector de municipalidad, una
+    pantalla con título propio y una ficha por municipalidad. Faltando este paso, todo lo que mide
+    esta prueba se mide sobre esa pantalla: no hay héroe, no hay «Estacionar ahora», la barra
+    inferior tiene cero destinos y mide cero. Eso fue exactamente la corrida del 09-10 —28 fallos,
+    ninguno real—, y es el modo más caro de equivocarse que tiene un arnés: no da un falso negativo
+    silencioso sino un expediente entero de defectos inventados sobre una pantalla correcta.
+
+    `barras-fijas.cjs` ya daba este paso; esta prueba nació sin él.
+  */
+  const ficha = page
+    .locator('button, a')
+    .filter({ hasText: /San José|Escazú|Montes de Oca/ })
+    .first();
+  if (await ficha.isVisible().catch(() => false)) {
+    await ficha.click();
+    await page.waitForTimeout(1600);
+  }
+
   return page;
+}
+
+/**
+ * Antes de medir: ¿esto es el Inicio del ciudadano?
+ *
+ * <p>La comprobación no es decorativa. Medir la pantalla equivocada no falla: mide. Si no estamos
+ * donde creemos, lo que corresponde es parar con un error y no escribir una lista de hallazgos
+ * falsos que después alguien tiene que desmentir uno por uno.</p>
+ */
+async function confirmarQueEsElInicio(page) {
+  const donde = await page.evaluate(() => ({
+    ruta: location.pathname,
+    titulo: String(document.querySelector('h1, .lx-screen-title')?.textContent || '').trim(),
+    hayLogin: Boolean(document.querySelector('input[type="password"]')),
+    haySelector: /Elegí cualquier municipalidad/i.test(document.body.textContent || ''),
+    hayBarra: Boolean(document.querySelector('.lx-bottom-tab-bar')),
+  }));
+  if (donde.hayLogin || donde.haySelector || !donde.hayBarra) {
+    const motivo = donde.hayLogin
+      ? 'seguimos en el formulario de login'
+      : donde.haySelector
+        ? 'estamos en el selector de municipalidad, no en el Inicio'
+        : 'no hay barra inferior: esto no es una pantalla raíz del ciudadano';
+    throw new Error(
+      `No se puede medir la fachada: ${motivo} (ruta=${donde.ruta}, título="${donde.titulo}"). ` +
+        'Medir desde acá produce defectos inventados en TODA la tabla.',
+    );
+  }
 }
 
 async function medirFachada(page, tamano, ancho) {
   const v = await page.evaluate(() => {
-    const rec = (s) => String(s || '').replace(/\s+/g, ' ').trim();
+    const rec = (s) =>
+      String(s || '')
+        .replace(/\s+/g, ' ')
+        .trim();
     const px = (n, prop) => (n ? Math.round(parseFloat(getComputedStyle(n)[prop])) : 0);
     const caja = (sel) => {
       const n = document.querySelector(sel);
@@ -82,10 +136,14 @@ async function medirFachada(page, tamano, ancho) {
         : null,
       // La foto es un FONDO, no un `<img>`: es lo que la hace fundirse en vez de ser un recuadro.
       fotoEsFondo: Boolean(
-        hero && getComputedStyle(hero.querySelector('.lx-citizen-hero__photo') || hero).backgroundImage !== 'none',
+        hero &&
+        getComputedStyle(hero.querySelector('.lx-citizen-hero__photo') || hero).backgroundImage !==
+          'none',
       ),
       heroTieneImg: hero ? hero.querySelectorAll('img').length : -1,
-      degradado: hero ? getComputedStyle(hero, '::after').backgroundImage.includes('gradient') : false,
+      degradado: hero
+        ? getComputedStyle(hero, '::after').backgroundImage.includes('gradient')
+        : false,
       cta: caja('.lx-hero-card--citizen'),
       ctaDegradado: cta ? getComputedStyle(cta).backgroundImage.includes('gradient') : false,
       ctaBoton: Boolean(document.querySelector('.lx-hero-card__go')),
@@ -125,16 +183,26 @@ async function medirFachada(page, tamano, ancho) {
     ok(Number(v.saludoPeso) >= 700, `${tamano}: y va en peso 700-800`, `peso=${v.saludoPeso}`);
     // El punto 10 dice no aceptar «foto rectangular sin integración/degradado».
     ok(v.fotoEsFondo, `${tamano}: la foto es fondo del bloque, no un recuadro pegado`);
-    ok(v.heroTieneImg === 0, `${tamano}: y no hay ningún <img> suelto en el héroe`, `hay ${v.heroTieneImg}`);
+    ok(
+      v.heroTieneImg === 0,
+      `${tamano}: y no hay ningún <img> suelto en el héroe`,
+      `hay ${v.heroTieneImg}`,
+    );
     ok(v.degradado, `${tamano}: con su degradado navy encima`);
   }
 
   ok(v.cta !== null, `${tamano}: «Estacionar ahora» existe`);
   if (v.cta) {
-    ok(v.cta.alto >= 150 && v.cta.alto <= 190, `${tamano}: el CTA mide ${v.cta.alto}px (pide 150-165)`);
+    ok(
+      v.cta.alto >= 150 && v.cta.alto <= 190,
+      `${tamano}: el CTA mide ${v.cta.alto}px (pide 150-165)`,
+    );
     ok(v.ctaDegradado, `${tamano}: con degradado azul`);
     ok(v.ctaBoton, `${tamano}: y su botón circular a la derecha`);
-    ok(v.ctaTituloPx >= 22 && v.ctaTituloPx <= 26, `${tamano}: título del CTA ${v.ctaTituloPx}px (pide 22-25)`);
+    ok(
+      v.ctaTituloPx >= 22 && v.ctaTituloPx <= 26,
+      `${tamano}: título del CTA ${v.ctaTituloPx}px (pide 22-25)`,
+    );
     // «CTA principal pequeño o perdido» es de las cosas que el punto 10 no acepta: tiene que estar
     // en el primer viewport, no detrás de un desplazamiento.
     ok(v.cta.top < 812, `${tamano}: y entra en el primer viewport`, `empieza en ${v.cta.top}px`);
@@ -154,7 +222,9 @@ async function medirFachada(page, tamano, ancho) {
     ok(v.valorPx >= 25 && v.valorPx <= 31, `${tamano}: el saldo mide ${v.valorPx}px (pide 25-31)`);
   } else {
     // Con una estadía activa la fachada cambia a propósito: no se exige el par.
-    console.log(`  ··  ${tamano}: no hay par Saldo/Vehículo (hay estadía activa, o el ciudadano no tiene vehículo)`);
+    console.log(
+      `  ··  ${tamano}: no hay par Saldo/Vehículo (hay estadía activa, o el ciudadano no tiene vehículo)`,
+    );
   }
 
   // Multas: el documento dice «solo cuando existan multas reales». Las dos salidas son correctas,
@@ -169,15 +239,27 @@ async function medirFachada(page, tamano, ancho) {
   }
 
   if (v.actividad.length > 0) {
-    ok(v.actividad.length <= 3, `${tamano}: la actividad muestra como mucho tres movimientos`, `son ${v.actividad.length}`);
+    ok(
+      v.actividad.length <= 3,
+      `${tamano}: la actividad muestra como mucho tres movimientos`,
+      `son ${v.actividad.length}`,
+    );
     const bajas = v.actividad.filter((a) => a < 92);
-    ok(bajas.length === 0, `${tamano}: y sus filas miden 92px o más`, `altos: ${v.actividad.join(', ')}`);
+    ok(
+      bajas.length === 0,
+      `${tamano}: y sus filas miden 92px o más`,
+      `altos: ${v.actividad.join(', ')}`,
+    );
   } else {
     console.log(`  ··  ${tamano}: la billetera no tiene movimientos todavía`);
   }
 
   // --- La barra inferior, que el documento llama «requisito crítico» ---------------------------
-  ok(v.barraDestinos === 5, `${tamano}: la barra tiene sus cinco destinos`, `son ${v.barraDestinos}`);
+  ok(
+    v.barraDestinos === 5,
+    `${tamano}: la barra tiene sus cinco destinos`,
+    `son ${v.barraDestinos}`,
+  );
   ok(
     v.barraAlto >= 70 && v.barraAlto <= 86,
     `${tamano}: la barra mide ${v.barraAlto}px (pide 70-78 + safe-area)`,
@@ -212,16 +294,25 @@ async function medirFachada(page, tamano, ancho) {
   const context = await navegador.newContext({ viewport: TAMANOS[1], locale: 'es-CR' });
   const page = await entrar(context);
 
-  for (const tamano of TAMANOS) {
-    console.log(`\n── ${tamano.nombre} ──`);
-    await page.setViewportSize({ width: tamano.width, height: tamano.height });
-    await page.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' });
-    await page.waitForTimeout(2000);
-    await medirFachada(page, tamano.nombre, tamano.width);
-    await page.screenshot({
-      path: `tests/responsive/capturas/ciudadano-${tamano.width}x${tamano.height}.png`,
-      fullPage: true,
-    });
+  try {
+    for (const tamano of TAMANOS) {
+      console.log(`\n── ${tamano.nombre} ──`);
+      await page.setViewportSize({ width: tamano.width, height: tamano.height });
+      await page.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' });
+      await page.waitForTimeout(2000);
+      await confirmarQueEsElInicio(page);
+      await medirFachada(page, tamano.nombre, tamano.width);
+      await page.screenshot({
+        path: `tests/responsive/capturas/ciudadano-${tamano.width}x${tamano.height}.png`,
+        fullPage: true,
+      });
+    }
+  } catch (e) {
+    // Un arnés que no sabe dónde está no reporta: para. Lo contrario —seguir midiendo— es lo que
+    // produjo 28 defectos inventados.
+    console.error(`\n${String(e.message).split('\n')[0]}`);
+    await navegador.close();
+    process.exit(3);
   }
 
   await navegador.close();

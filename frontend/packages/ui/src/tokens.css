@@ -3777,12 +3777,19 @@ a.lx-list-row {
 }
 
 /* v4 §5: «evitar que la etiqueta del día actual y el monto superior generen espacio vertical
-   adicional innecesario». A partir de una tarjeta ancha el rótulo sale del flujo y se apoya en el
-   renglón del título de la tarjeta, que está vacío a la derecha. Sigue reservado en el flujo
-   debajo de ese ancho, donde no hay lugar al lado del título. Sacarlo del flujo es lo contrario de
-   ocultarlo: se sigue leyendo, y ya no cuesta 24px de alto. */
+   adicional innecesario». A partir de una tarjeta ancha el rótulo puede salir del flujo y apoyarse
+   en el renglón del título de la tarjeta. Sacarlo del flujo es lo contrario de ocultarlo: se sigue
+   leyendo, y ya no cuesta 24px de alto.
+
+   PERO es OPCIONAL, y por eso pide la clase. Apoyarse en el renglón del título sólo funciona si
+   ese renglón está vacío a la derecha, y eso no lo sabe esta hoja: lo sabe quien arma la tarjeta.
+   Cuando dejó de estarlo —el 09-10 el gráfico semanal del administrador estrenó un rótulo de
+   rango en el encabezado— el día y el monto quedaron impresos ENCIMA de ese rótulo, que es
+   exactamente lo que el §7 de ese documento prohíbe: «no superponer fecha, total y título: cada
+   elemento debe tener su propia zona de layout». Automático, el ahorro de 24px se cobra en un
+   defecto que ninguna regla de desborde detecta, porque superponer no desborda. */
 @media (min-width: 900px) {
-  .lx-bars__callout {
+  .lx-bars--sobre-el-titulo .lx-bars__callout {
     position: absolute;
     top: -2.1rem;
     right: 0;
@@ -6612,6 +6619,15 @@ a.lx-list-row {
    renglón único con puntos suspensivos: es texto secundario, y dejarla crecer descuadraría las
    cuatro baldosas, que es el motivo por el que se recortó en su día. El cambio es sólo del título,
    que es lo que el documento nombra. */
+/* §9 otra vez, la mitad que faltaba: el título dejó de cortarse pero la ayuda seguía con «…»
+   («Definir una nueva área …»), y la regla no habla de títulos sino de accesos rápidos. Misma
+   solución que en fiscalización: envolver en vez de recortar. */
+:root[data-portal='admin'] .lx-quick-tile__hint {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+}
+
 :root[data-portal='admin'] .lx-quick-tile__title {
   white-space: normal;
   overflow: visible;
