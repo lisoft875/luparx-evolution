@@ -7083,3 +7083,104 @@ a.lx-list-row {
   border-top: 5px solid currentColor;
   opacity: 0.6;
 }
+
+/* =================================================================================================
+   Inicio municipal, plan visual del 09-10-2026
+
+   La orden trae una tabla de geometría y un diagnóstico que no es de color: «la tipografía y el
+   espacio interno de los KPI obligan a partir títulos en varias líneas y crean tarjetas
+   visualmente pesadas», «el dónut es muy dominante; las zonas quedan comprimidas», «Ingresos
+   presenta una gráfica vacía con ejes y cifras repetidas».
+
+   Todo lo de acá abajo está acotado al administrador por `data-portal`. El fiscalizador y el
+   ciudadano no se tocan en esta tarea.
+   ================================================================================================= */
+
+/* ---- El saludo: 64-80px de fila ------------------------------------------------------------- */
+:root[data-portal='admin'] .lx-home__top {
+  min-height: 64px;
+  align-items: center;
+}
+
+/* ---- Los cuatro KPI: 112-130px, iguales, con la etiqueta legible --------------------------
+   143px salían de tres cosas que se suman: la etiqueta a 12px partida en dos renglones, el
+   subtexto también en dos, y 14px de relleno arriba y abajo. La tabla pide etiqueta de 13-14 y
+   tarjeta de 112-130, así que la etiqueta SUBE —a 13, que es lo que pide— y lo que baja es el
+   interlineado y el relleno. Subir la letra y bajar la tarjeta a la vez sólo es contradictorio si
+   el espacio desperdiciado no estaba en la letra, y no lo estaba. */
+:root[data-portal='admin'] .lx-metric__hit {
+  /* 20 arriba y abajo, medido para caer en el centro del rango: con la etiqueta en una línea la
+     tarjeta queda en 114 y con dos en 130, y las dos puntas están dentro de los 112-130 que pide
+     la tabla. Así el mismo relleno sirve para «Multas emitidas» y para «Estacionamientos
+     activos» sin que las cuatro dejen de medir lo mismo —la cuadrícula las iguala a la más
+     alta—. */
+  padding: 20px var(--lx-space-4);
+  row-gap: 4px;
+}
+:root[data-portal='admin'] .lx-metric__label {
+  font-size: 13px;
+  line-height: 1.2;
+}
+:root[data-portal='admin'] .lx-metric__value {
+  line-height: 1.15;
+}
+:root[data-portal='admin'] .lx-metric__hint {
+  font-size: 12px;
+  line-height: 1.2;
+}
+:root[data-portal='admin'] .lx-metric__icon {
+  /* «Icono pequeño en fondo tintado». 36 en vez de 40: el icono acompaña, no compite con la
+     cifra, y la tarjeta recupera cuatro píxeles de alto en los tamaños donde el icono manda. */
+  width: 36px;
+  height: 36px;
+}
+
+/* ---- Fila A: las dos tarjetas con la misma altura ------------------------------------------
+   «Tarjetas de alturas visualmente equilibradas». Al achicar el dónut, Ocupación bajó a 232 e
+   Ingresos se quedó en 296: la fila quedaba escalonada. Estiradas, las dos miden lo que mide la
+   más alta y el contenido se reparte dentro, que es lo que hace una fila y no dos bloques
+   sueltos. */
+:root[data-portal='admin'] .lx-home-grid--analytics {
+  align-items: stretch;
+}
+:root[data-portal='admin'] .lx-home-grid--analytics > .lx-card {
+  display: flex;
+  flex-direction: column;
+}
+:root[data-portal='admin'] .lx-home-grid--analytics .lx-occupancy,
+:root[data-portal='admin'] .lx-home-grid--analytics .lx-bars {
+  flex: 1;
+}
+
+/* ---- Ocupación: el dónut deja de dominar -----------------------------------------------------
+   El diámetro lo decide el componente (su prop `size`), que baja a 136 en el Inicio. Acá va lo
+   que la hoja sí manda: que las zonas se queden con el ancho que el dónut suelta. */
+:root[data-portal='admin'] .lx-occupancy {
+  gap: var(--lx-space-4);
+}
+:root[data-portal='admin'] .lx-occupancy__zones {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ---- Ingresos: que la tarjeta no crezca al estrecharse la columna ---------------------------
+   A 1024 el gráfico conservaba su alto mientras la columna se angostaba y la tarjeta llegaba a
+   343px contra los 260-310 de la tabla, rompiendo el equilibrio de la fila A —que es justo lo que
+   la orden llama «alturas visualmente equilibradas». */
+@media (max-width: 1199px) {
+  :root[data-portal='admin'] .lx-bars__track {
+    /* 130: el alto que deja la fila A en 260, el suelo del rango, con la columna estrecha de
+       1024. Con 120 la fila caía a 252 y con el original de 160 subía a 343. */
+    height: 130px;
+  }
+}
+
+/* ---- Fila B: el vacío, donde menos molesta --------------------------------------------------
+   Probadas las dos y me quedo con la que ya había, con la razón escrita para que no se vuelva a
+   intentar: estirar la tarjeta de actividad hasta igualar la columna derecha convierte un hueco
+   de fondo en una TARJETA de 530px con dos renglones de texto flotando en el medio, que se lee
+   peor. Con `start` —lo que hay— la actividad mide lo que tiene y el aire queda del lado del
+   fondo, que es aire y no una caja vacía.
+
+   Esto sólo pasa con la actividad vacía, que es el estado de staging hoy. Con los cuatro o cinco
+   eventos de la referencia las dos columnas se emparejan solas y la discusión desaparece. */

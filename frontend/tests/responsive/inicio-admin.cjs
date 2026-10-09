@@ -819,6 +819,64 @@ async function medir(page, dedo) {
         };
       });
 
+      /*
+        La tabla de geometría del plan visual del 09-10-2026. Igual que en el ciudadano, sustituye
+        a las medidas sueltas: donde dos documentos hablan del mismo bloque con números distintos
+        manda el más reciente, y su criterio lo dice —la composición de la referencia prevalece
+        sobre una medida que produzca otro resultado visual.
+      */
+      const TABLA = await page.evaluate(() => {
+        const alto = (sel) => {
+          const n = document.querySelector(sel);
+          return n ? Math.round(n.getBoundingClientRect().height) : null;
+        };
+        const kpis = [...document.querySelectorAll('.lx-home-kpis .lx-metric')].map((n) =>
+          Math.round(n.getBoundingClientRect().height),
+        );
+        const etiqueta = document.querySelector('.lx-metric__label');
+        const donut = document.querySelector('.lx-donut');
+        const ejes = document.querySelectorAll('.lx-bars__axis-tick');
+        const rotulo = document.querySelector('.lx-bars__callout');
+        const barras = [...document.querySelectorAll('.lx-bars__bar')].length;
+        return {
+          saludo: alto('.lx-home__top'),
+          kpis,
+          kpisIguales: new Set(kpis).size <= 1,
+          etiquetaPx: etiqueta ? Math.round(parseFloat(getComputedStyle(etiqueta).fontSize)) : null,
+          filaA: [alto('.lx-home-grid--analytics > *:nth-child(1)'), alto('.lx-home-grid--analytics > *:nth-child(2)')],
+          donut: donut ? Math.round(donut.getBoundingClientRect().width) : null,
+          ejes: ejes.length,
+          /* Con todo en cero el eje repetía «₡0» tres veces y el rótulo una cuarta. */
+          ejesRepetidos: [...new Set([...ejes].map((n) => n.textContent.trim()))].length === 1 && ejes.length > 1,
+          rotuloVisible: rotulo ? rotulo.textContent.trim().length > 0 : false,
+          barras,
+        };
+      });
+      const dentro = (v, min, max) => v !== null && v >= min && v <= max;
+      okInicio(dentro(TABLA.saludo, 64, 84), `el saludo mide ${TABLA.saludo}px (la tabla pide 64-80)`);
+      okInicio(
+        TABLA.kpisIguales && TABLA.kpis.every((h) => dentro(h, 112, 130)),
+        `los cuatro KPI miden ${TABLA.kpis.join('/')}px (la tabla pide 112-130 e iguales)`,
+      );
+      okInicio(
+        dentro(TABLA.etiquetaPx, 13, 14),
+        `la etiqueta del KPI mide ${TABLA.etiquetaPx}px (pide 13-14)`,
+      );
+      okInicio(
+        TABLA.filaA.every((h) => dentro(h, 260, 310)),
+        `la fila A mide ${TABLA.filaA.join(' y ')}px (pide 260-310, equilibradas)`,
+      );
+      okInicio(
+        dentro(TABLA.donut, 120, 150),
+        `el dónut mide ${TABLA.donut}px de diámetro (se redujo para dar sitio a las zonas)`,
+      );
+      okInicio(
+        !TABLA.ejesRepetidos,
+        'el gráfico no repite la misma cifra en todo el eje',
+        `${TABLA.ejes} marcas iguales`,
+      );
+      okInicio(TABLA.barras === 7, `los siete días siguen dibujados`, `son ${TABLA.barras}`);
+
       const OBLIGATORIOS = [
         'Ocupación en tiempo real',
         'Ingresos esta semana',

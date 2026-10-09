@@ -607,6 +607,13 @@ export function HomePage(): React.JSX.Element {
                         caption={t('admin.home.occupancy.total')}
                         emptyLabel={t('admin.home.occupancy.noBase')}
                         title={t('admin.home.zones.title')}
+                        /* 136 y no los 168 por omisión. El plan del 09-10 lo pide con su razón:
+                           «reducir su diámetro respecto a staging para dar espacio a las zonas».
+                           Medido, el anillo soltaba 32px de ancho que la lista de zonas estaba
+                           pidiendo —ahí es donde «Escazú centro prueba» y su barra competían—. El
+                           componente escala su grosor con el diámetro, así que no hay nada más
+                           que ajustar. */
+                        size={136}
                       />
                       {/* De qué se compone el porcentaje. La referencia lo pone bajo el número y
                           son dos cifras que el panel ya daba: estadías corriendo sobre bahías en

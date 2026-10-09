@@ -83,6 +83,21 @@ export function BarChart({
   }
 
   const maximo = Math.max(...data.map((d) => d.value), 0);
+  /*
+    Un período entero en cero (09-10-2026).
+
+    No es un caso raro: es el estado normal de una municipalidad que todavía no cobró, y era el
+    de staging. Dibujado como cualquier otro, el gráfico repetía «₡0» tres veces en el eje y una
+    cuarta en el rótulo del día —cuatro ceros que no dicen nada y que el plan visual señala con
+    nombre: «una gráfica vacía con ejes y cifras repetidas, en vez de un estado sin recaudación
+    bien resuelto».
+
+    Así que con todo en cero se callan el eje y el rótulo, y se quedan los siete días y la frase
+    que lo explica. La fuente de datos no cambia y las barras siguen ahí: lo que desaparece es la
+    repetición, no la información. Un cero REAL de un día suelto —el martes no se cobró, el resto
+    sí— no entra acá: ése tiene escala contra la que leerse y se dibuja como siempre.
+  */
+  const todoEnCero = maximo === 0;
   const activa = seleccion ?? data[data.length - 1]?.key ?? null;
   const destacada = data.find((d) => d.key === activa) ?? null;
 
@@ -91,7 +106,7 @@ export function BarChart({
       {/* El valor de la barra en foco, arriba y siempre en el mismo lugar: un rótulo que salta de
           posición según la barra obliga a buscarlo cada vez. */}
       <p className="lx-bars__callout">
-        {destacada ? (
+        {destacada && !todoEnCero ? (
           <>
             <span className="lx-bars__callout-label">{destacada.labelLong ?? destacada.label}</span>
             <strong className="lx-bars__callout-value">{destacada.valueLabel}</strong>
@@ -100,7 +115,7 @@ export function BarChart({
       </p>
 
       <div className="lx-bars__plot">
-        {formatAxis ? (
+        {formatAxis && !todoEnCero ? (
           <div className="lx-bars__axis" aria-hidden="true">
             {Array.from({ length: MARCAS }, (_, i) => {
               // De arriba hacia abajo: techo, mitad, piso.
