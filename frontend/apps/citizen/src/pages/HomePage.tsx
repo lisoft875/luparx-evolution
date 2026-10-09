@@ -14,6 +14,7 @@ import {
   IconFine,
   IconPark,
   IconPlus,
+  IconWallet,
   ListRow,
   SectionHeader,
   StatCard,
@@ -252,6 +253,7 @@ export function HomePage(): React.JSX.Element {
             loading={
               <StatCard
                 className="lx-stat-card--compact"
+                icon={<IconWallet size={20} />}
                 label={t('citizen.wallet.balanceLabel')}
                 value={t('common.loading')}
               />
@@ -260,6 +262,13 @@ export function HomePage(): React.JSX.Element {
             {(wallet) => (
               <StatCard
                 className="lx-stat-card--compact"
+                /*
+                  El icono que faltaba (09-10-2026). La referencia lo dibuja en las dos tarjetas y
+                  no estaba: `StatCard` sólo lo pinta si se lo pasan, y acá no se le pasaba. Se
+                  veía en la comparación que armé —porque mi réplica lo inventó— y no en staging,
+                  que es la diferencia entre un boceto y la pantalla.
+                */
+                icon={<IconWallet size={20} />}
                 label={t('citizen.wallet.balanceLabel')}
                 value={formatCurrencyMinor(wallet.balanceMinor, wallet.currencyCode, locale)}
                 action={
@@ -277,6 +286,7 @@ export function HomePage(): React.JSX.Element {
             loading={
               <StatCard
                 className="lx-stat-card--compact"
+                icon={<IconCar size={20} />}
                 label={t('citizen.home.vehicleCard.label')}
                 value={t('common.loading')}
               />
@@ -284,6 +294,7 @@ export function HomePage(): React.JSX.Element {
             empty={
               <StatCard
                 className="lx-stat-card--compact"
+                icon={<IconCar size={20} />}
                 label={t('citizen.home.vehicleCard.label')}
                 value={t('citizen.home.vehicleCard.empty')}
                 action={
@@ -299,6 +310,7 @@ export function HomePage(): React.JSX.Element {
               return (
                 <StatCard
                   className="lx-stat-card--compact"
+                  icon={<IconCar size={20} />}
                   label={t('citizen.home.vehicleCard.label')}
                   value={vehicle?.plate ?? t('citizen.home.vehicleCard.empty')}
                   hint={vehicle ? [vehicle.brand, vehicle.model].filter(Boolean).join(' ') || undefined : undefined}

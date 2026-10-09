@@ -15,6 +15,32 @@ import { assertEnvConfigured } from './env';
 */
 document.documentElement.dataset.portal = 'citizen';
 
+/*
+  El Inicio abre ARRIBA, siempre (09-10-2026).
+
+  Reportado con dos capturas del mismo teléfono: al entrar, la pantalla aparecía ya desplazada
+  —sin encabezado, el héroe cortado por arriba— y había que subir a mano para ver la aplicación
+  entera.
+
+  No era el reposicionamiento al navegar, que ya se corrigió en `CitizenShell`: es el del
+  NAVEGADOR. Por omisión `history.scrollRestoration` vale `'auto'`, y entonces el navegador
+  recuerda a qué altura se dejó la página y la restituye al volver a abrirla. En una aplicación de
+  una sola página eso ocurre DESPUÉS de que el primer render fija su altura, así que un
+  `scrollTo(0, 0)` al montar se ejecuta antes y el navegador lo pisa a continuación. Por eso el
+  arreglo anterior no alcanzaba: no llegaba tarde por poco, llegaba antes de tiempo.
+
+  En `'manual'` el navegador deja de restituir y la posición la decide la aplicación, que es lo
+  correcto acá: las pantallas se abren por su título, no por donde quedó la anterior. No se pierde
+  ninguna restauración —esta aplicación no la hacía— y el botón «atrás» sigue navegando igual.
+
+  Va en el arranque del ciudadano y no en un componente: es una propiedad del documento, y ponerla
+  donde se monta la aplicación es ponerla una vez. Los otros tres portales no se tocan en esta
+  tarea.
+*/
+if (typeof history !== 'undefined' && 'scrollRestoration' in history) {
+  history.scrollRestoration = 'manual';
+}
+
 const container = document.getElementById('root');
 if (!container) throw new Error('Root element not found');
 

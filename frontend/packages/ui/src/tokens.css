@@ -6400,9 +6400,24 @@ a.lx-list-row {
     Esto es encuadre de ESTE activo. El día que llegue la fotografía automotriz de la referencia,
     lo que cambia son estos tres valores.
   */
-  background-size: auto 130%;
-  background-position: 16% bottom;
-  filter: brightness(1.8);
+  background-size: auto 104%;
+  /* `left`, que en este encuadre deja la marca en el tercio DERECHO: la imagen es casi un metro y
+     medio más ancha que la caja, así que alinear su borde izquierdo con el del bloque empuja la
+     marca —que vive en el centro del archivo— fuera de la zona del saludo. Medido: la marca cae
+     entre los 223 y los 346px de un ancho de 390, y el saludo termina en 242. */
+  background-position: left bottom;
+  /* Atenuada a propósito (09-10-2026, segunda corrección).
+
+     La pasada anterior la puso al 130% y a plena luz, y el resultado fue un LOGO GIGANTE ocupando
+     el lugar que la referencia reserva a una fotografía nocturna. Que se vea no era el objetivo
+     final: el objetivo es una imagen de fondo que dé atmósfera y deje leer el saludo. Un activo de
+     marca haciendo de protagonista no sustituye a la fotografía y además se nota que no es ella.
+
+     Así que la marca baja a presencia ambiental —su tamaño, su opacidad— y lo que sostiene el
+     bloque es la luz: el halo azul de abajo y los degradados. El día que llegue la fotografía
+     nocturna estos tres valores vuelven a subir, porque entonces la imagen SÍ es el asunto. */
+  opacity: 0.62;
+  filter: brightness(1.55);
 }
 /* El halo: la referencia no pide una imagen pegada sino una integrada y encendida. El degradado
    radial nace donde está la marca y se apaga antes de llegar al saludo. */
@@ -6410,11 +6425,19 @@ a.lx-list-row {
   content: '';
   position: absolute;
   inset: 0;
-  background: radial-gradient(
-    58% 80% at 78% 70%,
-    color-mix(in srgb, var(--lx-cta-bright) 22%, transparent),
-    transparent 70%
-  );
+  background:
+    radial-gradient(
+      62% 86% at 76% 76%,
+      color-mix(in srgb, var(--lx-cta-bright) 42%, transparent),
+      transparent 72%
+    ),
+    /* Una segunda luz, fría y baja, que insinúa el asfalto de la escena nocturna. Es luz, no
+       dibujo: no finge ser una fotografía ni añade ningún objeto que no exista. */
+      radial-gradient(
+        120% 62% at 50% 116%,
+        color-mix(in srgb, var(--lx-primary) 24%, transparent),
+        transparent 70%
+      );
 }
 /* Dos degradados, no uno. El horizontal protege el texto —opaco a la izquierda, transparente a la
    derecha— y el vertical funde el pie de la imagen con lo que viene debajo, que es lo que hace que
@@ -6782,12 +6805,36 @@ a.lx-list-row {
     0 16px 36px -20px color-mix(in srgb, var(--lx-cta-bright) 90%, transparent),
     inset 0 1px 0 rgba(255, 255, 255, 0.18);
 }
+.lx-hero-card--citizen {
+  /* El ancho que el título necesita, conseguido donde sobraba y no comprimiendo el texto: el
+     icono baja de 56 a 48, la flecha de 44 a 40 y el relleno lateral de 20 a 16. Son 28px que
+     van al título, que es lo que le faltaba para no partirse en dos líneas a 390. */
+  gap: var(--lx-space-3);
+  padding: var(--lx-space-4);
+}
+.lx-hero-card--citizen .lx-hero-card__title {
+  /* La referencia lo dibuja en una línea y esa es su jerarquía: partido en dos deja de ser un
+     título y pasa a ser un párrafo con cuerpo grande. */
+  white-space: nowrap;
+}
+@media (max-width: 359px) {
+  /* Por debajo de 360px no cabe y forzarlo sería peor que partirlo: `nowrap` no encoge el texto,
+     lo desborda. Ahí manda la regla del documento —«saludo y CTA tienen prioridad»— y el título
+     vuelve a poder envolver. */
+  .lx-hero-card--citizen .lx-hero-card__title {
+    white-space: normal;
+  }
+}
 .lx-hero-card--citizen .lx-hero-card__icon {
-  width: 56px;
-  height: 56px;
-  border-radius: 16px;
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
   background: rgba(255, 255, 255, 0.14);
   border: 1px solid rgba(255, 255, 255, 0.34);
+}
+.lx-hero-card--citizen .lx-hero-card__go {
+  width: 40px;
+  height: 40px;
 }
 .lx-hero-card--citizen .lx-hero-card__go {
   background: rgba(255, 255, 255, 0.22);
@@ -6800,19 +6847,52 @@ a.lx-list-row {
    línea: las dos tarjetas quedan parejas por el CONTENIDO y no por una altura escrita a mano, que
    es justo lo que el encargo prohíbe. */
 .lx-citizen-pair .lx-list-row__icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 14px;
+  /* 36 y no 40: comparte renglón con el rótulo y tiene que caber sin empujarlo. Y en la esquina
+     y no junto a la cifra —que es donde lo pone el boceto— porque con datos reales no entra: un
+     saldo de seis cifras y un icono de 40px no caben juntos en media columna de 170px, y la
+     primera víctima sería el número, que es el asunto de la tarjeta. El icono acompaña al rótulo
+     arriba; la cifra se queda con su renglón entero. */
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
   background: color-mix(in srgb, var(--lx-primary) 18%, transparent);
   border: 1px solid color-mix(in srgb, var(--lx-primary) 32%, transparent);
   color: var(--lx-primary);
 }
+/* La composición de la referencia, sin tocar el marcado (09-10-2026, segunda corrección).
+
+   El boceto no apila icono → rótulo → valor: pone el ROTULO arriba y el icono en la misma línea
+   que la cifra, que es lo que hace que la tarjeta se lea de un golpe —«saldo: tanto»— en vez de
+   en tres saltos. `StatCard` es un componente compartido y su orden sirve a otras pantallas, así
+   que no se cambia su marcado: se recoloca acá con una rejilla de áreas, que es exactamente para
+   esto. El DOM, el orden de lectura y el componente quedan intactos. */
 .lx-citizen-pair .lx-stat-card {
-  gap: 6px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas:
+    'rotulo icono'
+    'cifra  cifra'
+    'ayuda  ayuda'
+    'accion accion';
+  align-items: center;
+  column-gap: var(--lx-space-2);
+  row-gap: 6px;
   height: 100%;
 }
+.lx-citizen-pair .lx-stat-card__label {
+  grid-area: rotulo;
+}
+.lx-citizen-pair .lx-list-row__icon {
+  grid-area: icono;
+}
+.lx-citizen-pair .lx-stat-card__value {
+  grid-area: cifra;
+}
+.lx-citizen-pair .lx-stat-card__hint {
+  grid-area: ayuda;
+}
 .lx-citizen-pair .lx-stat-card__action {
-  margin-top: auto;
+  grid-area: accion;
 }
 
 /* ---- Multas: profundidad y luz ámbar, sin perder legibilidad ------------------------------

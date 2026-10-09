@@ -156,6 +156,21 @@ async function medirFachada(page, tamano, ancho, placaDelServidor) {
         Math.round(n.getBoundingClientRect().height),
       ),
       barraAlto: barra ? Math.round(barra.getBoundingClientRect().height) : 0,
+      /* Lo que la corrección del 09-10 (segunda vuelta) tiene que sostener. */
+      tituloCtaEnUnaLinea: (() => {
+        const n = document.querySelector('.lx-hero-card--citizen .lx-hero-card__title');
+        if (!n) return null;
+        const linea = parseFloat(getComputedStyle(n).lineHeight) || 1;
+        return { lineas: Math.round(n.getBoundingClientRect().height / linea), desborda: n.scrollWidth > n.clientWidth + 1 };
+      })(),
+      iconosDelPar: document.querySelectorAll('.lx-citizen-pair .lx-list-row__icon').length,
+      botonesDelPar: [...document.querySelectorAll('.lx-citizen-pair .lx-btn')].map((n) =>
+        Math.round(n.getBoundingClientRect().height),
+      ),
+      cifrasDelPar: [...document.querySelectorAll('.lx-citizen-pair .lx-stat-card__value')].map((n) => {
+        const linea = parseFloat(getComputedStyle(n).lineHeight) || 1;
+        return Math.round(n.getBoundingClientRect().height / linea);
+      }),
       barraDestinos: document.querySelectorAll('.lx-bottom-tab-bar__tab').length,
       barraIcono: px(document.querySelector('.lx-bottom-tab-bar__icon svg'), 'width'),
       barraEtiqueta: px(document.querySelector('.lx-bottom-tab-bar__label'), 'fontSize'),
@@ -302,6 +317,27 @@ async function medirFachada(page, tamano, ancho, placaDelServidor) {
   ok(
     v.rellenoMain >= 100,
     `${tamano}: el contenido reserva ${v.rellenoMain}px bajo la barra (pide 100-115)`,
+  );
+  // --- La segunda corrección visual del 09-10, medida ----------------------------------------
+  if (v.tituloCtaEnUnaLinea && ancho >= 360) {
+    ok(
+      v.tituloCtaEnUnaLinea.lineas === 1 && !v.tituloCtaEnUnaLinea.desborda,
+      `${tamano}: «Estacionar ahora» se mantiene en una sola línea`,
+      `líneas=${v.tituloCtaEnUnaLinea.lineas} desborda=${v.tituloCtaEnUnaLinea.desborda}`,
+    );
+  }
+  ok(v.iconosDelPar === 2, `${tamano}: Saldo y Vehículo llevan su icono`, `son ${v.iconosDelPar}`);
+  const botonesChicos = v.botonesDelPar.filter((alto) => alto < 44);
+  ok(
+    v.botonesDelPar.length === 2 && botonesChicos.length === 0,
+    `${tamano}: «Recargar» y «Cambiar» son tocables (44px o más)`,
+    `altos: ${v.botonesDelPar.join(', ')}`,
+  );
+  const cifrasPartidas = v.cifrasDelPar.filter((lineas) => lineas > 1);
+  ok(
+    cifrasPartidas.length === 0,
+    `${tamano}: ni el saldo ni la placa se parten en dos líneas`,
+    `líneas: ${v.cifrasDelPar.join(', ')}`,
   );
   ok(!v.desbordeH, `${tamano}: no hay desplazamiento horizontal`);
   if (ancho >= 768) {
@@ -475,6 +511,10 @@ async function auditarDomYCss(page) {
       await page.waitForTimeout(2000);
       page.off('response', oirVehiculos);
       await confirmarQueEsElInicio(page);
+      /* Reportado con dos capturas del teléfono: el Inicio abría ya desplazado, sin encabezado.
+         Era la restauración del navegador, que ocurre DESPUÉS del primer render. */
+      const alAbrir = await page.evaluate(() => Math.round(window.scrollY));
+      ok(alAbrir === 0, `${tamano.nombre}: el Inicio abre arriba, con su encabezado a la vista`, `scrollY=${alAbrir}`);
       await medirFachada(page, tamano.nombre, tamano.width, placaDelServidor);
       // La auditoría de DOM y CSS una sola vez, en el ancho de la referencia: lo que comprueba
       // —qué hoja llegó, qué reglas trae— no cambia con el viewport.
