@@ -289,6 +289,125 @@ async function medirFachada(page, tamano, ancho) {
   );
 }
 
+/**
+ * ¿Están las clases del rediseño Y se les está aplicando su CSS?
+ *
+ * <p>Son dos preguntas distintas y la diferencia es exactamente la que explica «lo desplegué y se
+ * ve igual». Una clase puede estar en el DOM mientras la hoja de estilos que llegó al navegador
+ * no tiene su regla —porque es la hoja anterior, porque el `build` no la incluyó, porque el
+ * selector quedó dentro de un bloque que no coincide—, y entonces el marcador está y el diseño
+ * no. Medir sólo `querySelector` dice «sí, existe» y no contesta nada.</p>
+ *
+ * <p>Por eso se comprueban tres cosas por bloque: que el elemento exista, que ALGUNA hoja cargada
+ * contenga una regla con ese selector, y qué valor terminó computando el navegador. Y se imprime
+ * el nombre del archivo CSS y JS que el navegador descargó, que es lo único que identifica sin
+ * ambigüedad qué versión se está mirando.</p>
+ */
+async function auditarDomYCss(page) {
+  const a = await page.evaluate(() => {
+    const rec = (x) => String(x || '').replace(/\s+/g, ' ').trim();
+
+    // Qué archivos llegaron. Llevan hash en el nombre: identifican la compilación exacta.
+    const recursos = performance
+      .getEntriesByType('resource')
+      .map((r) => r.name)
+      .filter((n) => /\/assets\/.*\.(css|js)$/.test(n))
+      .map((n) => n.split('/').pop());
+
+    // Las reglas de TODAS las hojas, para poder preguntar si un selector existe de verdad.
+    const selectores = new Set();
+    for (const hoja of Array.from(document.styleSheets)) {
+      let reglas;
+      try {
+        reglas = hoja.cssRules;
+      } catch {
+        continue; // hoja de otro origen: no se puede leer, y no hay ninguna acá
+      }
+      const recorrer = (lista) => {
+        for (const regla of Array.from(lista)) {
+          if (regla.selectorText) regla.selectorText.split(',').forEach((x) => selectores.add(x.trim()));
+          if (regla.cssRules) recorrer(regla.cssRules);
+        }
+      };
+      recorrer(reglas);
+    }
+    const hayRegla = (sel) => [...selectores].some((x) => x.includes(sel));
+
+    const mirar = (sel, props) => {
+      const n = document.querySelector(sel);
+      if (!n) return { sel, existe: false, regla: hayRegla(sel) };
+      const cs = getComputedStyle(n);
+      const caja = n.getBoundingClientRect();
+      const valores = {};
+      for (const prop of props) valores[prop] = rec(cs[prop]).slice(0, 120);
+      return {
+        sel,
+        existe: true,
+        regla: hayRegla(sel),
+        ancho: Math.round(caja.width),
+        alto: Math.round(caja.height),
+        valores,
+      };
+    };
+
+    const raiz = getComputedStyle(document.documentElement);
+    return {
+      recursos,
+      portal: document.documentElement.dataset.portal ?? '(sin atributo)',
+      tokens: {
+        '--lx-bg': rec(raiz.getPropertyValue('--lx-bg')),
+        '--lx-surface': rec(raiz.getPropertyValue('--lx-surface')),
+        '--lx-primary': rec(raiz.getPropertyValue('--lx-primary')),
+        '--lx-primary-fill': rec(raiz.getPropertyValue('--lx-primary-fill')),
+      },
+      fondoBody: rec(getComputedStyle(document.body).backgroundColor),
+      bloques: [
+        mirar('.lx-citizen-hero', ['minHeight', 'padding', 'position', 'overflow']),
+        mirar('.lx-citizen-hero__photo', ['backgroundImage', 'backgroundSize', 'backgroundPosition', 'opacity']),
+        mirar('.lx-citizen-hero__greeting', ['fontSize', 'fontWeight', 'lineHeight']),
+        mirar('.lx-hero-card--citizen', ['background', 'borderRadius', 'minHeight']),
+        mirar('.lx-citizen-pair', ['display', 'gridTemplateColumns', 'gap']),
+        mirar('.lx-citizen-activity__row', ['minHeight', 'display']),
+        mirar('.lx-bottom-tab-bar', ['height', 'position', 'background']),
+      ],
+    };
+  });
+
+  // ¿La fotografía del héroe se descargó, o el contenedor está pidiendo una URL que no existe?
+  const urlFoto = await page.evaluate(() => {
+    const n = document.querySelector('.lx-citizen-hero__photo');
+    if (!n) return null;
+    const m = /url\(["']?([^"')]+)["']?\)/.exec(getComputedStyle(n).backgroundImage);
+    return m ? m[1] : null;
+  });
+  let foto = 'sin contenedor de foto';
+  if (urlFoto) {
+    const r = await page.request.get(urlFoto).catch(() => null);
+    foto = r ? `${r.status()} · ${urlFoto.split('/').pop()}` : `NO SE PUDO PEDIR · ${urlFoto}`;
+  }
+
+  console.log('\n══ Auditoría de DOM y CSS ══');
+  console.log(`  archivos cargados: ${a.recursos.join(' · ') || '(ninguno con hash)'}`);
+  console.log(`  data-portal: ${a.portal}`);
+  console.log(`  tokens: ${Object.entries(a.tokens).map(([k, v]) => `${k}=${v}`).join('  ')}`);
+  console.log(`  fondo del body: ${a.fondoBody}`);
+  console.log(`  foto del héroe: ${foto}`);
+  for (const b of a.bloques) {
+    if (!b.existe) {
+      console.log(`  ✗   ${b.sel} — NO ESTÁ EN EL DOM (regla CSS presente: ${b.regla ? 'sí' : 'no'})`);
+      fallos++;
+      continue;
+    }
+    if (!b.regla) {
+      console.log(`  ✗   ${b.sel} — está en el DOM pero NINGUNA hoja cargada tiene su regla`);
+      fallos++;
+      continue;
+    }
+    const valores = Object.entries(b.valores).map(([k, v]) => `${k}: ${v}`).join(' · ');
+    console.log(`  ok  ${b.sel} — ${b.ancho}x${b.alto} · ${valores}`);
+  }
+}
+
 (async () => {
   const navegador = await chromium.launch();
   const context = await navegador.newContext({ viewport: TAMANOS[1], locale: 'es-CR' });
@@ -302,6 +421,15 @@ async function medirFachada(page, tamano, ancho) {
       await page.waitForTimeout(2000);
       await confirmarQueEsElInicio(page);
       await medirFachada(page, tamano.nombre, tamano.width);
+      // La auditoría de DOM y CSS una sola vez, en el ancho de la referencia: lo que comprueba
+      // —qué hoja llegó, qué reglas trae— no cambia con el viewport.
+      if (tamano.width === 390) await auditarDomYCss(page);
+      // Dos capturas, porque miden cosas distintas: la «vista» es un viewport con la cabecera
+      // pegada donde está, y la «completa» es la página entera —donde Playwright dibuja los
+      // elementos sticky a media altura, que es artefacto de la captura y no defecto.
+      await page.screenshot({
+        path: `tests/responsive/capturas/ciudadano-${tamano.width}x${tamano.height}-vista.png`,
+      });
       await page.screenshot({
         path: `tests/responsive/capturas/ciudadano-${tamano.width}x${tamano.height}.png`,
         fullPage: true,
