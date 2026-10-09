@@ -307,14 +307,7 @@ async function medirFachada(page, tamano, ancho, placaDelServidor) {
 
   ok(v.cta !== null, `${tamano}: «Estacionar ahora» existe`);
   if (v.cta) {
-    /* 150-165 era la medida con el héroe fotográfico detrás. La corrección del 09-10 pide
-       «reducir el alto excesivo actual y recuperar la proporción compacta de la referencia», y su
-       criterio rector dice que la imagen manda sobre el número cuando los dos no pueden ser
-       ciertos a la vez. */
-    ok(
-      v.cta.alto >= 118 && v.cta.alto <= 150,
-      `${tamano}: el CTA mide ${v.cta.alto}px (compacto: 118-150)`,
-    );
+    /* El alto del CTA lo mide `medirLaTabla`, con el rango de la orden definitiva. */
     ok(v.ctaDegradado, `${tamano}: con degradado azul`);
     ok(v.ctaBoton, `${tamano}: y su botón circular a la derecha`);
     ok(
@@ -592,6 +585,47 @@ async function auditarDomYCss(page) {
 }
 
 /**
+ * La tabla de la orden definitiva (09-10-2026), bloque por bloque.
+ *
+ * <p>Sustituye a las medidas sueltas que venían de los documentos anteriores. Donde las dos
+ * hablaban del mismo bloque con números distintos manda ésta, porque es la más reciente y porque
+ * su criterio lo dice: la composición aprobada prevalece sobre un número que produzca un
+ * resultado visual distinto.</p>
+ *
+ * <p>El rango se comprueba como rango: por debajo del mínimo hay un bloque que se quedó corto y
+ * por encima del máximo hay relleno de más, que es el defecto que esta tanda vino a quitar.</p>
+ */
+async function medirLaTabla(page, tamano) {
+  const RANGOS = [
+    ['cabecera', '.lx-app-bar', 56, 66],
+    ['saludo', '.lx-citizen-hero', 92, 115],
+    ['CTA «Estacionar ahora»', '.lx-hero-card--citizen', 112, 128],
+    ['par Saldo/Vehículo', '.lx-citizen-pair', 145, 160],
+    ['multas', '.lx-citizen-fines', 78, 92],
+    ['fila de actividad', '.lx-citizen-activity__row', 70, 82],
+    ['barra inferior', '.lx-bottom-tab-bar', 64, 78],
+  ];
+  const medido = await page.evaluate(
+    (rangos) =>
+      rangos.map(([nombre, sel, min, max]) => {
+        const n = document.querySelector(sel);
+        return { nombre, min, max, alto: n ? Math.round(n.getBoundingClientRect().height) : null };
+      }),
+    RANGOS,
+  );
+  for (const m of medido) {
+    if (m.alto === null) {
+      console.log(`  ··  ${tamano}: «${m.nombre}» no está en esta pantalla`);
+      continue;
+    }
+    ok(
+      m.alto >= m.min && m.alto <= m.max,
+      `${tamano}: ${m.nombre} mide ${m.alto}px (la tabla pide ${m.min}-${m.max})`,
+    );
+  }
+}
+
+/**
  * Lo que el contrato del 09-10 pide además de medir: que las cosas FUNCIONEN.
  *
  * <p>«Prueba funcional de Recargar, Cambiar, Estacionar, Multas, Ver todas y los cinco destinos
@@ -713,6 +747,7 @@ async function probarMontosLargos(page) {
          Era la restauración del navegador, que ocurre DESPUÉS del primer render. */
       const alAbrir = await page.evaluate(() => Math.round(window.scrollY));
       ok(alAbrir === 0, `${tamano.nombre}: el Inicio abre arriba, con su encabezado a la vista`, `scrollY=${alAbrir}`);
+      await medirLaTabla(page, tamano.nombre);
       await medirFachada(page, tamano.nombre, tamano.width, placaDelServidor);
       // La auditoría de DOM y CSS una sola vez, en el ancho de la referencia: lo que comprueba
       // —qué hoja llegó, qué reglas trae— no cambia con el viewport.

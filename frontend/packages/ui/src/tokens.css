@@ -6369,20 +6369,22 @@ a.lx-list-row {
   /* De borde a borde: el degradado tiene que llegar hasta donde llega el fondo, o se vería el
      recorte que el encargo prohíbe. Los márgenes se los devuelve el contenido, abajo. */
   margin: calc(-1 * var(--lx-space-4)) calc(-1 * var(--lx-space-4)) 0;
-  padding: var(--lx-space-4) var(--lx-space-4) var(--lx-space-5);
+  /* 20 arriba y 20 abajo. La tabla definitiva fija el bloque del saludo en 92-115px y sin
+     fotografía el contenido suma unos 52: el relleno es lo que lo lleva al MÍNIMO del rango, no
+     al máximo de la versión anterior. Es una diferencia de 40px contra los 123 que sobraban. */
+  padding: var(--lx-space-5) var(--lx-space-4);
   /*
-    Sin alto mínimo (09-10-2026, corrección del héroe).
+    92px: el SUELO de la tabla definitiva (92-115), no el techo de antes.
 
-    Eran 175px, que es la medida de la referencia CON su fotografía. Sin fotografía esos 175px no
-    sostienen nada: producen la «gran superficie oscura antes de la acción principal» que se
-    reportó, porque el contenido —saludo y subtítulo— ocupa 60 y el resto es vacío. La orden es
-    explícita: «ajustar la altura total de la cabecera al contenido; no compensar añadiendo
-    padding vertical».
+    Conviene distinguirlo de lo que se quitó, porque es la misma propiedad. Aquello era un mínimo
+    de 175px que, sin fotografía, dejaba más de cien píxeles de negro sobre el saludo —«una gran
+    superficie oscura antes de la acción principal»—. Esto es el mínimo que la orden fija para
+    este bloque, y el contenido ya lo llena casi entero: a 390px el saludo y el subtítulo miden
+    81 de esos 92. No hay franja vacía; hay un piso.
 
-    Así que la altura la decide el contenido. El día que entre la fotografía, el alto vuelve con
-    ella —una imagen de fondo necesita su caja— y este bloque recupera sus 175-215px por tener
-    algo dentro, que es la única razón legítima para ocuparlos.
+    Cuando entre la fotografía, el bloque podrá crecer hasta 115 por tener algo dentro.
   */
+  min-height: 92px;
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
@@ -6487,7 +6489,11 @@ a.lx-list-row {
 }
 .lx-citizen-hero__greeting {
   margin: 0;
-  font-size: 30px;
+  /* 26 y no 30. La tabla definitiva pide 23-27 y añade la razón: «no usar 32-36 px si obliga a
+     gastar una franja excesiva; no truncar el nombre». Un nombre completo a 30px empuja el
+     bloque a dos líneas altas y se come el primer viewport, que es justo lo que esta corrección
+     viene a recuperar. */
+  font-size: 26px;
   font-weight: 800;
   line-height: 1.12;
   letter-spacing: -0.02em;
@@ -6500,15 +6506,15 @@ a.lx-list-row {
 }
 .lx-citizen-hero__lead {
   margin: var(--lx-space-1) 0 0;
-  font-size: 15px;
+  font-size: 14px;
   color: var(--lx-text-muted);
   max-width: 78%;
 }
 @media (max-width: 380px) {
   /* «En pantallas pequeñas la imagen puede recortarse más; saludo y CTA tienen prioridad.» */
   .lx-citizen-hero__greeting {
-    font-size: 26px;
-    max-width: 88%;
+    font-size: 24px;
+    max-width: 92%;
   }
   .lx-citizen-hero__lead {
     max-width: 88%;
@@ -6526,14 +6532,14 @@ a.lx-list-row {
     aprobada manda sobre el número cuando los dos no pueden ser ciertos a la vez. Acá no pueden:
     150px sobre un héroe sin imagen es una tarjeta que ocupa más que el saludo.
   */
-  min-height: 124px;
+  min-height: 118px;
   border-radius: var(--lx-radius-xl);
   /* El degradado del encargo, con los dos azules en el orden que impone el contraste: el oscuro
      donde está el texto y el luminoso donde sólo hay un icono. Ver la nota de la paleta. */
   background: linear-gradient(100deg, var(--lx-primary-fill) 0%, var(--lx-primary-fill) 42%, var(--lx-cta-bright) 100%);
 }
 .lx-hero-card--citizen .lx-hero-card__title {
-  font-size: 23px;
+  font-size: 22px;
 }
 .lx-hero-card--citizen .lx-hero-card__subtitle {
   font-size: 15px;
@@ -6603,7 +6609,7 @@ a.lx-list-row {
   grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: center;
   gap: var(--lx-space-3);
-  padding: var(--lx-space-3) 0;
+  padding: var(--lx-space-2) 0;
   width: 100%;
   background: none;
   border: 0;
@@ -6612,8 +6618,11 @@ a.lx-list-row {
   text-align: left;
   font-family: inherit;
   cursor: pointer;
-  /* «filas 92-110 px» */
-  min-height: 92px;
+  /* 76px. Eran 92, que venía de la especificación de la fachada («filas 92-110»); la orden
+     definitiva del 09-10 baja el rango a 70-82 para recuperar el primer viewport, y su criterio
+     es que la composición manda sobre el número anterior cuando los dos no caben juntos. El
+     contenido de la fila no cambia: icono, concepto, fecha y zona, y el monto a la derecha. */
+  min-height: 76px;
 }
 .lx-citizen-activity__row:last-child {
   border-bottom: 0;
@@ -6632,6 +6641,20 @@ a.lx-list-row {
 .lx-citizen-activity__title {
   font-size: var(--lx-text-body-size);
   font-weight: 600;
+  /* La fila tiene que caber en 70-82px con tres renglones. El interlineado por omisión del
+     cuerpo deja la fila en 102 cuando el concepto ocupa dos líneas, que es lo normal con
+     «Pago de estacionamiento». Apretarlo acá es lo único que se toca: ni el texto se recorta ni
+     el concepto se abrevia. */
+  line-height: 1.25;
+}
+.lx-citizen-activity__when,
+.lx-citizen-activity__where {
+  line-height: 1.3;
+}
+.lx-citizen-activity .lx-citizen-badge {
+  /* 38 en vez de 44: sigue por encima del objetivo táctil de la fila, que es la fila entera. */
+  width: 38px;
+  height: 38px;
 }
 .lx-citizen-activity__when,
 .lx-citizen-activity__where {
@@ -6877,8 +6900,10 @@ a.lx-list-row {
   border: 1px solid rgba(255, 255, 255, 0.34);
 }
 .lx-hero-card--citizen .lx-hero-card__go {
-  width: 40px;
-  height: 40px;
+  /* 44, que es el piso táctil y el mínimo de la tabla (44-48). Estaba en 40 para ganarle ancho
+     al título; el ancho ahora sale del tamaño del título, que baja a 22. */
+  width: 44px;
+  height: 44px;
 }
 .lx-hero-card--citizen .lx-hero-card__go {
   background: rgba(255, 255, 255, 0.22);
@@ -6896,9 +6921,9 @@ a.lx-list-row {
      saldo de seis cifras y un icono de 40px no caben juntos en media columna de 170px, y la
      primera víctima sería el número, que es el asunto de la tarjeta. El icono acompaña al rótulo
      arriba; la cifra se queda con su renglón entero. */
-  width: 36px;
-  height: 36px;
-  border-radius: 12px;
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
   background: color-mix(in srgb, var(--lx-primary) 18%, transparent);
   border: 1px solid color-mix(in srgb, var(--lx-primary) 32%, transparent);
   color: var(--lx-primary);
@@ -6910,6 +6935,16 @@ a.lx-list-row {
    en tres saltos. `StatCard` es un componente compartido y su orden sirve a otras pantallas, así
    que no se cambia su marcado: se recoloca acá con una rejilla de áreas, que es exactamente para
    esto. El DOM, el orden de lectura y el componente quedan intactos. */
+.lx-citizen-pair {
+  /* La tabla pide 10-12 de hueco entre las dos columnas. */
+  gap: 12px !important;
+}
+.lx-citizen-pair .lx-card {
+  /* 12 arriba y abajo en vez de 16: los 8px que faltaban para entrar en 145-160 sin tocar ni el
+     tamaño de la cifra ni el del botón, que son lo que la tabla protege. */
+  padding-top: var(--lx-space-3);
+  padding-bottom: var(--lx-space-3);
+}
 .lx-citizen-pair .lx-stat-card {
   /* El contenedor contra el que se mide la cifra. */
   container-type: inline-size;
@@ -6922,7 +6957,7 @@ a.lx-list-row {
     'accion accion';
   align-items: center;
   column-gap: var(--lx-space-2);
-  row-gap: 6px;
+  row-gap: 2px;
   height: 100%;
 }
 .lx-citizen-pair .lx-stat-card__label {
@@ -6963,6 +6998,10 @@ a.lx-list-row {
    El degradado entra por la esquina del icono y muere antes de la mitad, así que el monto de la
    derecha conserva el fondo liso sobre el que se midió su contraste. */
 .lx-citizen-fines {
+  /* 78-92 de la tabla: era una tarjeta con el relleno estándar y sumaba 101. Lo que se quita es
+     relleno vertical, no contenido: el icono, el estado y el monto siguen enteros. */
+  padding-top: var(--lx-space-2);
+  padding-bottom: var(--lx-space-2);
   background:
     linear-gradient(135deg, color-mix(in srgb, var(--lx-warning) 14%, transparent) 0%, transparent 55%),
     var(--lx-surface);
