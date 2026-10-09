@@ -12,7 +12,6 @@ import {
   IconCheck,
   IconFine,
   IconList,
-  IconOffline,
   IconPin,
 } from '@luparx/ui';
 import type { BottomTab } from '@luparx/ui';
@@ -161,7 +160,23 @@ export function InspectorShell({
     {
       key: 'more',
       label: t('inspector.nav.more'),
-      icon: <IconOffline />,
+      /*
+        La lista con viñetas, que es lo que la referencia del 09-10 dibuja para este destino.
+
+        Antes era el icono de «sin conexión»: una señal tachada con un punto debajo. No era una
+        decisión de diseño, era una equivocación —el mismo dibujo con el que la pantalla avisa de
+        que el aparato se quedó sin red, colgado del botón que abre el menú de herramientas—, y en
+        la captura del encargo se ve con claridad entre los otros cuatro.
+
+        Se reutiliza `IconList`, que ya existe en la familia y es exactamente el dibujo de la
+        referencia: tres renglones con su viñeta. No se creó ningún icono nuevo.
+
+        Queda una consecuencia que conviene no esconder: «Mis boletas» usa ESE MISMO icono, así
+        que la barra pasa a tener dos iguales. La referencia pide este dibujo para «Más» y manda
+        ella; si hay que deshacer el empate, lo que corresponde es cambiar el de «Mis boletas»
+        —que tiene alternativas mejores, como el documento de una boleta— y eso es otra tarea.
+      */
+      icon: <IconList />,
       // «Más» ya no cae en el perfil: ahora es el menú de herramientas del fiscalizador. El
       // perfil sigue estando, una fila más abajo, que es donde la especificación del 24-09-2026
       // lo pone.

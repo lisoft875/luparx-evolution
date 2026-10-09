@@ -89,6 +89,10 @@ async function barraInferior(page, tamano) {
         iconoPx: icono ? Math.round(icono.getBoundingClientRect().width) : 0,
         activo: tab.getAttribute('aria-current') === 'page',
         insignia: tab.querySelector('.lx-bottom-tab-bar__badge')?.textContent?.trim() ?? null,
+        /* La FORMA del icono, no sólo su tamaño. Sirve para dos cosas: comprobar que «Más» dejó
+           de llevar el dibujo de «sin conexión» —una señal tachada, que es lo que tenía por
+           equivocación— y poder decir cuándo dos destinos comparten dibujo. */
+        formaIcono: icono ? icono.innerHTML.replace(/\s+/g, ' ').trim().slice(0, 220) : '',
       };
     });
     return {
@@ -124,6 +128,22 @@ async function barraInferior(page, tamano) {
     `${tamano}: los cinco destinos llevan etiqueta`,
     barra.destinos.map((d) => `«${d.texto}»`).join(' · '),
   );
+  /* El icono de «Más», que el encargo del 09-10 vino a corregir. La referencia pide la lista con
+     viñetas; lo que había era la señal tachada de «sin conexión», reconocible porque su primer
+     trazo es la diagonal `M3 3l18 18`. */
+  const mas = barra.destinos.find((d) => /^m[áa]s$/i.test(d.texto));
+  if (mas) {
+    ok(
+      !/M3 3l18 18/.test(mas.formaIcono),
+      `${tamano}: «Más» ya no lleva el icono de «sin conexión»`,
+      mas.formaIcono.slice(0, 80),
+    );
+    ok(
+      /circle/.test(mas.formaIcono) && /M8 6h13/.test(mas.formaIcono),
+      `${tamano}: y lleva la lista con viñetas de la referencia`,
+      mas.formaIcono.slice(0, 80),
+    );
+  }
   const tapados = barra.destinos.filter((d) => !d.suyoElCentro);
   ok(
     tapados.length === 0,
