@@ -737,9 +737,22 @@ async function medir(page, dedo) {
       );
       okInicio(comp.reloj, '  con la fecha y la hora a la derecha');
       okInicio(comp.donut !== null, 'el dónut de ocupación existe');
+      /*
+        120-150, y esta línea contradecía a otra de este mismo archivo (12-10-2026).
+
+        Pedía «≥140, como en la referencia» y venía de la especificación de octubre, cuando el
+        dónut era la pieza grande del bloque. La orden del 08-10 lo bajó a 136 a propósito —«el
+        dónut deja de dominar», para que la lista de zonas se quedara con el ancho que suelta— y
+        doscientas líneas más abajo este arnés ya comprueba el rango nuevo (120-150) con esa razón
+        escrita al lado.
+
+        O sea que el arnés se pedía dos cosas incompatibles a sí mismo y reportaba en rojo una
+        decisión tomada hace cuatro días. Es el mismo defecto que tuvo el arnés de Fiscalización
+        esta semana: una prueba que sobrevive a la especificación que la justificaba.
+      */
       okInicio(
-        comp.donut !== null && comp.donut.ancho >= 140,
-        '  y es grande, como en la referencia',
+        comp.donut !== null && comp.donut.ancho >= 120 && comp.donut.ancho <= 150,
+        '  y mide 120-150px: grande, sin comerse la lista de zonas',
         comp.donut ? `${comp.donut.ancho}px` : 'sin dónut',
       );
       // La inversión que pide la sección 6: la ocupación pasa a ser la columna ancha.
