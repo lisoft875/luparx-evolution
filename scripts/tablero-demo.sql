@@ -10,8 +10,9 @@
 -- Eso es exactamente lo que se ve hoy en Montes de Oca, y no es un defecto de la pantalla.
 --
 -- Esto escribe TREINTA días que terminan hoy, y además lo que aquel sembrador nunca tocó: boletas,
--- revisiones de fiscalización, estadías terminadas y movimientos de billetera. Con eso ninguno de
--- los nueve agregados del Panel —que son los de `DashboardService`— se queda en cero.
+-- revisiones de fiscalización y estadías terminadas. Con eso ocho de los nueve agregados del Panel
+-- —los de `DashboardService`— dejan de estar en cero. El noveno es la billetera, que no se puede
+-- sembrar sin romper una invariante de contrato: la sección 8 dice por qué.
 --
 -- Cómo se corre, desde el Mac, en un solo comando
 -- -----------------------------------------------
@@ -37,7 +38,6 @@
 --     estadías             plate_snapshot LIKE 'DMX%'
 --     boletas              number LIKE 'DEMO-%'
 --     revisiones           plate LIKE 'DMX%'
---     billetera            idempotency_key LIKE 'demo-mes:%'
 --
 -- `DMX` y no `DMO`: `DMO` es el marcador del sembrador de Java, y sus estadías activas son las que
 -- hoy dibujan el 62% de ocupación. Usar su mismo prefijo haría que el borrado de acá se llevara por
@@ -52,10 +52,10 @@
 --     dominio significa «nadie va a reportar esta plata». Entran en lo recaudado, que es lo que la
 --     pantalla tiene que mostrar, y quedan fuera de «lo que el proveedor todavía debe», que es la
 --     cifra que un descuadre arruinaría.
---   * SALDOS. Los movimientos de billetera de cada día suman CERO —una recarga y los consumos que
---     la gastan—, así que `wallet_accounts.balance_minor` sigue siendo cierto. Un saldo suelto sin
---     movimiento detrás, o un movimiento que no cuadra con el saldo, es un descuadre en la pantalla
---     de conciliación.
+--   * BILLETERA. `wallet_transactions` es de SOLO ANEXADO: la base rechaza el DELETE
+--     (CONTRACT.md v0.32). Lo que se escriba ahí no se puede quitar, y la regla de los datos de
+--     demostración es que todo lo sembrado se pueda deshacer — así que no se siembra. La sección 8
+--     lo cuenta entero. «Billetera por tipo» del Panel se queda vacío a propósito.
 --   * NADA EXISTENTE. No hay un solo UPDATE ni un DELETE sobre filas que no sean de este script.
 -- =================================================================================================
 
@@ -80,12 +80,18 @@ select :'municipio'::text as municipio, :dias::int as dias;
 -- Nada de identificadores pegados a mano: un UUID copiado de una consulta de ayer es la forma más
 -- fácil de sembrarle a la municipalidad equivocada. Se resuelve acá y se exige que sea UNA.
 -- -------------------------------------------------------------------------------------------------
+-- `tenants` NO tiene columna `name`: tiene `legal_name` («Municipalidad de Montes de Oca»),
+-- `display_name` («Montes de Oca») y `short_name` («M. de Oca»). Se busca en las tres y en el slug,
+-- porque quien escribe el parámetro no tiene por qué saber en cuál quedó el nombre que recuerda.
 create temporary table ctx on commit drop as
-select t.id as tenant_id, t.slug, t.name, t.time_zone as tz, t.currency_code as moneda,
+select t.id as tenant_id, t.slug, t.display_name as nombre, t.time_zone as tz,
+       t.currency_code as moneda,
        (now() at time zone t.time_zone)::date as hoy
 from tenants t
-where t.name ilike '%' || :'municipio' || '%'
-   or t.slug ilike '%' || replace(lower(:'municipio'), ' ', '-') || '%';
+where (t.display_name ilike '%' || (select municipio from param) || '%'
+    or t.legal_name   ilike '%' || (select municipio from param) || '%'
+    or coalesce(t.short_name, '') ilike '%' || (select municipio from param) || '%'
+    or t.slug         ilike '%' || replace(lower((select municipio from param)), ' ', '-') || '%');
 
 do $guardia$
 declare n int; m text;
@@ -93,7 +99,7 @@ begin
   select count(*) into n from ctx;
   select municipio into m from param;
   if n = 0 then
-    raise exception 'Ninguna municipalidad coincide con «%». Mirá: select slug, name from tenants;', m;
+    raise exception 'Ninguna municipalidad coincide con «%». Mirá: select slug, display_name from tenants;', m;
   elsif n > 1 then
     raise exception 'Coinciden % municipalidades con «%». Afiná con -v municipio=''...''.', n, m;
   end if;
@@ -148,7 +154,6 @@ $guardia$;
 -- -------------------------------------------------------------------------------------------------
 delete from citations           where tenant_id = (select tenant_id from ctx) and number like 'DEMO-%';
 delete from enforcement_checks  where tenant_id = (select tenant_id from ctx) and plate like 'DMX%';
-delete from wallet_transactions where tenant_id = (select tenant_id from ctx) and idempotency_key like 'demo-mes:%';
 delete from parking_sessions    where tenant_id = (select tenant_id from ctx) and plate_snapshot like 'DMX%';
 delete from payments            where tenant_id = (select tenant_id from ctx) and provider = 'demo-mes';
 
@@ -370,39 +375,25 @@ where a.inspector_id is not null
   and exists (select 1 from infraction_types where tenant_id = c.tenant_id and active);
 
 -- -------------------------------------------------------------------------------------------------
--- 8. Movimientos de billetera: «Billetera por tipo» del Panel.
+-- 8. Movimientos de billetera: NO se siembran. Descubierto al verificar, 12-10-2026.
 --
--- `countByType` agrupa por `createdAt`. Cada día una recarga y cuatro consumos que la gastan EXACTA:
--- el neto del mes es cero, así que `wallet_accounts.balance_minor` sigue diciendo la verdad y la
--- cuenta nunca pasa por debajo del saldo que ya tenía (`ck_wallet_transactions_balance_after`).
+-- La primera versión de este script escribía cinco movimientos por día, con neto cero para no
+-- descuadrar el saldo. Al correrlo contra el esquema REAL —el que levantan las migraciones, no una
+-- copia mía— el segundo intento falló con el mensaje que la propia base tiene escrito:
 --
--- Si la municipalidad no tiene ninguna billetera abierta, esto no escribe nada y lo dice al final.
--- Abrir una sería inventarle una cuenta a alguien.
+--     «La tabla wallet_transactions es de solo anexado: no admite DELETE (CONTRACT.md v0.32). Lo
+--      único que se puede completar después es payment_id cuando estaba nulo […]. Un error se
+--      corrige agregando una fila que lo diga, nunca cambiando la que ya está.»
+--
+-- O sea que lo que se escriba ahí NO SE PUEDE BORRAR. Y la regla de los datos de demostración es
+-- que todo lo que se siembre tenga una forma de quitarse; lo que no se puede quitar, no se siembra.
+-- Desactivar el disparador para esquivarlo sería romper una invariante de contrato para poder
+-- pintar una barra, que es exactamente al revés de para qué está esa invariante.
+--
+-- Consecuencia asumida: «Billetera por tipo» del Panel se queda vacío. Se llena solo en cuanto
+-- alguien recargue o consuma desde el portal del ciudadano, que es la única forma honesta de
+-- llenarlo.
 -- -------------------------------------------------------------------------------------------------
-create temporary table billetera on commit drop as
-select wa.id as account_id, wa.user_id, wa.balance_minor as saldo, wa.currency_code as moneda
-from wallet_accounts wa
-where wa.tenant_id = (select tenant_id from ctx)
-order by wa.balance_minor desc, wa.id
-limit 1;
-
-insert into wallet_transactions (id, tenant_id, account_id, user_id, type, amount_minor,
-                                 currency_code, balance_after_minor, idempotency_key, created_at)
-select gen_random_uuid(), c.tenant_id, w.account_id, w.user_id, mov.tipo, mov.monto,
-       w.moneda, w.saldo + mov.despues,
-       'demo-mes:' || di.dia || ':' || mov.orden, cuando.t + (mov.orden || ' hours')::interval
-from ctx c
-cross join billetera w
-cross join dias di
-cross join lateral (select ((di.dia + interval '7 hours')::timestamp at time zone c.tz) as t) cuando
-cross join lateral (
-  -- La recarga primero y los consumos después: así el saldo corriente nunca baja del que ya había.
-  select 1 as orden, 'TOP_UP'         as tipo,  4000000::bigint as monto, 4000000::bigint as despues
-  union all select 2, 'SESSION_CHARGE',  -1000000::bigint, 3000000::bigint
-  union all select 3, 'SESSION_CHARGE',  -1000000::bigint, 2000000::bigint
-  union all select 4, 'SESSION_CHARGE',  -1000000::bigint, 1000000::bigint
-  union all select 5, 'EXTENSION_CHARGE',-1000000::bigint,       0::bigint) mov
-where cuando.t + (mov.orden || ' hours')::interval <= now();
 
 commit;
 
@@ -411,10 +402,12 @@ commit;
 -- -------------------------------------------------------------------------------------------------
 \echo ''
 \echo '=== lo que escribió este script ==='
-with t as (select id, name from tenants
-            where name ilike '%' || :'municipio' || '%'
-               or slug ilike '%' || replace(lower(:'municipio'), ' ', '-') || '%')
-select 'municipalidad' as pieza, (select name from t) as cuanto, '' as desde_hasta
+with t as (select id, display_name as nombre from tenants
+            where display_name ilike '%' || :'municipio' || '%'
+               or legal_name   ilike '%' || :'municipio' || '%'
+               or coalesce(short_name, '') ilike '%' || :'municipio' || '%'
+               or slug         ilike '%' || replace(lower(:'municipio'), ' ', '-') || '%')
+select 'municipalidad' as pieza, (select nombre from t) as cuanto, '' as desde_hasta
 union all
 select 'pagos CAPTURED', count(*)::text,
        coalesce(min(requested_at)::date || ' → ' || max(requested_at)::date, '—')
@@ -437,10 +430,6 @@ union all
 select 'boletas', count(*)::text,
        coalesce(min(occurred_at)::date || ' → ' || max(occurred_at)::date, '—')
   from citations where tenant_id = (select id from t) and number like 'DEMO-%'
-union all
-select 'mov. de billetera', count(*)::text,
-       coalesce('neto ' || sum(amount_minor)::text || ' (tiene que ser 0)', '—')
-  from wallet_transactions where tenant_id = (select id from t) and idempotency_key like 'demo-mes:%'
 union all
 select 'ocupación en curso', count(*)::text, 'intactas: las sembró DevDashboardSeeder'
   from parking_sessions where tenant_id = (select id from t) and plate_snapshot like 'DMO%' and status = 'ACTIVE';
