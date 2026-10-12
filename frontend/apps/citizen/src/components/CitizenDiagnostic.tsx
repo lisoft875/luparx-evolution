@@ -109,6 +109,11 @@ export function CitizenDiagnostic({ open, onClose }: CitizenDiagnosticProps): Re
           ok: t('citizen.help.diag.tone.ok'),
           warning: t('citizen.help.diag.tone.warning'),
           problem: t('citizen.help.diag.tone.problem'),
+          /* `DiagnosticList` ganó un cuarto tono el 12-10-2026 —«no disponible», para una capacidad
+             que este aparato no tiene— y la etiqueta es obligatoria porque el tono se dice también
+             en palabras. El Ciudadano no monta ninguna fila con ese tono hoy; la etiqueta está para
+             que el día que lo haga ya se lea bien en un lector de pantalla. */
+          unavailable: t('citizen.help.diag.tone.unavailable'),
         }}
       />
     </Modal>

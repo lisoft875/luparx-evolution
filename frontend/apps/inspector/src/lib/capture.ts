@@ -251,37 +251,84 @@ export async function locationPermissionState(): Promise<PermissionReadiness> {
  * standing in the street cannot wait thirty seconds for a fix, and a citation without coordinates
  * is a perfectly valid citation.
  */
-export async function takePosition(timeoutMs = 10_000): Promise<CapturedPosition | null> {
+/**
+ * El resultado de pedir la posición, con su CAUSA.
+ *
+ * <p>`takePosition` devuelve `null` para tres cosas que no se parecen —el permiso denegado, el
+ * aparato sin receptor y el tiempo que se venció— y para emitir una boleta da igual: las tres
+ * significan «sin coordenadas» y la boleta sale igual, que es la regla del dominio. Para el
+ * diagnóstico no da igual: el §2 del encargo del Centro de soporte pide que cada estado explique
+ * su causa y el siguiente paso, y los tres siguientes pasos son distintos —ir a Ajustes, no hay
+ * nada que hacer, volver a intentar al aire libre—.</p>
+ *
+ * <p>Por eso esto no es una función aparte que repita la lectura: es la de abajo, y `takePosition`
+ * pasó a ser su envoltorio. Dos lecturas de GPS con dos implementaciones es como se llega a que el
+ * diagnóstico diga una cosa y la boleta otra.</p>
+ */
+export type PositionProbe =
+  | { outcome: 'ok'; position: CapturedPosition }
+  | { outcome: 'denied' }
+  | { outcome: 'unavailable' }
+  | { outcome: 'timeout' };
+
+export async function probePosition(timeoutMs = 10_000): Promise<PositionProbe> {
   const plugin = nativeGeolocation();
   if (plugin) {
     try {
       const result = await plugin.getCurrentPosition({ enableHighAccuracy: true, timeout: timeoutMs });
       return {
-        latitude: result.coords.latitude,
-        longitude: result.coords.longitude,
-        accuracyM: result.coords.accuracy ?? null,
-        capturedAt: new Date(result.timestamp ?? Date.now()).toISOString(),
+        outcome: 'ok',
+        position: {
+          latitude: result.coords.latitude,
+          longitude: result.coords.longitude,
+          accuracyM: result.coords.accuracy ?? null,
+          capturedAt: new Date(result.timestamp ?? Date.now()).toISOString(),
+        },
       };
-    } catch {
-      return null;
+    } catch (fallo) {
+      // Capacitor envía el motivo en el mensaje; no hay códigos estables, así que se mira el texto
+      // y, cuando no se reconoce, se dice «no disponible» en vez de adivinar «denegado».
+      const texto = String((fallo as { message?: string } | null)?.message ?? fallo).toLowerCase();
+      if (texto.includes('denied') || texto.includes('denegad')) return { outcome: 'denied' };
+      if (texto.includes('timeout') || texto.includes('timed out')) return { outcome: 'timeout' };
+      return { outcome: 'unavailable' };
     }
   }
-  if (typeof navigator === 'undefined' || !navigator.geolocation) return null;
-  return new Promise<CapturedPosition | null>((resolve) => {
+  if (typeof navigator === 'undefined' || !navigator.geolocation) return { outcome: 'unavailable' };
+  return new Promise<PositionProbe>((resolve) => {
     navigator.geolocation.getCurrentPosition(
       (position) =>
         resolve({
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-          accuracyM: Number.isFinite(position.coords.accuracy) ? position.coords.accuracy : null,
-          capturedAt: new Date(position.timestamp).toISOString(),
+          outcome: 'ok',
+          position: {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            accuracyM: Number.isFinite(position.coords.accuracy) ? position.coords.accuracy : null,
+            capturedAt: new Date(position.timestamp).toISOString(),
+          },
         }),
-      // Refused, unavailable or timed out — three different causes, one honest outcome: no
-      // coordinates. The screen says so; it never falls back to a last-known or a zone centroid.
-      () => resolve(null),
+      // Los tres códigos del navegador, que son exactamente las tres causas que el diagnóstico
+      // tiene que poder distinguir. `GeolocationPositionError` los numera desde 1.
+      (error) => {
+        if (error.code === error.PERMISSION_DENIED) resolve({ outcome: 'denied' });
+        else if (error.code === error.TIMEOUT) resolve({ outcome: 'timeout' });
+        else resolve({ outcome: 'unavailable' });
+      },
       { enableHighAccuracy: true, timeout: timeoutMs, maximumAge: 0 },
     );
   });
 }
 
-
+/**
+ * La posición, o nada.
+ *
+ * <p>Envoltorio de {@link probePosition} desde el 12-10-2026. Quien emite una boleta no necesita
+ * saber POR QUÉ no hubo coordenadas —la boleta se emite igual y deja constancia de la ausencia—,
+ * así que esta firma no cambia y las tres causas se colapsan en `null`, que es lo que sus dos
+ * llamadores ya esperaban. Refused, unavailable or timed out: three different causes, one honest
+ * outcome. It never falls back to a last-known or a zone centroid.</p>
+ */
+export async function takePosition(timeoutMs = 10_000): Promise<CapturedPosition | null> {
+  const resultado = await probePosition(timeoutMs);
+  return resultado.outcome === 'ok' ? resultado.position : null;
+}

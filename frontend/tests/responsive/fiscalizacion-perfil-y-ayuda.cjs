@@ -343,6 +343,9 @@ async function estadoDeLaCabecera(page) {
         const caja = n.getBoundingClientRect();
         return {
           titulo: rec(n.querySelector('.lx-list-row__title')?.textContent),
+          // La descripción breve de cada fila: el §7 del encargo del Centro de soporte la pide
+          // junto al icono, el título y la flecha, y hasta el 12-10 no estaba.
+          meta: rec(n.querySelector('.lx-list-row__meta')?.textContent),
           icono: n.querySelectorAll('.lx-list-row__icon svg').length,
           flecha: n.querySelectorAll('.lx-list-row__value svg').length,
           alto: Math.round(caja.height),
@@ -365,11 +368,21 @@ async function estadoDeLaCabecera(page) {
       `«${ayuda.lead}»`,
     );
 
-    const esperados = ['Diagnóstico', 'Permisos del dispositivo', 'Sincronización', 'Reportar un problema'];
+    // SEIS desde el 12-10-2026. Eran cuatro; el §7 del encargo del Centro de soporte nombra las
+    // seis filas una por una y las dos que faltaban —guías y «Acerca de»— son las únicas que este
+    // módulo no tenía. El número exacto se comprueba igual que antes: ni una de más.
+    const esperados = [
+      'Diagnóstico',
+      'Permisos del dispositivo',
+      'Sincronización',
+      'Reportar un problema',
+      'Guías de uso',
+      'Acerca de LuParX',
+    ];
     const titulos = ayuda.filas.map((f) => f.titulo);
     comprobar(
       esperados.every((e) => titulos.includes(e)) && ayuda.filas.length === esperados.length,
-      'Ayuda tiene exactamente los cuatro accesos del encargo',
+      'Ayuda tiene exactamente los seis accesos del encargo',
       titulos.join(' · ') || 'ninguno',
     );
 
@@ -390,6 +403,11 @@ async function estadoDeLaCabecera(page) {
         `  «${fila.titulo}»: icono + nombre + flecha`,
         JSON.stringify(fila),
       );
+      comprobar(
+        fila.meta.length > 0,
+        '  y su descripción breve (§7)',
+        `«${fila.meta}»`,
+      );
       comprobar(fila.alto >= 44, '  con blanco táctil suficiente', `${fila.alto}px`);
     }
   }
@@ -401,6 +419,8 @@ async function estadoDeLaCabecera(page) {
       { nombre: 'Permisos del dispositivo', espera: '.lx-diag__row' },
       { nombre: 'Sincronización', espera: '.lx-summary__row' },
       { nombre: 'Reportar un problema', espera: '.lx-report-state' },
+      { nombre: 'Guías de uso', espera: '.lx-guide' },
+      { nombre: 'Acerca de LuParX', espera: '.lx-summary__row' },
     ];
     for (const panel of paneles) {
       await page.goto(`${BASE}/inspector/help`, { waitUntil: 'domcontentloaded' });
@@ -430,6 +450,92 @@ async function estadoDeLaCabecera(page) {
         );
       }
     }
+  }
+
+  // --- Lo que el encargo del Centro de soporte agregó (12-10-2026) -----------------------------
+  {
+    console.log('── Guías de uso y «Acerca de» ──');
+    await page.goto(`${BASE}/inspector/help`, { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(1800);
+    await page.locator('.lx-list-row').filter({ hasText: 'Guías de uso' }).first().click();
+    await page.waitForSelector('.lx-modal .lx-guide', { timeout: 8000 }).catch(() => {});
+    const guias = await page.evaluate(() =>
+      [...document.querySelectorAll('.lx-modal .lx-guide')].map((n) => ({
+        clave: n.getAttribute('data-guia'),
+        titulo: (n.querySelector('.lx-guide__summary')?.textContent ?? '').trim(),
+        pasos: n.querySelectorAll('.lx-guide__step li').length,
+        alto: Math.round(n.querySelector('.lx-guide__summary').getBoundingClientRect().height),
+      })),
+    );
+    // Las seis que el §6 nombra. Por `data-guia` y no por el título, que es texto traducible.
+    const CLAVES = ['lookup', 'cite', 'photos', 'offline', 'sync', 'trouble'];
+    comprobar(
+      guias.length === CLAVES.length && CLAVES.every((c) => guias.some((g) => g.clave === c)),
+      `las seis guías del §6 están (${guias.map((g) => g.clave).join(', ') || 'ninguna'})`,
+    );
+    for (const guia of guias) {
+      comprobar(guia.pasos >= 3, `  «${guia.titulo}» tiene pasos de verdad`, `${guia.pasos}`);
+      comprobar(guia.alto >= 44, '  y su blanco táctil llega a 44px', `${guia.alto}px`);
+    }
+    // Que una guía ABRA. Un `<details>` que no despliega es un título y no una guía.
+    await page.locator('.lx-modal .lx-guide__summary').first().click();
+    await page.waitForTimeout(300);
+    const abierta = await page.evaluate(() => {
+      const d = document.querySelector('.lx-modal .lx-guide');
+      return Boolean(d?.hasAttribute('open')) && d.querySelector('.lx-guide__step li').getBoundingClientRect().height > 0;
+    });
+    comprobar(abierta, '  y al tocarla se despliega su contenido');
+
+    await page.goto(`${BASE}/inspector/help`, { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(1800);
+    await page.locator('.lx-list-row').filter({ hasText: 'Acerca de LuParX' }).first().click();
+    await page.waitForSelector('.lx-modal .lx-summary__row', { timeout: 8000 }).catch(() => {});
+    const acerca = await page.evaluate(() =>
+      [...document.querySelectorAll('.lx-modal .lx-summary__row')].map((n) =>
+        (n.textContent ?? '').replace(/\s+/g, ' ').trim(),
+      ),
+    );
+    comprobar(acerca.length >= 4, '«Acerca de» muestra versión, compilación, entorno y fecha', acerca.join(' | '));
+    /*
+      Lo que NO puede pasar: un dato inventado. En staging los cuatro vienen del build, así que
+      ninguno debería decir «no disponible»; si alguno lo dice, es que el despliegue no pasó el
+      argumento, y eso es un fallo de la cadena de build y no de la pantalla — que está diciendo
+      la verdad. Se reporta como aviso, no como fallo de la pantalla.
+    */
+    const sinDato = acerca.filter((fila) => /no disponible/i.test(fila));
+    if (sinDato.length > 0) {
+      console.log(`  ··  ${sinDato.length} dato(s) sin llegar desde el build: ${sinDato.join(' | ')}`);
+    }
+
+    console.log('── Sincronización: «sin pendientes» no es «todo sincronizado» ──');
+    await page.goto(`${BASE}/inspector/help`, { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(1800);
+    await page.locator('.lx-list-row').filter({ hasText: 'Sincronización' }).first().click();
+    await page.waitForSelector('.lx-modal .lx-summary__row', { timeout: 8000 }).catch(() => {});
+    const sync = await page.evaluate(() => {
+      const filas = [...document.querySelectorAll('.lx-modal .lx-summary__row')].map((n) =>
+        (n.textContent ?? '').replace(/\s+/g, ' ').trim(),
+      );
+      return { filas, texto: filas.join(' | ') };
+    });
+    comprobar(
+      sync.filas.some((f) => /enviadas y confirmadas/i.test(f)),
+      'el panel dice cuántas se enviaron y confirmaron (§4)',
+      sync.texto,
+    );
+    /*
+      El defecto que el §4 prohíbe por su nombre: un aparato que nunca envió nada diciendo «Todo
+      sincronizado». Las dos frases no pueden convivir — si la última sincronización dice «no ha
+      enviado nada», lo de arriba tiene que decir otra cosa.
+    */
+    const nuncaEnvio = /no ha enviado nada/i.test(sync.texto);
+    comprobar(
+      !nuncaEnvio || !/todo sincronizado/i.test(sync.texto),
+      nuncaEnvio
+        ? '  y en un aparato que nunca envió NO dice «Todo sincronizado»'
+        : '  (este aparato ya envió: «Todo sincronizado» es correcto acá)',
+      sync.texto,
+    );
   }
 
   console.log('── Diagnóstico: que detecte de verdad ──');

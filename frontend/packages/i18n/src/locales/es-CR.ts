@@ -1250,6 +1250,130 @@ export const esCR = {
   'inspector.help.report.copy': 'Copiar el estado',
   'inspector.help.report.copied': 'Copiado. Pegalo en el mensaje a soporte.',
   'inspector.help.report.failed': 'No se pudo copiar. El estado está acá abajo para leerlo.',
+
+  /* --- Centro de soporte, ampliado el 12-10-2026 (encargo «Centro de soporte») ------------------
+     Las seis filas del §7, la conectividad efectiva del §2, las guías del §6 y el «Acerca de».
+     Lo que NO hay acá es un formulario de incidencias: el §5 pide no construirlo mientras no exista
+     un destino autorizado, y no existe. */
+  'inspector.help.entry.diag.meta': 'Cámara, ubicación, conexión y almacenamiento',
+  'inspector.help.entry.permissions.meta': 'Qué le concediste a la aplicación en este aparato',
+  'inspector.help.entry.sync.meta': 'Qué está esperando y qué ya se envió',
+  'inspector.help.entry.report.meta': 'Copiar el estado para pasárselo a soporte',
+  'inspector.help.entry.guides': 'Guías de uso',
+  'inspector.help.entry.guides.meta': 'Cómo se hace cada tarea del turno',
+  'inspector.help.entry.about': 'Acerca de LuParX',
+  'inspector.help.entry.about.meta': 'Versión, entorno y compilación',
+  'inspector.help.diag.tone.unavailable': 'no disponible',
+
+  'inspector.help.diag.connection.checking': 'Comprobando…',
+  'inspector.help.diag.connection.ok': 'Hay comunicación con el servidor ({{ms}} ms)',
+  'inspector.help.diag.connection.slow': 'El servidor contesta lento ({{ms}} ms)',
+  'inspector.help.diag.connection.slowNote':
+    'Las boletas salen igual, pero el envío puede parecer colgado. Si podés, buscá mejor señal.',
+  'inspector.help.diag.connection.unreachable': 'Hay red, pero no se llega al servidor',
+  'inspector.help.diag.connection.unreachableNote':
+    'Suele ser un wifi que pide aceptar condiciones, o una caída del servicio. Seguí trabajando: la boleta se guarda acá y sale sola.',
+  'inspector.help.diag.connection.timeout': 'El servidor no contestó a tiempo',
+  'inspector.help.diag.connection.timeoutNote':
+    'Puede ser señal muy débil. Seguí trabajando: la boleta se guarda acá y sale sola cuando mejore.',
+  'inspector.help.diag.connection.unauthorized': 'Se llega al servidor, pero la sesión no sirve',
+  'inspector.help.diag.connection.unauthorizedNote': 'La red está bien. Volvé a entrar con tu usuario.',
+  'inspector.help.diag.connection.retest': 'Comprobar de nuevo',
+
+  'inspector.help.diag.camera.test': 'Probar cámara',
+  'inspector.help.diag.camera.testing': 'Abriendo la cámara…',
+  'inspector.help.diag.camera.testOk': 'La cámara respondió. La foto de prueba no se guardó.',
+  'inspector.help.diag.camera.testCancelled': 'Cancelaste la prueba. No se guardó ninguna foto.',
+  'inspector.help.diag.camera.unavailable': 'Este aparato no ofrece cámara',
+  'inspector.help.diag.camera.unavailableNote':
+    'No hay nada que arreglar en los ajustes: las boletas se emiten sin fotografía, salvo los tipos que la exigen.',
+
+  'inspector.help.diag.location.test': 'Probar ubicación',
+  'inspector.help.diag.location.fix': 'Última lectura: {{lat}}, {{lon}}',
+  'inspector.help.diag.location.accuracy': 'Precisión aproximada: {{m}} m',
+  'inspector.help.diag.location.accuracyUnknown': 'El aparato no informó la precisión.',
+  'inspector.help.diag.location.timeout': 'No se obtuvo la posición a tiempo',
+  'inspector.help.diag.location.timeoutNote':
+    'Pasa bajo techo y entre edificios altos. Probá al aire libre; la boleta se emite igual sin coordenadas.',
+  'inspector.help.diag.location.unavailable': 'Este aparato no ofrece ubicación',
+  'inspector.help.diag.location.unavailableNote':
+    'No hay nada que arreglar en los ajustes. La boleta se emite igual y queda constancia de que no hubo coordenadas.',
+
+  'inspector.help.permissions.settings.title': 'Si está denegado, se cambia en los ajustes del aparato',
+  'inspector.help.permissions.settings.ios':
+    'iPhone o iPad, aplicación instalada: Ajustes → buscá LuParX en la lista → Cámara y Ubicación.',
+  'inspector.help.permissions.settings.safari':
+    'iPad o iPhone en Safari: tocá «aA» en la barra de direcciones → Ajustes del sitio web → Cámara y Ubicación. También en Ajustes → Safari → Cámara y Ubicación.',
+  'inspector.help.permissions.settings.android':
+    'Android: Ajustes → Aplicaciones → el navegador o LuParX → Permisos.',
+  'inspector.help.permissions.recheck': 'Volver a comprobar',
+  'inspector.help.permissions.apiNote':
+    'El navegador no siempre deja leer el estado exacto de un permiso ni volver a preguntar desde la página: por eso el cambio se hace en los ajustes y acá sólo se vuelve a leer.',
+
+  'inspector.help.diag.sync.nothingYet': 'Sin pendientes · este aparato todavía no ha enviado nada',
+  'inspector.help.sync.sentLabel': 'Enviadas y confirmadas',
+  'inspector.help.sync.sent.one': '{{count}} boleta confirmada por el servidor',
+  'inspector.help.sync.sent.other': '{{count}} boletas confirmadas por el servidor',
+  'inspector.help.sync.noneSent': 'Ninguna todavía.',
+  'inspector.help.sync.nothingYetNote':
+    'No es lo mismo que «todo sincronizado»: este aparato no ha enviado ninguna boleta.',
+
+  'inspector.help.guides.title': 'Guías de uso',
+  'inspector.help.guides.lead':
+    'Qué hace la aplicación en cada tarea. El procedimiento de tu municipalidad —cuándo corresponde multar y qué plazos corren— no está acá.',
+  'inspector.help.guide.lookup.title': 'Consultar un vehículo',
+  'inspector.help.guide.lookup.s1': 'Entrá la placa en la pantalla de inicio y tocá «Buscar».',
+  'inspector.help.guide.lookup.s2':
+    'Elegí la zona y escribí la bahía. Las dos son opcionales, pero sin la bahía la cobertura no se puede confirmar.',
+  'inspector.help.guide.lookup.s3':
+    'El resultado dice una de seis cosas: pago vigente, pago vencido, pagó por otra bahía, sin pago vigente, exonerado, o falta la bahía para responder.',
+  'inspector.help.guide.lookup.s4':
+    '«Falta la bahía» no es un error de la aplicación: con varias estadías de la misma placa, la plataforma se niega a adivinar cuál es el carro que tenés delante.',
+  'inspector.help.guide.lookup.s5': 'La última consulta queda a la vista debajo, por si tenés que volver a leerla.',
+  'inspector.help.guide.cite.title': 'Emitir una boleta',
+  'inspector.help.guide.cite.s1': 'La boleta tiene cuatro pasos: vehículo, infracción, evidencia y revisar.',
+  'inspector.help.guide.cite.s2':
+    'En «infracción» se elige el tipo. Algunos tipos exigen fotografía y no se pueden emitir sin al menos una; la pantalla lo avisa.',
+  'inspector.help.guide.cite.s3':
+    'Si hay ubicación, se adjunta sola. Si no la hay, la boleta se emite igual y queda constancia de que no hubo coordenadas.',
+  'inspector.help.guide.cite.s4': 'El último paso muestra todo junto antes de emitir. Nada se envía hasta que confirmás ahí.',
+  'inspector.help.guide.cite.s5': 'Una vez emitida, el número de boleta lo asigna el servidor, no el teléfono.',
+  'inspector.help.guide.photos.title': 'Fotografías y evidencia',
+  'inspector.help.guide.photos.s1': 'Las fotos se agregan DENTRO de la boleta, en el paso de evidencia. No hay una galería aparte.',
+  'inspector.help.guide.photos.s2': 'Hasta seis fotografías por boleta.',
+  'inspector.help.guide.photos.s3': 'Cada una, hasta 10 MB. Si una foto pesa más, el teléfono la rechaza antes de guardarla.',
+  'inspector.help.guide.photos.s4':
+    'Sin señal las fotos se guardan en el teléfono junto con la boleta y viajan con ella cuando se envía.',
+  'inspector.help.guide.offline.title': 'Trabajar sin señal',
+  'inspector.help.guide.offline.s1':
+    'Podés consultar, levantar boletas y sacar fotos sin conexión. Lo único que necesita señal es la consulta de una placa contra el servidor.',
+  'inspector.help.guide.offline.s2': 'Cada boleta levantada sin señal se guarda en este teléfono y aparece en «Pendientes».',
+  'inspector.help.guide.offline.s3': 'Cuando vuelve la señal se envían solas. No hace falta que hagas nada.',
+  'inspector.help.guide.offline.s4':
+    'Cerrar la aplicación no borra la cola. Lo que sí la pone en riesgo es el modo privado del navegador o quedarse sin espacio: el diagnóstico lo comprueba.',
+  'inspector.help.guide.sync.title': 'Cómo se envían las boletas',
+  'inspector.help.guide.sync.s1': 'Una boleta pasa por cuatro estados: esperando, enviando, enviada o con error.',
+  'inspector.help.guide.sync.s2': '«Sincronizar ahora» sólo adelanta el envío de lo que ya iba a salir solo.',
+  'inspector.help.guide.sync.s3': '«Reintentar» toca únicamente las que fallaron. Las que ya se enviaron no se vuelven a enviar.',
+  'inspector.help.guide.sync.s4':
+    'Cada boleta viaja con una clave propia, así que un reintento nunca crea una boleta duplicada en el servidor.',
+  'inspector.help.guide.trouble.title': 'Si la cámara o el GPS no responden',
+  'inspector.help.guide.trouble.s1':
+    'Abrí «Diagnóstico»: dice el estado real de cada permiso y, cuando se puede hacer algo, ofrece el botón.',
+  'inspector.help.guide.trouble.s2':
+    'Un permiso denegado no se arregla desde la aplicación. Se cambia en los ajustes del aparato; «Permisos del dispositivo» explica dónde.',
+  'inspector.help.guide.trouble.s3': 'Después de cambiarlo en los ajustes, volvé y tocá «Volver a comprobar».',
+  'inspector.help.guide.trouble.s4':
+    'Sin GPS se puede seguir trabajando: la boleta se emite sin coordenadas y queda constancia. Nunca se inventa una ubicación.',
+
+  'inspector.help.about.title': 'Acerca de LuParX',
+  'inspector.help.about.version': 'Versión',
+  'inspector.help.about.build': 'Compilación',
+  'inspector.help.about.environment': 'Entorno',
+  'inspector.help.about.builtAt': 'Compilada el',
+  'inspector.help.about.unknown': 'No disponible en esta compilación',
+  'inspector.help.about.note':
+    'Estos datos los escribe el proceso de compilación. Cuando alguno dice «no disponible», es que esta compilación no lo recibió — no se sustituye por un valor inventado.',
   'inspector.help.title': 'Ayuda',
   /* --- Sexta opción: el diagnóstico (06-10-2026) ----------------------------------------------
      Antes era «Resolver un problema» y abría una lista de siete filas que repetía, casi exacta, las
@@ -1451,6 +1575,7 @@ export const esCR = {
 
   'citizen.help.diag.tone.ok': 'correcto',
   'citizen.help.diag.tone.warning': 'atención',
+  'citizen.help.diag.tone.unavailable': 'no disponible',
   'citizen.help.diag.tone.problem': 'problema',
   'citizen.help.diag.connection': 'Conexión',
   'citizen.help.diag.connection.ok': 'En línea',

@@ -1212,6 +1212,127 @@ export const enUS: Record<TranslationKey, string> = {
   'inspector.help.report.copy': 'Copy the state',
   'inspector.help.report.copied': 'Copied. Paste it into your message to support.',
   'inspector.help.report.failed': 'Could not copy. The state is below so you can read it.',
+
+  /* --- Support centre, extended 12-10-2026 ---------------------------------------------------- */
+  'inspector.help.entry.diag.meta': 'Camera, location, connection and storage',
+  'inspector.help.entry.permissions.meta': 'What you granted the app on this device',
+  'inspector.help.entry.sync.meta': 'What is waiting and what was already sent',
+  'inspector.help.entry.report.meta': 'Copy the state to pass on to support',
+  'inspector.help.entry.guides': 'How-to guides',
+  'inspector.help.entry.guides.meta': 'How each task of the shift works',
+  'inspector.help.entry.about': 'About LuParX',
+  'inspector.help.entry.about.meta': 'Version, environment and build',
+  'inspector.help.diag.tone.unavailable': 'not available',
+
+  'inspector.help.diag.connection.checking': 'Checking…',
+  'inspector.help.diag.connection.ok': 'The server is reachable ({{ms}} ms)',
+  'inspector.help.diag.connection.slow': 'The server is answering slowly ({{ms}} ms)',
+  'inspector.help.diag.connection.slowNote':
+    'Citations still go out, but sending may look stuck. Move somewhere with better signal if you can.',
+  'inspector.help.diag.connection.unreachable': 'There is a network, but the server cannot be reached',
+  'inspector.help.diag.connection.unreachableNote':
+    'Usually a wifi asking you to accept its terms, or an outage. Keep working: the citation is stored here and goes out on its own.',
+  'inspector.help.diag.connection.timeout': 'The server did not answer in time',
+  'inspector.help.diag.connection.timeoutNote':
+    'This can be weak signal. Keep working: the citation is stored here and goes out when it improves.',
+  'inspector.help.diag.connection.unauthorized': 'The server is reachable, but the session is not valid',
+  'inspector.help.diag.connection.unauthorizedNote': 'The network is fine. Sign in again.',
+  'inspector.help.diag.connection.retest': 'Check again',
+
+  'inspector.help.diag.camera.test': 'Test camera',
+  'inspector.help.diag.camera.testing': 'Opening the camera…',
+  'inspector.help.diag.camera.testOk': 'The camera responded. The test photo was not saved.',
+  'inspector.help.diag.camera.testCancelled': 'You cancelled the test. No photo was saved.',
+  'inspector.help.diag.camera.unavailable': 'This device offers no camera',
+  'inspector.help.diag.camera.unavailableNote':
+    'There is nothing to fix in settings: citations are issued without a photograph, except for the types that require one.',
+
+  'inspector.help.diag.location.test': 'Test location',
+  'inspector.help.diag.location.fix': 'Last reading: {{lat}}, {{lon}}',
+  'inspector.help.diag.location.accuracy': 'Approximate accuracy: {{m}} m',
+  'inspector.help.diag.location.accuracyUnknown': 'The device did not report accuracy.',
+  'inspector.help.diag.location.timeout': 'The position was not obtained in time',
+  'inspector.help.diag.location.timeoutNote':
+    'This happens indoors and between tall buildings. Try outdoors; the citation is issued without coordinates either way.',
+  'inspector.help.diag.location.unavailable': 'This device offers no location',
+  'inspector.help.diag.location.unavailableNote':
+    'There is nothing to fix in settings. The citation is issued anyway and records that there were no coordinates.',
+
+  'inspector.help.permissions.settings.title': 'If it is denied, change it in the device settings',
+  'inspector.help.permissions.settings.ios':
+    'iPhone or iPad, installed app: Settings -> find LuParX in the list -> Camera and Location.',
+  'inspector.help.permissions.settings.safari':
+    'iPad or iPhone in Safari: tap "aA" in the address bar -> Website Settings -> Camera and Location. Also Settings -> Safari -> Camera and Location.',
+  'inspector.help.permissions.settings.android':
+    'Android: Settings -> Apps -> the browser or LuParX -> Permissions.',
+  'inspector.help.permissions.recheck': 'Check again',
+  'inspector.help.permissions.apiNote':
+    'The browser does not always allow reading a permission exact state or asking again from the page: that is why the change is made in settings and this screen only re-reads it.',
+
+  'inspector.help.diag.sync.nothingYet': 'Nothing waiting - this device has not sent anything yet',
+  'inspector.help.sync.sentLabel': 'Sent and confirmed',
+  'inspector.help.sync.sent.one': '{{count}} citation confirmed by the server',
+  'inspector.help.sync.sent.other': '{{count}} citations confirmed by the server',
+  'inspector.help.sync.noneSent': 'None yet.',
+  'inspector.help.sync.nothingYetNote':
+    'This is not the same as "all synced": this device has not sent any citation.',
+
+  'inspector.help.guides.title': 'How-to guides',
+  'inspector.help.guides.lead':
+    'What the app does in each task. Your municipality procedure - when a citation applies and what deadlines run - is not here.',
+  'inspector.help.guide.lookup.title': 'Look up a vehicle',
+  'inspector.help.guide.lookup.s1': 'Enter the plate on the home screen and tap "Search".',
+  'inspector.help.guide.lookup.s2':
+    'Pick the zone and type the bay. Both are optional, but without the bay coverage cannot be confirmed.',
+  'inspector.help.guide.lookup.s3':
+    'The result says one of six things: paid and current, payment expired, paid for another bay, no current payment, exempt, or the bay is missing to answer.',
+  'inspector.help.guide.lookup.s4':
+    '"Bay missing" is not an app error: with several stays on the same plate, the platform refuses to guess which car is in front of you.',
+  'inspector.help.guide.lookup.s5': 'The last lookup stays visible below, in case you need to read it again.',
+  'inspector.help.guide.cite.title': 'Issue a citation',
+  'inspector.help.guide.cite.s1': 'A citation has four steps: vehicle, infraction, evidence and review.',
+  'inspector.help.guide.cite.s2':
+    'The type is chosen under "infraction". Some types require a photograph and cannot be issued without one; the screen says so.',
+  'inspector.help.guide.cite.s3':
+    'If there is a location, it is attached on its own. If not, the citation is issued anyway and records that there were no coordinates.',
+  'inspector.help.guide.cite.s4': 'The last step shows everything together before issuing. Nothing is sent until you confirm there.',
+  'inspector.help.guide.cite.s5': 'Once issued, the citation number is assigned by the server, not by the phone.',
+  'inspector.help.guide.photos.title': 'Photographs and evidence',
+  'inspector.help.guide.photos.s1': 'Photos are added INSIDE a citation, at the evidence step. There is no separate gallery.',
+  'inspector.help.guide.photos.s2': 'Up to six photographs per citation.',
+  'inspector.help.guide.photos.s3': 'Each one up to 10 MB. A heavier photo is rejected by the phone before it is stored.',
+  'inspector.help.guide.photos.s4':
+    'Offline, photos are stored on the phone together with the citation and travel with it when it is sent.',
+  'inspector.help.guide.offline.title': 'Working without signal',
+  'inspector.help.guide.offline.s1':
+    'You can look up, raise citations and take photos offline. The only thing that needs signal is checking a plate against the server.',
+  'inspector.help.guide.offline.s2': 'Every citation raised offline is stored on this phone and appears under "Pending".',
+  'inspector.help.guide.offline.s3': 'They are sent on their own when signal returns. You do not need to do anything.',
+  'inspector.help.guide.offline.s4':
+    'Closing the app does not clear the queue. What does put it at risk is the browser private mode or running out of space: the diagnostic checks for that.',
+  'inspector.help.guide.sync.title': 'How citations are sent',
+  'inspector.help.guide.sync.s1': 'A citation goes through four states: waiting, sending, sent, or failed.',
+  'inspector.help.guide.sync.s2': '"Sync now" only brings forward what was going to go out anyway.',
+  'inspector.help.guide.sync.s3': '"Retry" touches only the ones that failed. Those already sent are not sent again.',
+  'inspector.help.guide.sync.s4':
+    'Each citation travels with its own key, so a retry never creates a duplicate citation on the server.',
+  'inspector.help.guide.trouble.title': 'If the camera or GPS does not respond',
+  'inspector.help.guide.trouble.s1':
+    'Open "Diagnostic": it shows the real state of each permission and offers a button where something can be done.',
+  'inspector.help.guide.trouble.s2':
+    'A denied permission cannot be fixed from the app. It is changed in the device settings; "Device permissions" explains where.',
+  'inspector.help.guide.trouble.s3': 'After changing it in settings, come back and tap "Check again".',
+  'inspector.help.guide.trouble.s4':
+    'You can keep working without GPS: the citation is issued without coordinates and records the fact. A location is never invented.',
+
+  'inspector.help.about.title': 'About LuParX',
+  'inspector.help.about.version': 'Version',
+  'inspector.help.about.build': 'Build',
+  'inspector.help.about.environment': 'Environment',
+  'inspector.help.about.builtAt': 'Built on',
+  'inspector.help.about.unknown': 'Not available in this build',
+  'inspector.help.about.note':
+    'These values are written by the build process. When one says "not available", this build did not receive it - it is not replaced by an invented value.',
   'inspector.help.title': 'Help',
   'inspector.help.diag.title': 'App diagnostics',
   'inspector.help.diag.checking': 'Checking…',
@@ -1404,6 +1525,7 @@ export const enUS: Record<TranslationKey, string> = {
 
   'citizen.help.diag.tone.ok': 'fine',
   'citizen.help.diag.tone.warning': 'heads up',
+  'citizen.help.diag.tone.unavailable': 'not available',
   'citizen.help.diag.tone.problem': 'problem',
   'citizen.help.diag.connection': 'Connection',
   'citizen.help.diag.connection.ok': 'Online',

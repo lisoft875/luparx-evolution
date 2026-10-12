@@ -124,6 +124,11 @@ services:
       dockerfile: Dockerfile
       args:
         PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:?falta PUBLIC_BASE_URL}
+        # Para el «Acerca de» de Fiscalización. deploy.sh exporta LUPARX_VERSION con el hash corto
+        # del commit justo antes de construir; si alguien construye a mano queda vacío y la
+        # pantalla lo dice en vez de inventarlo.
+        LUPARX_BUILD: ${LUPARX_VERSION:-}
+        LUPARX_ENVIRONMENT: ${LUPARX_ENVIRONMENT:-staging}
     image: luparx/web:${LUPARX_VERSION:-local}
     restart: unless-stopped
     depends_on:

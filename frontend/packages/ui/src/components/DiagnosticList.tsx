@@ -9,8 +9,16 @@ import { Button } from './Button';
  * perder datos; `warning` es algo que conviene saber y con lo que se sigue usando la aplicación
  * igual —un permiso denegado que no hace falta para la tarea principal, por ejemplo—. Pintar el
  * segundo de rojo enseña a no creerle al rojo.</p>
+ *
+ * <p>`unavailable` es el cuarto, y se agregó el 12-10-2026 porque faltaba un estado de verdad, no
+ * un matiz: una capacidad que este aparato NO TIENE —un iPad sin receptor de GPS, un navegador sin
+ * cámara— no está fallando. Hasta hoy se pintaba igual que un permiso denegado, y las dos cosas
+ * llevan a sitios distintos: el permiso se arregla en Ajustes y la ausencia no se arregla. Decirle
+ * a alguien que revise los permisos de un receptor que no existe es mandarlo a buscar durante diez
+ * minutos algo que no va a encontrar. El §2 del Centro de soporte lo pide por su nombre: «Correcto,
+ * Requiere atención, No disponible».</p>
  */
-export type DiagnosticTone = 'ok' | 'warning' | 'problem';
+export type DiagnosticTone = 'ok' | 'warning' | 'problem' | 'unavailable';
 
 export interface DiagnosticAction {
   label: string;
@@ -47,7 +55,7 @@ export interface DiagnosticListProps {
   /** Las tres frases del encabezado, según el peor tono que se haya encontrado. */
   summary: { allGood: string; warning: string; problem: string };
   /** El tono dicho en palabras, para quien no distingue el color. */
-  toneLabels: { ok: string; warning: string; problem: string };
+  toneLabels: { ok: string; warning: string; problem: string; unavailable: string };
   /** Lo que se muestra mientras las comprobaciones asíncronas viajan. */
   loadingLabel?: string;
   /** `true` mientras se mide: se dibuja `loadingLabel` en vez de la lista. */
@@ -98,7 +106,9 @@ export function DiagnosticList({
   }
 
   const hayProblema = checks.some((check) => check.tone === 'problem');
-  const hayAviso = checks.some((check) => check.tone === 'warning');
+  // `unavailable` cuenta como aviso en el resumen y no como problema: que a un aparato le falte una
+  // capacidad no rompe nada, pero tampoco es «todo está funcionando correctamente».
+  const hayAviso = checks.some((check) => check.tone === 'warning' || check.tone === 'unavailable');
 
   return (
     <div className="lx-diag">
@@ -115,7 +125,15 @@ export function DiagnosticList({
           <li
             key={check.key}
             className="lx-diag__row"
-            data-tono={check.tone === 'problem' ? 'problema' : check.tone === 'warning' ? 'aviso' : 'ok'}
+            data-tono={
+              check.tone === 'problem'
+                ? 'problema'
+                : check.tone === 'warning'
+                  ? 'aviso'
+                  : check.tone === 'unavailable'
+                    ? 'nodisponible'
+                    : 'ok'
+            }
             data-check={check.key}
             data-accion={check.action ? (check.action.kind === 'remedy' ? 'remedio' : 'permiso') : undefined}
           >
@@ -131,7 +149,9 @@ export function DiagnosticList({
                     ? toneLabels.ok
                     : check.tone === 'warning'
                       ? toneLabels.warning
-                      : toneLabels.problem}
+                      : check.tone === 'unavailable'
+                        ? toneLabels.unavailable
+                        : toneLabels.problem}
                 </span>
               </p>
               <p className="lx-diag__state">{check.state}</p>

@@ -128,6 +128,7 @@ export function CitizenDevicePermissions({ open, onClose }: CitizenDevicePermiss
             ok: t('citizen.help.diag.tone.ok'),
             warning: t('citizen.help.diag.tone.warning'),
             problem: t('citizen.help.diag.tone.problem'),
+            unavailable: t('citizen.help.diag.tone.unavailable'),
           }}
           checks={[fila]}
         />

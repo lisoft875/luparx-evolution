@@ -5542,6 +5542,15 @@ a.lx-list-row {
 .lx-diag__row[data-tono='problema'] {
   border-color: color-mix(in srgb, var(--lx-danger) 45%, var(--lx-border));
 }
+/* «No disponible»: el borde de siempre y el icono apagado (12-10-2026).
+
+   Deliberadamente SIN color de estado. Que a este aparato le falte una capacidad no es un fallo
+   que haya que mirar, y teñirlo de ámbar lo pondría a competir por la atención con el permiso que
+   sí se puede arreglar dos filas más abajo. El dato va en la palabra, que es donde tiene que ir. */
+.lx-diag__row[data-tono='nodisponible'] .lx-diag__icon {
+  background: var(--lx-surface-hover);
+  color: var(--lx-text-subtle);
+}
 .lx-diag__icon {
   flex: 0 0 auto;
   display: inline-flex;
@@ -5565,6 +5574,65 @@ a.lx-list-row {
   background: var(--lx-danger-soft);
   color: var(--lx-danger-text);
 }
+/* --- Centro de soporte: las guías y el «Acerca de» (12-10-2026) --------------------------------
+   Dos listas de texto corto dentro de un modal. No hay componente nuevo: una guía es un `<details>`
+   del navegador —abre, cierra, lo lee un lector de pantalla y no necesita una sola línea de
+   JavaScript— y el «Acerca de» es la `SummaryList` que ya usa el panel de sincronización. */
+.lx-guide {
+  border: 1px solid var(--lx-border);
+  border-radius: var(--lx-radius-md);
+  background: var(--lx-surface-2);
+  padding: 0;
+}
+.lx-guide + .lx-guide {
+  margin-top: var(--lx-space-2);
+}
+.lx-guide__summary {
+  display: flex;
+  align-items: center;
+  gap: var(--lx-space-2);
+  /* 44px de blanco táctil con el relleno, que es el mínimo del sistema para un dedo. */
+  min-height: 44px;
+  padding: var(--lx-space-2) var(--lx-space-3);
+  font-size: var(--lx-text-body-size);
+  font-weight: 600;
+  color: var(--lx-text);
+  cursor: pointer;
+  list-style: none;
+}
+/* Safari dibuja su propio triángulo y lo pone fuera de la fila; se quita y el estado lo dice el
+   `::after` de abajo, que sí se puede colocar. */
+.lx-guide__summary::-webkit-details-marker {
+  display: none;
+}
+.lx-guide__summary::after {
+  content: '+';
+  margin-left: auto;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--lx-text-subtle);
+}
+.lx-guide[open] .lx-guide__summary::after {
+  content: '−';
+}
+.lx-guide__body {
+  margin: 0;
+  padding: 0 var(--lx-space-3) var(--lx-space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--lx-space-2);
+}
+.lx-guide__step {
+  margin: 0;
+  padding-left: var(--lx-space-4);
+  color: var(--lx-text-muted);
+  font-size: var(--lx-text-meta-size);
+  line-height: 1.45;
+}
+.lx-guide__step li + li {
+  margin-top: 4px;
+}
+
 .lx-diag__body {
   display: flex;
   flex-direction: column;

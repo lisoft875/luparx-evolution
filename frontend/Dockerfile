@@ -23,6 +23,19 @@ WORKDIR /app
 # El cliente ya pide rutas /api/v1/..., así que acá va el origen SIN ninguna ruta.
 ARG PUBLIC_BASE_URL=http://localhost
 
+# Qué compilación es ésta, para el «Acerca de» del Centro de soporte (12-10-2026).
+#
+# Entra como argumento de build y no se lee en ejecución, por lo mismo que el prefijo: Vite lo
+# resuelve al compilar. `scripts/deploy.sh` ya exporta el hash corto del commit como
+# LUPARX_VERSION antes de construir, y LUPARX_ENVIRONMENT ya vive en infra/.env para el backend;
+# el compose de despliegue los pasa. Vacíos —un build de alguien en su máquina— la pantalla dice
+# que no están disponibles en esta compilación, que es la verdad y es lo que el §6 pide.
+#
+# NO se resuelve con `git rev-parse` acá dentro: el contexto de build es `frontend/` y el .git del
+# repositorio está un nivel más arriba, así que no existe en esta imagen.
+ARG LUPARX_BUILD=
+ARG LUPARX_ENVIRONMENT=
+
 # Prefijo de cada portal. El ciudadano en la raíz porque es el único de cara al público.
 ARG BASE_PATH_CITIZEN=/
 ARG BASE_PATH_ADMIN=/admin/
@@ -60,6 +73,7 @@ RUN set -eu; \
       app="${portal%%:*}"; prefix="${portal#*:}"; \
       echo "== build $app en $prefix =="; \
       VITE_API_BASE_URL="$PUBLIC_BASE_URL" VITE_BASE_PATH="$prefix" \
+        LUPARX_BUILD="$LUPARX_BUILD" LUPARX_ENVIRONMENT="$LUPARX_ENVIRONMENT" \
         npx vite build --config "apps/$app/vite.config.ts" "apps/$app"; \
     done
 
