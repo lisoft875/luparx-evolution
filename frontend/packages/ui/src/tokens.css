@@ -3798,6 +3798,18 @@ a.lx-list-row {
   }
 }
 
+/* Vacío de verdad, no «vacío por ahora» (12-10-2026).
+
+   `.lx-bars__callout` reserva 24px aunque no haya barra en foco, y la razón es buena: si no, el
+   gráfico entero salta cada vez que el mouse entra y sale. Pero con la serie ENTERA en cero el
+   rótulo no puede llegar a tener contenido nunca —`BarChart` lo suprime con `todoEnCero`—, así
+   que esos 24px reservan sitio para algo que no va a venir. `:empty` distingue los dos casos sin
+   que el componente tenga que decir nada: con datos el rótulo trae el día destacado desde el
+   primer pintado, así que sólo coincide en la semana sin recaudación. */
+.lx-bars__callout:empty {
+  min-height: 0;
+}
+
 .lx-bars__callout-label {
   color: var(--lx-text-muted);
   font-size: 0.8125rem;
@@ -4958,9 +4970,34 @@ a.lx-list-row {
   }
 }
 
-.lx-home-grid--operation {
-  --lx-home-grid-main: 60fr;
-  --lx-home-grid-side: 40fr;
+/* ---- Fila inferior: tres columnas de 40/30/30 (12-10-2026) ---------------------------------
+   La tabla de la «Especificación visual ejecutable» lo pide por su número, y su referencia B lo
+   dibuja: actividad, accesos rápidos y zonas más utilizadas, uno al lado del otro.
+
+   Eran dos columnas de 60/40 con los accesos y el ranking apilados en la derecha. El defecto que
+   eso producía está medido en la captura de staging: con un solo evento de actividad la columna
+   izquierda mide 115px y la pila de la derecha 404, o sea 288px de fondo vacío a media pantalla.
+
+   El reparto no usa las dos variables de `.lx-home-grid` porque esas describen una fila de DOS
+   columnas; acá hacen falta tres y se escriben enteras. */
+@media (min-width: 1200px) {
+  .lx-home-grid--operation {
+    grid-template-columns: minmax(0, 40fr) minmax(0, 30fr) minmax(0, 30fr);
+  }
+}
+/* Entre 1000 y 1199 la fila se queda en dos columnas —tres a ese ancho dejan los accesos rápidos
+   en 2×2 de 120px— y el tercer bloque ocupa el renglón entero. Es lo que la tabla de responsive
+   pide para 900-1199: «fila inferior en 2 columnas o apilada». */
+@media (min-width: 1000px) and (max-width: 1199px) {
+  /* Mitad y mitad, no el 65/35 que `.lx-home-grid` trae por omisión: con dos columnas, la de los
+     accesos rápidos es la que necesita ancho —son cuatro baldosas en 2×2— y la actividad es texto
+     que se lee igual de bien en la mitad. */
+  .lx-home-grid--operation {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .lx-home-grid--operation > :nth-child(3) {
+    grid-column: 1 / -1;
+  }
 }
 
 /* --- Pie de página ------------------------------------------------------------------------------ */
@@ -4977,6 +5014,21 @@ a.lx-list-row {
   border-top: 1px solid var(--lx-border);
   color: var(--lx-text-subtle);
   font-size: 0.75rem;
+}
+
+/* ---- El menú lateral del portal administrativo: 240px (12-10-2026) ---------------------------
+   La tabla pide 230-250 y la columna medía 264, que es el valor elegido en octubre para que las
+   etiquetas largas del admin en español no se recortaran.
+
+   Se comprobó antes de bajarlo, que es lo que hacía falta: la etiqueta más ancha del menú
+   —«Política de parqueo»— mide 207px de texto, y a 240 de columna quedan 208 de ancho útil tras
+   el relleno. Ninguna de las quince filas se recorta. Los 24px que se sueltan se los queda el
+   tablero, que es donde escasean.
+
+   Sólo el portal administrativo: los otros tres no están en este encargo. */
+:root[data-portal='admin'] .lx-page-layout__sidebar {
+  width: 240px;
+  flex: 0 0 240px;
 }
 
 /* El contenedor del Inicio: una columna con el espaciado de la escala, y el pie empujado abajo. */
@@ -4998,6 +5050,19 @@ a.lx-list-row {
 .lx-page-layout__content:has(> .lx-home) {
   padding: var(--lx-space-4);
   gap: var(--lx-space-3);
+  /*
+    El tablero usa el ancho que haya (12-10-2026).
+
+    `.lx-page-layout__content` topa en 1200px, y la razón escrita al lado de ese valor sigue
+    siendo buena: un formulario de ajustes estirado a lo ancho de un monitor pone la etiqueta y
+    su campo a un palmo de distancia. Un TABLERO es lo contrario — son tarjetas de ancho propio
+    en una cuadrícula, y el ancho de más se reparte entre ellas en vez de separar nada.
+
+    Medido: a 1536 el menú se lleva 240 y quedan 1296; con el tope, 96px se iban en márgenes
+    laterales del contenido y la fila de cuatro KPI se angostaba por nada. La tabla de la
+    especificación pide «ancho restante fluido», que es exactamente esto.
+  */
+  max-width: none;
 }
 
 /* La cabecera del tablero: el nombre de la municipalidad a la izquierda y el estado del sistema a
@@ -5988,13 +6053,10 @@ a.lx-list-row {
   flex-shrink: 0;
 }
 
-/* La columna derecha de la fila 3, con dos tarjetas apiladas. */
-.lx-home-stack {
-  display: flex;
-  flex-direction: column;
-  gap: var(--lx-card-gap);
-  min-width: 0;
-}
+/* `.lx-home-stack` vivió acá hasta el 12-10-2026: era la columna derecha de la fila inferior,
+   con los accesos rápidos encima del ranking de zonas. La fila pasó a tres columnas y las dos
+   tarjetas son ahora hermanas de la actividad, así que no queda nadie que la monte. Se borra en
+   vez de dejarla: una clase sin uso es la que alguien vuelve a escribir creyendo que hace falta. */
 
 /* ---- «Zonas más utilizadas»: una clasificación, no una medición --------------------------------
    Se lee por posición, así que es una `<ol>` de verdad: el orden es el dato. */
@@ -7320,15 +7382,93 @@ a.lx-list-row {
   }
 }
 
-/* ---- Fila B: el vacío, donde menos molesta --------------------------------------------------
-   Probadas las dos y me quedo con la que ya había, con la razón escrita para que no se vuelva a
-   intentar: estirar la tarjeta de actividad hasta igualar la columna derecha convierte un hueco
-   de fondo en una TARJETA de 530px con dos renglones de texto flotando en el medio, que se lee
-   peor. Con `start` —lo que hay— la actividad mide lo que tiene y el aire queda del lado del
-   fondo, que es aire y no una caja vacía.
+/* ---- Fila inferior: tres columnas que miden lo mismo (12-10-2026) ---------------------------
+   Hasta ayer esta fila tenía `align-items: start` y la razón escrita al lado era buena: con DOS
+   columnas, estirar la tarjeta de actividad hasta igualar la pila de la derecha convertía un
+   hueco de fondo en una TARJETA de 530px con dos renglones de texto flotando en el medio, que se
+   lee peor que el hueco.
 
-   Esto sólo pasa con la actividad vacía, que es el estado de staging hoy. Con los cuatro o cinco
-   eventos de la referencia las dos columnas se emparejan solas y la discusión desaparece. */
+   Con tres columnas la aritmética cambia y la conclusión se invierte. La diferencia entre la
+   actividad vacía y su vecina más alta deja de ser 288px y pasa a ser la altura de una tarjeta;
+   estiradas, las tres terminan en la misma línea —que es como la referencia B las dibuja y lo que
+   la orden pide al hablar de «alineación de tarjetas»— y el aire que sobra queda dentro de la
+   tarjeta de actividad, debajo de sus eventos, donde se lee como sitio para los que vengan.
+
+   Con cuatro o cinco eventos, que es el estado normal de una municipalidad en operación, las tres
+   columnas se emparejan solas y esta regla no se nota. */
+@media (min-width: 1200px) {
+  :root[data-portal='admin'] .lx-home-grid--operation {
+    align-items: stretch;
+  }
+  :root[data-portal='admin'] .lx-home-grid--operation > .lx-card {
+    display: flex;
+    flex-direction: column;
+  }
+}
+/* Por debajo de 1200 la fila deja de ser tres columnas parecidas y vuelve a ser dos de contenido
+   distinto; ahí estirar sí reproduce el defecto viejo —una tarjeta de 370px con un renglón de
+   texto flotando— así que cada una mide lo que tiene. `align-items: start` es lo que
+   `.lx-home-grid` ya trae; esto es dejarlo en paz, no una regla nueva. */
+
+/* ---- Fila de gráficos: 240-270 de alto -------------------------------------------------------
+   Medía 280, nueve por encima del tope de la tabla, y los nueve salían de un sitio concreto: el
+   rótulo del gráfico reservando 24px que en una semana sin recaudación no puede llegar a usar
+   (ver `.lx-bars__callout:empty`) y una pista de barras de 160.
+
+   El `min-height` es el piso y no una altura fija: sin él la tarjeta de ingresos cae a 237 en la
+   semana vacía —por debajo del rango— y con él las dos columnas de la fila miden lo mismo en los
+   dos estados, con datos y sin ellos. El techo lo pone el contenido y se queda dentro de 270. */
+:root[data-portal='admin'] .lx-home-grid--analytics > .lx-card {
+  min-height: 244px;
+}
+@media (min-width: 1200px) {
+  :root[data-portal='admin'] .lx-bars__track {
+    height: 150px;
+  }
+}
+
+/* ---- Las tarjetas del tablero: relleno 14 ----------------------------------------------------
+   `--dense` vale 12 en todo el sistema y la tabla pide 14-18 para las tarjetas de esta pantalla.
+   Sube sólo acá: `--dense` la usan también las tablas y los paneles de otras pantallas, donde los
+   12 son la densidad que se decidió para ellas. */
+:root[data-portal='admin'] .lx-home .lx-card--dense {
+  padding: 14px;
+}
+
+/* ---- Accesos rápidos: el icono se pone encima cuando la columna no da para tenerlo al lado ---
+   La tabla pide los cuatro accesos «en subgrid 2×2» y «botones completos y legibles, sin cortes»,
+   y a 1440 las dos cosas se pelean: la columna de 30% deja baldosas de 153px y, con el icono a la
+   izquierda, al texto le quedan 83. Ahí «Registrar espacio» se parte en dos renglones y la ayuda
+   en tres.
+
+   La consulta es de CONTENEDOR y no de ventana, porque lo que decide no es el tamaño de la
+   pantalla sino el ancho que le tocó a esta columna: la misma tarjeta en el 40% o en una pantalla
+   de 1536 tiene sitio de sobra y conserva la composición de la referencia —icono a la izquierda,
+   ayuda en dos renglones—. Medido: 315px de tarjeta a 1440 (apila), 344 a 1536 (no apila).
+
+   No se recorta nada ni se achica la letra: lo que cambia es dónde va el icono. */
+:root[data-portal='admin'] .lx-home .lx-quick-grid {
+  container-type: inline-size;
+}
+@container (max-width: 330px) {
+  :root[data-portal='admin'] .lx-home .lx-quick-tile {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      'icono'
+      'titulo'
+      'texto';
+    gap: 6px 0;
+    align-content: start;
+  }
+}
+
+/* ---- Los KPI: el piso del rango, 115 ---------------------------------------------------------
+   Con la etiqueta en un solo renglón la tarjeta caía a 114, un píxel por debajo del rango de la
+   tabla. El piso lo pone el alto mínimo y no más relleno, para que con la etiqueta en dos
+   renglones el techo siga siendo 130. */
+:root[data-portal='admin'] .lx-metric {
+  min-height: 116px;
+}
 
 /* =================================================================================================
    Fiscalización · lo que cambia con el ancho (12-10-2026, v2)

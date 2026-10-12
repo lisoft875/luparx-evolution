@@ -663,7 +663,49 @@ async function medir(page, dedo) {
           graficoAncho: analitica[1] ? Math.round(analitica[1].getBoundingClientRect().width) : 0,
           ranking: document.querySelectorAll('.lx-zone-rank__row').length,
           rankingPuestos: [...document.querySelectorAll('.lx-zone-rank__pos')].map((n) => rec(n.textContent)),
-          apiladas: document.querySelectorAll('.lx-home-stack > .lx-card').length,
+          /* La fila inferior pasó a TRES columnas el 12-10-2026 (40/30/30). Lo que se mide es
+             el reparto real y el desnivel, que es el defecto que la fila de dos producía: con un
+             solo evento de actividad, 288px de fondo vacío a media pantalla. */
+          filaBanchos: [...document.querySelectorAll('.lx-home-grid--operation > *')].map((n) =>
+            Math.round(n.getBoundingClientRect().width),
+          ),
+          filaBaltos: [...document.querySelectorAll('.lx-home-grid--operation > *')].map((n) =>
+            Math.round(n.getBoundingClientRect().height),
+          ),
+          menuAncho: Math.round(
+            document.querySelector('.lx-page-layout__sidebar')?.getBoundingClientRect().width ?? 0,
+          ),
+          menuRecortado: [...document.querySelectorAll('.lx-nav-link')].filter(
+            (n) => n.scrollWidth > n.clientWidth + 1,
+          ).length,
+          contenidoAncho: Math.round(
+            document.querySelector('.lx-page-layout__content')?.getBoundingClientRect().width ?? 0,
+          ),
+          barraSuperior: Math.round(
+            document.querySelector('.lx-page-layout__header')?.getBoundingClientRect().height ?? 0,
+          ),
+          tarjetaRelleno: (() => {
+            const c = document.querySelector('.lx-home .lx-card--dense');
+            return c ? Math.round(parseFloat(getComputedStyle(c).paddingTop)) : null;
+          })(),
+          /* Solape por intersección de cajas en los encabezados de tarjeta. No lo detecta ninguna
+             regla de desborde —superponer no desborda— y ya pasó una vez: el rótulo del gráfico
+             impreso encima del rango de fechas. */
+          solapes: (() => {
+            const textos = [...document.querySelectorAll('.lx-section-header *, .lx-bars__callout')]
+              .filter((n) => n.childElementCount === 0 && (n.textContent || '').trim().length > 0);
+            const choques = [];
+            for (let i = 0; i < textos.length; i += 1) {
+              for (let j = i + 1; j < textos.length; j += 1) {
+                const a = textos[i].getBoundingClientRect();
+                const b = textos[j].getBoundingClientRect();
+                if (a.right > b.left + 1 && b.right > a.left + 1 && a.bottom > b.top + 1 && b.bottom > a.top + 1) {
+                  choques.push(`«${textos[i].textContent.trim().slice(0, 20)}» x «${textos[j].textContent.trim().slice(0, 20)}»`);
+                }
+              }
+            }
+            return choques;
+          })(),
           eventos: document.querySelectorAll('.lx-feed__item').length,
           // El estado vacío DISEÑADO —dos renglones, no un párrafo centrado— es una respuesta
           // válida a «cuántos eventos hay»: en una municipalidad sin actividad reciente, cero es
@@ -706,7 +748,54 @@ async function medir(page, dedo) {
         'la ocupación es más ancha que el gráfico de ingresos',
         `ocupación ${comp.ocupacionAncho}px vs gráfico ${comp.graficoAncho}px`,
       );
-      okInicio(comp.apiladas === 2, 'la columna derecha de la fila 3 lleva dos tarjetas apiladas', `son ${comp.apiladas}`);
+      /* La fila inferior, con la tabla del 12-10-2026: tres columnas de 40/30/30. */
+      okInicio(
+        comp.filaBanchos.length === 3,
+        'la fila inferior tiene tres columnas (actividad, accesos, zonas)',
+        `son ${comp.filaBanchos.length}`,
+      );
+      if (comp.filaBanchos.length === 3) {
+        const total = comp.filaBanchos.reduce((a, b) => a + b, 0);
+        const reparto = comp.filaBanchos.map((w) => Math.round((w / total) * 100));
+        okInicio(
+          Math.abs(reparto[0] - 40) <= 2 && Math.abs(reparto[1] - 30) <= 2 && Math.abs(reparto[2] - 30) <= 2,
+          `  y se reparten ${reparto.join('/')} (la tabla pide 40/30/30)`,
+        );
+        const desnivel = Math.max(...comp.filaBaltos) - Math.min(...comp.filaBaltos);
+        okInicio(
+          desnivel <= 2,
+          `  y las tres terminan en la misma línea (desnivel ${desnivel}px)`,
+          comp.filaBaltos.join('/'),
+        );
+      }
+      okInicio(
+        comp.menuAncho >= 230 && comp.menuAncho <= 250,
+        `el menú lateral mide ${comp.menuAncho}px (la tabla pide 230-250)`,
+      );
+      okInicio(
+        comp.menuRecortado === 0,
+        '  y ninguna etiqueta del menú se recorta a ese ancho',
+        `${comp.menuRecortado} recortadas`,
+      );
+      okInicio(
+        comp.barraSuperior >= 64 && comp.barraSuperior <= 72,
+        `la barra superior mide ${comp.barraSuperior}px (pide 64-72)`,
+      );
+      /* «Ancho restante fluido»: el contenido se queda con lo que el menú suelta, sin tope. A 1536
+         con un menú de 240 son 1296; con el tope viejo de 1200 se perdían 96px en márgenes. */
+      okInicio(
+        comp.contenidoAncho >= 1536 - comp.menuAncho - 2,
+        `el contenido usa el ancho que deja el menú (${comp.contenidoAncho}px)`,
+      );
+      okInicio(
+        comp.tarjetaRelleno !== null && comp.tarjetaRelleno >= 14 && comp.tarjetaRelleno <= 18,
+        `las tarjetas del tablero tienen ${comp.tarjetaRelleno}px de relleno (pide 14-18)`,
+      );
+      okInicio(
+        comp.solapes.length === 0,
+        'ningún texto de encabezado se imprime encima de otro',
+        comp.solapes.join(' · '),
+      );
       /*
         Corregido el 08-10-2026, y era un defecto MÍO de la prueba, no de la pantalla.
 
@@ -855,16 +944,16 @@ async function medir(page, dedo) {
       const dentro = (v, min, max) => v !== null && v >= min && v <= max;
       okInicio(dentro(TABLA.saludo, 64, 84), `el saludo mide ${TABLA.saludo}px (la tabla pide 64-80)`);
       okInicio(
-        TABLA.kpisIguales && TABLA.kpis.every((h) => dentro(h, 112, 130)),
-        `los cuatro KPI miden ${TABLA.kpis.join('/')}px (la tabla pide 112-130 e iguales)`,
+        TABLA.kpisIguales && TABLA.kpis.every((h) => dentro(h, 115, 130)),
+        `los cuatro KPI miden ${TABLA.kpis.join('/')}px (la tabla del 12-10 pide 115-130 e iguales)`,
       );
       okInicio(
         dentro(TABLA.etiquetaPx, 13, 14),
         `la etiqueta del KPI mide ${TABLA.etiquetaPx}px (pide 13-14)`,
       );
       okInicio(
-        TABLA.filaA.every((h) => dentro(h, 260, 310)),
-        `la fila A mide ${TABLA.filaA.join(' y ')}px (pide 260-310, equilibradas)`,
+        TABLA.filaA.every((h) => dentro(h, 240, 270)),
+        `la fila de gráficos mide ${TABLA.filaA.join(' y ')}px (la tabla del 12-10 pide 240-270)`,
       );
       okInicio(
         dentro(TABLA.donut, 120, 150),

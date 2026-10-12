@@ -700,10 +700,20 @@ export function HomePage(): React.JSX.Element {
               </Card>
             </div>
 
-            {/* --- E. fila 3: actividad | (accesos rápidos + zonas más utilizadas) --------------
-                La columna derecha lleva DOS tarjetas apiladas, que es la composición de la
-                referencia. Es también lo que justifica subir la actividad de tres eventos a cinco:
-                con la derecha apilada, la izquierda tiene el alto para gastarlo. */}
+            {/* --- E. fila 3: actividad | accesos rápidos | zonas más utilizadas ---------------
+                TRES columnas de 40/30/30 desde el 12-10-2026, que es lo que pide la tabla de la
+                «Especificación visual ejecutable» y lo que dibuja su referencia B.
+
+                Eran dos: actividad a la izquierda y, a la derecha, una pila con los accesos encima
+                del ranking. Esa composición venía de la referencia anterior y tenía un defecto
+                medible que la captura de staging enseña: con UN solo evento de actividad —el
+                estado real de la municipalidad de prueba— la columna izquierda medía 115px y la
+                pila de la derecha 404, o sea 288px de fondo vacío a media pantalla. En tres
+                columnas la diferencia cae a la altura de una tarjeta, y la fila vuelve a leerse
+                como una fila.
+
+                La pila (`.lx-home-stack`) desaparece del árbol y su regla se borra de la hoja: no
+                queda nadie que la monte. */}
             <div className="lx-home-grid lx-home-grid--operation">
               <Card className="lx-card--dense">
                 <SectionHeader
@@ -757,37 +767,35 @@ export function HomePage(): React.JSX.Element {
                 )}
               </Card>
 
-              <div className="lx-home-stack">
-                <Card className="lx-card--dense">
-                  <SectionHeader title={t('admin.home.quick.title')} />
-                  <QuickActions />
-                </Card>
+              <Card className="lx-card--dense">
+                <SectionHeader title={t('admin.home.quick.title')} />
+                <QuickActions />
+              </Card>
 
-                {/* «Zonas más utilizadas»: el bloque nuevo de la referencia. Mismo dato que la
-                    lista del dónut —`occupancy.zones`, ordenado una sola vez más arriba— leído de
-                    otra manera: ahí es «cuán llena está cada una», acá es «cuáles son las que más
-                    se usan». Las dos salen de la misma ordenación a propósito. */}
-                <Card className="lx-card--dense">
-                  <SectionHeader
-                    title={t('admin.home.rank.title')}
-                    aside={
-                      <Link to="/zones" className="lx-linklike lx-linklike--go">
-                        {t('admin.home.rank.detail')}
-                        <IconChevronRight size={14} />
-                      </Link>
-                    }
-                  />
-                  {panel.isLoading ? (
-                    <>
-                      <Skeleton height="1.75rem" />
-                      <Skeleton height="1.75rem" />
-                      <Skeleton height="1.75rem" />
-                    </>
-                  ) : (
-                    <ZoneRanking zonas={zonasPorUso} emptyLabel={t('admin.home.rank.empty')} />
-                  )}
-                </Card>
-              </div>
+              {/* «Zonas más utilizadas»: el bloque nuevo de la referencia. Mismo dato que la
+                  lista del dónut —`occupancy.zones`, ordenado una sola vez más arriba— leído de
+                  otra manera: ahí es «cuán llena está cada una», acá es «cuáles son las que más
+                  se usan». Las dos salen de la misma ordenación a propósito. */}
+              <Card className="lx-card--dense">
+                <SectionHeader
+                  title={t('admin.home.rank.title')}
+                  aside={
+                    <Link to="/zones" className="lx-linklike lx-linklike--go">
+                      {t('admin.home.rank.detail')}
+                      <IconChevronRight size={14} />
+                    </Link>
+                  }
+                />
+                {panel.isLoading ? (
+                  <>
+                    <Skeleton height="1.75rem" />
+                    <Skeleton height="1.75rem" />
+                    <Skeleton height="1.75rem" />
+                  </>
+                ) : (
+                  <ZoneRanking zonas={zonasPorUso} emptyLabel={t('admin.home.rank.empty')} />
+                )}
+              </Card>
             </div>
 
             {/* --- G. Atención requerida, SÓLO con incidencias reales --------------------------
