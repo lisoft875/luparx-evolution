@@ -1775,8 +1775,9 @@ export const esCR = {
   'inspector.home.where': 'Fiscalización · {{tenant}}',
   'inspector.home.where.noTenant': 'Fiscalización',
   'inspector.home.quick.lookup.hint': 'Verificar estado y permisos',
-  'inspector.home.quick.cite.hint': 'Infracción o advertencia',
-  'inspector.home.quick.queue.hint': 'Boletas por enviar',
+  // Las dos ayudas con las palabras exactas de la referencia v2.
+  'inspector.home.quick.cite.hint': 'Infracción o aviso',
+  'inspector.home.quick.queue.hint': 'Por enviar',
   'inspector.home.quick.evidence.hint': 'Fotos y adjuntos',
   'inspector.home.fast.go': 'Buscar',
   'inspector.home.last.title': 'Última consulta',
