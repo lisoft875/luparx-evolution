@@ -86,7 +86,21 @@ const ACTOS: Readonly<Record<string, { key: TranslationKey; icon: React.ReactNod
   PARKING_SCHEDULE_UPDATED: { key: 'admin.home.activity.PARKING_SCHEDULE_UPDATED', icon: <IconPark size={16} /> },
 };
 
-const EVENTOS_A_PEDIR = 40;
+/*
+  Cuántas entradas se le piden al servidor (12-10-2026).
+
+  Eran cuarenta, y se pedían SIN filtrar para descartar en el cliente las que no están en `ACTOS`.
+  Eso funciona mientras la bitácora esté tranquila: el rastro guarda ochenta y ocho acciones, la
+  mayoría de sistema, y basta con cuarenta ingresos de sesión seguidos —una tanda de pruebas, un
+  día de trabajo con varios fiscalizadores— para que los actos de negocio queden fuera de la
+  primera página y la tarjeta salga vacía teniendo la municipalidad actividad. Pasó el 12-10 y lo
+  reportó el arnés: «actos visibles: ninguno».
+
+  Ahora el filtro lo hace el servidor (`actions`), así que lo que vuelve ya es de la lista blanca y
+  no hace falta pedir de más: diez para mostrar cinco deja margen de sobra para los que el cliente
+  descarte si alguna vez el servidor ignora el parámetro.
+*/
+const EVENTOS_A_PEDIR = 10;
 /**
  * Cuántos eventos entran en la portada.
  *
@@ -224,7 +238,9 @@ export function HomePage(): React.JSX.Element {
 
   const actividad = useQuery({
     queryKey: ['admin', 'home', 'actividad'],
-    queryFn: () => apiClient.adminAudit.list({ page: 0, size: EVENTOS_A_PEDIR }),
+    // La lista blanca viaja al servidor: es la MISMA de `ACTOS`, así que no hay dos listas que
+    // mantener sincronizadas ni forma de que una pantalla pida algo que no sabe dibujar.
+    queryFn: () => apiClient.adminAudit.list({ page: 0, size: EVENTOS_A_PEDIR, actions: Object.keys(ACTOS) }),
     enabled: puedeVerCifras,
     refetchInterval: 60_000,
   });

@@ -535,8 +535,14 @@ export class ApiClient {
   };
 
   readonly adminAudit = {
-    list: (query: AuditEventsQuery & PageParams): Promise<PagedResponse<AuditEvent>> =>
-      this.http.request('GET', '/api/v1/admin/audit-events', { query }),
+    list: ({ actions, ...resto }: AuditEventsQuery & PageParams): Promise<PagedResponse<AuditEvent>> =>
+      this.http.request('GET', '/api/v1/admin/audit-events', {
+        /* Separadas por coma y no como parámetro repetido: `buildQuery` usa `URLSearchParams.set`,
+           que se queda con el último valor, y Spring parte una lista separada por comas sin
+           ayuda. Convertir acá y no en `buildQuery` deja intacta la serialización que usan las
+           otras ciento y pico de llamadas. */
+        query: actions && actions.length > 0 ? { ...resto, actions: actions.join(',') } : resto,
+      }),
     /**
      * Recomputes this municipality's audit chain and reports any break (v0.32).
      *

@@ -641,8 +641,70 @@ async function medir(page, dedo) {
     // «Se parece» no es comprobable; «la ocupación es más ancha que el gráfico» sí.
     {
       await page.setViewportSize({ width: 1536, height: 960 });
+
+      /*
+        La llamada a la bitácora, vista desde fuera (12-10-2026).
+
+        La portada muestra una lista blanca de actos de NEGOCIO sobre un rastro de ochenta y ocho
+        acciones. Hasta hoy pedía las cuarenta más recientes SIN filtrar y descartaba en el
+        cliente; el 12-10 esta misma corrida imprimió «actos visibles: ninguno» con la tarjeta
+        vacía, porque el rastro de sistema llenaba la primera página.
+
+        Se miran las DOS mitades, que fallan por separado: que la petición lleve el filtro, y que
+        lo que el servidor devuelve llegue a dibujarse. Una tarjeta vacía con la respuesta llena
+        es un defecto del cliente; una petición sin filtro es la regresión de hoy volviendo.
+      */
+      let bitacoraUrl = null;
+      let bitacoraItems = null;
+      const verPeticion = (peticion) => {
+        if (peticion.url().includes('/admin/audit-events')) bitacoraUrl = peticion.url();
+      };
+      const verRespuesta = async (respuesta) => {
+        if (!respuesta.url().includes('/admin/audit-events') || !respuesta.ok()) return;
+        try {
+          const cuerpo = await respuesta.json();
+          bitacoraItems = Array.isArray(cuerpo?.items) ? cuerpo.items : null;
+        } catch {
+          /* una respuesta que no es JSON no dice nada de esto */
+        }
+      };
+      page.on('request', verPeticion);
+      page.on('response', verRespuesta);
+
       await page.goto(`${BASE}/admin/`, { waitUntil: 'domcontentloaded' });
       await page.waitForTimeout(2600);
+      page.off('request', verPeticion);
+      page.off('response', verRespuesta);
+
+      okInicio(
+        bitacoraUrl !== null && bitacoraUrl.includes('actions='),
+        'la portada le pide a la bitácora sólo sus actos, no las N más recientes de todo',
+        bitacoraUrl ? decodeURIComponent(bitacoraUrl.split('?')[1] ?? '') : 'no hubo llamada a la bitácora',
+      );
+      if (Array.isArray(bitacoraItems)) {
+        const ACTOS_DE_LA_PORTADA = new Set([
+          'PARKING_SESSION_STARTED', 'PARKING_SESSION_FINISHED', 'PARKING_ZONE_CREATED',
+          'USER_REGISTERED', 'USER_PASSWORD_RESET_REQUESTED', 'WALLET_TOPUP_RECORDED',
+          'CITATION_ISSUED', 'CITATION_PAID', 'CITATION_CANCELLED', 'CITATION_APPEAL_FILED',
+          'CITATION_APPEAL_RESOLVED', 'PLATE_EXEMPTION_GRANTED', 'PARKING_SPACE_CREATED',
+          'PARKING_ZONE_UPDATED', 'PARKING_RATE_UPDATED', 'PARKING_POLICY_UPDATED',
+          'PARKING_SCHEDULE_UPDATED',
+        ]);
+        const ajenos = bitacoraItems.map((e) => e.action).filter((a) => !ACTOS_DE_LA_PORTADA.has(a));
+        okInicio(
+          ajenos.length === 0,
+          '  y el servidor devuelve sólo esos actos',
+          [...new Set(ajenos)].join(', '),
+        );
+        const dibujables = bitacoraItems.filter((e) => ACTOS_DE_LA_PORTADA.has(e.action)).length;
+        const esperados = Math.min(dibujables, 5);
+        const pintados = await page.evaluate(() => document.querySelectorAll('.lx-feed__item').length);
+        okInicio(
+          pintados === esperados,
+          `  y los ${esperados} que caben se dibujan (la respuesta trae ${bitacoraItems.length})`,
+          `pintados ${pintados}`,
+        );
+      }
 
       const comp = await page.evaluate(() => {
         const rec = (s) => String(s || '').replace(/\s+/g, ' ').trim();

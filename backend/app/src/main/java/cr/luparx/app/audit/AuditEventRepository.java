@@ -43,6 +43,47 @@ public interface AuditEventRepository extends JpaRepository<AuditEventEntity, UU
                                           Pageable pageable);
 
     /**
+     * Lo mismo, acotado a un CONJUNTO de acciones (12-10-2026).
+     *
+     * <h2>Para qué</h2>
+     *
+     * <p>La portada del administrador muestra «Actividad reciente»: una lista blanca de diecisiete
+     * actos de negocio —se estacionó alguien, se emitió una boleta, se creó una zona— sobre un
+     * rastro que guarda ochenta y ocho acciones, la mayoría de sistema. Hasta hoy pedía las
+     * cuarenta entradas más recientes SIN filtrar y descartaba en el cliente las que no estaban en
+     * su lista, y eso funciona sólo mientras el rastro esté tranquilo: en cuanto cuarenta ingresos
+     * de sesión seguidos se ponen delante, la tarjeta queda vacía aunque la municipalidad tenga
+     * actividad. Pasó, y es lo que se corrige: el filtro baja a la base, donde está el índice.</p>
+     *
+     * <h2>Por qué es una consulta APARTE y no un parámetro más de la de arriba</h2>
+     *
+     * <p>Por la misma razón que {@code searchInTenantMatching}, y conviene no volver a aprenderla:
+     * una colección opcional dentro de la consulta compartida obliga a escribir
+     * {@code (:actions is null or a.action in :actions)}, que es justo la forma que el 25-09-2026
+     * tiró la pantalla con {@code :q}. Y una lista vacía dentro de un {@code in} es SQL inválido.
+     * Acá {@code :actions} nunca llega nula ni vacía —el controlador no usa este camino si lo
+     * está— así que no hay nada que inferir, y el camino de siempre no se toca.</p>
+     */
+    @Query("""
+            select a from AuditEventEntity a
+            where a.tenantId = :tenantId
+              and a.action in :actions
+              and (:actor is null or a.actorUserId = :actor)
+              and (:resourceType is null or a.resourceType = :resourceType)
+              and (:ipHash is null or a.ipHash = :ipHash)
+              and a.occurredAt >= :from and a.occurredAt < :to
+            order by a.occurredAt desc
+            """)
+    Page<AuditEventEntity> searchInTenantByActions(@Param("tenantId") UUID tenantId,
+                                                   @Param("actions") List<String> actions,
+                                                   @Param("actor") UUID actor,
+                                                   @Param("resourceType") String resourceType,
+                                                   @Param("ipHash") String ipHash,
+                                                   @Param("from") Instant from,
+                                                   @Param("to") Instant to,
+                                                   Pageable pageable);
+
+    /**
      * Lo mismo, y además acotado por un texto que quien consulta escribió.
      *
      * <h2>Por qué es una consulta APARTE y no un parámetro opcional de la de arriba</h2>

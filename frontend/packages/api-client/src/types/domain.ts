@@ -773,6 +773,18 @@ export type AuditEventsQuery = {
   actor?: string;
   action?: string;
   /**
+   * Varias acciones a la vez (12-10-2026).
+   *
+   * <p>Para quien muestra un subconjunto fijo del rastro —la portada del administrador y su lista
+   * blanca de actos de negocio— en vez de pedir las N más recientes de TODO y descartar en el
+   * cliente lo que no sirve. Esa forma funciona mientras la bitácora esté tranquila y deja la
+   * tarjeta vacía en cuanto no lo está.</p>
+   *
+   * <p>No reemplaza a `action`, que es el desplegable de una sola acción de la pantalla de
+   * auditoría. No se combina con `q`: si llegaran los dos, el servidor usa la lista.</p>
+   */
+  actions?: readonly string[];
+  /**
    * Texto libre: identificador de recurso (por prefijo) o código de acción (por contenido).
    *
    * No busca por nombre de persona — ese dato no vive en la bitácora, se resuelve al leer para que

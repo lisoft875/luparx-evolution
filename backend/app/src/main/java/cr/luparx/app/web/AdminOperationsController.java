@@ -32,6 +32,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -120,6 +121,21 @@ public class AdminOperationsController {
              * filtro por actor ya existe y se llega a él con «Ver sólo lo de esta persona».</p>
              */
             @RequestParam(required = false) String q,
+            /**
+             * Varias acciones a la vez, separadas por coma (12-10-2026).
+             *
+             * <p>Existe para la portada del administrador, que muestra una lista blanca de actos de
+             * NEGOCIO sobre un rastro donde la mayoría de las entradas son de sistema. Pedía las
+             * cuarenta más recientes y descartaba en el cliente lo que no le servía; con el rastro
+             * movido —cuarenta ingresos de sesión seguidos bastan— la tarjeta quedaba vacía
+             * teniendo la municipalidad actividad. El filtro baja acá, que es donde está el
+             * índice.</p>
+             *
+             * <p>{@code action} (singular) se queda como está: es el filtro de la pantalla de
+             * auditoría, donde se elige UNA acción de un desplegable, y no tiene sentido
+             * reemplazarlo por una lista de un elemento.</p>
+             */
+            @RequestParam(required = false) List<String> actions,
             @RequestParam(required = false) Instant from,
             @RequestParam(required = false) Instant to,
             @RequestParam(required = false) Integer page,
@@ -136,13 +152,29 @@ public class AdminOperationsController {
         // —las que no buscan nada— pasaban a depender de que Hibernate acertara su tipo SQL. No
         // acertó. Una función nueva no puede romper el camino que no usa.
         String texto = blankToNull(q);
-        Page<cr.luparx.app.audit.AuditEventEntity> result = texto == null
-                ? auditEventRepository.searchInTenant(
-                        tenantId.value(), actor, action, blankToNull(resourceType), blankToNull(ipHash),
-                        start, end, pageable)
-                : auditEventRepository.searchInTenantMatching(
-                        tenantId.value(), actor, action, blankToNull(resourceType), blankToNull(ipHash),
-                        start, end, likePrefix(texto), likeContains(texto), pageable);
+        // Tres caminos, y los dos de siempre no cambian. El de `actions` sólo se toma con una
+        // lista de verdad —ni nula ni vacía—, que es la condición que la consulta necesita para
+        // no tener que inferir nada: un `in ()` vacío es SQL inválido.
+        List<String> acciones = actions == null
+                ? List.of()
+                : actions.stream().map(AdminOperationsController::blankToNull).filter(Objects::nonNull).toList();
+        Page<cr.luparx.app.audit.AuditEventEntity> result;
+        if (!acciones.isEmpty()) {
+            // `q` no se combina con `actions`: la portada manda una lista blanca y no busca texto,
+            // y la pantalla de auditoría busca texto y no manda listas. Si llegaran los dos, manda
+            // la lista, que es el filtro más estrecho.
+            result = auditEventRepository.searchInTenantByActions(
+                    tenantId.value(), acciones, actor, blankToNull(resourceType), blankToNull(ipHash),
+                    start, end, pageable);
+        } else if (texto == null) {
+            result = auditEventRepository.searchInTenant(
+                    tenantId.value(), actor, action, blankToNull(resourceType), blankToNull(ipHash),
+                    start, end, pageable);
+        } else {
+            result = auditEventRepository.searchInTenantMatching(
+                    tenantId.value(), actor, action, blankToNull(resourceType), blankToNull(ipHash),
+                    start, end, likePrefix(texto), likeContains(texto), pageable);
+        }
         // One lookup for the whole page, before the mapping loop rather than inside it (v0.33).
         Map<UUID, cr.luparx.app.audit.AuditActorResolver.Actor> actors =
                 actorResolver.resolve(result.getContent());
