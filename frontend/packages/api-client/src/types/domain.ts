@@ -1964,6 +1964,24 @@ export interface InspectorZone {
 }
 
 /**
+ * Lo que un fiscalizador hizo en una ventana de su turno (`GET /inspector/shift-summary`).
+ *
+ * <p>La ventana viaja de vuelta además de ir en la petición: la pantalla rotula las cifras con
+ * ella —«hoy», «este turno»— y pedirle que recuerde lo que mandó es cómo se termina mostrando el
+ * número de ayer con la etiqueta de hoy.</p>
+ *
+ * <p>Dos cifras y no cuatro: «evidencias tomadas» no tiene fuente en el servidor —las fotos viven
+ * dentro de cada boleta y nadie las cuenta— y «pendientes» no puede tenerla, porque son las
+ * boletas que todavía NO salieron del aparato.</p>
+ */
+export interface InspectorShiftSummary {
+  from: string;
+  to: string;
+  checks: number;
+  citations: number;
+}
+
+/**
  * Why an act does or does not carry coordinates (CONTRACT.md v0.29).
  *
  * Until v0.29 all three collapsed into "latitude is null", so a refusal, a timeout and a phone with

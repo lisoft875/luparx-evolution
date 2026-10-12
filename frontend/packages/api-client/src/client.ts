@@ -85,6 +85,7 @@ import type {
   PlateCheckRequest,
   EnforcementCheck,
   EnforcementChecksQuery,
+  InspectorShiftSummary,
   InspectorZone,
   ExemptionStatus,
   RequestExemptionRequest,
@@ -998,6 +999,14 @@ export class ApiClient {
      * only as the offline cache it always was.
      */
     zones: (): Promise<InspectorZone[]> => this.http.request('GET', '/api/v1/inspector/zones'),
+    /**
+     * Lo que hice en esta ventana: consultas y boletas (CONTRACT, 12-10-2026).
+     *
+     * <p>Sólo mías: el servidor toma el fiscalizador del contexto de sesión y no de un parámetro,
+     * así que no hay forma de pedir el turno de otra persona desde el portal.</p>
+     */
+    shiftSummary: (from: string, to: string): Promise<InspectorShiftSummary> =>
+      this.http.request('GET', '/api/v1/inspector/shift-summary', { query: { from, to } }),
     /** What this municipality fines today. Only the kinds still in force. */
     infractionTypes: async (): Promise<InfractionType[]> =>
       (

@@ -1768,6 +1768,13 @@ export const esCR = {
   // pantalla deja de encabezarse con un saludo y pasa a decir qué se hace en ella.
   'inspector.home.title': 'Consultar vehículo',
   'inspector.home.subtitle': 'Verifica el estado de estacionamiento y los permisos.',
+  // El resumen del turno (12-10-2026). Tres rótulos y no cuatro: «Evidencias tomadas» no tiene
+  // fuente en el servidor y la tarjeta no se dibuja.
+  'inspector.home.shift.checks': 'Consultas hoy',
+  'inspector.home.shift.citations': 'Boletas emitidas',
+  'inspector.home.shift.pending': 'Pendientes de enviar',
+  'inspector.home.location.title': 'Ubicación de la consulta',
+  'inspector.home.clock.label': 'Fecha y hora del aparato',
 
   /* --- Pantalla inicial de Fiscalización (07-10-2026, especificación visual responsive) ------ */
   'inspector.home.greeting': 'Hola, Inspector',
@@ -2215,7 +2222,10 @@ export const esCR = {
   // «Placa del vehículo» y no «Placa»: desde la v2 este rótulo SE VE encima del campo, y la
   // referencia lo dibuja con esas tres palabras. Sigue siendo además el nombre accesible.
   'inspector.lookup.plateLabel': 'Placa del vehículo',
-  'inspector.lookup.platePlaceholder': 'SJP123',
+  // Una frase y no un ejemplo de formato (12-10-2026): desde la especificación definitiva el
+  // campo no lleva rótulo visible, así que el marcador de posición es lo único que dice qué va
+  // ahí. La hoja lo dibuja a 15px mientras el valor tecleado sigue a 24.
+  'inspector.lookup.platePlaceholder': 'Ingresa la placa del vehículo',
   'inspector.lookup.zoneLabel': 'Zona',
   // Propio y no el genérico «Selecciona una opción»: es el texto de la referencia v2 y además
   // dice QUÉ se elige, que es lo que un marcador de posición tiene que hacer.

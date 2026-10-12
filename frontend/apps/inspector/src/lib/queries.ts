@@ -6,6 +6,7 @@ import type {
   AppNotification,
   CitationDetail,
   InfractionType,
+  InspectorShiftSummary,
   PagedResponse,
   PlateStatus,
   Citation,
@@ -39,7 +40,50 @@ const KEYS = {
   citation: (id: string) => ['inspector', 'citation', id] as const,
   notifications: (page: number, size: number) => ['inspector', 'notifications', page, size] as const,
   unreadCount: ['inspector', 'notifications', 'unread-count'] as const,
+  shiftSummary: (dia: string) => ['inspector', 'shift-summary', dia] as const,
 };
+
+/**
+ * Lo que esta persona hizo HOY: consultas y boletas (12-10-2026).
+ *
+ * <h2>La ventana es el día local del aparato</h2>
+ *
+ * <p>De medianoche a medianoche, en la hora del aparato y no en UTC: la especificación pide
+ * «consultas realizadas hoy» y «hoy» en Costa Rica termina a las 00:00 de allá, no a las 18:00.
+ * El extremo superior es la medianoche SIGUIENTE y no «ahora», que es lo que mantiene estable la
+ * clave de caché —si fuera «ahora» cambiaría en cada render— y no cuenta de más, porque un acto
+ * del futuro no existe.</p>
+ *
+ * <h2>Qué pasa si el servidor no contesta</h2>
+ *
+ * <p>Nada se dibuja. La especificación lo pide en letra: «si no se puede obtener la cifra, no
+ * mostrarla; nunca poner 0 cuando el dato es desconocido». Un cero inventado en «boletas emitidas»
+ * es peor que no tener la tarjeta: parece un turno sin trabajo.</p>
+ */
+export function useShiftSummary(): UseQueryResult<InspectorShiftSummary> {
+  const { apiClient } = useAuth();
+  const ventana = useMemo(() => {
+    const desde = new Date();
+    desde.setHours(0, 0, 0, 0);
+    const hasta = new Date(desde);
+    hasta.setDate(hasta.getDate() + 1);
+    // La clave lleva el día local, así que a medianoche la caché se renueva sola.
+    const dia = `${desde.getFullYear()}-${String(desde.getMonth() + 1).padStart(2, '0')}-${String(
+      desde.getDate(),
+    ).padStart(2, '0')}`;
+    return { desde: desde.toISOString(), hasta: hasta.toISOString(), dia };
+  }, []);
+  return useQuery({
+    queryKey: KEYS.shiftSummary(ventana.dia),
+    queryFn: () => apiClient.inspectorEnforcement.shiftSummary(ventana.desde, ventana.hasta),
+    // Un turno cambia mientras se trabaja, y esta pantalla se deja abierta: un minuto es
+    // suficiente para que las cifras acompañen sin convertirse en un sondeo.
+    refetchInterval: 60_000,
+    // Sin reintentos en cadena: si el servidor no publica la ruta, la pantalla se queda sin
+    // tarjetas y eso es un resultado correcto, no algo que haya que insistir.
+    retry: 0,
+  });
+}
 
 /**
  * The catalogue an officer writes under. Cached for the length of a shift rather than re-fetched
