@@ -55,6 +55,10 @@ const TAMANOS = [
   { nombre: 'tablet vertical',  width: 768, height: 1024, dedo: true, kpisEsperados: 2 },
   { nombre: 'tablet apaisada',  width: 1024, height: 768, dedo: true, kpisEsperados: 2 },
   { nombre: 'laptop',           width: 1280, height: 800, dedo: false, kpisEsperados: 4 },
+  /* 1366x768 lo pide la correctiva por nombre dos veces: la prueba H —«revisar también con
+     1366 × 768 y 1024 × 768»— y la entrega, que exige su captura. Es además el ancho donde la
+     etiqueta del KPI se parte en dos renglones, o sea donde el techo de 120 se pone a prueba. */
+  { nombre: 'laptop 1366',      width: 1366, height: 768, dedo: false, kpisEsperados: 4 },
   { nombre: 'escritorio',       width: 1440, height: 900, dedo: false, kpisEsperados: 4 },
   { nombre: 'escritorio grande',width: 1920, height: 1080, dedo: false, kpisEsperados: 4 },
 ];
@@ -295,7 +299,10 @@ async function medir(page, dedo) {
       //
       // Para los otros cinco tamaños alcanza la vista: existen para medir, no para mostrar.
       // -------------------------------------------------------------------------------------
-      const ENTREGA = [390, 768, 1440];
+      /* Los tres anchos cuya captura pide la §12: 1536 y 1366 de escritorio y el 390 de mano, que
+         sigue siendo el que enseña si algo se parte. 1440 y 768 se conservan de la entrega
+         anterior porque son los que Javier ya tiene de referencia para comparar. */
+      const ENTREGA = [390, 768, 1366, 1440, 1536];
       const nombreCaptura = `admin-inicio-${tam.width}x${tam.height}`;
       await page.screenshot({ path: `tests/responsive/capturas/${nombreCaptura}-vista.png` });
       if (ENTREGA.includes(tam.width)) {
@@ -734,6 +741,10 @@ async function medir(page, dedo) {
           filaBaltos: [...document.querySelectorAll('.lx-home-grid--operation > *')].map((n) =>
             Math.round(n.getBoundingClientRect().height),
           ),
+          operacionAlineacion: (() => {
+            const f = document.querySelector('.lx-home-grid--operation');
+            return f ? getComputedStyle(f).alignItems : null;
+          })(),
           menuAncho: Math.round(
             document.querySelector('.lx-page-layout__sidebar')?.getBoundingClientRect().width ?? 0,
           ),
@@ -749,6 +760,14 @@ async function medir(page, dedo) {
           tarjetaRelleno: (() => {
             const c = document.querySelector('.lx-home .lx-card--dense');
             return c ? Math.round(parseFloat(getComputedStyle(c).paddingTop)) : null;
+          })(),
+          areaRelleno: (() => {
+            const c = document.querySelector('.lx-page-layout__content');
+            return c ? Math.round(parseFloat(getComputedStyle(c).paddingLeft)) : null;
+          })(),
+          areaHueco: (() => {
+            const h = document.querySelector('.lx-home');
+            return h ? Math.round(parseFloat(getComputedStyle(h).rowGap)) : null;
           })(),
           /* Solape por intersección de cajas en los encabezados de tarjeta. No lo detecta ninguna
              regla de desborde —superponer no desborda— y ya pasó una vez: el rótulo del gráfico
@@ -813,8 +832,8 @@ async function medir(page, dedo) {
         esta semana: una prueba que sobrevive a la especificación que la justificaba.
       */
       okInicio(
-        comp.donut !== null && comp.donut.ancho >= 120 && comp.donut.ancho <= 150,
-        '  y mide 120-150px: grande, sin comerse la lista de zonas',
+        comp.donut !== null && comp.donut.ancho >= 115 && comp.donut.ancho <= 135,
+        '  y mide 115-135px, lo que pide la §5 de la correctiva',
         comp.donut ? `${comp.donut.ancho}px` : 'sin dónut',
       );
       // La inversión que pide la sección 6: la ocupación pasa a ser la columna ancha.
@@ -836,12 +855,33 @@ async function medir(page, dedo) {
           Math.abs(reparto[0] - 40) <= 2 && Math.abs(reparto[1] - 30) <= 2 && Math.abs(reparto[2] - 30) <= 2,
           `  y se reparten ${reparto.join('/')} (la tabla pide 40/30/30)`,
         );
-        const desnivel = Math.max(...comp.filaBaltos) - Math.min(...comp.filaBaltos);
+        /*
+          Esto comprobaba lo contrario hace unas horas: «las tres terminan en la misma línea
+          (desnivel <= 2)». La correctiva lo prohíbe en tres sitios —tabla §3 «altura según
+          contenido, NO igualar a la tarjeta más alta», §7 «con una sola actividad debe verse como
+          tarjeta compacta» y §10 «evitar align-items: stretch […]; usar align-items: start»—, así
+          que lo que se comprueba es lo inverso: que la fila NO esté igualada.
+
+          Dos mitades, porque fallan por separado: la regla de CSS (que nadie vuelva a poner
+          `stretch`) y su efecto medible (que la tarjeta de actividad, con pocos eventos, sea de
+          verdad más baja que su vecina más alta). La segunda sólo se afirma cuando hay poco que
+          mostrar: con cuatro o cinco eventos las tres columnas se emparejan solas y un desnivel de
+          cero sería correcto.
+        */
         okInicio(
-          desnivel <= 2,
-          `  y las tres terminan en la misma línea (desnivel ${desnivel}px)`,
-          comp.filaBaltos.join('/'),
+          comp.operacionAlineacion === 'start' || comp.operacionAlineacion === 'flex-start',
+          `  y la fila no iguala alturas (align-items: ${comp.operacionAlineacion})`,
         );
+        const desnivel = Math.max(...comp.filaBaltos) - Math.min(...comp.filaBaltos);
+        if (comp.eventos <= 2) {
+          okInicio(
+            Math.min(...comp.filaBaltos) < Math.max(...comp.filaBaltos) - 10,
+            `  y con ${comp.eventos} evento(s) la actividad queda compacta, no estirada (desnivel ${desnivel}px)`,
+            comp.filaBaltos.join('/'),
+          );
+        } else {
+          console.log(`  ··  la fila mide ${comp.filaBaltos.join('/')}px; con ${comp.eventos} eventos emparejarse es correcto`);
+        }
       }
       okInicio(
         comp.menuAncho >= 230 && comp.menuAncho <= 250,
@@ -865,6 +905,15 @@ async function medir(page, dedo) {
       okInicio(
         comp.tarjetaRelleno !== null && comp.tarjetaRelleno >= 14 && comp.tarjetaRelleno <= 18,
         `las tarjetas del tablero tienen ${comp.tarjetaRelleno}px de relleno (pide 14-18)`,
+      );
+      /* Tabla §3: «Área principal — padding 18-20 px; separación entre filas 12-14 px». */
+      okInicio(
+        comp.areaRelleno >= 18 && comp.areaRelleno <= 20,
+        `el área principal tiene ${comp.areaRelleno}px de relleno (pide 18-20)`,
+      );
+      okInicio(
+        comp.areaHueco >= 12 && comp.areaHueco <= 14,
+        `y ${comp.areaHueco}px de separación entre filas (pide 12-14)`,
       );
       okInicio(
         comp.solapes.length === 0,
@@ -974,8 +1023,10 @@ async function medir(page, dedo) {
             return `«${rec(callout.textContent)}» se imprime encima de «${rec((cruza(r) ? rotulo : titulo).textContent)}»`;
           })(),
           // La otra mitad del §9: la ayuda del acceso rápido tampoco puede quedar con «…».
+          ayudasVisibles: [...document.querySelectorAll('.lx-quick-tile__hint')]
+            .filter((n) => getComputedStyle(n).display !== 'none').length,
           ayudasRecortadas: [...document.querySelectorAll('.lx-quick-tile__hint')]
-            .filter((n) => n.scrollWidth > n.clientWidth + 1)
+            .filter((n) => getComputedStyle(n).display !== 'none' && n.scrollWidth > n.clientWidth + 1)
             .map((n) => rec(n.textContent)),
           // §12: el bloque de atención existe SÓLO con incidencias. Las dos salidas son correctas.
           atencion: document.querySelectorAll('.lx-home-attention__item').length,
@@ -1014,32 +1065,136 @@ async function medir(page, dedo) {
           ejesRepetidos: [...new Set([...ejes].map((n) => n.textContent.trim()))].length === 1 && ejes.length > 1,
           rotuloVisible: rotulo ? rotulo.textContent.trim().length > 0 : false,
           barras,
+          /* §6: con los siete días en cero NO hay gráfico, hay un estado vacío compacto y
+             centrado. Las dos salidas son correctas y se distinguen acá, para que el resto de las
+             comprobaciones del gráfico no afirmen un eje que la pantalla tiene razón en no
+             dibujar. */
+          vacioIngresos: (() => {
+            const n = document.querySelector('.lx-home-grid--analytics .lx-empty-state--inline');
+            if (!n) return null;
+            return {
+              texto: n.textContent.replace(/\s+/g, ' ').trim(),
+              // Que el bloque de texto sea compacto: lo que no puede volver a pasar es un gráfico
+              // de ejes de 150px de alto sin un solo dato.
+              altoTexto: Math.round(n.querySelector('.lx-empty-state__title').getBoundingClientRect().height),
+            };
+          })(),
+          // §5: «filas de 27-32 px» en la lista de zonas del dónut.
+          filasZona: [...document.querySelectorAll('.lx-occupancy .lx-zone-row')].map((n) =>
+            Math.round(n.getBoundingClientRect().height),
+          ),
+          // §7: «filas compactas de 30-34 px» en «Zonas más utilizadas».
+          filasRanking: [...document.querySelectorAll('.lx-zone-rank__row')].map((n) =>
+            Math.round(n.getBoundingClientRect().height),
+          ),
+          // §7: «cada acceso de 62-76 px aprox.; ícono de 16-18 px, título 12-13 px».
+          baldosas: [...document.querySelectorAll('.lx-quick-tile')].map((n) =>
+            Math.round(n.getBoundingClientRect().height),
+          ),
+          baldosaTituloPx: (() => {
+            const n = document.querySelector('.lx-quick-tile__title');
+            return n ? Math.round(parseFloat(getComputedStyle(n).fontSize)) : null;
+          })(),
+          baldosaGlifo: (() => {
+            const n = document.querySelector('.lx-quick-tile__icon svg');
+            return n ? Math.round(n.getBoundingClientRect().width) : null;
+          })(),
+          // Tabla §3: «ícono 16-20 px en contenedor 30-34 px».
+          kpiIconoCaja: (() => {
+            const n = document.querySelector('.lx-metric__icon');
+            return n ? Math.round(n.getBoundingClientRect().width) : null;
+          })(),
+          kpiIconoGlifo: (() => {
+            const n = document.querySelector('.lx-metric__icon svg');
+            return n ? Math.round(n.getBoundingClientRect().width) : null;
+          })(),
+          // §7: nada del ranking puede quedar con «…». La prueba E lo pide para toda la pantalla.
+          rankingRecortado: [...document.querySelectorAll('.lx-zone-rank__name')]
+            .filter((n) => n.scrollWidth > n.clientWidth + 1)
+            .map((n) => n.textContent.trim()),
         };
       });
       const dentro = (v, min, max) => v !== null && v >= min && v <= max;
-      okInicio(dentro(TABLA.saludo, 64, 84), `el saludo mide ${TABLA.saludo}px (la tabla pide 64-80)`);
+      /* 50-62 (correctiva 12-10-2026). Era 64-84 por la especificación anterior, y es el rango que
+         esta misma línea comprobaba en verde esta mañana: la tabla nueva pide «bloque de 50-62 px,
+         sin hero alto». Medido, el bloque daba 64 por el h1 a 30px; ahora da 56. */
+      okInicio(dentro(TABLA.saludo, 50, 62), `el saludo mide ${TABLA.saludo}px (la tabla pide 50-62)`);
       okInicio(
-        TABLA.kpisIguales && TABLA.kpis.every((h) => dentro(h, 115, 130)),
-        `los cuatro KPI miden ${TABLA.kpis.join('/')}px (la tabla del 12-10 pide 115-130 e iguales)`,
+        TABLA.kpisIguales && TABLA.kpis.every((h) => dentro(h, 105, 120)),
+        `los cuatro KPI miden ${TABLA.kpis.join('/')}px (la correctiva pide 105-120 e iguales)`,
       );
       okInicio(
         dentro(TABLA.etiquetaPx, 13, 14),
         `la etiqueta del KPI mide ${TABLA.etiquetaPx}px (pide 13-14)`,
       );
       okInicio(
-        TABLA.filaA.every((h) => dentro(h, 240, 270)),
-        `la fila de gráficos mide ${TABLA.filaA.join(' y ')}px (la tabla del 12-10 pide 240-270)`,
+        TABLA.filaA.every((h) => dentro(h, 220, 245)),
+        `la fila de gráficos mide ${TABLA.filaA.join(' y ')}px (la correctiva pide 220-245)`,
       );
       okInicio(
-        dentro(TABLA.donut, 120, 150),
-        `el dónut mide ${TABLA.donut}px de diámetro (se redujo para dar sitio a las zonas)`,
+        dentro(TABLA.donut, 115, 135),
+        `el dónut mide ${TABLA.donut}px de diámetro (la §5 pide 115-135)`,
       );
       okInicio(
         !TABLA.ejesRepetidos,
         'el gráfico no repite la misma cifra en todo el eje',
         `${TABLA.ejes} marcas iguales`,
       );
-      okInicio(TABLA.barras === 7, `los siete días siguen dibujados`, `son ${TABLA.barras}`);
+      /*
+        Hasta hoy esta línea exigía las siete barras siempre, y con la semana en cero las siete
+        estaban dibujadas con altura cero: era verde sobre el defecto que la §6 manda corregir. Las
+        dos salidas válidas son ahora «siete barras» o «el estado vacío con su frase», y nunca las
+        dos a la vez: un eje sin datos ya no es una respuesta aceptable.
+      */
+      okInicio(
+        (TABLA.barras === 7 && TABLA.vacioIngresos === null)
+          || (TABLA.barras === 0 && TABLA.vacioIngresos !== null),
+        TABLA.vacioIngresos
+          ? '  la semana sumó cero y se dice en un estado vacío compacto, sin gráfico de ejes'
+          : '  los siete días siguen dibujados',
+        `barras=${TABLA.barras} vacío=${TABLA.vacioIngresos ? `«${TABLA.vacioIngresos.texto}»` : 'no'}`,
+      );
+      if (TABLA.vacioIngresos) {
+        okInicio(
+          /Sin recaudación registrada en este per/i.test(TABLA.vacioIngresos.texto),
+          '  y la frase es la que pide la §6',
+          TABLA.vacioIngresos.texto,
+        );
+        okInicio(
+          TABLA.vacioIngresos.altoTexto <= 40,
+          `  y el bloque es compacto (${TABLA.vacioIngresos.altoTexto}px de texto, no 150 de eje vacío)`,
+        );
+      }
+      /* Las piezas que la correctiva mide una por una. */
+      okInicio(
+        TABLA.filasZona.length > 0 && TABLA.filasZona.every((h) => dentro(h, 27, 32)),
+        `las filas de zona del dónut miden ${TABLA.filasZona.join('/')}px (la §5 pide 27-32)`,
+      );
+      okInicio(
+        TABLA.filasRanking.length === 0 || TABLA.filasRanking.every((h) => dentro(h, 30, 34)),
+        `las filas del ranking miden ${TABLA.filasRanking.join('/')}px (la §7 pide 30-34)`,
+      );
+      okInicio(
+        TABLA.rankingRecortado.length === 0,
+        '  y ningún nombre del ranking queda con puntos suspensivos',
+        TABLA.rankingRecortado.join(' · '),
+      );
+      okInicio(
+        TABLA.baldosas.length === 4 && TABLA.baldosas.every((h) => dentro(h, 62, 76)),
+        `los cuatro accesos miden ${TABLA.baldosas.join('/')}px (la §7 pide 62-76)`,
+      );
+      okInicio(
+        dentro(TABLA.baldosaTituloPx, 12, 13),
+        `el título del acceso mide ${TABLA.baldosaTituloPx}px (pide 12-13)`,
+      );
+      okInicio(
+        dentro(TABLA.baldosaGlifo, 16, 18),
+        `su ícono mide ${TABLA.baldosaGlifo}px (pide 16-18)`,
+      );
+      okInicio(
+        dentro(TABLA.kpiIconoCaja, 30, 34) && dentro(TABLA.kpiIconoGlifo, 16, 20),
+        `el ícono del KPI mide ${TABLA.kpiIconoGlifo}px en un contenedor de ${TABLA.kpiIconoCaja}px (pide 16-20 en 30-34)`,
+      );
 
       const OBLIGATORIOS = [
         'Ocupación en tiempo real',
@@ -1062,8 +1217,8 @@ async function medir(page, dedo) {
         cerrada.accesosRecortados.join(' · '),
       );
       okInicio(
-        cerrada.kpiValorPx >= 28 && cerrada.kpiValorPx <= 34,
-        `el número de un KPI mide ${cerrada.kpiValorPx}px (la especificación pide 28-34)`,
+        cerrada.kpiValorPx >= 27 && cerrada.kpiValorPx <= 32,
+        `el número de un KPI mide ${cerrada.kpiValorPx}px (la correctiva pide 27-32)`,
       );
       okInicio(
         cerrada.tituloModuloPx >= 18 && cerrada.tituloModuloPx <= 20,
@@ -1084,9 +1239,17 @@ async function medir(page, dedo) {
         'nada se imprime encima del encabezado del gráfico',
         cerrada.encabezadoCruzado ?? '',
       );
+      /*
+        La §7 marca la descripción del acceso como OPCIONAL y en esta pantalla no se dibuja: en la
+        columna del 30% la baldosa más ancha deja 130px de texto y la ayuda más corta mide ~155, o
+        sea que a ningún ancho cabría entera. Esta comprobación cuida las dos salidas —ausente, o
+        presente y completa— porque «ausente» hacía pasar en silencio la versión recortada.
+      */
       okInicio(
-        cerrada.ayudasRecortadas.length === 0,
-        'ninguna ayuda de acceso rápido queda recortada en escritorio',
+        cerrada.ayudasVisibles === 0 || cerrada.ayudasRecortadas.length === 0,
+        cerrada.ayudasVisibles === 0
+          ? 'la ayuda del acceso no se dibuja (opcional por la §7), así que no hay nada que recortar'
+          : 'ninguna ayuda de acceso rápido queda recortada en escritorio',
         cerrada.ayudasRecortadas.join(' · '),
       );
       okInicio(

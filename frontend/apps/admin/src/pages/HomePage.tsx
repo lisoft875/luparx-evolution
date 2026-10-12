@@ -365,6 +365,11 @@ export function HomePage(): React.JSX.Element {
     }));
   }, [serie.data, locale]);
 
+  /* Una semana con los siete días en cero. Se distingue de «no hay serie» (`barras.length === 0`,
+     que atiende el `emptyLabel` del propio gráfico): acá la semana existe y la municipalidad no
+     cobró en ella. La §6 de la correctiva decide cómo se dibuja eso. */
+  const todoEnCero = barras.length > 0 && barras.every((b) => b.value === 0);
+
   const eventos: AuditEvent[] = useMemo(
     () => (actividad.data?.items ?? []).filter((e) => e.action in ACTOS).slice(0, EVENTOS_A_MOSTRAR),
     [actividad.data],
@@ -623,13 +628,13 @@ export function HomePage(): React.JSX.Element {
                         caption={t('admin.home.occupancy.total')}
                         emptyLabel={t('admin.home.occupancy.noBase')}
                         title={t('admin.home.zones.title')}
-                        /* 136 y no los 168 por omisión. El plan del 09-10 lo pide con su razón:
-                           «reducir su diámetro respecto a staging para dar espacio a las zonas».
-                           Medido, el anillo soltaba 32px de ancho que la lista de zonas estaba
-                           pidiendo —ahí es donde «Escazú centro prueba» y su barra competían—. El
-                           componente escala su grosor con el diámetro, así que no hay nada más
-                           que ajustar. */
-                        size={136}
+                        /* 124 (correctiva 12-10-2026). Venía de 136, que venía de los 168 por
+                           omisión; la §5 pide ahora «reducir dónut a 115-135 px de diámetro
+                           aprox.» y 124 es el centro de ese rango. El motivo es el mismo de
+                           siempre y por eso el número baja otra vez en vez de discutirse: el
+                           anillo suelta ancho que la lista de zonas está pidiendo. El componente
+                           escala su grosor con el diámetro, así que no hay nada más que ajustar. */
+                        size={124}
                       />
                       {/* De qué se compone el porcentaje. La referencia lo pone bajo el número y
                           son dos cifras que el panel ya daba: estadías corriendo sobre bahías en
@@ -691,27 +696,34 @@ export function HomePage(): React.JSX.Element {
                       {t('common.retry')}
                     </Button>
                   </div>
+                ) : todoEnCero ? (
+                  /* Con los siete días en cero NO se dibuja el gráfico (correctiva 12-10-2026).
+
+                     Hasta hoy se dibujaba, con la nota debajo, y el argumento escrito acá era que
+                     quitar el gráfico «escondería que la semana existe y que la municipalidad no
+                     cobró en ella». La §6 decide lo contrario en letra —«presentar un estado vacío
+                     compacto y centrado […]; no dejar un gran gráfico de ejes sin datos»— y al
+                     mirar la captura de staging tiene razón: siete barras de altura cero sobre un
+                     eje rotulado en colones leen como un fallo de carga, no como una semana sin
+                     ingresos. La frase lo dice y ocupa un octavo del alto.
+
+                     El gráfico vuelve solo en cuanto un día traiga un monto: la condición es el
+                     dato, no una preferencia guardada. Nada se fabrica —ni barras ni tendencias—
+                     y el total de la semana de arriba tampoco se dibuja, porque es cero. */
+                  <div className="lx-empty-state lx-empty-state--inline">
+                    <p className="lx-empty-state__title">{t('admin.home.revenue.empty')}</p>
+                  </div>
                 ) : (
-                  <>
-                    <BarChart
-                      title={t('admin.home.revenue.title')}
-                      data={barras}
-                      emptyLabel={t('admin.home.revenue.empty')}
-                      formatAxis={(valor) => dinero(Math.round(valor), serie.data?.currencyCode ?? 'CRC')}
-                      tableHeaders={{
-                        label: t('admin.home.revenue.columnDay'),
-                        value: t('admin.home.revenue.columnAmount'),
-                      }}
-                    />
-                    {/* Con TODO en cero el gráfico se queda —los siete días siguen dibujados— y la
-                        nota va debajo. Convertir la tarjeta en un párrafo escondería que la semana
-                        existe y que la municipalidad no cobró en ella, que es el dato. */}
-                    {barras.length > 0 && barras.every((b) => b.value === 0) ? (
-                      <p className="lx-text-meta" style={{ margin: 'var(--lx-space-2) 0 0' }}>
-                        {t('admin.home.revenue.empty')}
-                      </p>
-                    ) : null}
-                  </>
+                  <BarChart
+                    title={t('admin.home.revenue.title')}
+                    data={barras}
+                    emptyLabel={t('admin.home.revenue.empty')}
+                    formatAxis={(valor) => dinero(Math.round(valor), serie.data?.currencyCode ?? 'CRC')}
+                    tableHeaders={{
+                      label: t('admin.home.revenue.columnDay'),
+                      value: t('admin.home.revenue.columnAmount'),
+                    }}
+                  />
                 )}
               </Card>
             </div>
