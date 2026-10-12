@@ -310,6 +310,37 @@ public class InspectorEnforcementController {
                 citations.size(), citations.totalElements(), citations.totalPages());
     }
 
+    /**
+     * Lo que hice en esta ventana: consultas y boletas (12-10-2026).
+     *
+     * <p>Las dos cifras en una sola respuesta porque son la misma pregunta —«¿qué hice yo hoy?»— y
+     * la pantalla que las pide se abre de pie en la calle: dos llamadas serían dos esperas.</p>
+     *
+     * <p>{@code from} y {@code to} son obligatorios y los acota quien llama. «Todo mi historial»
+     * sobre la tabla de consultas es una consulta que se hace más lenta cada día que la
+     * municipalidad opera, y no hay ninguna pantalla que necesite esa lectura.</p>
+     *
+     * <p>Sólo mías: el identificador sale del contexto de sesión y no de un parámetro, así que no
+     * hay forma de pedir el turno de otra persona desde acá. Lo de la municipalidad entera es el
+     * panel administrativo, con su propio permiso.</p>
+     */
+    @GetMapping("/shift-summary")
+    @PreAuthorize("hasAuthority('PERM_CITATION_READ')")
+    @Operation(summary = "My checks and citations in a window")
+    public EnforcementDtos.ShiftSummaryResponse shiftSummary(
+            @RequestParam Instant from,
+            @RequestParam Instant to) {
+        TenantId tenantId = TenantContextHolder.requireTenantId();
+        UUID me = TenantContextHolder.requireUserId().value();
+        long checks = checkService.countForInspector(tenantId, me, from, to);
+        // `search` ya acepta inspector + rango: no hace falta un método nuevo en CitationService.
+        // Se pide una página de uno porque lo que interesa es `totalElements`, no las filas.
+        long citations = citationService
+                .search(tenantId, null, null, me, null, from, to, PageRequest.parse(0, 1, null))
+                .totalElements();
+        return new EnforcementDtos.ShiftSummaryResponse(from, to, checks, citations);
+    }
+
     /** One of my citations, with its evidence and its history. */
     @GetMapping("/citations/{id}")
     @PreAuthorize("hasAuthority('PERM_CITATION_READ')")

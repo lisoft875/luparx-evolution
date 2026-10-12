@@ -737,4 +737,14 @@ public final class EnforcementDtos {
     public record InspectorZoneResponse(UUID id, String code, String name, String description,
                                         ParkingDtos.SpaceCodeRange spaceCodes) {
     }
+
+    /**
+     * Lo que esta persona hizo en una ventana de su turno (12-10-2026).
+     *
+     * <p>La ventana viaja en la respuesta además de en la petición: la pantalla la dibuja debajo de
+     * las cifras («hoy», «este turno») y pedirle que recuerde lo que mandó para rotularlas es cómo
+     * se termina mostrando el número de ayer con la etiqueta de hoy.</p>
+     */
+    public record ShiftSummaryResponse(Instant from, Instant to, long checks, long citations) {
+    }
 }

@@ -101,6 +101,17 @@ public class EnforcementCheckService {
         return PageResponse.of(page.getContent(), request.page(), request.size(), page.getTotalElements());
     }
 
+    /**
+     * Cuántas consultas hizo este fiscalizador en la ventana. Para el resumen de su jornada.
+     *
+     * <p>Acotado siempre por municipalidad y por persona: la pregunta es «¿qué hice yo hoy acá?», y
+     * ninguna otra lectura de este método tiene sentido.</p>
+     */
+    @Transactional(readOnly = true)
+    public long countForInspector(TenantId tenantId, UUID inspector, Instant from, Instant to) {
+        return checkRepository.countForInspector(tenantId.value(), inspector, from, to);
+    }
+
     /** How many rows are past the retention cutoff, so the purge can say something true. */
     @Transactional(readOnly = true)
     public long countDueForPurge(Instant cutoff) {

@@ -46,6 +46,26 @@ public interface EnforcementCheckRepository extends JpaRepository<EnforcementChe
                                   Pageable pageable);
 
     /**
+     * Cuántas consultas hizo esta persona en esta ventana (12-10-2026).
+     *
+     * <p>Un conteo y no un {@code search(...).totalElements}: la pantalla que lo pide quiere el
+     * número, no la primera página de filas, y ésta es la tabla más grande de la plataforma.</p>
+     *
+     * <p>No hace falta índice nuevo: recorre la misma combinación de columnas
+     * ({@code tenantId}, {@code inspectorUserId}, {@code occurredAt}) que {@code search} ya usa.</p>
+     */
+    @Query("""
+            select count(c) from EnforcementCheck c
+            where c.tenantId = :tenantId
+              and c.inspectorUserId = :inspector
+              and c.occurredAt >= :from and c.occurredAt < :to
+            """)
+    long countForInspector(@Param("tenantId") UUID tenantId,
+                           @Param("inspector") UUID inspector,
+                           @Param("from") Instant from,
+                           @Param("to") Instant to);
+
+    /**
      * Deletes one batch of checks older than the cutoff, and answers how many it removed.
      *
      * <p>In batches, not all at once. A single statement over a year of a busy municipality's
