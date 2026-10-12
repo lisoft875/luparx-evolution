@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { useAuth } from '@luparx/auth';
 import { ActiveTenantBadge } from '@luparx/features';
 import { useTranslation } from '@luparx/i18n';
 import {
@@ -48,6 +49,7 @@ export function InspectorShell({
   onBack,
 }: InspectorShellProps): React.JSX.Element {
   const { t } = useTranslation();
+  const { me } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const online = useIsOnline();
@@ -66,8 +68,15 @@ export function InspectorShell({
   const avisos = (sinLeer.data?.unread ?? 0) + pending;
   /** La única pantalla sin campana: la de los avisos. Un botón hacia donde ya estás. */
   const enAvisos = location.pathname.startsWith('/notifications');
-  /** La única pantalla con saludo, que es la que puede llevar el estado de conexión en el cuerpo. */
-  const enInicio = location.pathname === '/';
+  /*
+    La identidad de la sesión, en el encabezado (12-10-2026, v2).
+
+    El documento pide un «encabezado compacto: marca, municipio, inspector y estado de conexión».
+    Las dos primeras ya estaban. El nombre entra acá, y la hoja lo esconde por debajo de 480px:
+    en un teléfono esa fila ya lleva el logo, la municipalidad, el estado y la campana, y el
+    nombre completo la partiría en dos. Ahí la identidad sigue a un toque, en Más → Perfil.
+  */
+  const nombre = me?.user.givenName ?? null;
   // One request per session, on whatever screen the officer lands on, so the zone picker is not
   // empty on a device that has already worked a shift.
   useZoneDirectorySeed();
@@ -297,46 +306,22 @@ export function InspectorShell({
           }
           end={
             /*
-              El estado de conexión, resuelto en dos sitios y no en uno (08-10-2026).
+              El estado de conexión, en la barra y SIEMPRE (12-10-2026).
 
-              Hubo un choque real entre dos encargos. El del 06-10 pidió «En línea» arriba a la
-              derecha y se hizo; la referencia visual del 07-10 lo dibuja junto al saludo, en la
-              pantalla de inicio. Los dos tienen razón en algo distinto, y por eso no se elige: se
-              parte por lo que cada caso necesita.
+              Esta línea tuvo cuatro criterios en seis días y conviene cerrar la historia, porque
+              cada uno corrigió algo real del anterior. El 06-10 se pidió «En línea» arriba a la
+              derecha y se hizo. La referencia del 07-10 lo dibujó junto al saludo del Inicio, así
+              que se partió: confirmación junto al saludo, advertencia en la barra. Eso dejó un
+              hueco que el encargo del 08-10 señaló —en Ayuda, que no tenía saludo, con señal no
+              quedaba ningún indicador—, y el reparto pasó a ser por si la pantalla tenía saludo.
 
-              Cuando hay señal, «En línea» es una confirmación. Vive junto al saludo, que es donde
-              la referencia la pone y donde se lee al entrar; si se va al desplazarse no se pierde
-              nada, porque no había nada que decidir.
-
-              Cuando NO hay señal, es una advertencia, y cambia de naturaleza: un fiscalizador que
-              no sabe que está sin señal da por presentada una boleta que todavía está en el
-              teléfono. Esa advertencia tiene que estar en todas las pantallas y no puede
-              desplazarse fuera de la vista, así que aparece acá, en la barra fija.
-
-              Y nunca las dos a la vez: sin señal, la pantalla de inicio no dibuja su ficha. Un solo
-              indicador en pantalla, que es lo que el encargo del 06-10 pedía al quitar la franja
-              duplicada.
+              La v2 quita el saludo. Con él se va la única razón por la que esto estaba repartido,
+              y la regla vuelve a ser la simple: el estado vive en el encabezado compacto, que es
+              fijo y está en las nueve pantallas. Un solo indicador en pantalla, que es lo que el
+              06-10 pedía al borrar la franja duplicada.
             */
-            /*
-              Afinado el 08-10-2026, y es el tercer criterio de esta línea en tres días: conviene
-              contar por qué, porque cada uno corrigió algo real del anterior.
-
-              El encargo del 06-10 pidió «En línea» arriba a la derecha. La referencia visual del
-              07-10 lo dibuja junto al saludo. Ayer lo partí por estado —confirmación junto al
-              saludo, advertencia en la barra— y eso dejó un hueco que el encargo de hoy señala en
-              su punto 10: en Ayuda, que no tiene saludo, con señal no quedaba ningún indicador.
-
-              El reparto correcto no es por estado sino por si la pantalla TIENE saludo. En el
-              inicio lo lleva el saludo, que es donde la referencia lo pone. En todas las demás
-              —Boleta, Mis boletas, Pendientes, Más, Ayuda, Perfil— lo lleva la barra, que es fija
-              y no se va al desplazarse. Sin señal lo lleva la barra siempre, también en el inicio,
-              porque entonces es una advertencia y no puede depender de dónde esté uno.
-
-              Sigue habiendo UN solo indicador en pantalla, que es lo que el 06-10 pedía al borrar
-              la franja duplicada. `enInicio` es la ruta y no `onBack`: lo que decide es si hay un
-              saludo debajo, y eso lo sabe la ruta.
-            */
-            !online || !enInicio ? (
+            <>
+              {nombre ? <span className="lx-fiscal-who">{nombre}</span> : null}
               <Badge
                 /* El mismo gancho estable para medir desde fuera: buscarla por su texto obligaría
                    a las pruebas a conocer las traducciones. */
@@ -345,7 +330,7 @@ export function InspectorShell({
               >
                 {online ? t('inspector.home.online') : t('inspector.offline.badge')}
               </Badge>
-            ) : undefined
+            </>
                     }
         />
       </div>

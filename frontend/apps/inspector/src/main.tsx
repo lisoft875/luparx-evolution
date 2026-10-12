@@ -8,6 +8,19 @@ import { assertEnvConfigured } from './env';
 // targets for gloved/sunlit use — driven entirely by `--lx-*` tokens, see tokens.css.
 document.documentElement.dataset.density = 'outdoor';
 
+/*
+  El portal, como gancho de la paleta (12-10-2026).
+
+  No estaba: de los cuatro portales, Fiscalización era el único que no se identificaba, así que
+  pintaba con la paleta general. Desde la v2 tiene la suya —fondo navy, una sola tarjeta, los dos
+  azules— y vive en `:root[data-portal='inspector']` de tokens.css, que es el mismo gancho que el
+  Ciudadano, el Administrador y la Plataforma usan desde que existen.
+
+  El orden importa y está escrito también en tokens.css: ese bloque va DESPUÉS del de densidad
+  exterior, porque las dos reglas tienen la misma especificidad y la densidad redefine el borde.
+*/
+document.documentElement.dataset.portal = 'inspector';
+
 const container = document.getElementById('root');
 if (!container) throw new Error('Root element not found');
 

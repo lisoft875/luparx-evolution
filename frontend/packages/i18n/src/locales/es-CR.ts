@@ -1763,6 +1763,11 @@ export const esCR = {
   'inspector.home.quick.evidence': 'Evidencia',
   'inspector.home.quick.queue': 'Pendientes',
   'inspector.home.quick.label': 'Acciones del turno',
+  'inspector.home.quick.title': 'Acciones rápidas',
+  // El título y el subtítulo de la pantalla (12-10-2026, orden visual v2 para iPad). La
+  // pantalla deja de encabezarse con un saludo y pasa a decir qué se hace en ella.
+  'inspector.home.title': 'Consultar vehículo',
+  'inspector.home.subtitle': 'Verifica el estado de estacionamiento y los permisos.',
 
   /* --- Pantalla inicial de Fiscalización (07-10-2026, especificación visual responsive) ------ */
   'inspector.home.greeting': 'Hola, Inspector',
@@ -1775,7 +1780,9 @@ export const esCR = {
   'inspector.home.quick.evidence.hint': 'Fotos y adjuntos',
   'inspector.home.fast.go': 'Buscar',
   'inspector.home.last.title': 'Última consulta',
-  'inspector.home.last.empty': 'Todavía no consultaste ninguna placa en este turno.',
+  // El estado vacío, con la frase de la referencia v2: dice qué va a pasar, no sólo que no
+  // ha pasado nada.
+  'inspector.home.last.empty': 'Los resultados aparecerán después de consultar una placa.',
   'inspector.home.last.again': 'Volver a consultar {{plate}}',
   'inspector.home.last.checkedAt': 'Consultada a las {{time}}',
   // Cuatro claves que la pantalla de inicio del inspector ya usaba sin que existieran: el tipo
@@ -2204,14 +2211,21 @@ export const esCR = {
   'inspector.lookup.help': 'Verifica permisos, infracciones y datos disponibles del vehículo.',
   'inspector.lookup.offline': 'Sin señal: la consulta necesita conexión. La boleta sí se puede levantar y sale sola cuando vuelva.',
   'inspector.lookup.checking': 'Consultando la placa…',
-  'inspector.lookup.plateLabel': 'Placa',
+  // «Placa del vehículo» y no «Placa»: desde la v2 este rótulo SE VE encima del campo, y la
+  // referencia lo dibuja con esas tres palabras. Sigue siendo además el nombre accesible.
+  'inspector.lookup.plateLabel': 'Placa del vehículo',
   'inspector.lookup.platePlaceholder': 'SJP123',
   'inspector.lookup.zoneLabel': 'Zona',
+  // Propio y no el genérico «Selecciona una opción»: es el texto de la referencia v2 y además
+  // dice QUÉ se elige, que es lo que un marcador de posición tiene que hacer.
+  'inspector.lookup.zonePlaceholder': 'Seleccionar zona',
   'inspector.lookup.bayLabel': 'Bahía',
   'inspector.lookup.bayPlaceholder': '0042',
   'inspector.lookup.submit': 'Consultar',
-  'inspector.lookup.bayHint':
-    'Sin la bahía el sistema nunca dice que está cubierta: la bahía es lo que distingue el carro que pagó del que no.',
+  // Abreviada el 12-10-2026, que es lo que la v2 autoriza en letra: «se puede abreviar la
+  // explicación en pantalla, pero nunca modificar su lógica». La regla no cambia —sin bahía el
+  // servidor no confirma cobertura—; lo que cambia es que se dice en un renglón y no en tres.
+  'inspector.lookup.bayHint': 'Sin la bahía, la cobertura no se confirma.',
   'inspector.lookup.bayIncomplete': 'Indicá la zona y la bahía juntas, o ninguna de las dos.',
   'inspector.lookup.checkedAt': 'Consultado a las {{time}}',
   'inspector.lookup.coveringStay': 'Sesión vigente hasta {{time}}',

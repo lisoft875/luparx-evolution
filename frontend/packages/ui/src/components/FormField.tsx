@@ -9,6 +9,15 @@ export interface FormFieldProps {
   /** Pass the already-translated "optional" label (e.g. t('common.optional')) to annotate a non-required field; omit for required fields. */
   optionalLabel?: string;
   children: React.ReactNode | ((ids: { inputId: string; describedBy: string | undefined }) => React.ReactNode);
+  /**
+   * Clase extra en el contenedor del campo.
+   *
+   * <p>Para el caso en que el hueco o la composición del campo los decide la pantalla y no el
+   * componente: la fila de la placa del fiscalizador, por ejemplo, pone su propia separación con
+   * el `gap` del formulario y necesita apagar el margen inferior de `.lx-field`. Sin esto había
+   * que envolver el campo en un `div` sólo para tener dónde colgar la clase.</p>
+   */
+  className?: string;
 }
 
 /**
@@ -24,6 +33,7 @@ export function FormField({
   hint,
   optionalLabel,
   children,
+  className,
 }: FormFieldProps): React.JSX.Element {
   const generatedId = useId();
   const inputId = htmlFor ?? generatedId;
@@ -32,7 +42,7 @@ export function FormField({
   const describedBy = [hintId, errorId].filter(Boolean).join(' ') || undefined;
 
   return (
-    <div className="lx-field">
+    <div className={['lx-field', className].filter(Boolean).join(' ')}>
       <label htmlFor={inputId} className="lx-field__label">
         {label}
         {optionalLabel ? <span className="lx-field__optional"> ({optionalLabel})</span> : null}

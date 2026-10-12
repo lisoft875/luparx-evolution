@@ -61,6 +61,12 @@ const CLARO = new Map([...OSCURO, ...tokensDe(":root[data-theme='light']")]);
   para mirar colores y su override redefine `--lx-primary` y `--lx-primary-soft` de una vez.
 */
 const PLATAFORMA = new Map([...OSCURO, ...tokensDe(":root[data-portal='platform']")]);
+/*
+  Fiscalización redefine superficies, bordes, los dos azules y el texto auxiliar (12-10-2026). Se
+  revisa como un tema más por el mismo motivo que la plataforma: es el portal que nadie abre para
+  mirar colores, y el que se usa al sol.
+*/
+const FISCALIZACION = new Map([...OSCURO, ...tokensDe(":root[data-portal='inspector']")]);
 const PLATAFORMA_CLARA = new Map([
   ...CLARO,
   ...tokensDe(":root[data-portal='platform']"),
@@ -296,6 +302,7 @@ function revisarTema(nombre, mapa, oscuro) {
 revisarTema('TEMA OSCURO', OSCURO, true);
 revisarTema('TEMA CLARO', CLARO, false);
 revisarTema('PLATAFORMA · OSCURO', PLATAFORMA, true);
+revisarTema('FISCALIZACIÓN · OSCURO', FISCALIZACION, true);
 revisarTema('PLATAFORMA · CLARO', PLATAFORMA_CLARA, false);
 
 console.log(`\n${fallos === 0 ? 'Toda la paleta pasa.' : `${fallos} combinación(es) por debajo del mínimo.`}\n`);

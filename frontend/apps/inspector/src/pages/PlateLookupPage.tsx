@@ -1,7 +1,6 @@
 import * as React from 'react';
 import { useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '@luparx/auth';
 import {
   formatCurrencyMinor,
   formatDate,
@@ -21,10 +20,7 @@ import {
   IconCheck,
   IconChevronRight,
   IconClock,
-  IconEye,
-  IconFine,
   IconPin,
-  IconSearch,
   Input,
   ListRow,
   SectionHeader,
@@ -57,15 +53,12 @@ import { lookupErrorMessage } from '../lib/apiErrors';
 export function PlateLookupPage(): React.JSX.Element {
   const { t, locale } = useTranslation();
   const navigate = useNavigate();
-  const { me, activeTenant } = useAuth();
   const zones = useKnownZones();
   const lookup = usePlateLookup();
   const online = useIsOnline();
   // El conteo real de la cola de este aparato, para la insignia de «Pendientes».
   const { pending } = useCitationQueue();
   const ultima = useLastLookup();
-  const nombre = me?.user.givenName ?? null;
-  const municipio = activeTenant?.shortName ?? activeTenant?.name ?? null;
 
   // El acceso «Consultar placa» del lanzador no navega a ningún lado: ya estamos en su pantalla,
   // así que lleva el cursor al campo —que es la acción— y abre el teclado.
@@ -117,328 +110,374 @@ export function PlateLookupPage(): React.JSX.Element {
   return (
     <InspectorShell>
       {/*
-        El saludo (07-10-2026, especificación visual responsive de Fiscalización).
+        El título de la pantalla (12-10-2026, «Orden visual de implementación v2, iPad»).
 
-        Ocupa el sitio donde estaba `<h1>Consulta de placa</h1>`, y eso es textualmente lo que el
-        documento pide: «no repetir un gran título genérico como "Consulta de placa" ocupando
-        espacio antes de las acciones», y en su lugar «saludo corto: Hola, Inspector» con
-        «Fiscalización · Escazú» debajo.
+        Ocupa el sitio donde del 07 al 12 de octubre estuvo el saludo —«Hola, Javier» y
+        «Fiscalización · Escazú»—, y eso es textualmente lo que el documento pide: «mostrar el
+        título "Consultar vehículo" y un subtítulo breve; debajo, el formulario de consulta como
+        bloque principal», con un encabezado compacto que lleve «marca, municipio, inspector y
+        estado de conexión». Las cuatro cosas están arriba, en la barra, que es fija y está en
+        todas las pantallas (ver InspectorShell); acá queda lo que la pantalla HACE.
 
-        Sigue siendo el `h1` de la pantalla. No es un detalle de estilo: es el encabezado de nivel 1
-        por el que entra un lector de pantalla, y quitarlo para poner un texto decorativo habría
-        dejado la pantalla principal del portal sin título.
+        El saludo no se esconde con CSS: se fue del árbol, y con él sus tres reglas.
 
-        El nombre es el de verdad cuando lo hay. El documento escribe «Hola, Inspector» porque es
-        una maqueta y no tiene a nadie dentro; nosotros sí —`me.user.givenName`, que ya viaja en la
-        sesión— y saludar por el nombre no es inventar un dato, es usar el que está. «Inspector» se
-        queda como respaldo para la sesión que todavía no cargó.
+        Vuelve a haber un `h1` de verdad, y no es un detalle de estilo. Durante cinco días el
+        encabezado de nivel 1 de la pantalla principal del portal fue un saludo, así que un lector
+        de pantalla entraba por «Hola, Javier» en vez de por el nombre de la tarea.
       */}
-      <header className="lx-inspector-greeting">
-        <div style={{ minWidth: 0 }}>
-          <h1 className="lx-inspector-greeting__name">
-            {nombre ? t('inspector.home.greeting.named', { name: nombre }) : t('inspector.home.greeting')}
-          </h1>
-          <p className="lx-inspector-greeting__where">
-            {municipio
-              ? t('inspector.home.where', { tenant: municipio })
-              : t('inspector.home.where.noTenant')}
-          </p>
-        </div>
-        {/*
-          La ficha verde de «En línea», junto al saludo, como en la referencia aprobada
-          (08-10-2026).
-
-          SÓLO cuando hay señal, y eso es el reparto con la barra superior, no un descuido. Con
-          señal, «En línea» es una confirmación: vive acá, donde la referencia la pone, y si se va
-          al desplazarse no se pierde nada porque no había nada que decidir. Sin señal es una
-          ADVERTENCIA —un fiscalizador que no lo sabe da por presentada una boleta que está en el
-          teléfono—, y entonces la dibuja la barra fija, que no se va de la pantalla y está en
-          todas. Ver la nota larga en InspectorShell.
-
-          Nunca las dos a la vez: un solo indicador en pantalla.
-        */}
-        {online ? (
-          <Badge className="lx-inspector-greeting__state" tone="success">
-            {t('inspector.home.online')}
-          </Badge>
-        ) : null}
+      <header className="lx-fiscal-title">
+        <h1 className="lx-fiscal-title__h">{t('inspector.home.title')}</h1>
+        <p className="lx-fiscal-title__sub">{t('inspector.home.subtitle')}</p>
       </header>
 
       {/*
-        Las cuatro acciones del turno, con la composición de la referencia aprobada: icono arriba,
-        título, ayuda corta y, en las dos que llevan a otra pantalla, un chevron.
+        La consulta y su respuesta, juntas y primero.
 
-        SÓLO mientras no hay veredicto en pantalla, y eso no es un descuido: cuando hay respuesta la
-        pantalla tiene una sola decisión encima —levantar la boleta o no— y 220px de lanzador por
-        delante la empujarían fuera de la vista en un teléfono de 812px. Las cuatro siguen a un toque
-        en la barra inferior, que nunca se va.
+        El envoltorio no es decorativo: en iPad horizontal es la columna izquierda de la
+        cuadrícula (ver `.lx-fiscal-consulta` en tokens.css). Por debajo de 1024 es
+        `display: contents`, o sea que no existe para la maquetación y la columna sigue siendo la
+        misma de siempre.
 
-        No se crea ninguna ruta: `/cite` y `/queue` ya existen, y la consulta es esta misma pantalla.
+        El veredicto va DEBAJO del formulario y no encima, que es el único cambio de criterio que
+        trae la v2 en esta pareja. Estuvo arriba desde que existe la pantalla, con un motivo
+        bueno: el formulario es lo que el fiscalizador acaba de llenar y no necesita releer, y con
+        la respuesta debajo de una tarjeta de cinco campos había que desplazarse para saber si se
+        levanta boleta. Lo que cambia es que el formulario ya no mide cinco campos de alto ni está
+        al final: en un teléfono de 390 la respuesta empieza alrededor de los 400px, o sea dentro
+        del primer pantallazo, y pegada al campo donde se tecleó la placa.
       */}
-      {!result ? (
-        <nav className="lx-quick-grid lx-quick-grid--touch" aria-label={t('inspector.home.quick.label')}>
-          {[
-            {
-              clave: 'lookup' as const,
-              icono: <IconSearch />,
-              // El acceso «Consultar placa» no navega: ya estamos en su pantalla, así que lleva el
-              // cursor al campo —que es la acción— y abre el teclado.
-              onClick: () => plateRef.current?.focus(),
-              principal: true,
-              flecha: true,
-            },
-            { clave: 'cite' as const, icono: <IconFine />, onClick: () => navigate('/cite'), flecha: true },
-            {
-              clave: 'queue' as const,
-              icono: <IconCheck />,
-              onClick: () => navigate('/queue'),
-              // El conteo REAL de la cola de este aparato, no un número de maqueta. Sin insignia
-              // cuando no hay nada esperando: un «0» es una marca que significa «nada».
-              conteo: pending,
-            },
-            // La evidencia se agrega DENTRO de una boleta: llevar al flujo de boleta es el punto
-            // correcto del flujo que ya existe, no un descuido ni una galería nueva.
-            { clave: 'evidence' as const, icono: <IconEye />, onClick: () => navigate('/cite') },
-          ].map((acceso) => (
-            <button
-              key={acceso.clave}
-              type="button"
-              className={[
-                'lx-quick-tile',
-                'lx-quick-tile--touch',
-                'lx-quick-tile--inspector',
-                acceso.principal ? 'lx-quick-tile--primary' : '',
-              ]
-                .filter(Boolean)
-                .join(' ')}
-              onClick={acceso.onClick}
-            >
-              <span className="lx-quick-tile__icon" aria-hidden="true">
-                {acceso.icono}
-              </span>
-              <span className="lx-quick-tile__title">
-                {t(`inspector.home.quick.${acceso.clave}` as TranslationKey)}
-              </span>
-              <span className="lx-quick-tile__hint">
-                {t(`inspector.home.quick.${acceso.clave}.hint` as TranslationKey)}
-              </span>
-              {acceso.flecha ? (
-                <span className="lx-quick-tile__go" aria-hidden="true">
-                  <IconChevronRight size={18} />
+      <div className="lx-fiscal-consulta">
+        {/*
+          El formulario, con la composición de la referencia: el rótulo «Placa del vehículo», la
+          placa y BUSCAR en una fila, y debajo la zona y la bahía en dos columnas con sus rótulos
+          siempre visibles.
+
+          Sin `SectionHeader` acá. El título de la tarjeta era «Consultar placa» y repetía lo que
+          ahora dice el título de la pantalla: la v2 lo señala por su nombre —«Consultar placa deja
+          de repetirse»— y la referencia dibuja la tarjeta sin encabezado propio.
+
+          La zona y la bahía se quedan, aunque sean campos opcionales. No es decoración: sin ese
+          par el servidor NO puede decir «cubierta» —contesta `AMBIGUOUS`— y el fiscalizador habría
+          caminado hasta el carro para nada. La v2 lo protege en letra: «la regla funcional
+          existente sobre bahía/cobertura… se puede abreviar la explicación en pantalla, pero nunca
+          modificar su lógica». Se abrevió la explicación, no la regla.
+        */}
+        <Card>
+          <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--lx-space-3)' }}>
+            {/*
+              Con `FormField`, o sea con un `<label>` de verdad asociado al campo, que es lo que la
+              referencia dibuja y lo que la v2 pide para los tres campos («etiquetas siempre
+              visibles»). Hasta ayer este campo se apoyaba en el título de la tarjeta y en el
+              marcador de posición, y su nombre accesible lo daba un `aria-label`; ese `aria-label`
+              se va con el rótulo, porque tener los dos haría que el visible no fuera el que se
+              anuncia.
+            */}
+            <FormField className="lx-plate-field" label={t('inspector.lookup.plateLabel')}>
+              {({ inputId }) => (
+                <div className="lx-plate-row">
+                  <Input
+                    id={inputId}
+                    ref={plateRef}
+                    name="plate"
+                    value={plate}
+                    onChange={(event) => setPlate(event.target.value.toUpperCase())}
+                    placeholder={t('inspector.lookup.platePlaceholder')}
+                    autoCapitalize="characters"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    inputMode="text"
+                    required
+                    // El único campo que se lee a un brazo de distancia y se escribe sin mirar.
+                    // Cifras tabulares para que la placa no cambie de ancho mientras se teclea.
+                    style={{
+                      fontSize: 24,
+                      fontWeight: 700,
+                      letterSpacing: '.08em',
+                      textAlign: 'center',
+                      height: 56,
+                      fontVariantNumeric: 'tabular-nums',
+                    }}
+                  />
+                  {/*
+                    El `submit` del formulario y la única acción principal de la pantalla, así que
+                    no hay además un botón ancho debajo repitiéndola. Dice su nombre en todos los
+                    tamaños: hasta ayer era un cuadrado con sólo el icono en teléfono, y la
+                    referencia de la v2 lo dibuja con la palabra. El icono es lo que se fue — era
+                    lo único que no cabía al lado de un campo de placa de 24px en un teléfono de
+                    360.
+                  */}
+                  <button
+                    type="submit"
+                    className="lx-plate-row__go"
+                    aria-busy={lookup.isPending}
+                    disabled={plate.trim().length === 0 || lookup.isPending}
+                  >
+                    <span className="lx-plate-row__go-text">{t('inspector.home.fast.go')}</span>
+                  </button>
+                </div>
+              )}
+            </FormField>
+
+            <div className="lx-grid-2">
+              <FormField label={t('inspector.lookup.zoneLabel')} optionalLabel={t('common.optional')}>
+                {({ inputId }) => (
+                  <Select
+                    id={inputId}
+                    value={zoneId}
+                    onChange={setZoneId}
+                    options={zoneOptions}
+                    placeholder={
+                      zoneOptions.length === 0
+                        ? t('inspector.zones.empty')
+                        : t('inspector.lookup.zonePlaceholder')
+                    }
+                    disabled={zoneOptions.length === 0}
+                    aria-label={t('inspector.lookup.zoneLabel')}
+                  />
+                )}
+              </FormField>
+              <FormField label={t('inspector.lookup.bayLabel')} optionalLabel={t('common.optional')}>
+                {({ inputId }) => (
+                  <Input
+                    id={inputId}
+                    name="spaceCode"
+                    value={bay}
+                    onChange={(event) => setBay(event.target.value.toUpperCase())}
+                    placeholder={t('inspector.lookup.bayPlaceholder')}
+                    autoCapitalize="characters"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    style={{ fontSize: 20, fontWeight: 700, textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}
+                  />
+                )}
+              </FormField>
+            </div>
+
+            <p className="lx-text-meta" style={{ margin: 0 }}>
+              {t('inspector.lookup.bayHint')}
+            </p>
+            {/* Los seis estados que la especificación declara obligatorios: inicial, cargando,
+                encontrado, sin resultado, error y sin conexión. */}
+            {!online ? <Alert tone="warning">{t('inspector.lookup.offline')}</Alert> : null}
+            {lookup.isPending ? (
+              <p className="lx-text-meta" role="status" style={{ margin: 0 }}>
+                {t('inspector.lookup.checking')}
+              </p>
+            ) : null}
+            {zoneOptions.length === 0 ? <Alert tone="info">{t('inspector.zones.emptyHint')}</Alert> : null}
+            {pairError ? <Alert tone="danger">{t('inspector.lookup.bayIncomplete')}</Alert> : null}
+            {lookup.isError ? <Alert tone="danger">{lookupErrorMessage(lookup.error, t)}</Alert> : null}
+          </form>
+        </Card>
+
+        {result ? (
+          <>
+            {/* The surface tone only has `success` and `warning`; the other two verdicts carry their
+                colour on the mark and the headline, and their meaning on the shape. */}
+            <Card tone={cardToneFor(result.verdict)}>
+              <div style={{ display: 'flex', gap: 'var(--lx-space-4)', alignItems: 'flex-start' }}>
+                <span style={{ color: `var(--lx-${verdictTone(result.verdict)})`, flexShrink: 0 }}>
+                  <VerdictMark verdict={result.verdict} />
                 </span>
-              ) : null}
-              {acceso.conteo ? <span className="lx-quick-tile__count">{acceso.conteo}</span> : null}
-            </button>
-          ))}
-        </nav>
-      ) : null}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--lx-space-2)', minWidth: 0 }}>
+                  {/*
+                    La placa arriba y el estado como ficha a su lado (08-10-2026).
 
-      {result ? (
-        <>
-          {/* The surface tone only has `success` and `warning`; the other two verdicts carry their
-              colour on the mark and the headline, and their meaning on the shape. */}
-          <Card tone={cardToneFor(result.verdict)}>
-            <div style={{ display: 'flex', gap: 'var(--lx-space-4)', alignItems: 'flex-start' }}>
-              <span style={{ color: `var(--lx-${verdictTone(result.verdict)})`, flexShrink: 0 }}>
-                <VerdictMark verdict={result.verdict} />
-              </span>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--lx-space-2)', minWidth: 0 }}>
-                {/*
-                  La placa arriba y el estado como ficha a su lado (08-10-2026).
+                    La sección 5 del documento pide «placa prominente, estado con chip», y hasta hoy
+                    era al revés: el veredicto ocupaba el renglón grande a 24px y la placa iba en el
+                    renglón de metadatos, a 13px, junto a la hora.
 
-                  La sección 5 del documento pide «placa prominente, estado con chip», y hasta hoy
-                  era al revés: el veredicto ocupaba el renglón grande a 24px y la placa iba en el
-                  renglón de metadatos, a 13px, junto a la hora.
+                    Las dos lecturas tenían razón y ahora conviven. La placa manda porque es la
+                    identidad de lo que se está mirando y es lo que se dicta en voz alta cuando
+                    alguien reclama en la bahía. El veredicto NO pierde peso: lo dice la ficha de
+                    color a su lado, lo dice la marca de la izquierda —una forma legible a un metro,
+                    que es la distancia entre los ojos de un fiscalizador y un teléfono a la altura
+                    de la cintura— y lo dice la frase completa debajo. Tres señales, ninguna de ellas
+                    sólo color.
 
-                  Las dos lecturas tenían razón y ahora conviven. La placa manda porque es la
-                  identidad de lo que se está mirando y es lo que se dicta en voz alta cuando
-                  alguien reclama en la bahía. El veredicto NO pierde peso: lo dice la ficha de
-                  color a su lado, lo dice la marca de la izquierda —una forma legible a un metro,
-                  que es la distancia entre los ojos de un fiscalizador y un teléfono a la altura
-                  de la cintura— y lo dice la frase completa debajo. Tres señales, ninguna de ellas
-                  sólo color.
-
-                  La hora de la consulta se queda donde estaba, en el renglón de metadatos, sin la
-                  placa al lado porque la placa ya está arriba.
-                */}
-                <p className="lx-verdict__plate">
-                  <strong>{result.plateNormalized}</strong>
-                  <Badge tone={verdictTone(result.verdict) === 'success' ? 'success' : 'warning'}>
-                    {t(plateVerdictKey(result.verdict))}
-                  </Badge>
-                </p>
-                <p className="lx-text-body" style={{ margin: 0 }}>
-                  {t(VERDICT_DETAIL_KEYS[result.verdict], {
-                    bay: result.bay?.spaceCode ?? bay,
-                    other: result.otherStays[0]?.spaceCode ?? '',
-                  })}
-                </p>
-                <p className="lx-text-meta" style={{ margin: 0, fontVariantNumeric: 'tabular-nums' }}>
-                  {t('inspector.lookup.checkedAt', { time: formatTime(result.checkedAt, locale) })}
-                </p>
-                {/* The stay itself, spelled out. Until v0.28 the start time was never shown and the
-                    expiry was rendered time-only, so a stay that ran out yesterday at 14:30 and one
-                    running until 14:30 today looked identical on screen. */}
-                {stay ? (
-                  /* En dos o tres columnas cuando hay ancho, una debajo de otra en el teléfono.
-                     Lo pide la sección 4 para tablet —«datos secundarios pueden organizarse en 2-3
-                     columnas»— y lo hace CSS con `columns`, no una cuadrícula: estas filas son
-                     cuatro o cinco líneas de texto suelto cuyo número cambia con la respuesta
-                     (puede no haber pago, puede no haber transacción), y una cuadrícula con un
-                     número fijo de columnas deja huecos cuando faltan. */
-                  <div className="lx-verdict__facts">
-                    <span className="lx-text-meta">
-                      {t('inspector.lookup.stay.zone', { zone: stay.zoneName ?? '', bay: stay.spaceCode ?? '' })}
-                    </span>
-                    <span className="lx-text-meta" style={{ fontVariantNumeric: 'tabular-nums' }}>
-                      {t('inspector.lookup.stay.startedAt', { datetime: formatDateTime(stay.startedAt, locale) })}
-                    </span>
-                    <span className="lx-text-meta" style={{ fontVariantNumeric: 'tabular-nums' }}>
-                      {t(
-                        result.verdict === 'EXPIRED'
-                          ? 'inspector.lookup.stay.expiredAt'
-                          : 'inspector.lookup.stay.expiresAt',
-                        { datetime: formatDateTime(stay.expiresAt, locale) },
-                      )}
-                      {minutesLeft !== null ? (
-                        <>
-                          {' · '}
-                          {t(
-                            minutesLeft >= 0
-                              ? 'inspector.lookup.stay.remaining'
-                              : 'inspector.lookup.stay.overdue',
-                            { minutes: Math.abs(minutesLeft) },
-                          )}
-                        </>
-                      ) : null}
-                    </span>
-                    {/* The payment (v0.32). The whole reason the officer's lookup and the money read
-                        from the same record: a stay can exist and have cost nothing —courtesy, the
-                        citizen's own minutes, an hour this municipality does not charge for— and an
-                        officer who cannot tell those from a payment has nothing to say to the person
-                        arguing with them. */}
-                    {stay.paymentStatus ? (
+                    La hora de la consulta se queda donde estaba, en el renglón de metadatos, sin la
+                    placa al lado porque la placa ya está arriba.
+                  */}
+                  <p className="lx-verdict__plate">
+                    <strong>{result.plateNormalized}</strong>
+                    <Badge tone={verdictTone(result.verdict) === 'success' ? 'success' : 'warning'}>
+                      {t(plateVerdictKey(result.verdict))}
+                    </Badge>
+                  </p>
+                  <p className="lx-text-body" style={{ margin: 0 }}>
+                    {t(VERDICT_DETAIL_KEYS[result.verdict], {
+                      bay: result.bay?.spaceCode ?? bay,
+                      other: result.otherStays[0]?.spaceCode ?? '',
+                    })}
+                  </p>
+                  <p className="lx-text-meta" style={{ margin: 0, fontVariantNumeric: 'tabular-nums' }}>
+                    {t('inspector.lookup.checkedAt', { time: formatTime(result.checkedAt, locale) })}
+                  </p>
+                  {/* The stay itself, spelled out. Until v0.28 the start time was never shown and the
+                      expiry was rendered time-only, so a stay that ran out yesterday at 14:30 and one
+                      running until 14:30 today looked identical on screen. */}
+                  {stay ? (
+                    /* En dos o tres columnas cuando hay ancho, una debajo de otra en el teléfono.
+                       Lo pide la sección 4 para tablet —«datos secundarios pueden organizarse en 2-3
+                       columnas»— y lo hace CSS con `columns`, no una cuadrícula: estas filas son
+                       cuatro o cinco líneas de texto suelto cuyo número cambia con la respuesta
+                       (puede no haber pago, puede no haber transacción), y una cuadrícula con un
+                       número fijo de columnas deja huecos cuando faltan. */
+                    <div className="lx-verdict__facts">
+                      <span className="lx-text-meta">
+                        {t('inspector.lookup.stay.zone', { zone: stay.zoneName ?? '', bay: stay.spaceCode ?? '' })}
+                      </span>
                       <span className="lx-text-meta" style={{ fontVariantNumeric: 'tabular-nums' }}>
-                        {stay.paymentStatus === 'PAID'
-                          ? t('inspector.lookup.stay.paid', {
-                              amount: formatCurrencyMinor(
-                                stay.amountMinor ?? 0,
-                                stay.currencyCode ?? '',
-                                locale,
-                              ),
-                            })
-                          : stay.noChargeReason
-                            ? t(
-                                `inspector.lookup.stay.noCharge.${stay.noChargeReason}` as TranslationKey,
-                              )
-                            : t('inspector.lookup.stay.noCharge')}
-                        {/* The movement, so a complaint at the bay traces to the money without the
-                            officer leaving the street. Shortened: it is a reference to read out, not
-                            an identifier to retype. */}
-                        {stay.paymentTransactionId ? (
+                        {t('inspector.lookup.stay.startedAt', { datetime: formatDateTime(stay.startedAt, locale) })}
+                      </span>
+                      <span className="lx-text-meta" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                        {t(
+                          result.verdict === 'EXPIRED'
+                            ? 'inspector.lookup.stay.expiredAt'
+                            : 'inspector.lookup.stay.expiresAt',
+                          { datetime: formatDateTime(stay.expiresAt, locale) },
+                        )}
+                        {minutesLeft !== null ? (
                           <>
                             {' · '}
-                            {t('inspector.lookup.stay.transaction', {
-                              id: stay.paymentTransactionId.slice(0, 8),
-                            })}
+                            {t(
+                              minutesLeft >= 0
+                                ? 'inspector.lookup.stay.remaining'
+                                : 'inspector.lookup.stay.overdue',
+                              { minutes: Math.abs(minutesLeft) },
+                            )}
                           </>
                         ) : null}
                       </span>
-                    ) : null}
-                  </div>
-                ) : null}
-                {/* The tolerance, said out loud. The municipality's grace is applied by the server —
-                    that is why this reads "vigente" — but until v0.28 it was invisible, so the
-                    officer saw "vigente" beside a time already past and had no way to know why. */}
-                {withinGrace ? (
-                  <Alert tone="info">
-                    {t('inspector.lookup.withinGrace', { minutes: result.graceMinutes })}
-                  </Alert>
-                ) : null}
-                {result.exemption ? (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    {/* The category first, in the municipality's own words: "Discapacidad" is what the
-                        officer says out loud, and the written reason is what backs it up. Whose permit
-                        it is deliberately never reaches this screen. */}
-                    {result.exemption.typeName ? (
+                      {/* The payment (v0.32). The whole reason the officer's lookup and the money read
+                          from the same record: a stay can exist and have cost nothing —courtesy, the
+                          citizen's own minutes, an hour this municipality does not charge for— and an
+                          officer who cannot tell those from a payment has nothing to say to the person
+                          arguing with them. */}
+                      {stay.paymentStatus ? (
+                        <span className="lx-text-meta" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                          {stay.paymentStatus === 'PAID'
+                            ? t('inspector.lookup.stay.paid', {
+                                amount: formatCurrencyMinor(
+                                  stay.amountMinor ?? 0,
+                                  stay.currencyCode ?? '',
+                                  locale,
+                                ),
+                              })
+                            : stay.noChargeReason
+                              ? t(
+                                  `inspector.lookup.stay.noCharge.${stay.noChargeReason}` as TranslationKey,
+                                )
+                              : t('inspector.lookup.stay.noCharge')}
+                          {/* The movement, so a complaint at the bay traces to the money without the
+                              officer leaving the street. Shortened: it is a reference to read out, not
+                              an identifier to retype. */}
+                          {stay.paymentTransactionId ? (
+                            <>
+                              {' · '}
+                              {t('inspector.lookup.stay.transaction', {
+                                id: stay.paymentTransactionId.slice(0, 8),
+                              })}
+                            </>
+                          ) : null}
+                        </span>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  {/* The tolerance, said out loud. The municipality's grace is applied by the server —
+                      that is why this reads "vigente" — but until v0.28 it was invisible, so the
+                      officer saw "vigente" beside a time already past and had no way to know why. */}
+                  {withinGrace ? (
+                    <Alert tone="info">
+                      {t('inspector.lookup.withinGrace', { minutes: result.graceMinutes })}
+                    </Alert>
+                  ) : null}
+                  {result.exemption ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      {/* The category first, in the municipality's own words: "Discapacidad" is what the
+                          officer says out loud, and the written reason is what backs it up. Whose permit
+                          it is deliberately never reaches this screen. */}
+                      {result.exemption.typeName ? (
+                        <span className="lx-text-body">
+                          <strong>{result.exemption.typeName}</strong>
+                        </span>
+                      ) : null}
                       <span className="lx-text-body">
-                        <strong>{result.exemption.typeName}</strong>
+                        {t('inspector.lookup.exemption.reason', { reason: result.exemption.reason })}
                       </span>
-                    ) : null}
-                    <span className="lx-text-body">
-                      {t('inspector.lookup.exemption.reason', { reason: result.exemption.reason })}
-                    </span>
-                    {result.exemption.documentRef ? (
+                      {result.exemption.documentRef ? (
+                        <span className="lx-text-meta">
+                          {t('inspector.lookup.exemption.document', { ref: result.exemption.documentRef })}
+                        </span>
+                      ) : null}
                       <span className="lx-text-meta">
-                        {t('inspector.lookup.exemption.document', { ref: result.exemption.documentRef })}
+                        {result.exemption.validTo
+                          ? t('inspector.lookup.exemption.until', {
+                              date: formatDate(result.exemption.validTo, locale),
+                            })
+                          : t('inspector.lookup.exemption.noEnd')}
                       </span>
-                    ) : null}
-                    <span className="lx-text-meta">
-                      {result.exemption.validTo
-                        ? t('inspector.lookup.exemption.until', {
-                            date: formatDate(result.exemption.validTo, locale),
-                          })
-                        : t('inspector.lookup.exemption.noEnd')}
-                    </span>
-                  </div>
-                ) : null}
+                    </div>
+                  ) : null}
+                </div>
               </div>
-            </div>
-          </Card>
-
-          {result.otherStays.length > 0 ? (
-            <Card>
-              <SectionHeader title={t('inspector.lookup.otherStays')} />
-              {result.otherStays.map((stay) => (
-                <ListRow
-                  key={stay.sessionId}
-                  title={t('inspector.lookup.stayRow', {
-                    zone: stay.zoneName,
-                    bay: stay.spaceCode,
-                    time: formatTime(stay.expiresAt, locale),
-                  })}
-                  meta={t('inspector.lookup.useThisBay')}
-                  // One tap turns an AMBIGUOUS answer into a conclusive one, with the bay the
-                  // server itself just named — no retyping a code the officer never saw painted.
-                  onClick={() => {
-                    setZoneId(stay.zoneId);
-                    setBay(stay.spaceCode);
-                    runLookup(stay.zoneId, stay.spaceCode);
-                  }}
-                />
-              ))}
             </Card>
-          ) : null}
 
-          {/* AMBIGUOUS means the server refused to answer without the bay, so there is nothing to
-              act on yet — offering the ticket there invited one written off an answer nobody gave.
-              EXEMPT and COVERED both mean no non-payment citation is due. */}
-          {result.verdict === 'AMBIGUOUS' ? (
-            <Alert tone="warning">{t('inspector.lookup.needBayToCite')}</Alert>
-          ) : null}
-          {result.verdict === 'EXPIRED' || result.verdict === 'BAY_MISMATCH' || result.verdict === 'NOT_COVERED' ? (
-            <Button
-              type="button"
-              variant="secondary"
-              fullWidth
-              onClick={() =>
-                navigate('/cite', {
-                  state: {
-                    plate: result.plateNormalized,
-                    zoneId: result.bay?.zoneId ?? zoneId ?? '',
-                    spaceCode: result.bay?.spaceCode ?? bay,
-                    spaceId: result.bay?.spaceId ?? '',
-                    // The consultation this ticket is being written from (CONTRACT.md v0.29).
-                    checkId: result.checkId ?? undefined,
-                  },
-                })
-              }
-            >
-              {t('inspector.lookup.cite')}
-            </Button>
-          ) : null}
-        </>
-      ) : null}
+            {result.otherStays.length > 0 ? (
+              <Card>
+                <SectionHeader title={t('inspector.lookup.otherStays')} />
+                {result.otherStays.map((stay) => (
+                  <ListRow
+                    key={stay.sessionId}
+                    title={t('inspector.lookup.stayRow', {
+                      zone: stay.zoneName,
+                      bay: stay.spaceCode,
+                      time: formatTime(stay.expiresAt, locale),
+                    })}
+                    meta={t('inspector.lookup.useThisBay')}
+                    // One tap turns an AMBIGUOUS answer into a conclusive one, with the bay the
+                    // server itself just named — no retyping a code the officer never saw painted.
+                    onClick={() => {
+                      setZoneId(stay.zoneId);
+                      setBay(stay.spaceCode);
+                      runLookup(stay.zoneId, stay.spaceCode);
+                    }}
+                  />
+                ))}
+              </Card>
+            ) : null}
+
+            {/* AMBIGUOUS means the server refused to answer without the bay, so there is nothing to
+                act on yet — offering the ticket there invited one written off an answer nobody gave.
+                EXEMPT and COVERED both mean no non-payment citation is due. */}
+            {result.verdict === 'AMBIGUOUS' ? (
+              <Alert tone="warning">{t('inspector.lookup.needBayToCite')}</Alert>
+            ) : null}
+            {result.verdict === 'EXPIRED' || result.verdict === 'BAY_MISMATCH' || result.verdict === 'NOT_COVERED' ? (
+              <Button
+                type="button"
+                variant="secondary"
+                fullWidth
+                onClick={() =>
+                  navigate('/cite', {
+                    state: {
+                      plate: result.plateNormalized,
+                      zoneId: result.bay?.zoneId ?? zoneId ?? '',
+                      spaceCode: result.bay?.spaceCode ?? bay,
+                      spaceId: result.bay?.spaceId ?? '',
+                      // The consultation this ticket is being written from (CONTRACT.md v0.29).
+                      checkId: result.checkId ?? undefined,
+                    },
+                  })
+                }
+              >
+                {t('inspector.lookup.cite')}
+              </Button>
+            ) : null}
+          </>
+        ) : null}
+      </div>
+
       {/*
         La fila de cuatro métricas de tablet, y por qué NO está (08-10-2026).
 
@@ -467,209 +506,141 @@ export function PlateLookupPage(): React.JSX.Element {
         ya existe).
       */}
 
-      {/*
-        El formulario, con la fila de la referencia: la placa y un botón cuadrado al lado.
+      <div className="lx-fiscal-aside">
+        {/*
+          Los tres accesos secundarios (12-10-2026, v2).
 
-        Título «Consultar placa» y una ayuda de un renglón, que es lo que pide la sección 5 del
-        documento. Es el título de la TARJETA, no de la pantalla: la pantalla ya la encabeza el
-        saludo, y poner los dos habría reintroducido el título genérico que la sección 3 quita.
+          Eran cuatro baldosas grandes encabezando la pantalla. Son tres, compactas y DESPUÉS del
+          formulario: «mover Levantar boleta, Pendientes y Evidencia a tres accesos secundarios
+          compactos; Consultar placa deja de repetirse como tarjeta, porque el formulario ya está
+          en primer plano».
 
-        La zona y la bahía se quedan, aunque la referencia del teléfono sólo dibuje la placa. No es
-        desobedecer el dibujo: sin ese par el servidor NO puede decir «cubierta» —su respuesta es
-        `AMBIGUOUS`— y el fiscalizador habría caminado hasta el carro para nada. El documento pide
-        no perder funcionalidad existente y no tocar las reglas de validación, y esto es las dos
-        cosas. Van debajo y en dos columnas, que es donde no compiten con la acción principal.
-      */}
-      <Card>
-        <SectionHeader title={t('inspector.lookup.title')} description={t('inspector.lookup.help')} />
-        <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--lx-space-3)' }}>
-          <div className="lx-plate-row">
-            {/* Sin `FormField` acá, a diferencia de la zona y la bahía: el rótulo visible de este
-                campo es el título de la tarjeta («Consultar placa») y el marcador de posición
-                («SJP123»), que es como lo dibuja la referencia. Un rótulo encima metería una
-                tercera fila en una cuadrícula de dos columnas y desalinearía el botón cuadrado con
-                el campo. El nombre accesible no se pierde: va en `aria-label`. */}
-            <Input
-              ref={plateRef}
-              name="plate"
-              aria-label={t('inspector.lookup.plateLabel')}
-              value={plate}
-              onChange={(event) => setPlate(event.target.value.toUpperCase())}
-              placeholder={t('inspector.lookup.platePlaceholder')}
-              autoCapitalize="characters"
-              autoCorrect="off"
-              spellCheck={false}
-              inputMode="text"
-              required
-              // El único campo que se lee a un brazo de distancia y se escribe sin mirar.
-              // Cifras tabulares para que la placa no cambie de ancho mientras se teclea.
-              style={{
-                fontSize: 24,
-                fontWeight: 700,
-                letterSpacing: '.08em',
-                textAlign: 'center',
-                height: 56,
-                fontVariantNumeric: 'tabular-nums',
-              }}
-            />
-            {/* Cuadrado, compacto y del mismo alto que el campo, como en la referencia. Es el
-                `submit` del formulario: la acción principal de la pantalla es una sola y es ésta,
-                así que no hay además un botón ancho debajo repitiéndola. */}
+          Ninguna lleva relleno azul. La de «Consultar placa» lo llevaba, y con ella se va la única
+          superficie grande de azul saturado que tenía la pantalla, que es lo que la v2 pide
+          evitar: el azul queda para BUSCAR y para los estados interactivos.
+
+          No se crea ninguna ruta: `/cite` y `/queue` ya existen. La evidencia se agrega DENTRO de
+          una boleta, así que lleva al flujo de boleta, que es el punto correcto del flujo que ya
+          existe y no una galería nueva.
+        */}
+        <h2 className="lx-fiscal-subhead" id="lx-fiscal-acciones">
+          {t('inspector.home.quick.title')}
+        </h2>
+        <nav className="lx-quick-grid lx-quick-grid--touch" aria-labelledby="lx-fiscal-acciones">
+          {[
+            { clave: 'cite' as const, onClick: () => navigate('/cite') },
+            {
+              clave: 'queue' as const,
+              onClick: () => navigate('/queue'),
+              // El conteo REAL de la cola de este aparato, no un número de maqueta. Sin insignia
+              // cuando no hay nada esperando: un «0» es una marca que significa «nada».
+              conteo: pending,
+            },
+            { clave: 'evidence' as const, onClick: () => navigate('/cite') },
+          ].map((acceso) => (
             <button
-              type="submit"
-              className="lx-plate-row__go"
-              aria-label={t('inspector.home.fast.go')}
-              aria-busy={lookup.isPending}
-              disabled={plate.trim().length === 0 || lookup.isPending}
-            >
-              <IconSearch size={22} />
-              {/* La palabra sólo aparece en tablet, donde cabe: la hoja la oculta en teléfono. No
-                  es un segundo botón ni un texto alternativo —el nombre accesible lo da el
-                  `aria-label` y es el mismo en los dos tamaños—, es la misma acción diciendo su
-                  nombre donde hay sitio para decirlo, que es como la dibuja la referencia del
-                  iPad. */}
-              <span className="lx-plate-row__go-text">{t('inspector.home.fast.go')}</span>
-            </button>
-          </div>
-
-          <div className="lx-grid-2">
-            <FormField label={t('inspector.lookup.zoneLabel')} optionalLabel={t('common.optional')}>
-              {({ inputId }) => (
-                <Select
-                  id={inputId}
-                  value={zoneId}
-                  onChange={setZoneId}
-                  options={zoneOptions}
-                  placeholder={
-                    zoneOptions.length === 0 ? t('inspector.zones.empty') : t('common.select.placeholder')
-                  }
-                  disabled={zoneOptions.length === 0}
-                  aria-label={t('inspector.lookup.zoneLabel')}
-                />
-              )}
-            </FormField>
-            <FormField label={t('inspector.lookup.bayLabel')} optionalLabel={t('common.optional')}>
-              {({ inputId }) => (
-                <Input
-                  id={inputId}
-                  name="spaceCode"
-                  value={bay}
-                  onChange={(event) => setBay(event.target.value.toUpperCase())}
-                  placeholder={t('inspector.lookup.bayPlaceholder')}
-                  autoCapitalize="characters"
-                  autoCorrect="off"
-                  spellCheck={false}
-                  style={{ fontSize: 20, fontWeight: 700, textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}
-                />
-              )}
-            </FormField>
-          </div>
-
-          <p className="lx-text-meta" style={{ margin: 0 }}>
-            {t('inspector.lookup.bayHint')}
-          </p>
-          {/* Los seis estados que la sección 5 declara obligatorios. Tres ya estaban —inicial,
-              encontrado y error—; «cargando» ahora se dice con palabras además de con el botón
-              ocupado, y «sin conexión» no existía: la consulta fallaba con un error de red genérico
-              que no distinguía «no hay señal» de «el servidor dijo que no». */}
-          {!online ? <Alert tone="warning">{t('inspector.lookup.offline')}</Alert> : null}
-          {lookup.isPending ? (
-            <p className="lx-text-meta" role="status" style={{ margin: 0 }}>
-              {t('inspector.lookup.checking')}
-            </p>
-          ) : null}
-          {zoneOptions.length === 0 ? <Alert tone="info">{t('inspector.zones.emptyHint')}</Alert> : null}
-          {pairError ? <Alert tone="danger">{t('inspector.lookup.bayIncomplete')}</Alert> : null}
-          {lookup.isError ? <Alert tone="danger">{lookupErrorMessage(lookup.error, t)}</Alert> : null}
-        </form>
-      </Card>
-
-      {/*
-        «Última consulta» (07-10-2026).
-
-        Sólo cuando no hay un veredicto en pantalla: con uno, la última consulta ES ésa y repetirla
-        debajo sería decir dos veces lo mismo. Y sólo si existe de verdad —el documento dice
-        «únicamente si existe»—; si este aparato no consultó nada todavía, lo que se dibuja es el
-        estado vacío, no una placa de ejemplo.
-
-        Lo que muestra sale de la respuesta que el servidor ya dio, guardada por el propio aparato
-        (ver lib/lastLookup.ts). NO hay endpoint de historial de consultas, así que no hay ninguna
-        otra fuente real: el bloque de la referencia que muestra marca, modelo y color del vehículo
-        se queda sin dibujar, porque esos tres datos no existen en ninguna respuesta del servidor y
-        pintarlos sería exactamente la maqueta que el documento prohíbe.
-      */}
-      {!result ? (
-        <Card>
-          <SectionHeader title={t('inspector.home.last.title')} />
-          {ultima ? (
-            <button
+              key={acceso.clave}
               type="button"
-              className="lx-last-check"
-              onClick={() => {
-                setPlate(ultima.plate);
-                lookup.reset();
-                plateRef.current?.focus();
-              }}
-              aria-label={t('inspector.home.last.again', { plate: ultima.plate })}
+              className="lx-quick-tile lx-quick-tile--inspector"
+              onClick={acceso.onClick}
             >
-              <span style={{ minWidth: 0 }}>
-                <span className="lx-last-check__head">
-                  <span className="lx-last-check__plate">{ultima.plate}</span>
-                  <Badge tone={verdictTone(ultima.verdict) === 'success' ? 'success' : 'warning'}>
-                    {t(plateVerdictKey(ultima.verdict))}
-                  </Badge>
-                </span>
-                <span className="lx-last-check__facts">
-                  {ultima.zoneName ? (
-                    <span className="lx-last-check__fact">
-                      <IconPin size={14} />
-                      <span>
-                        {ultima.spaceCode
-                          ? t('inspector.lookup.stay.zone', { zone: ultima.zoneName, bay: ultima.spaceCode })
-                          : ultima.zoneName}
+              <span className="lx-quick-tile__title">
+                {t(`inspector.home.quick.${acceso.clave}` as TranslationKey)}
+              </span>
+              <span className="lx-quick-tile__hint">
+                {t(`inspector.home.quick.${acceso.clave}.hint` as TranslationKey)}
+              </span>
+              {acceso.conteo ? <span className="lx-quick-tile__count">{acceso.conteo}</span> : null}
+            </button>
+          ))}
+        </nav>
+
+        {/*
+          «Última consulta» (07-10-2026).
+
+          Sólo cuando no hay un veredicto en pantalla: con uno, la última consulta ES ésa y repetirla
+          debajo sería decir dos veces lo mismo. Y sólo si existe de verdad —el documento dice
+          «únicamente si existe»—; si este aparato no consultó nada todavía, lo que se dibuja es el
+          estado vacío, no una placa de ejemplo.
+
+          Lo que muestra sale de la respuesta que el servidor ya dio, guardada por el propio aparato
+          (ver lib/lastLookup.ts). NO hay endpoint de historial de consultas, así que no hay ninguna
+          otra fuente real: el bloque de la referencia que muestra marca, modelo y color del vehículo
+          se queda sin dibujar, porque esos tres datos no existen en ninguna respuesta del servidor y
+          pintarlos sería exactamente la maqueta que el documento prohíbe.
+        */}
+        {!result ? (
+          <Card className="lx-card--dense lx-last-card">
+            <SectionHeader title={t('inspector.home.last.title')} />
+            {ultima ? (
+              <button
+                type="button"
+                className="lx-last-check"
+                onClick={() => {
+                  setPlate(ultima.plate);
+                  lookup.reset();
+                  plateRef.current?.focus();
+                }}
+                aria-label={t('inspector.home.last.again', { plate: ultima.plate })}
+              >
+                <span style={{ minWidth: 0 }}>
+                  <span className="lx-last-check__head">
+                    <span className="lx-last-check__plate">{ultima.plate}</span>
+                    <Badge tone={verdictTone(ultima.verdict) === 'success' ? 'success' : 'warning'}>
+                      {t(plateVerdictKey(ultima.verdict))}
+                    </Badge>
+                  </span>
+                  <span className="lx-last-check__facts">
+                    {ultima.zoneName ? (
+                      <span className="lx-last-check__fact">
+                        <IconPin size={14} />
+                        <span>
+                          {ultima.spaceCode
+                            ? t('inspector.lookup.stay.zone', { zone: ultima.zoneName, bay: ultima.spaceCode })
+                            : ultima.zoneName}
+                        </span>
                       </span>
-                    </span>
-                  ) : null}
-                  {ultima.expiresAt ? (
+                    ) : null}
+                    {ultima.expiresAt ? (
+                      <span className="lx-last-check__fact">
+                        <IconClock size={14} />
+                        <span style={{ fontVariantNumeric: 'tabular-nums' }}>
+                          {t(
+                            ultima.verdict === 'EXPIRED'
+                              ? 'inspector.lookup.stay.expiredAt'
+                              : 'inspector.lookup.stay.expiresAt',
+                            { datetime: formatDateTime(ultima.expiresAt, locale) },
+                          )}
+                        </span>
+                      </span>
+                    ) : null}
+                    {ultima.exemptUntil ? (
+                      <span className="lx-last-check__fact">
+                        <IconCheck size={14} />
+                        <span>
+                          {t('inspector.lookup.exemption.until', {
+                            date: formatDate(ultima.exemptUntil, locale),
+                          })}
+                        </span>
+                      </span>
+                    ) : null}
                     <span className="lx-last-check__fact">
                       <IconClock size={14} />
                       <span style={{ fontVariantNumeric: 'tabular-nums' }}>
-                        {t(
-                          ultima.verdict === 'EXPIRED'
-                            ? 'inspector.lookup.stay.expiredAt'
-                            : 'inspector.lookup.stay.expiresAt',
-                          { datetime: formatDateTime(ultima.expiresAt, locale) },
-                        )}
+                        {t('inspector.home.last.checkedAt', { time: formatTime(ultima.checkedAt, locale) })}
                       </span>
-                    </span>
-                  ) : null}
-                  {ultima.exemptUntil ? (
-                    <span className="lx-last-check__fact">
-                      <IconCheck size={14} />
-                      <span>
-                        {t('inspector.lookup.exemption.until', {
-                          date: formatDate(ultima.exemptUntil, locale),
-                        })}
-                      </span>
-                    </span>
-                  ) : null}
-                  <span className="lx-last-check__fact">
-                    <IconClock size={14} />
-                    <span style={{ fontVariantNumeric: 'tabular-nums' }}>
-                      {t('inspector.home.last.checkedAt', { time: formatTime(ultima.checkedAt, locale) })}
                     </span>
                   </span>
                 </span>
-              </span>
-              <IconChevronRight size={18} aria-hidden="true" />
-            </button>
-          ) : (
-            <p className="lx-text-meta" style={{ margin: 0 }}>
-              {t('inspector.home.last.empty')}
-            </p>
-          )}
-        </Card>
-      ) : null}
+                <IconChevronRight size={18} aria-hidden="true" />
+              </button>
+            ) : (
+              <p className="lx-last-card__empty">{t('inspector.home.last.empty')}</p>
+            )}
+          </Card>
+        ) : null}
+
+      </div>
 
     </InspectorShell>
   );

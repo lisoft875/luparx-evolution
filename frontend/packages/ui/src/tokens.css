@@ -4843,27 +4843,11 @@ a.lx-list-row {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
-.lx-quick-tile--touch {
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-areas:
-    'icono'
-    'titulo';
-  justify-items: center;
-  gap: var(--lx-space-2) 0;
-  min-height: 88px;
-  text-align: center;
-}
-.lx-quick-tile--touch .lx-quick-tile__icon {
-  width: 40px;
-  height: 40px;
-}
-/* El nombre SÍ se parte acá: «Levantar boleta» en 140px de ancho necesita dos renglones, y
-   recortarlo con puntos suspensivos dejaría un botón que no dice qué hace. */
-.lx-quick-tile--touch .lx-quick-tile__title {
-  font-size: 0.9375rem;
-  white-space: normal;
-  overflow: visible;
-}
+/* `.lx-quick-tile--touch` vivió acá del 05-10 al 12-10-2026: la variante centrada, icono arriba y
+   nombre debajo, del lanzador de cuatro baldosas del fiscalizador. La v2 del Inicio de
+   Fiscalización quitó ese lanzador —tres accesos, con título y ayuda a la izquierda, ver
+   `.lx-quick-tile--inspector`—, así que no quedaba nada montándola. Se borra en vez de dejarla:
+   una clase sin uso es la que alguien vuelve a poner en un `className` creyendo que hace falta. */
 
 /* --- Ocupación por zona, compacta -------------------------------------------------------------- */
 /* Nombre, barra y porcentaje en UN renglón.
@@ -5337,6 +5321,10 @@ a.lx-list-row {
 .lx-connection-badge--compact {
   padding: 1px var(--lx-space-2);
   font-size: calc(var(--lx-text-meta-size) - 1px);
+  /* 12-10-2026: no se encoge y no se parte. Desde la v2 comparte la esquina con el nombre del
+     fiscalizador, y «En línea» partido en dos renglones subiría el alto de la barra entera. */
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 /* La campana queda en la esquina, y entre insignia y campana no hace falta el hueco grande de la
    fila: son dos cosas del mismo grupo. Los dos portales, que ahora tienen la misma esquina. */
@@ -5538,147 +5526,240 @@ a.lx-list-row {
 }
 
 /* ============================================================================================
-   FISCALIZACIÓN · estructura responsive (07-10-2026)
+   FISCALIZACIÓN · la jerarquía del Inicio (12-10-2026, «Orden visual de implementación v2, iPad»)
 
-   De la especificación visual responsive: celular primero (375x812, funcionando desde 360), tablet
-   después, y nunca el portal administrativo reducido. Las medidas no son nuevas: `--lx-space-4` ya
-   vale 16px, `--lx-card-gap` 12px, `--lx-radius-md` 12px, el título de pantalla 28px y el auxiliar
-   13px — es decir, el «paso 2: crear tokens» del documento ya estaba hecho y no se creó ninguno.
-   Lo que faltaba era usarlos con consultas de medio, que es lo que hay aquí.
+   Esta sección sustituye a la del 07-10-2026 y a su parche de iPad del 09-10. Conviene decir qué
+   se fue y por qué, porque lo que se va no estaba roto: cumplía el encargo anterior al pie de la
+   letra.
+
+   Aquel pedía un saludo corto arriba y cuatro accesos grandes antes del formulario, y así estaba.
+   La v2 dice que ESO es el problema, con la captura delante: «hoy las cuatro tarjetas ocupan la
+   primera fila y parten títulos; el formulario queda debajo». Así que la pantalla se reordena
+   entera —«el nuevo diseño cambia la jerarquía completa, no sólo bordes, iconos o tonalidades»—:
+
+     1. el encabezado compacto, que YA EXISTE (`.lx-app-bar--inspector`): marca, municipio,
+        fiscalizador y estado de conexión en una sola fila;
+     2. el título «Consultar vehículo» con su subtítulo, que es lo que la pantalla sirve para hacer;
+     3. el formulario de consulta como BLOQUE PRINCIPAL, lo primero que se toca;
+     4. tres accesos secundarios compactos — «Consultar placa deja de repetirse como tarjeta,
+        porque el formulario ya está en primer plano»;
+     5. «Última consulta», discreta antes de buscar.
+
+   Lo que se BORRA de aquí, y no se esconde con CSS:
+
+     · `.lx-inspector-greeting` y sus tres reglas. El saludo ya no existe en el árbol; la identidad
+       del fiscalizador se fue al encabezado, que es donde la v2 la pone.
+     · `.lx-quick-tile--primary`. Ninguna baldosa lleva ya relleno azul: la v2 reserva el azul vivo
+       para Buscar y pide en letra «evitar grandes superficies de azul saturado».
+     · `.lx-quick-tile__go`, el chevron de las baldosas. La referencia v2 no lo dibuja y el árbol
+       ya no lo monta; su `grid-area: flecha` tampoco existiría en la composición nueva.
+
+   Las medidas son las de la tabla de la v2, en px de CSS, y las comprueba
+   `tests/responsive/fiscalizacion-visual.cjs` en 768×1024, 1024×768 y 390×844.
    ============================================================================================ */
 
 .lx-inspector-main {
   flex: 1;
   display: flex;
   flex-direction: column;
+  /* 12 en teléfono y 16 en tablet: el «espaciado vertical entre bloques 12-16» de la tabla. */
   gap: var(--lx-card-gap);
   width: 100%;
-  max-width: 640px;
+  /* 960, que es el «ancho de contenido fluido, máximo 960 px» de la v2. Eran 1060, y venían del
+     parche de iPad del 09-10: con cuatro baldosas en una fila, 920 las dejaba angostas. Ya no hay
+     cuatro baldosas, y el formulario a 1060 era una fila de campos demasiado larga para leer. */
+  max-width: 960px;
   margin: 0 auto;
-  /* 16px de margen lateral en celular, que es la medida de la tabla del documento. El relleno
-     inferior lo pone el shell con la altura medida de la barra fija. */
+  /* 16 de margen lateral en celular; el relleno inferior lo pone el shell con la altura MEDIDA de
+     la barra fija, que es lo único que ningún CSS puede saber. */
   padding: var(--lx-space-4) var(--lx-space-4) 0;
 }
-
-/* Tablet (768px arriba): el margen sube a 24-32px y el ancho útil a 720px, que es lo que pide el
-   documento para el formulario de consulta centrado. No aparece barra lateral: Fiscalización
-   conserva el patrón de aplicación operativa a cualquier ancho. */
 @media (min-width: 768px) {
   .lx-inspector-main {
-    /* 920 y no 720 (08-10-2026, v2 del documento): «área central max-width 920 px en
-       tablet/escritorio de prueba». El 720 venía de la v1, que lo pedía para el FORMULARIO de
-       consulta; la v2 habla del área central entera. A 768 no cambia nada —el ancho disponible ya
-       es menor— y a 1024 o más deja de sobrar lienzo a los lados sin estirar los controles, que es
-       lo que su punto 4 pide: «no estirar los botones del celular a bloques gigantes». */
-    max-width: 920px;
+    gap: var(--lx-space-4);
+    /* 24, el tope del «padding lateral 16-24» de la tabla. */
     padding-right: var(--lx-space-6);
     padding-left: var(--lx-space-6);
   }
 }
-@media (min-width: 1024px) {
-  .lx-inspector-main {
-    padding-right: var(--lx-space-8);
-    padding-left: var(--lx-space-8);
+
+/* ---- El título de la pantalla ---------------------------------------------------------------
+   «Mostrar el título "Consultar vehículo" y un subtítulo breve.»
+
+   Vuelve a haber un `h1` de verdad. Del 07 al 12 de octubre el encabezado de nivel 1 era el
+   saludo, así que un lector de pantalla entraba a la pantalla principal del portal por «Hola,
+   Javier» en vez de por lo que la pantalla hace.
+
+   22-26px escritos a mano y no `--lx-text-screen-title-size`: ese token vale 30px en densidad
+   exterior —que es la del fiscalizador— y la tabla de la v2 topa el título en 26. */
+.lx-fiscal-title {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  /* El rango de la tabla es 58-76 de alto total. El piso lo pone esta regla; el techo lo pone el
+     contenido, que son dos renglones. */
+  min-height: 58px;
+}
+.lx-fiscal-title__h {
+  margin: 0;
+  font-size: 25px;
+  font-weight: 700;
+  line-height: 1.16;
+  letter-spacing: -0.01em;
+}
+.lx-fiscal-title__sub {
+  margin: 0;
+  /* 15px en densidad exterior, dentro del 13-15 de la tabla. */
+  font-size: var(--lx-text-meta-size);
+  line-height: 1.3;
+  color: var(--lx-text-muted);
+}
+@media (min-width: 768px) {
+  .lx-fiscal-title__h {
+    font-size: 26px;
   }
 }
 
-/* ---- El saludo: lo primero que se lee, y no un título de pantalla genérico -------------------
-   El documento es explícito en los dos sentidos: «saludo corto: Hola, Inspector» y debajo
-   «Fiscalización · Escazú»; y «no repetir un gran título genérico como "Consulta de placa"
-   ocupando espacio antes de las acciones». Ese h1 estaba y se fue: el saludo ocupa su sitio y es
-   el encabezado de nivel 1 de la pantalla, así que no se pierde la estructura del documento ni el
-   punto de entrada de un lector de pantalla. */
-.lx-inspector-greeting {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--lx-space-3);
-}
-.lx-inspector-greeting__name {
+/* El rótulo de una sección del Inicio («Acciones rápidas»). No es `SectionHeader` porque no
+   encabeza una tarjeta: va suelto sobre el fondo, encima de la cuadrícula. */
+.lx-fiscal-subhead {
   margin: 0;
-  font-size: var(--lx-text-screen-title-size);
+  font-size: var(--lx-text-card-title-size);
   font-weight: 700;
-  line-height: 1.15;
-  letter-spacing: -0.01em;
-}
-.lx-inspector-greeting__where {
-  margin: 2px 0 0;
-  font-size: var(--lx-text-meta-size);
-  color: var(--lx-text-muted);
+  line-height: 1.2;
 }
 
-/* ---- Los cuatro accesos del turno, con la composición de la referencia aprobada ---------------
-   NO es una tarjeta nueva. Es `.lx-quick-tile`, que ya existe y ya trae el icono, el título y la
-   ayuda; lo que cambia es el reparto, porque la referencia apila icono → título → ayuda con el
-   chevron a la derecha, y la variante `--touch` que tenía el fiscalizador centraba icono y título
-   y no dibujaba la ayuda. Se completa, no se recrea.
+/* ---- El bloque principal: la placa y Buscar en una fila -------------------------------------
+   «Placa + Buscar en una sola fila; input ≥48 de alto; Buscar ≥48×90; foco visible.» */
 
-   Por qué volvió la ayuda: la variante táctil la quitó en octubre con un argumento razonable
-   («poco texto»), y la referencia la pide en las cuatro — «Verificar estado y permisos»,
-   «Infracción o advertencia», «Boletas por enviar», «Fotos y adjuntos»—. Con 12-13px y dos
-   renglones cabe de sobra en los 165px que da una columna a 375px. */
-.lx-quick-tile--inspector {
+/* El rótulo «Placa del vehículo» SE VE desde la v2, encima del campo, como en la referencia.
+   Hasta ayer el campo no tenía rótulo visible —se apoyaba en el título de la tarjeta y en el
+   marcador de posición— y el argumento de entonces era que un rótulo metía una tercera fila que
+   desalineaba el botón. Ya no aplica: el rótulo va ARRIBA de la fila, no dentro, así que el campo
+   y el botón siguen siendo dos celdas del mismo alto. */
+.lx-plate-field {
+  /* `.lx-field` trae 16px de margen inferior para separarse del campo de abajo; acá ese hueco lo
+     pone el `gap` del formulario, y sumar los dos dejaba 28px entre la placa y la zona. */
+  margin-bottom: 0;
+}
+/* La zona pide más ancho que la bahía, y sólo en teléfono (12-10-2026).
+
+   A 390px, dos columnas iguales dejan el selector en 156px y «Seleccionar zona» se recorta con
+   puntos suspensivos; la bahía, al lado, son cuatro cifras en 156px de sobra. 1.35/1 reparte 183
+   y 135, que es justo lo que cada uno necesita. Desde 768 vuelven a ser iguales, que es como la
+   referencia del iPad las dibuja. */
+@media (max-width: 767px) {
+  .lx-fiscal-consulta .lx-grid-2 {
+    grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  }
+}
+/* Y por debajo de 390 —el teléfono más angosto que el proyecto sostiene, 360— ni siquiera 1.35
+   alcanza: quedan 170px y el texto pide 135 más el relleno y la flecha. Una debajo de otra, que
+   es lo que la v2 permite en teléfono («una columna»), y la zona recupera los 296 completos. */
+@media (max-width: 389px) {
+  .lx-fiscal-consulta .lx-grid-2 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.lx-plate-row {
+  display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--lx-space-2);
+  align-items: stretch;
+}
+/* El botón dice su nombre en TODOS los tamaños (12-10-2026).
+
+   Hasta ayer era un cuadrado de 56px: sólo el icono en teléfono y la palabra desde 768. La
+   referencia de la v2 lo dibuja con la palabra, y la cuenta sale sin el icono: con 96px de mínimo
+   quedan 184px para el campo en un teléfono de 390 y 154 en uno de 360, de sobra para «SJP123» a
+   24px centrados. El icono es lo único que no cabía, y es lo único que se fue.
+
+   56 de alto —no 48— porque es el alto del campo que acompaña, y la fila no puede tener un botón
+   más bajo que su campo. Supera con holgura el objetivo táctil de 44. */
+.lx-plate-row__go {
+  min-width: 96px;
+  height: 56px;
+  padding: 0 var(--lx-space-4);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--lx-radius-md);
+  background: var(--lx-primary-fill);
+  color: var(--lx-primary-contrast);
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  /* MAYÚSCULAS por CSS y no en el texto traducido: «BUSCAR» es una decisión de presentación de
+     este botón, y el nombre accesible sigue siendo la palabra normal. */
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.lx-plate-row__go:hover:not(:disabled) {
+  background: var(--lx-primary-fill-hover, var(--lx-primary-fill));
+}
+.lx-plate-row__go:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.lx-plate-row__go:focus-visible {
+  outline: 2px solid var(--lx-focus-ring);
+  outline-offset: 2px;
+}
+
+/* ---- Los tres accesos secundarios -----------------------------------------------------------
+   «Mover Levantar boleta, Pendientes y Evidencia a tres accesos secundarios compactos»,
+   «84-110 px», «texto completo sin truncado».
+
+   No es una tarjeta nueva: es `.lx-quick-tile`, que ya existe, con el reparto que la referencia
+   dibuja —título y una línea de ayuda, alineados a la izquierda— y sin icono ni flecha. El icono
+   no se quita por gusto: a este tamaño empujaba la baldosa a 124-132px, que es exactamente la
+   altura que la v2 viene a quitar. */
+.lx-quick-tile--inspector {
+  grid-template-columns: minmax(0, 1fr);
   grid-template-areas:
-    'icono  flecha'
-    'titulo flecha'
-    'texto  flecha';
+    'titulo'
+    'texto';
   justify-items: start;
-  align-content: start;
-  gap: var(--lx-space-2) var(--lx-space-2);
-  /* 132px (08-10-2026, v2): el documento da el rango medido, «132-150 px a 375 px de ancho», y
-     las tarjetas quedaban en 110. El mínimo y no una altura fija: el grid ya estira las cuatro a
-     la más alta, y un alto fijo recortaría la ayuda cuando el idioma la alargue — con 132 de piso
-     y el tope en el contenido, el rango se cumple por los dos lados. */
-  min-height: 132px;
-  padding: var(--lx-space-3);
+  align-content: center;
+  gap: 4px 0;
+  /* 88, dentro del 84-110 de la v2. Mínimo y no alto fijo: la cuadrícula ya estira las tres a la
+     más alta, y un alto fijo recortaría la ayuda cuando el idioma la alargue. */
+  min-height: 88px;
+  padding: var(--lx-space-3) var(--lx-space-4);
   text-align: left;
   position: relative;
 }
-@media (max-width: 380px) {
-  /* A 360px una columna da 156px; la tarjeta sigue en dos columnas (ésa es la regla del documento:
-     «360-479 px: cards 2 columnas») y lo que cede es el relleno. */
-  .lx-quick-tile--inspector {
-    padding: var(--lx-space-2) var(--lx-space-3);
-  }
-}
-.lx-quick-tile--inspector .lx-quick-tile__icon {
-  width: 36px;
-  height: 36px;
-  align-self: start;
+/* Cuando la baldosa lleva conteo, el texto le deja su esquina: a tres columnas en iPad
+   horizontal, «Pendientes» terminaba a 8px de la insignia. */
+.lx-quick-tile--inspector:has(.lx-quick-tile__count) {
+  padding-right: 40px;
 }
 .lx-quick-tile--inspector .lx-quick-tile__title {
-  /* 16-18px y peso 600-700 por la tabla de medidas; `--lx-text-card-title-size` vale 17px y ya es
-     el tamaño de «título de card» en toda la aplicación. */
-  font-size: var(--lx-text-card-title-size);
+  font-size: 16px;
   font-weight: 700;
   line-height: 1.2;
   white-space: normal;
   overflow: visible;
-  align-self: end;
+  text-overflow: clip;
 }
-/* La ayuda SÍ se parte en dos renglones acá, al revés que en el Inicio administrativo: allá son
-   cuatro tarjetas en una fila ancha y un segundo renglón las desalineaba; acá son dos columnas
-   estrechas y recortar con puntos suspensivos dejaría «Verificar estado y per…», que no dice nada. */
+/* La ayuda se PARTE, nunca se recorta: «Infracción o aviso» con puntos suspensivos no dice nada,
+   y la v2 lo pide por su nombre («texto completo sin truncado»). */
 .lx-quick-tile--inspector .lx-quick-tile__hint {
   font-size: var(--lx-text-meta-size);
   line-height: 1.25;
+  color: var(--lx-text-muted);
   white-space: normal;
   overflow: visible;
   text-overflow: clip;
 }
-/* El chevron: sólo en las tarjetas que llevan a otra pantalla, como en la referencia. «Pendientes»
-   y «Evidencia» no lo llevan ahí, y no se les pone: una flecha que no distingue a nadie deja de
-   ser información. */
-.lx-quick-tile__go {
-  grid-area: flecha;
-  align-self: center;
-  display: inline-flex;
-  color: var(--lx-text-subtle);
-  flex-shrink: 0;
-}
 /* El conteo real de pendientes, arriba a la derecha. Mismo recuadro y mismo color que el de la
-   barra inferior y el de la campana: «hay algo esperándote» se lee igual en los tres sitios. */
+   barra inferior y el de la campana: «hay algo esperándote» se lee igual en los tres sitios. No
+   está en la referencia —que es una maqueta sin datos dentro— y se queda: es el único dato real
+   que estas tres baldosas pueden dar, y la v2 pide no perder lo que ya funciona. */
 .lx-quick-tile__count {
   position: absolute;
   top: var(--lx-space-2);
@@ -5693,63 +5774,6 @@ a.lx-list-row {
   font-weight: 700;
   line-height: 20px;
   text-align: center;
-}
-
-/* La acción prioritaria con fondo azul, que es lo que el documento permite y la referencia usa en
-   «Consultar placa». El relleno es `--lx-primary-fill` y no `--lx-primary`: sobre el azul claro el
-   texto blanco da 3.78 y no pasa — es la misma medición por la que la paleta tiene dos azules, uno
-   para tinta sobre superficie y otro para rellenar. */
-.lx-quick-tile--primary {
-  background: var(--lx-primary-fill);
-  border-color: var(--lx-primary-fill);
-  color: var(--lx-primary-contrast);
-}
-.lx-quick-tile--primary:hover {
-  background: var(--lx-primary-fill-hover, var(--lx-primary-fill));
-}
-.lx-quick-tile--primary .lx-quick-tile__title,
-.lx-quick-tile--primary .lx-quick-tile__hint,
-.lx-quick-tile--primary .lx-quick-tile__go {
-  color: var(--lx-primary-contrast);
-}
-/* El cuadro del icono, sobre azul, no puede seguir siendo `--lx-primary-soft`: es azul sobre azul.
-   Un velo blanco translúcido funciona sobre cualquier azul de la familia sin inventar un token. */
-.lx-quick-tile--primary .lx-quick-tile__icon {
-  background: rgba(255, 255, 255, 0.16);
-  color: var(--lx-primary-contrast);
-}
-
-/* ---- Consulta rápida: el campo de placa y un botón cuadrado, en una fila --------------------- */
-.lx-plate-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: var(--lx-space-2);
-  align-items: stretch;
-}
-/* Cuadrado y compacto, como pide el documento: el mismo lado que el alto del campo, así que la
-   fila no tiene un botón más alto ni más bajo que el campo que lo acompaña. 56px entra en el
-   rango 48-56 de la tabla y supera los 44 de objetivo táctil con holgura. */
-.lx-plate-row__go {
-  width: 56px;
-  min-width: 56px;
-  height: 56px;
-  padding: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  border-radius: var(--lx-radius-md);
-  background: var(--lx-primary-fill);
-  color: var(--lx-primary-contrast);
-  cursor: pointer;
-}
-.lx-plate-row__go:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-.lx-plate-row__go:focus-visible {
-  outline: 2px solid var(--lx-focus-ring);
-  outline-offset: 2px;
 }
 
 /* ---- Última consulta ------------------------------------------------------------------------- */
@@ -5806,6 +5830,23 @@ a.lx-list-row {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* El bloque de «Última consulta» ANTES de buscar (12-10-2026, v2).
+
+   «Convertir Última consulta en bloque discreto antes de buscar y en resultado legible cuando
+   exista una respuesta», con el estado vacío entre 64 y 88px de alto. Discreto quiere decir
+   exactamente eso: el título de la sección y un renglón que dice qué va a pasar ahí. Con el
+   relleno normal de tarjeta (16) el bloque se iba por encima de 88, así que lleva `--dense` (12),
+   que ya existe para esto. */
+.lx-last-card .lx-section-header {
+  margin-bottom: var(--lx-space-1);
+}
+.lx-last-card__empty {
+  margin: 0;
+  font-size: var(--lx-text-meta-size);
+  line-height: 1.3;
+  color: var(--lx-text-muted);
 }
 
 /* ---- El anillo de ocupación (08-10-2026) ------------------------------------------------------
@@ -6270,14 +6311,43 @@ a.lx-list-row {
    El relleno superior sigue siendo `max(..., env(safe-area-inset-top))`, así que los 64px son de
    barra VISIBLE y la franja del notch se paga aparte, que es lo que dice el documento. */
 .lx-app-bar--inspector {
-  min-height: 64px;
+  /*
+    56-64 de alto VISIBLE, que es lo que la v2 pide para el encabezado compacto (12-10-2026).
+
+    Medía 77 y los 64 de `min-height` no tenían nada que ver: el alto lo decidía el contenido —la
+    campana, que en densidad exterior es un objetivo táctil de 52px— más los 12+12 de relleno
+    vertical de `.lx-app-bar`. Lo que cede es el relleno, no el botón: 4+52+4 más el borde dan 61,
+    dentro del rango, y la campana conserva sus 52, muy por encima de los 44 que la misma v2 exige.
+
+    El relleno superior sigue siendo `max(..., env(safe-area-inset-top))`, así que los 61px son de
+    barra visible y la franja del notch se paga aparte.
+  */
+  min-height: 56px;
+  padding-top: max(var(--lx-space-1), env(safe-area-inset-top));
+  padding-bottom: var(--lx-space-1);
 }
 
-/* La ficha de «En línea» junto al saludo del fiscalizador: no se encoge y no se parte, porque es
-   dos palabras y el saludo de al lado ya tiene `min-width: 0` para ceder él. */
-.lx-inspector-greeting__state {
-  flex-shrink: 0;
+/* El nombre del fiscalizador y la ficha de «En línea», en el encabezado compacto (12-10-2026).
+
+   La v2 pide que el encabezado lleve «marca, municipio, inspector y estado de conexión». Las dos
+   primeras ya estaban —`Brand` y `ActiveTenantBadge`—; el estado dejó de repartirse entre la barra
+   y el saludo (ya no hay saludo) y se queda SIEMPRE en la barra, que es fija y está en todas las
+   pantallas; y el nombre entra acá.
+
+   El nombre se esconde por debajo de 480px, y no se recorta: en un teléfono esa fila ya lleva el
+   logo, la municipalidad, el estado y la campana, y la identidad de la sesión está a un toque en
+   Más → Perfil. La referencia del iPad tampoco lo dibuja; la prosa de la v2 sí lo pide, así que
+   aparece donde cabe sin apretar nada. */
+.lx-fiscal-who {
+  font-size: var(--lx-text-meta-size);
+  color: var(--lx-text-muted);
   white-space: nowrap;
+  flex-shrink: 0;
+}
+@media (max-width: 479px) {
+  .lx-fiscal-who {
+    display: none;
+  }
 }
 
 /* El estado de la aplicación en texto plano, para copiarlo a soporte (08-10-2026).
@@ -6301,6 +6371,81 @@ a.lx-list-row {
   overflow: auto;
   -webkit-user-select: text;
   user-select: text;
+}
+
+/* ==============================================================================================
+   FISCALIZACIÓN · paleta propia del portal (12-10-2026, «Orden visual v2, iPad»)
+
+   La v2 da cinco colores por su valor: fondo #061A2B, tarjeta #102D43, borde #31536A, azul #0788FF
+   y acento #31B4FF. Entran por el mismo gancho con el que el Ciudadano, el Administrador y la
+   Plataforma tienen la suya; los otros tres portales no se enteran de nada de esto.
+
+   El bloque va DESPUÉS de `[data-density='outdoor']` a propósito. Esa regla —la densidad exterior
+   del fiscalizador— redefine `--lx-border` como un blanco al 16%, y las dos tienen la misma
+   especificidad: si este bloque fuera antes, el borde #31536A que pide la v2 no se vería nunca.
+
+   ── Los dos azules, y por qué son dos ────────────────────────────────────────────────────────
+
+   Medido sobre la tarjeta nueva, el #0788FF de la v2 no puede llevar texto encima ni ser texto:
+
+     · blanco sobre #0788FF        → 3.51   (hace falta 4.5)
+     · #0788FF como texto en tarjeta → 4.00 (hace falta 4.5)
+
+   Es exactamente el caso del Ciudadano (#0788FF, 3.51) y del Administrador (#18A8FF, 2.60), y se
+   resuelve igual: los dos papeles se separan y los dos valores salen de la propia referencia.
+
+     · TINTA   → #31B4FF, el acento de la v2. 6.10 sobre tarjeta: texto, iconos, enlaces, foco y
+                 la pestaña activa de la barra inferior, que es el azul que la referencia dibuja.
+     · RELLENO → #0670D6, el mismo azul un escalón más oscuro, para el botón BUSCAR con texto
+                 blanco: 4.89. Es el valor que el Ciudadano ya usa por esta misma razón.
+
+   El #31B4FF nunca lleva texto blanco encima (2.31) y el #0788FF no se usa como texto corrido.
+   Esto deja el azul vivo donde la v2 lo quiere —Buscar y los estados interactivos— y en ningún
+   sitio más: «evitar grandes superficies de azul saturado» es, sobre todo, que ninguna tarjeta
+   del Inicio lleve relleno azul, y desde hoy ninguna lo lleva.
+
+   ── El texto auxiliar sube un paso ───────────────────────────────────────────────────────────
+
+   `--lx-text-subtle` pasa de #8698AC a #9AACC0. No es gusto: sobre la tarjeta interna nueva
+   (#14364E, más clara que la de la paleta general) el valor viejo caía a 4.27 y el nuevo da 5.44.
+   Y va en la dirección correcta para este portal, que se usa de pie y al sol.
+
+   Quién lo verifica: `packages/ui/src/__checks__/paleta.check.mjs`, que lee ESTE archivo y mide
+   este tema como uno más. `npm run checks`.
+   ============================================================================================== */
+:root[data-portal='inspector'] {
+  --lx-bg: #061a2b;
+  /* El cromo entre el lienzo y la tarjeta: 1.11 sobre el fondo, 1.13 por debajo de la tarjeta. */
+  --lx-chrome: #0b2436;
+  --lx-surface: #102d43;
+  /*
+    UN solo tono de tarjeta, que es lo que la v2 da y lo que la referencia dibuja: el formulario,
+    los tres accesos y «Última consulta» son el mismo plano sobre el fondo navy.
+
+    Y además es lo único que pasa la medición. Con un `surface-2` un paso más claro —#14364E, que
+    es lo que la escalera del tema general haría— los cinco textos de estado sobre su propio fondo
+    suave caían por debajo de 4.5: rojo 4.13, azul 4.21, violeta 4.27, ámbar 4.20, teal 4.37. Se
+    probaron cuatro escalones intermedios y hasta #112F45 el rojo seguía en 4.47. Con el tono de la
+    tarjeta, los cinco pasan (rojo 4.54, el más justo) y el escalón que de verdad se mira —fondo a
+    tarjeta— se queda en 1.24.
+  */
+  --lx-surface-2: var(--lx-surface);
+  --lx-surface-hover: #19445e;
+  --lx-bg-elevated: var(--lx-surface);
+  --lx-border: #31536a;
+  --lx-border-strong: #3e6684;
+  --lx-text: #f4f8fc;
+  --lx-text-muted: #94a8bc;
+  --lx-text-subtle: #9aacc0;
+
+  --lx-primary: #31b4ff;
+  --lx-primary-2: #66c9ff;
+  --lx-primary-strong: #66c9ff;
+  --lx-primary-text: #31b4ff;
+  --lx-primary-fill: #0670d6;
+  --lx-primary-fill-hover: #0561bb;
+  --lx-primary-soft: color-mix(in srgb, #31b4ff 14%, transparent);
+  --lx-focus-ring: #31b4ff;
 }
 
 /* ==============================================================================================
@@ -7186,100 +7331,101 @@ a.lx-list-row {
    eventos de la referencia las dos columnas se emparejan solas y la discusión desaparece. */
 
 /* =================================================================================================
-   Fiscalización en iPad (09-10-2026)
+   Fiscalización · lo que cambia con el ancho (12-10-2026, v2)
 
-   El documento es de tablet vertical y su diagnóstico es de densidad, no de color: «las cuatro
-   tarjetas consumen demasiada altura en dos filas y dejan el formulario demasiado abajo», «la
-   consulta de placa debe aparecer en el primer pantallazo sin tener que desplazar dos filas de
-   tarjetas enormes».
+   Lo de arriba es la jerarquía, y es la misma en los tres tamaños: título, formulario, accesos,
+   última consulta. Acá vive sólo lo que DEPENDE del ancho, que es lo que la v2 pide en su sección
+   de responsive:
 
-   En teléfono no cambia nada: todo lo de acá vive dentro de `min-width: 768px`, que es donde el
-   problema existe. Lo único que cambia en los dos es la barra inferior, porque su rango nuevo
-   —68-82— no se cumplía ni en uno ni en otro.
+     · teléfono (390 y 360): una columna; los accesos en DOS columnas con el tercero ocupando el
+       renglón entero; la placa y Buscar siguen cabiendo en una fila;
+     · iPad vertical (768×1024): la consulta primero y los accesos en TRES columnas;
+     · iPad horizontal (1024×768): la consulta a la izquierda, los accesos y «Última consulta» a la
+       derecha — «si hay ancho», que es la condición que la propia v2 le pone.
    ================================================================================================= */
 
-@media (min-width: 768px) {
-  .lx-inspector-main {
-    /* 1060: el documento pide «ancho máximo 1024-1100 px» para el área de contenido. Eran 920,
-       que venían de la v2 de octubre; con cuatro acciones en una fila, 920 las deja angostas. */
-    max-width: 1060px;
-    /* 24, dentro de los 20-28 que pide la tabla. */
-    padding-right: var(--lx-space-6);
-    padding-left: var(--lx-space-6);
-  }
+/* Teléfono: dos columnas, y el tercer acceso ocupa el renglón. La v2 lo pide así —«accesos en 2
+   columnas o una lista compacta, nunca truncado»— y la medición lo confirma: tres columnas a 390px
+   dejan 111px por baldosa y «Levantar boleta» se parte en dos renglones. A dos columnas son 173px
+   y entra en uno.
 
-  /* Las cuatro acciones en UNA fila, que es el cambio que recupera el primer pantallazo. En dos
-     filas de 132px más el hueco, el lanzador se comía 276px antes del formulario; en una fila son
-     132 y la consulta sube por encima del pliegue sin tocar una sola regla de negocio. */
-  .lx-quick-grid--touch {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    /* 12, dentro del 10-14 de la tabla. */
-    gap: var(--lx-space-3);
-  }
-
-  /* 124px, dentro del 112-145 que pide la tabla para la fila de acciones en tablet. Es menos que
-     los 132 del teléfono y no es una contradicción: aquel rango —132-150— lo medía el documento
-     anterior sobre una tarjeta de media pantalla con su ayuda en dos renglones; en una fila de
-     cuatro, cada tarjeta es más ancha y la misma ayuda entra en uno. */
-  .lx-quick-tile--inspector {
-    min-height: 124px;
-    /* A 768 —la tablet más angosta del documento— una columna de cuatro mide 170px y la ayuda
-       («Verificar estado y permisos») entra en dos renglones, no en uno: la tarjeta se iba a 161
-       contra los 112-145 de la tabla. Lo que cede es el aire interno, no el texto: el documento
-       dice en letra «no reducir texto para forzar tarjetas pequeñas». Desde 810 la ayuda entra
-       en un renglón y esto no se nota. */
-    gap: 6px var(--lx-space-2);
-    padding: var(--lx-space-3) var(--lx-space-3) var(--lx-space-2);
-  }
-  .lx-quick-tile--inspector .lx-quick-tile__icon {
-    width: 32px;
-    height: 32px;
-  }
-
-  /* El botón de buscar deja de ser sólo un icono: en la referencia dice «Buscar», y a este ancho
-     cabe la palabra. El cuadrado se queda en teléfono, donde no. */
-  .lx-plate-row__go {
-    width: auto;
-    min-width: 132px;
-    gap: var(--lx-space-2);
-    padding: 0 var(--lx-space-5);
-    font-size: var(--lx-text-body-size);
-    font-weight: 700;
-  }
-  .lx-plate-row__go .lx-plate-row__go-text {
-    display: inline;
-  }
-
-  /* El bloque del saludo: 72-96px de la tabla. Con el nombre y el rol suma unos 60, así que el
-     piso lo pone esta regla y el contenido decide hasta dónde sube. */
-  .lx-inspector-greeting {
-    min-height: 72px;
-    align-items: center;
+   `:nth-child(3):last-child` y no `:last-child` a secas: si algún día son cuatro accesos, los
+   cuatro forman dos filas limpias y esta regla se apaga sola. */
+.lx-quick-grid--touch {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--lx-space-3);
+}
+@media (max-width: 767px) {
+  .lx-quick-grid--touch > :nth-child(3):last-child {
+    grid-column: 1 / -1;
   }
 }
 
-/* En teléfono la palabra no cabe al lado de un campo de placa de 24px centrado: el botón se queda
-   cuadrado y con su nombre accesible, que es como estaba. */
-.lx-plate-row__go-text {
-  display: none;
+@media (min-width: 768px) {
+  /* Las tres en una fila, que es la composición de la referencia del iPad. */
+  .lx-quick-grid--touch {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  /* 120px de mínimo para Buscar donde sobra ancho; el tope táctil de la v2 es 90. */
+  .lx-plate-row__go {
+    min-width: 120px;
+  }
+}
+
+/* ---- iPad horizontal: dos columnas ----------------------------------------------------------
+   «iPad horizontal: consulta a la izquierda; acciones y última consulta a la derecha si hay
+   ancho.» A 1024 el contenido útil son 912px, que partidos en 1.2fr/1fr dan 495 y 401: el
+   formulario sigue siendo un formulario y los tres accesos siguen siendo tres accesos.
+
+   Dos decisiones que conviene dejar escritas:
+
+   · `.lx-inspector-main` la usan las NUEVE pantallas del portal, así que la cuadrícula no puede
+     ser suya sin más: una pantalla sin estas áreas vería sus bloques repartidos en celdas que no
+     le corresponden. Se acota con `:has(> .lx-fiscal-title)`, que sólo es verdad en el Inicio.
+   · Los dos envoltorios son `display: contents` por defecto, o sea que por debajo de 1024 no
+     existen para la maquetación: la columna sigue siendo la misma columna de siempre, con el
+     mismo `gap`. Sólo aquí se convierten en celdas.
+
+   `orientation: landscape` además del ancho: un iPad vertical de 834px no entra —su sitio es una
+   columna— y un escritorio sí, que es donde esto también se prueba. */
+.lx-fiscal-consulta,
+.lx-fiscal-aside {
+  display: contents;
+}
+@media (min-width: 1024px) and (orientation: landscape) {
+  .lx-inspector-main:has(> .lx-fiscal-title) {
+    display: grid;
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+    grid-template-areas:
+      'titulo titulo'
+      'consulta accesos';
+    align-content: start;
+    align-items: start;
+    column-gap: var(--lx-space-4);
+  }
+  .lx-fiscal-title {
+    grid-area: titulo;
+  }
+  .lx-fiscal-consulta {
+    grid-area: consulta;
+  }
+  .lx-fiscal-aside {
+    grid-area: accesos;
+  }
+  .lx-fiscal-consulta,
+  .lx-fiscal-aside {
+    display: flex;
+    flex-direction: column;
+    gap: var(--lx-space-4);
+    min-width: 0;
+  }
 }
 
 /* ---- La barra inferior: 68-82px + safe area ------------------------------------------------
    Eran 64 de destino, que venían del rango 64-72 del documento de octubre. El de iPad lo sube a
    68-82 «+ safe area» y añade la razón en su lista de accesibilidad: esto se toca de pie, al sol
-   y a veces con guantes. Sube el destino, no la barra: el relleno de la safe-area sigue aparte y
+   y a veces con guantes. Sube el DESTINO, no la barra: el relleno de la safe-area sigue aparte y
    el shell sigue midiendo la altura real para reservar el espacio del contenido. */
 :root[data-density='outdoor'] .lx-bottom-tab-bar__tab {
   min-height: 70px;
-}
-
-/* La franja más angosta de la tabla, 768-819: ahí y sólo ahí la ayuda de la tarjeta ocupa dos
-   renglones y el bloque se pasa cuatro píxeles del tope de 145. Se quitan del relleno, que es lo
-   único que sobra; el texto no se toca —el documento prohíbe en letra «reducir texto para forzar
-   tarjetas pequeñas»—. */
-@media (min-width: 768px) and (max-width: 819px) {
-  .lx-quick-tile--inspector {
-    gap: 4px var(--lx-space-2);
-    padding: var(--lx-space-2) var(--lx-space-3);
-  }
 }

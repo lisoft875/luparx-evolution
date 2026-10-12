@@ -318,8 +318,11 @@ async function medir(page) {
       conexion: caja(document.querySelector('.lx-connection-badge')),
       conexionAlcanzable: alcanzable(document.querySelector('.lx-connection-badge')),
       conexionEnBarra: Boolean(document.querySelector('.lx-connection-badge')?.closest('.lx-app-bar')),
-      // La ficha verde junto al saludo del fiscalizador (08-10-2026): el otro sitio donde el estado
-      // de conexión puede estar, y el único cuando hay señal.
+      /* Hasta el 11-10-2026 el fiscalizador llevaba el estado junto al saludo de su pantalla de
+         inicio, y esto contaba esa ficha. La v2 del Inicio quitó el saludo, así que el estado
+         volvió a estar SIEMPRE en la barra fija —un solo sitio, en las nueve pantallas— y ya no
+         hay un segundo lugar que contar. Se deja la medida en cero para que, si alguien reintroduce
+         un indicador en el cuerpo, la cuenta de «exactamente uno» lo delate. */
       estadoEnSaludo: document.querySelectorAll('.lx-inspector-greeting__state').length,
       estadoEnSaludoAlcanzable: alcanzable(document.querySelector('.lx-inspector-greeting__state')),
       grupoDerecho: caja(document.querySelector('.lx-app-bar__end')),
@@ -400,35 +403,34 @@ function revisar(etiqueta, arriba, abajo, exigeCabecera, conexion, soloRaiz = fa
     boleta sale sola.
   */
   if (conexion === 'saludo-o-barra') {
-    // El inicio es la única pantalla con saludo, y se reconoce por eso mismo: la ficha está ahí.
-    const esInicio = arriba.estadoEnSaludo > 0;
+    /*
+      Reescrito el 12-10-2026 con la v2 del Inicio de Fiscalización.
+
+      Lo de antes repartía el indicador entre la barra y el saludo: con señal lo llevaba el saludo
+      del inicio, y en las demás pantallas la barra. Ese reparto existía porque la referencia del
+      07-10 dibujaba la ficha junto al saludo. La v2 quita el saludo, y con él la única razón del
+      reparto: el estado vuelve a la barra fija, en las nueve pantallas y con señal o sin ella.
+
+      Lo que se comprueba sigue siendo lo mismo que el 06-10 pedía, y es lo que importa: UN solo
+      indicador en pantalla, dentro de la cabecera, y legible.
+    */
     const indicadores = arriba.conexiones + arriba.estadoEnSaludo;
     comprobar(
       indicadores === 1,
       `${etiqueta} · hay exactamente un indicador de conexión en pantalla`,
-      `barra=${arriba.conexiones} saludo=${arriba.estadoEnSaludo}`,
+      `barra=${arriba.conexiones} cuerpo=${arriba.estadoEnSaludo}`,
     );
-    if (esInicio) {
-      comprobar(
-        arriba.conexiones === 0,
-        `${etiqueta} · en el inicio lo lleva el saludo, no la barra`,
-        `en la barra hay ${arriba.conexiones}`,
-      );
-      comprobar(
-        arriba.estadoEnSaludoAlcanzable === true,
-        `${etiqueta} · y se puede leer, no está tapado`,
-      );
-    } else {
-      comprobar(
-        arriba.conexiones === 1 && arriba.conexionEnBarra === true,
-        `${etiqueta} · sin saludo, el estado lo lleva la barra fija`,
-        `conexiones=${arriba.conexiones} enBarra=${arriba.conexionEnBarra}`,
-      );
-      comprobar(
-        arriba.conexionAlcanzable === true,
-        `${etiqueta} · y se puede leer`,
-      );
-    }
+    comprobar(
+      arriba.estadoEnSaludo === 0,
+      `${etiqueta} · y no hay ninguno suelto en el cuerpo de la pantalla`,
+      `en el cuerpo hay ${arriba.estadoEnSaludo}`,
+    );
+    comprobar(
+      arriba.conexiones === 1 && arriba.conexionEnBarra === true,
+      `${etiqueta} · el estado lo lleva la barra fija`,
+      `conexiones=${arriba.conexiones} enBarra=${arriba.conexionEnBarra}`,
+    );
+    comprobar(arriba.conexionAlcanzable === true, `${etiqueta} · y se puede leer, no está tapado`);
   }
   const exigeConexion =
     conexion !== 'no' && conexion !== 'saludo-o-barra' && arriba.barras === 1 && !(soloRaiz && arriba.tieneVolver);

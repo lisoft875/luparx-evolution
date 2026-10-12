@@ -107,12 +107,15 @@ async function medirBarra(page) {
     const donde = await p0.evaluate(() => ({
       ruta: location.pathname,
       hayContrasena: Boolean(document.querySelector('input[type="password"]')),
-      hayConsulta: (document.body.textContent || '').includes('Consulta de placa'),
+      // El título de la pantalla de inicio. Era «Consulta de placa» hasta el 11-10-2026 y desde la
+      // v2 es «Consultar vehículo»: si no se actualiza, esta comprobación pasa sola y deja de
+      // comprobar nada, porque el texto viejo ya no existe en ninguna parte.
+      hayConsulta: (document.body.textContent || '').includes('Consultar vehículo'),
     }));
     comprobar(
       donde.hayContrasena && !donde.hayConsulta,
-      'sin sesión, /inspector muestra el login y no Consulta de placa',
-      `cayó en ${donde.ruta} · campo de contraseña=${donde.hayContrasena} · «Consulta de placa» en pantalla=${donde.hayConsulta}`,
+      'sin sesión, /inspector muestra el login y no el Inicio de Fiscalización',
+      `cayó en ${donde.ruta} · campo de contraseña=${donde.hayContrasena} · «Consultar vehículo» en pantalla=${donde.hayConsulta}`,
     );
     await limpio.close();
   }

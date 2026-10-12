@@ -1,9 +1,13 @@
 /**
  * Fiscalización · especificación visual responsive — los criterios medibles.
  *
- * <p>Mide la pantalla inicial de /inspector contra la tabla de medidas del documento del
- * 07-10-2026 y contra sus criterios de aceptación, en los CINCO tamaños que el paso 9 nombra:
- * 360x800, 375x812, 390x844, 768x1024 y tablet horizontal.</p>
+ * <p>Mide la pantalla inicial de /inspector contra la tabla de medidas del «Orden visual de
+ * implementación v2 · iPad» (12-10-2026) y contra sus criterios de aceptación, en los cinco
+ * tamaños de siempre: 360x800, 375x812, 390x844, 768x1024 y 1024x768.</p>
+ *
+ * <p>La parte del Inicio se reescribió con la v2. La anterior medía el saludo, el lanzador de
+ * cuatro baldosas y el botón cuadrado —que era lo correcto hasta el 11 de octubre— y con la
+ * pantalla nueva habría reportado en rojo justamente lo que el encargo pedía corregir.</p>
  *
  * <h2>Qué se mide y qué no</h2>
  *
@@ -188,181 +192,346 @@ async function barraInferior(page, tamano) {
   );
 }
 
-/** La pantalla inicial: saludo, lanzador 2x2, consulta rápida y última consulta. */
+/**
+ * El Inicio, con la jerarquía de la v2: encabezado compacto, título, formulario, tres accesos,
+ * última consulta.
+ *
+ * <p>Esta función se reescribió entera el 12-10-2026 y conviene decirlo, porque lo que medía antes
+ * no estaba mal: medía el saludo, el lanzador de cuatro baldosas y el botón cuadrado, que es lo que
+ * el encargo del 07-10 pedía y lo que había. La v2 cambia la pantalla, así que una prueba que
+ * siguiera exigiendo aquello habría reportado en rojo justamente la corrección pedida.</p>
+ */
 async function pantallaInicial(page, tamano, ancho) {
   const vista = await page.evaluate(() => {
     const px = (nodo, prop) => (nodo ? Math.round(parseFloat(getComputedStyle(nodo)[prop])) : 0);
-    const saludo = document.querySelector('.lx-inspector-greeting__name');
-    const donde = document.querySelector('.lx-inspector-greeting__where');
+    const caja = (nodo) => {
+      if (!nodo) return null;
+      const c = nodo.getBoundingClientRect();
+      return { x: Math.round(c.x), y: Math.round(c.y), ancho: Math.round(c.width), alto: Math.round(c.height) };
+    };
     const main = document.querySelector('.lx-inspector-main');
-    const tarjetas = [...document.querySelectorAll('.lx-quick-tile--inspector')].map((t) => {
+    const titulo = document.querySelector('.lx-fiscal-title__h');
+    const sub = document.querySelector('.lx-fiscal-title__sub');
+    const tarjetaConsulta = document.querySelector('.lx-fiscal-consulta .lx-card');
+    const nav = document.querySelector('.lx-quick-grid--touch');
+    const campo = document.querySelector('.lx-plate-row input');
+    const boton = document.querySelector('.lx-plate-row__go');
+    const barra = document.querySelector('.lx-app-bar--inspector');
+
+    const accesos = [...document.querySelectorAll('.lx-quick-tile--inspector')].map((t) => {
       const c = t.getBoundingClientRect();
+      const tit = t.querySelector('.lx-quick-tile__title');
+      const ayu = t.querySelector('.lx-quick-tile__hint');
       return {
-        titulo: t.querySelector('.lx-quick-tile__title')?.textContent?.trim() ?? '',
-        ayuda: t.querySelector('.lx-quick-tile__hint')?.textContent?.trim() ?? '',
-        tituloPx: px(t.querySelector('.lx-quick-tile__title'), 'fontSize'),
-        ayudaPx: px(t.querySelector('.lx-quick-tile__hint'), 'fontSize'),
-        radio: px(t, 'borderTopLeftRadius'),
+        titulo: tit?.textContent?.trim() ?? '',
+        ayuda: ayu?.textContent?.trim() ?? '',
+        tituloPx: px(tit, 'fontSize'),
+        ayudaPx: px(ayu, 'fontSize'),
         x: Math.round(c.x),
         ancho: Math.round(c.width),
         alto: Math.round(c.height),
         azul: t.classList.contains('lx-quick-tile--primary'),
-        flecha: Boolean(t.querySelector('.lx-quick-tile__go')),
+        // Truncado DE VERDAD: el texto que no entra en su caja, no una regla de CSS que lo permita.
+        cortado:
+          (tit && tit.scrollWidth > tit.clientWidth + 1) || (ayu && ayu.scrollWidth > ayu.clientWidth + 1),
         conteo: t.querySelector('.lx-quick-tile__count')?.textContent?.trim() ?? null,
       };
     });
-    const campo = document.querySelector('.lx-plate-row input');
-    const boton = document.querySelector('.lx-plate-row__go');
-    const cajaCampo = campo?.getBoundingClientRect();
-    const cajaBoton = boton?.getBoundingClientRect();
+
+    // Los rótulos de los tres campos, y que de verdad estén asociados al control.
+    const rotulos = [...document.querySelectorAll('.lx-fiscal-consulta label.lx-field__label')].map((l) => ({
+      texto: l.textContent.trim(),
+      para: l.getAttribute('for'),
+      apunta: Boolean(l.getAttribute('for') && document.getElementById(l.getAttribute('for'))),
+      visible: getComputedStyle(l).display !== 'none' && l.getBoundingClientRect().height > 0,
+    }));
+
+    const ultima = document.querySelector('.lx-last-card');
+
     return {
-      saludo: saludo?.textContent?.trim() ?? null,
-      saludoPx: px(saludo, 'fontSize'),
-      saludoPeso: saludo ? getComputedStyle(saludo).fontWeight : null,
-      donde: donde?.textContent?.trim() ?? null,
-      dondePx: px(donde, 'fontSize'),
+      // --- encabezado compacto ---
+      barra: caja(barra),
+      marca: (document.querySelector('.lx-app-bar .lx-brand__wordmark')?.textContent || '').trim(),
+      municipio: (document.querySelector('.lx-app-bar .lx-tenant-badge')?.textContent || '').trim(),
+      conexion: (document.querySelector('.lx-app-bar .lx-connection-badge')?.textContent || '').trim(),
+      fiscalizador: (document.querySelector('.lx-app-bar .lx-fiscal-who')?.textContent || '').trim(),
+      // --- título ---
+      titulo: titulo?.textContent?.trim() ?? null,
+      tituloPx: px(titulo, 'fontSize'),
+      tituloPeso: titulo ? getComputedStyle(titulo).fontWeight : null,
+      sub: sub?.textContent?.trim() ?? null,
+      subPx: px(sub, 'fontSize'),
+      cajaTitulo: caja(document.querySelector('.lx-fiscal-title')),
+      // Lo que la v2 quita, por su nombre.
+      saludos: [...document.querySelectorAll('.lx-inspector-main *')].filter((n) =>
+        /^hola,/i.test((n.textContent || '').trim()),
+      ).length,
+      tituloGenerico: [...document.querySelectorAll('h1, h2, .lx-section-header__title')]
+        .map((n) => n.textContent.trim())
+        .filter((x) => /^consulta(r)? de placa$/i.test(x)).length,
+      // Ninguna fotografía ni logotipo gigante dentro del contenido.
+      imagenes: [...document.querySelectorAll('.lx-inspector-main img')].map((n) =>
+        Math.round(n.getBoundingClientRect().height),
+      ),
+      // --- el bloque principal ---
+      cajaConsulta: caja(tarjetaConsulta),
+      padConsulta: px(tarjetaConsulta, 'paddingTop'),
+      campo: caja(campo),
+      boton: caja(boton),
+      botonTexto: (boton?.textContent || '').trim(),
+      enLinea: campo && boton ? Math.abs(campo.getBoundingClientRect().y - boton.getBoundingClientRect().y) <= 2 : false,
+      rotulos,
+      zona: caja(document.querySelector('.lx-fiscal-consulta .lx-select')),
+      bahia: caja(document.querySelector('.lx-fiscal-consulta input[name="spaceCode"]')),
+      // --- accesos ---
+      cajaNav: caja(nav),
+      rotuloAcciones: (document.querySelector('.lx-fiscal-subhead')?.textContent || '').trim(),
+      accesos,
+      // El orden del DOM, que es el que lee un lector de pantalla y el que manda cuando la
+      // maquetación cambia de columnas: la consulta ANTES que los accesos.
+      consultaAntes:
+        tarjetaConsulta && nav
+          ? Boolean(tarjetaConsulta.compareDocumentPosition(nav) & Node.DOCUMENT_POSITION_FOLLOWING)
+          : false,
+      // --- última consulta ---
+      cajaUltima: caja(ultima),
+      ultimaVacia: Boolean(document.querySelector('.lx-last-card__empty')),
+      ultimaReal: Boolean(document.querySelector('.lx-last-check')),
+      // --- medidas del contenedor y color ---
       margenIzq: px(main, 'paddingLeft'),
       margenDer: px(main, 'paddingRight'),
       anchoMain: main ? Math.round(main.getBoundingClientRect().width) : 0,
-      tarjetas,
-      campoAlto: cajaCampo ? Math.round(cajaCampo.height) : 0,
-      botonLado: cajaBoton ? [Math.round(cajaBoton.width), Math.round(cajaBoton.height)] : [0, 0],
-      botonEnLinea: cajaCampo && cajaBoton ? Math.abs(cajaCampo.y - cajaBoton.y) <= 2 : false,
-      // Que el título genérico se haya ido: el documento lo pide por su nombre.
-      tituloGenerico: [...document.querySelectorAll('h1, .lx-text-screen-title')]
-        .map((n) => n.textContent.trim())
-        .filter((x) => /^consulta de placa$/i.test(x)).length,
-      ultima: Boolean(document.querySelector('.lx-last-check')),
-      ultimaVacia: [...document.querySelectorAll('.lx-card')].some((c) =>
-        /todavía no consultaste/i.test(c.textContent || ''),
-      ),
+      hueco: px(main, 'rowGap'),
+      colores: {
+        fondo: getComputedStyle(document.body).backgroundColor,
+        tarjeta: tarjetaConsulta ? getComputedStyle(tarjetaConsulta).backgroundColor : null,
+        borde: tarjetaConsulta ? getComputedStyle(tarjetaConsulta).borderTopColor : null,
+        buscar: boton ? getComputedStyle(boton).backgroundColor : null,
+      },
     };
   });
 
-  ok(Boolean(vista.saludo) && /^hola,/i.test(vista.saludo), `${tamano}: el saludo encabeza la pantalla`, `«${vista.saludo}»`);
-  /*
-    24-30, y el margen de arriba tiene nombre (08-10-2026).
-
-    La tabla del documento pide 24-28px en celular y 24-30 en tablet. Medido en staging da 30 en
-    los cinco tamaños, también en el teléfono: dos píxeles por encima de lo que pide la tabla para
-    celular. No es un descuido — es `:root[data-density='outdoor']`, que el portal del fiscalizador
-    activa y que sube el título de pantalla de 28 a 30 para que se lea de pie y al sol. Esa decisión
-    es anterior a este documento y persigue el mismo objetivo que su tabla, así que gana ella.
-
-    Se deja escrito en vez de sólo ensanchar el rango: una prueba que acepta 24-30 sin decir por
-    qué esconde la pregunta, y dentro de un mes nadie sabe si los 30px son la densidad de exteriores
-    o una regla que se escapó.
-  */
+  // ── el encabezado compacto: marca, municipio, inspector y estado ─────────────────────────────
   ok(
-    vista.saludoPx >= 24 && vista.saludoPx <= 30,
-    `${tamano}: el saludo mide ${vista.saludoPx}px (24-28 por tabla; 30 con densidad de exteriores)`,
+    vista.barra !== null && vista.barra.alto >= 56 && vista.barra.alto <= 64,
+    `${tamano}: el encabezado mide ${vista.barra?.alto}px (la v2 pide 56-64)`,
   );
-  ok(Number(vista.saludoPeso) >= 700, `${tamano}: el saludo va en peso 700`, `peso=${vista.saludoPeso}`);
-  ok(/^fiscalización/i.test(vista.donde ?? ''), `${tamano}: debajo dice «Fiscalización · municipalidad»`, `«${vista.donde}»`);
-  ok(
-    vista.dondePx >= 12 && vista.dondePx <= 15,
-    `${tamano}: el renglón de abajo es texto auxiliar (${vista.dondePx}px)`,
-  );
-  ok(vista.tituloGenerico === 0, `${tamano}: ya no hay un «Consulta de placa» genérico encabezando`);
-
-  /* El ancho útil. El tope sube de 920 a 1100: el documento de iPad (09-10-2026) pide «ancho
-     máximo 1024-1100 px» para el área de contenido, y con cuatro acciones en una fila los 920 de
-     la v2 las dejaban angostas. Se comprueba el TOPE y no un valor exacto, porque por debajo del
-     máximo el ancho lo manda el viewport y exigir una cifra sería exigir un tamaño de pantalla. */
-  ok(
-    vista.anchoMain <= 1100,
-    `${tamano}: el área central no pasa de 1100px`,
-    `mide ${vista.anchoMain}px`,
-  );
-  const margenEsperado = ancho >= 768 ? [24, 32] : [16, 16];
-  ok(
-    vista.margenIzq >= margenEsperado[0] && vista.margenIzq <= margenEsperado[1] && vista.margenIzq === vista.margenDer,
-    `${tamano}: margen lateral ${vista.margenIzq}px (el documento pide ${margenEsperado[0]}-${margenEsperado[1]})`,
-  );
-
-  ok(vista.tarjetas.length === 4, `${tamano}: el lanzador tiene cuatro accesos`, `son ${vista.tarjetas.length}`);
-  if (vista.tarjetas.length === 4) {
-    /*
-      El reparto del lanzador depende del ancho desde el documento de iPad (09-10-2026): «en iPad
-      vertical las cuatro acciones deben ocupar una fila; en teléfono, pasar a 2×2». Antes eran
-      2×2 siempre, que es lo que dejaba el formulario de consulta debajo de dos filas de tarjetas
-      —el defecto que ese documento vino a corregir—.
-    */
-    const columnas = new Set(vista.tarjetas.map((t) => t.x));
-    const esperadas = ancho >= 768 ? 4 : 2;
-    ok(
-      columnas.size === esperadas,
-      `${tamano}: el lanzador va en ${esperadas} columna(s)`,
-      `son ${columnas.size}`,
-    );
-    if (ancho >= 768) {
-      const altos = vista.tarjetas.map((t) => t.alto);
-      const fuera = altos.filter((h) => h < 112 || h > 145);
-      ok(
-        fuera.length === 0,
-        `${tamano}: y las cuatro miden 112-145px, la fila de acciones de la tabla`,
-        `altos: ${altos.join(', ')}`,
-      );
-    }
-    const titulosMal = vista.tarjetas.filter((t) => t.tituloPx < 16 || t.tituloPx > 19);
-    ok(titulosMal.length === 0, `${tamano}: los títulos de tarjeta miden 16-18px`, titulosMal.map((t) => `${t.titulo} ${t.tituloPx}px`).join(', '));
-    const ayudasMal = vista.tarjetas.filter((t) => !t.ayuda || t.ayudaPx < 12 || t.ayudaPx > 15);
-    ok(ayudasMal.length === 0, `${tamano}: las cuatro llevan ayuda de 12-13px`, ayudasMal.map((t) => `${t.titulo} ${t.ayudaPx}px`).join(', '));
-    const radiosMal = vista.tarjetas.filter((t) => t.radio < 12 || t.radio > 16);
-    ok(radiosMal.length === 0, `${tamano}: el radio de las tarjetas es 12-14px`, radiosMal.map((t) => `${t.titulo} ${t.radio}px`).join(', '));
-    ok(
-      vista.tarjetas.filter((t) => t.azul).length === 1,
-      `${tamano}: exactamente una acción prioritaria en azul`,
-    );
-    ok(
-      vista.tarjetas.every((t) => t.ancho >= 44 && t.alto >= 44),
-      `${tamano}: ninguna tarjeta baja del objetivo táctil`,
-    );
-    /* El alto que da la v2 del documento: «cards aprox. 141-150 x 132-150 px a 375 px de ancho».
-       Se mide el ALTO y no el ancho: el ancho lo decide la columna —a 375 con 16 de margen y 12 de
-       separación salen 165, y a 768 salen más— así que exigirle 141-150 sería exigir un viewport,
-       no un diseño. El alto sí es una decisión, y es la que el documento quiere ver cambiada. */
-    /* El piso de 132 es el de la v2 y vale para el TELÉFONO, donde la tarjeta ocupa media
-       pantalla. En tablet la fila de cuatro tiene su propio rango —112-145, comprobado arriba— y
-       exigirle además 132 sería exigir las dos cosas a la vez. */
-    if (ancho < 768) {
-      const bajas = vista.tarjetas.filter((t) => t.alto < 132);
-      ok(
-        bajas.length === 0,
-        `${tamano}: las tarjetas miden al menos 132px de alto, como pide la v2`,
-        bajas.map((t) => `${t.titulo} ${t.alto}px`).join(', '),
-      );
-    }
+  ok(/lupa\s*rx/i.test(vista.marca), `${tamano}: el encabezado lleva la marca`, `«${vista.marca}»`);
+  ok(vista.municipio.length > 0, `${tamano}: y el municipio`, `«${vista.municipio}»`);
+  ok(/en línea|sin conexión/i.test(vista.conexion), `${tamano}: y el estado de conexión`, `«${vista.conexion}»`);
+  /* El nombre del fiscalizador se esconde por debajo de 480px a propósito (ver `.lx-fiscal-who`):
+     ahí la fila ya lleva logo, municipalidad, estado y campana. */
+  if (ancho >= 480) {
+    ok(vista.fiscalizador.length > 0, `${tamano}: y el nombre del fiscalizador`, `«${vista.fiscalizador}»`);
   }
 
+  // ── el título de la pantalla ─────────────────────────────────────────────────────────────────
+  ok(/^consultar veh/i.test(vista.titulo ?? ''), `${tamano}: la pantalla se titula «Consultar vehículo»`, `«${vista.titulo}»`);
   ok(
-    vista.campoAlto >= 48 && vista.campoAlto <= 60,
-    `${tamano}: el campo de placa mide ${vista.campoAlto}px (el documento pide 48-56)`,
+    vista.tituloPx >= 22 && vista.tituloPx <= 26,
+    `${tamano}: el título mide ${vista.tituloPx}px (la v2 pide 22-26)`,
   );
-  /*
-    El botón de buscar cambia de forma con el ancho, y las dos formas son correctas.
-
-    En teléfono es cuadrado y sólo icono: la palabra no cabe al lado de un campo de placa de 24px
-    centrado. Desde 768 dice «Buscar», que es como lo dibuja la referencia del iPad, y entonces
-    deja de ser cuadrado a propósito. Lo que no cambia en ninguno de los dos es lo que de verdad
-    importa: el alto, que sigue en el rango táctil.
-
-    Exigir «cuadrado» en los cinco anchos era exigir la versión de teléfono en la tablet, que es
-    justo lo que el documento vino a corregir.
-  */
-  const esperadoCuadrado = ancho < 768;
+  ok(Number(vista.tituloPeso) >= 700, `${tamano}: el título va en peso 700`, `peso=${vista.tituloPeso}`);
+  ok(Boolean(vista.sub) && vista.subPx >= 13 && vista.subPx <= 15, `${tamano}: lleva subtítulo breve de 13-15px`, `«${vista.sub}» ${vista.subPx}px`);
   ok(
-    esperadoCuadrado
-      ? vista.botonLado[0] === vista.botonLado[1] && vista.botonLado[0] >= 48 && vista.botonLado[0] <= 56
-      : vista.botonLado[0] >= 96 && vista.botonLado[1] >= 48 && vista.botonLado[1] <= 60,
-    `${tamano}: el botón de búsqueda ${esperadoCuadrado ? 'es cuadrado de 48-56px' : 'lleva su palabra y conserva el alto táctil'}`,
-    `mide ${vista.botonLado[0]}x${vista.botonLado[1]}`,
+    vista.cajaTitulo !== null && vista.cajaTitulo.alto >= 58 && vista.cajaTitulo.alto <= 76,
+    `${tamano}: el bloque de título mide ${vista.cajaTitulo?.alto}px (58-76)`,
   );
-  ok(vista.botonEnLinea, `${tamano}: el botón de búsqueda está en la misma fila que el campo`);
+  ok(vista.saludos === 0, `${tamano}: el saludo «Hola, …» ya no encabeza la pantalla`, `quedan ${vista.saludos}`);
+  ok(vista.tituloGenerico === 0, `${tamano}: no hay un «Consultar placa» genérico repetido`);
+  ok(vista.imagenes.length === 0, `${tamano}: no hay fotografía ni logotipo dentro del contenido`, `alturas: ${vista.imagenes.join(', ')}`);
+
+  // ── la consulta es el bloque principal, y va PRIMERO ─────────────────────────────────────────
+  ok(vista.consultaAntes, `${tamano}: la consulta aparece antes que los accesos secundarios`);
   ok(
-    vista.ultima || vista.ultimaVacia,
+    vista.cajaConsulta !== null && vista.cajaTitulo !== null && vista.cajaConsulta.y >= vista.cajaTitulo.y,
+    `${tamano}: y debajo del título`,
+  );
+  ok(
+    vista.cajaNav !== null && vista.cajaConsulta !== null
+      && (vista.cajaNav.y >= vista.cajaConsulta.y + vista.cajaConsulta.alto - 1
+        || vista.cajaNav.x >= vista.cajaConsulta.x + vista.cajaConsulta.ancho - 1),
+    `${tamano}: los accesos quedan después de la consulta, debajo o a su derecha`,
+    `consulta=${JSON.stringify(vista.cajaConsulta)} accesos=${JSON.stringify(vista.cajaNav)}`,
+  );
+  /* 220-270 de la tabla. Por debajo de 390px la zona y la bahía se apilan —si no, «Seleccionar
+     zona» se recorta— y la tarjeta crece: ahí se comprueba que siga siendo UNA tarjeta y no que
+     mida lo que mide en un iPad. */
+  if (ancho >= 390) {
+    ok(
+      vista.cajaConsulta.alto >= 220 && vista.cajaConsulta.alto <= 270,
+      `${tamano}: la tarjeta de consulta mide ${vista.cajaConsulta.alto}px (la v2 pide 220-270)`,
+    );
+  }
+  ok(
+    vista.padConsulta >= 16 && vista.padConsulta <= 20,
+    `${tamano}: su relleno es de ${vista.padConsulta}px (16-20)`,
+  );
+  ok(vista.campo !== null && vista.campo.alto >= 48, `${tamano}: el campo de placa mide ${vista.campo?.alto}px (≥48)`);
+  ok(
+    vista.boton !== null && vista.boton.alto >= 48 && vista.boton.ancho >= 90,
+    `${tamano}: Buscar mide ${vista.boton?.ancho}x${vista.boton?.alto} (la v2 pide ≥90x48)`,
+  );
+  ok(vista.botonTexto.length > 0, `${tamano}: y dice su nombre, no sólo un icono`, `«${vista.botonTexto}»`);
+  ok(vista.enLinea, `${tamano}: la placa y Buscar van en la misma fila`);
+  // Las etiquetas SIEMPRE visibles, que es lo que la v2 pide para los tres campos.
+  ok(vista.rotulos.length >= 3, `${tamano}: los tres campos llevan rótulo`, `son ${vista.rotulos.length}`);
+  ok(
+    vista.rotulos.every((r) => r.visible && r.apunta),
+    `${tamano}: los rótulos se ven y apuntan a su control`,
+    vista.rotulos.map((r) => `«${r.texto}»→${r.para}`).join(' · '),
+  );
+  ok(
+    vista.zona !== null && vista.bahia !== null && vista.zona.alto >= 44 && vista.bahia.alto >= 44,
+    `${tamano}: zona y bahía conservan el objetivo táctil`,
+    `zona=${vista.zona?.alto} bahía=${vista.bahia?.alto}`,
+  );
+  /* Dos columnas desde 390. Es la composición de la referencia; por debajo se apilan, que es lo
+     que la v2 permite en teléfono y lo único que evita recortar el texto del selector. */
+  if (ancho >= 390) {
+    ok(
+      Math.abs(vista.zona.y - vista.bahia.y) <= 2,
+      `${tamano}: zona y bahía van en dos columnas`,
+      `zona.y=${vista.zona.y} bahía.y=${vista.bahia.y}`,
+    );
+  }
+
+  // ── los tres accesos secundarios ─────────────────────────────────────────────────────────────
+  ok(vista.accesos.length === 3, `${tamano}: hay TRES accesos secundarios, no cuatro tarjetas`, `son ${vista.accesos.length}`);
+  ok(/acciones r[áa]pidas/i.test(vista.rotuloAcciones), `${tamano}: con su rótulo «Acciones rápidas»`, `«${vista.rotuloAcciones}»`);
+  if (vista.accesos.length === 3) {
+    const nombres = vista.accesos.map((a) => a.titulo);
+    ok(
+      /levantar/i.test(nombres[0]) && /pendientes/i.test(nombres[1]) && /evidencia/i.test(nombres[2]),
+      `${tamano}: son Levantar boleta, Pendientes y Evidencia, en ese orden`,
+      nombres.join(' · '),
+    );
+    ok(
+      vista.accesos.every((a) => !/consultar placa/i.test(a.titulo)),
+      `${tamano}: «Consultar placa» ya no se repite como tarjeta`,
+    );
+    const fuera = vista.accesos.filter((a) => a.alto < 84 || a.alto > 110);
+    ok(fuera.length === 0, `${tamano}: los tres miden 84-110px de alto`, vista.accesos.map((a) => `${a.titulo} ${a.alto}px`).join(', '));
+    const cortados = vista.accesos.filter((a) => a.cortado);
+    ok(cortados.length === 0, `${tamano}: ningún texto se recorta`, cortados.map((a) => a.titulo).join(', '));
+    ok(
+      vista.accesos.every((a) => a.ayuda.length > 0),
+      `${tamano}: los tres llevan su línea de ayuda`,
+      vista.accesos.map((a) => `${a.titulo}: «${a.ayuda}»`).join(' · '),
+    );
+    ok(
+      vista.accesos.filter((a) => a.azul).length === 0,
+      `${tamano}: ninguno lleva relleno azul (el azul queda para Buscar)`,
+    );
+    const columnas = new Set(vista.accesos.map((a) => a.x)).size;
+    const esperadas = ancho >= 768 ? 3 : 2;
+    ok(columnas === esperadas, `${tamano}: van en ${esperadas} columnas`, `son ${columnas}`);
+  }
+
+  // ── última consulta ──────────────────────────────────────────────────────────────────────────
+  ok(
+    vista.ultimaVacia || vista.ultimaReal,
     `${tamano}: «Última consulta» muestra una consulta real o su estado vacío, nunca una maqueta`,
   );
+  if (vista.ultimaVacia && vista.cajaUltima) {
+    ok(
+      vista.cajaUltima.alto >= 64 && vista.cajaUltima.alto <= 88,
+      `${tamano}: su estado vacío mide ${vista.cajaUltima.alto}px (la v2 pide 64-88)`,
+    );
+  }
+
+  // ── el contenedor y la paleta ────────────────────────────────────────────────────────────────
+  ok(vista.anchoMain <= 960, `${tamano}: el área central no pasa de 960px`, `mide ${vista.anchoMain}px`);
+  const margen = ancho >= 768 ? [20, 28] : [16, 16];
+  ok(
+    vista.margenIzq >= margen[0] && vista.margenIzq <= margen[1] && vista.margenIzq === vista.margenDer,
+    `${tamano}: margen lateral ${vista.margenIzq}px (la v2 pide ${margen[0]}-${margen[1]})`,
+  );
+  ok(vista.hueco >= 12 && vista.hueco <= 16, `${tamano}: separación vertical de ${vista.hueco}px (12-16)`);
+  /* Los colores de la v2, por su valor. Se miden los computados y no los tokens: un token correcto
+     que nadie aplica no pinta nada. */
+  ok(vista.colores.fondo === 'rgb(6, 26, 43)', `${tamano}: el fondo es #061A2B`, vista.colores.fondo);
+  ok(vista.colores.tarjeta === 'rgb(16, 45, 67)', `${tamano}: la tarjeta es #102D43`, vista.colores.tarjeta);
+  ok(vista.colores.borde === 'rgb(49, 83, 106)', `${tamano}: el borde es #31536A`, vista.colores.borde);
+  /*
+    El relleno de Buscar es #0670D6 y no el #0788FF del documento, y es deliberado: con texto
+    blanco encima, #0788FF da 3.51 y hace falta 4.5. Es el mismo caso que el Ciudadano resolvió en
+    septiembre con este mismo valor. El #31B4FF de la v2 sí se usa, como TINTA: enlaces, iconos,
+    foco y la pestaña activa. La medición está escrita en tokens.css y la verifica paleta.check.mjs.
+  */
+  ok(vista.colores.buscar === 'rgb(6, 112, 214)', `${tamano}: Buscar lleva el azul de relleno medido`, vista.colores.buscar);
+}
+
+/**
+ * La consulta sigue funcionando, con sus validaciones y sus estados. Sólo lectura: una consulta de
+ * placa no modifica nada en el servidor.
+ */
+async function consultaFunciona(page, tamano) {
+  const escribir = async (placa, bahia) => {
+    await page.fill('.lx-plate-row input', '');
+    await page.fill('.lx-plate-row input', placa);
+    const campoBahia = page.locator('.lx-fiscal-consulta input[name="spaceCode"]');
+    await campoBahia.fill(bahia ?? '');
+  };
+
+  // 1. Zona sin bahía / bahía sin zona: la pareja se valida ANTES de salir a la red.
+  await escribir('SJP123', '0042');
+  await page.click('.lx-plate-row__go');
+  await page.waitForTimeout(900);
+  const incompleta = await page.locator('.lx-alert').filter({ hasText: /zona y la bah/i }).count();
+  ok(incompleta === 1, `${tamano}: con bahía y sin zona, avisa antes de consultar`, `avisos=${incompleta}`);
+
+  // 2. Una placa sin la pareja: el servidor contesta y la pantalla dice algo.
+  await escribir('SJP123', '');
+  await Promise.all([
+    page.waitForResponse((r) => /\/inspector\/plate-checks|\/plate/.test(r.url()), { timeout: 20000 }).catch(() => null),
+    page.click('.lx-plate-row__go'),
+  ]);
+  await page.waitForTimeout(1200);
+  const respondio = await page.evaluate(() => ({
+    veredicto: Boolean(document.querySelector('.lx-verdict__plate')),
+    error: Boolean(document.querySelector('.lx-alert')),
+  }));
+  ok(
+    respondio.veredicto || respondio.error,
+    `${tamano}: una consulta real termina en veredicto o en un error dicho, nunca en una pantalla muda`,
+  );
+
+  // 3. El veredicto queda debajo del formulario y dentro del primer pantallazo.
+  if (respondio.veredicto) {
+    const sitio = await page.evaluate(() => {
+      const v = document.querySelector('.lx-verdict__plate').closest('.lx-card');
+      const f = document.querySelector('.lx-fiscal-consulta .lx-card');
+      return { veredicto: Math.round(v.getBoundingClientRect().y), formulario: Math.round(f.getBoundingClientRect().y) };
+    });
+    ok(sitio.veredicto > sitio.formulario, `${tamano}: la respuesta aparece bajo el formulario`, JSON.stringify(sitio));
+  }
+
+  // 4. Error de red: se corta la consulta y la pantalla tiene que decirlo.
+  await page.route('**/plate**', (ruta) => ruta.abort());
+  await escribir('ABC123', '');
+  await page.click('.lx-plate-row__go');
+  await page.waitForTimeout(1500);
+  const conError = await page.locator('.lx-alert').count();
+  ok(conError > 0, `${tamano}: con la red caída, la consulta lo dice`, `avisos=${conError}`);
+  await page.unroute('**/plate**');
+}
+
+/** Los tres accesos llevan a donde dicen, y no se creó ninguna ruta nueva. */
+async function accesosNavegan(page, tamano) {
+  const destinos = [
+    { texto: /levantar/i, ruta: '/inspector/cite' },
+    { texto: /pendientes/i, ruta: '/inspector/queue' },
+    { texto: /evidencia/i, ruta: '/inspector/cite' },
+  ];
+  for (const destino of destinos) {
+    await page.goto(`${BASE}/inspector/`, { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(1400);
+    await page.locator('.lx-quick-tile--inspector').filter({ hasText: destino.texto }).first().click();
+    await page.waitForTimeout(1200);
+    const url = new URL(page.url()).pathname.replace(/\/$/, '');
+    ok(url === destino.ruta, `${tamano}: el acceso ${destino.texto.source} lleva a ${destino.ruta}`, `quedó en ${url}`);
+  }
 }
 
 /** Sin desplazamiento horizontal, y el último elemento de la pantalla visible bajo la barra. */
@@ -512,10 +681,16 @@ async function boletaYPendientes(page, tamano, ancho) {
     await barraInferior(page, tamano.nombre);
     await pantallaInicial(page, tamano.nombre, tamano.width);
     await sinCortes(page, tamano.nombre);
+    // Las dos que la v2 pide de cada tamaño: «primer viewport y página completa».
     await page.screenshot({
-      path: `tests/responsive/capturas/fiscalizacion-${tamano.width}x${tamano.height}.png`,
+      path: `tests/responsive/capturas/fiscalizacion-${tamano.width}x${tamano.height}-vista.png`,
+    });
+    await page.screenshot({
+      path: `tests/responsive/capturas/fiscalizacion-${tamano.width}x${tamano.height}-completa.png`,
       fullPage: true,
     });
+    await consultaFunciona(page, tamano.nombre);
+    await accesosNavegan(page, tamano.nombre);
     await boletaYPendientes(page, tamano.nombre, tamano.width);
   }
 
