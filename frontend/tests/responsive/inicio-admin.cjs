@@ -883,8 +883,8 @@ async function medir(page, dedo) {
           Math.round((comp.graficoAncho / total) * 100),
         ];
         okInicio(
-          Math.abs(repartoA[0] - 55) <= 2 && Math.abs(repartoA[1] - 45) <= 2,
-          `  y se reparten ${repartoA.join('/')} (la definitiva pide 55/45)`,
+          Math.abs(repartoA[0] - 53) <= 2 && Math.abs(repartoA[1] - 47) <= 2,
+          `  y se reparten ${repartoA.join('/')} (la «exacta» §3 pide ~53/47)`,
         );
       }
       /*
@@ -908,7 +908,11 @@ async function medir(page, dedo) {
       if (comp.filaBanchos.length === 3) {
         const total = comp.filaBanchos.reduce((a, b) => a + b, 0);
         const reparto = comp.filaBanchos.map((w) => Math.round((w / total) * 100));
-        const esperado = [36, 31, 33];
+        /* 40/30/30. La «Especificación exacta» §3 lo escribe y su figura A lo dibuja: medido sobre
+           ese dibujo, 520 / 372 / 372 px sobre 1264 de contenido. Venía de 36/31/33, que salía de
+           medir la figura ANTERIOR; los dos puntos de más que tenían los accesos existían para que
+           «Registrar espacio» entrara en un 2×2, y con la cuadrícula en una columna sobran. */
+        const esperado = [40, 30, 30];
         okInicio(
           reparto.every((v, i) => Math.abs(v - esperado[i]) <= 3),
           `  y se reparten ${reparto.join('/')} (la referencia pide ~${esperado.join('/')})`,
@@ -1157,6 +1161,13 @@ async function medir(page, dedo) {
           baldosas: [...document.querySelectorAll('.lx-quick-tile')].map((n) =>
             Math.round(n.getBoundingClientRect().height),
           ),
+          // Cuántas baldosas comparten el renglón de arriba: 1 significa una sola columna.
+          accesosPorFila: (() => {
+            const t = [...document.querySelectorAll('.lx-quick-tile')];
+            if (t.length === 0) return 0;
+            const arriba = t[0].getBoundingClientRect().top;
+            return t.filter((n) => Math.abs(n.getBoundingClientRect().top - arriba) < 4).length;
+          })(),
           baldosaTituloPx: (() => {
             const n = document.querySelector('.lx-quick-tile__title');
             return n ? Math.round(parseFloat(getComputedStyle(n).fontSize)) : null;
@@ -1187,18 +1198,26 @@ async function medir(page, dedo) {
       /* 60-75 (boceto aprobado, 13-10-2026). Esta línea ha pedido 64-80, luego 50-62 y ahora
          60-75: cada encargo trae su rango y manda el más reciente, que es además el que viene con
          la imagen aprobada delante. */
-      okInicio(dentro(TABLA.saludo, 56, 64), `el saludo mide ${TABLA.saludo}px (la definitiva pide 56-64)`);
+      /*
+        Los rangos de abajo son el SOLAPE de los dos encargos del 13-10, no los de uno de los dos.
+
+        La mañana («Inicio adaptable» §3) pide saludo 56-64, KPI 100-112 y gráficos 240-275. La
+        tarde («Especificación exacta» §4) pide saludo 62-70, KPI 105-118 y gráficos 245-270. Un
+        arnés que comprobara sólo el segundo daría por malo lo que el primero exige, y al revés.
+        Comprobar el solape —62-64, 105-112, 245-270— es lo único que no contradice a ninguno.
+      */
+      okInicio(dentro(TABLA.saludo, 62, 64), `el saludo mide ${TABLA.saludo}px (solape de los dos encargos: 62-64)`);
       okInicio(
-        TABLA.kpisIguales && TABLA.kpis.every((h) => dentro(h, 100, 110)),
-        `los cuatro KPI miden ${TABLA.kpis.join('/')}px (la definitiva pide 100-110 e iguales)`,
+        TABLA.kpisIguales && TABLA.kpis.every((h) => dentro(h, 105, 112)),
+        `los cuatro KPI miden ${TABLA.kpis.join('/')}px (solape: 105-112 e iguales)`,
       );
       okInicio(
         dentro(TABLA.etiquetaPx, 13, 14),
         `la etiqueta del KPI mide ${TABLA.etiquetaPx}px (pide 13-14)`,
       );
       okInicio(
-        TABLA.filaA.every((h) => dentro(h, 240, 270)),
-        `la fila de gráficos mide ${TABLA.filaA.join(' y ')}px (la definitiva pide 240-270)`,
+        TABLA.filaA.every((h) => dentro(h, 245, 270)),
+        `la fila de gráficos mide ${TABLA.filaA.join(' y ')}px (solape: 245-270)`,
       );
       okInicio(
         dentro(TABLA.donut, 115, 125),
@@ -1262,9 +1281,19 @@ async function medir(page, dedo) {
         El rango de 46-54 sí se comprueba, donde la baldosa SÍ es de un renglón: a 1920 y a 1366,
         en el bloque de los tres viewports.
       */
+      /*
+        44-50, y en UNA columna. La figura A de la «exacta» dibuja las cuatro baldosas una debajo
+        de otra, en un renglón cada una y con su flecha; a ese ancho el título entra entero y la
+        baldosa vuelve a medir lo que mide un renglón. Esta línea ha pedido 50-56, luego 62-70 con
+        dos renglones, y ahora esto: cada figura trae su composición y manda la más reciente.
+      */
       okInicio(
-        TABLA.baldosas.length === 4 && TABLA.baldosas.every((h) => dentro(h, 62, 70)),
-        `los cuatro accesos miden ${TABLA.baldosas.join('/')}px (dos renglones, como la referencia)`,
+        TABLA.baldosas.length === 4 && TABLA.baldosas.every((h) => dentro(h, 42, 52)),
+        `los cuatro accesos miden ${TABLA.baldosas.join('/')}px (un renglón, como la figura A)`,
+      );
+      okInicio(
+        TABLA.accesosPorFila === 1,
+        `  y van en una sola columna (${TABLA.accesosPorFila} por fila)`,
       );
       okInicio(
         dentro(TABLA.baldosaTituloPx, 12, 13),
@@ -1423,29 +1452,49 @@ async function medir(page, dedo) {
     // escritas al lado de su línea, no escondidas en un rango ancho: un rango que abarca las dos
     // escalas no comprueba ninguna.
     {
+      /*
+        PANTALLA contra VIEWPORT, y es la corrección más importante de esta tanda.
+
+        La captura del problema es una pantalla de 1440×900 y el arnés venía midiendo 1440×900.
+        Pero lo que la aplicación recibe no es la pantalla: es el VIEWPORT, y en esa captura mide
+        unos 1440×608 —entre la barra de menú de macOS, las pestañas, la barra de direcciones, la
+        de marcadores y el Dock, el navegador se lleva 292px—. Medido sobre su propia captura, con
+        la barra lateral de 248px de regla.
+
+        O sea que el arnés comprobaba una ventana 292px más alta que la real y por eso NUNCA podía
+        ver la fila inferior cortada que ella sí ve. El §4 de la «Especificación exacta» lo dice
+        con todas las letras: «no diseñar como si los 960 px completos fueran espacio disponible;
+        calcular el alto útil a partir del contenedor real del navegador».
+
+        Así que cada pantalla del §7 se corre DOS veces, con la pantalla entera y con el viewport
+        real, y la salida dice cuál es cuál. Lo que se exige en el viewport corto no es que todo
+        quepa —el propio §7 autoriza «scroll vertical normal, corto y justificado»— sino que nada
+        quede cortado, tapado ni oculto para aparentar que cabe.
+      */
+      const CHROME_MACOS = 292;
       const TRES = [
         {
           nombre: 'escritorio grande', width: 1920, height: 1080, pequeno: false,
-          // §2: «contenido centrado con ancho máximo de 1500-1600 px». Es el único de los tres
+          // §2 de la mañana: «contenido centrado con ancho máximo de 1500-1600 px». Es el único
           // donde el techo se alcanza: 1920 - 248 de menú son 1672, por encima de 1600.
           anchoTope: [1500, 1600],
-          // A este ancho la cuadrícula de accesos pasa de 404 y el título entra en UN renglón, que
-          // es lo que el Paso D prefiere. Acá sí aplica el rango de la tabla.
-          baldosa: [46, 54],
+          baldosa: [42, 52],
         },
+        { nombre: 'escritorio 1536', width: 1536, height: 960, pequeno: false, anchoTope: null, baldosa: [42, 52] },
+        { nombre: 'escritorio mediano', width: 1440, height: 900, pequeno: false, anchoTope: null, baldosa: [42, 52] },
+        { nombre: 'portátil 1366', width: 1366, height: 768, pequeno: true, anchoTope: null, baldosa: [42, 52] },
+        { nombre: 'laptop 1280', width: 1280, height: 800, pequeno: true, anchoTope: null, baldosa: [42, 52] },
+      ].flatMap((v) => [
+        { ...v, nombre: `${v.nombre} · pantalla` },
         {
-          nombre: 'escritorio mediano', width: 1440, height: 900, pequeno: false,
-          anchoTope: null,
-          // 62-70: dos renglones. Misma razón que a 1536, medida: la cuadrícula queda en 322 y un
-          // renglón necesitaría 404. La referencia aprobada dibuja dos renglones.
-          baldosa: [62, 70],
+          ...v,
+          nombre: `${v.nombre} · viewport real`,
+          height: v.height - CHROME_MACOS,
+          // Con el viewport corto manda la escala baja: saludo, KPI y gráficos se compactan.
+          bajo: true,
+          anchoTope: v.anchoTope,
         },
-        {
-          nombre: 'portátil pequeño', width: 1366, height: 768, pequeno: true,
-          anchoTope: null,
-          baldosa: [42, 56],
-        },
-      ];
+      ]);
       const ctxTres = await browser.newContext({
         storageState: estado,
         locale: 'es-CR',
@@ -1457,8 +1506,8 @@ async function medir(page, dedo) {
         await pt.setViewportSize({ width: v.width, height: v.height });
         await pt.goto(`${BASE}/admin/`, { waitUntil: 'domcontentloaded' });
         await pt.waitForTimeout(2400);
-        await pt.screenshot({ path: `tests/responsive/capturas/adaptable-${v.width}x${v.height}-vista.png` });
-        await pt.screenshot({ path: `tests/responsive/capturas/adaptable-${v.width}x${v.height}-completa.png`, fullPage: true });
+        await pt.screenshot({ path: `tests/responsive/capturas/exacta-${v.width}x${v.height}-vista.png` });
+        await pt.screenshot({ path: `tests/responsive/capturas/exacta-${v.width}x${v.height}-completa.png`, fullPage: true });
 
         const m = await pt.evaluate(() => {
           const alto = (sel) => {
@@ -1523,6 +1572,18 @@ async function medir(page, dedo) {
               .filter((n) => n.getClientRects().length > 1)
               .map((n) => (n.textContent || '').trim()),
             desborde: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
+            documento: document.documentElement.scrollHeight,
+            // Un contenedor del tablero con su propia barra es la «doble barra» que el §5 prohíbe.
+            dobleScroll: [...document.querySelectorAll('.lx-page-layout__content, .lx-home, .lx-home *')]
+              .filter((n) => {
+                const e = getComputedStyle(n);
+                return (e.overflowY === 'auto' || e.overflowY === 'scroll') && n.scrollHeight > n.clientHeight + 1;
+              })
+              .map((n) => String(n.className).slice(0, 40)),
+            // Y contenido recortado por `overflow: hidden`, que es «aparentar que cabe».
+            ocultos: [...document.querySelectorAll('.lx-home, .lx-home .lx-card')]
+              .filter((n) => getComputedStyle(n).overflow === 'hidden' && n.scrollHeight > n.clientHeight + 2)
+              .map((n) => `${String(n.className).slice(0, 30)}(${n.scrollHeight}>${n.clientHeight})`),
             bloques: [...document.querySelectorAll('.lx-section-header__title, .lx-home-attention__title, .lx-home__status-label')].map(
               (n) => (n.textContent || '').trim(),
             ),
@@ -1531,9 +1592,20 @@ async function medir(page, dedo) {
         });
 
         const dentro = (val, [min, max]) => val !== null && val >= min && val <= max;
-        const R = v.pequeno
-          ? { barra: [56, 64], menu: [210, 235], hueco: [10, 12], kpi: [88, 102], graf: [205, 235], relleno: [12, 14] }
-          : { barra: [60, 68], menu: [230, 250], hueco: [12, 16], kpi: [100, 112], graf: [240, 275], relleno: [14, 18] };
+        /*
+          Tres escalas, no dos, y cada una con su razón:
+
+            - `bajo`: el viewport es corto (≤760 de alto) y la hoja compacta lo vertical. Es la
+              escala que le toca a la captura del problema, 1440×608.
+            - `pequeno`: la pantalla es estrecha (≤1400) y lo que cambia es el menú y el glifo.
+            - el resto: hay sitio, así que mandan los rangos del §4 de la tarde en su solape con
+              los de la mañana.
+        */
+        const R = v.bajo
+          ? { barra: [56, 64], menu: [210, 250], hueco: [8, 12], kpi: [88, 102], graf: [205, 235], relleno: [12, 18] }
+          : v.pequeno
+            ? { barra: [56, 68], menu: [210, 235], hueco: [10, 16], kpi: [105, 112], graf: [245, 270], relleno: [12, 18] }
+            : { barra: [60, 68], menu: [230, 250], hueco: [12, 16], kpi: [105, 112], graf: [245, 270], relleno: [14, 18] };
 
         console.log(`\n  ${v.nombre} · ${v.width}×${v.height} (innerWidth ${m.ventana.w}, innerHeight ${m.ventana.h})`);
         okInicio(dentro(m.barra, R.barra), `  encabezado fijo ${m.barra}px (pide ${R.barra.join('-')})`);
@@ -1581,6 +1653,17 @@ async function medir(page, dedo) {
         // §6: nada cortado, nada tapado, sin scroll horizontal.
         okInicio(m.recortados.length === 0, '  ningún texto queda con puntos suspensivos', m.recortados.join(' · '));
         okInicio(!m.desborde, '  y no hay scroll horizontal');
+        /*
+          Las tres reglas del §5 de la «exacta» sobre el alto, comprobadas y no declaradas:
+
+            - nada se oculta con `overflow: hidden` para aparentar que cabe;
+            - no hay doble barra de desplazamiento (body + panel principal);
+            - y el desplazamiento que quede es el del CONTENIDO: se imprime para que se vea si es
+              «corto y justificado» o si algo lo está inflando.
+        */
+        okInicio(m.ocultos.length === 0, '  nada se oculta con overflow para aparentar que cabe', m.ocultos.join(' · '));
+        okInicio(m.dobleScroll.length === 0, '  y no hay doble barra de desplazamiento', m.dobleScroll.join(' · '));
+        console.log(`  ··  documento ${m.documento}px · desplazamiento ${Math.max(0, m.documento - m.ventana.h)}px`);
         for (const bloque of ['Ocupación en tiempo real', 'Ingresos esta semana', 'Actividad reciente', 'Accesos rápidos', 'Zonas más utilizadas']) {
           okInicio(
             m.bloques.some((t) => t.includes(bloque)),
