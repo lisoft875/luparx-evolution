@@ -1654,6 +1654,10 @@ async function medir(page, dedo) {
               (n) => (n.textContent || '').trim(),
             ),
             pila: document.querySelectorAll('.lx-home-stack').length,
+            contenedor: (() => {
+              const n = document.querySelector('.lx-home');
+              return n ? getComputedStyle(n).containerType : null;
+            })(),
           };
         });
 
@@ -1702,6 +1706,17 @@ async function medir(page, dedo) {
         // Paso D: la composición de la referencia.
         okInicio(m.columnas === 3, `  la fila inferior tiene tres columnas`, `son ${m.columnas}`);
         okInicio(m.pila === 0, '  y no ha vuelto la pila de dos tarjetas', `pilas: ${m.pila}`);
+        /*
+          Y que las filas se reorganicen por el ancho del TABLERO y no por el de la ventana. Es
+          la diferencia entre adaptarse al espacio disponible y adaptarse a un proxy del espacio
+          disponible: a 1200 de ventana el tablero mide 940, y con el menú a otro ancho mediría
+          otra cosa. Se comprueba que el contenedor exista; los cortes ya se comprueban por su
+          efecto, contando columnas en cada viewport.
+        */
+        okInicio(
+          m.contenedor === 'inline-size',
+          `  y el tablero es contenedor de consulta (container-type: ${m.contenedor})`,
+        );
         if (m.columnas === 3) {
           console.log(`  ··  reparto ${m.reparto.join('/')} (la figura A pide ~40/30/30)`);
         }

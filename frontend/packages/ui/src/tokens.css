@@ -3994,7 +3994,12 @@ a.lx-list-row {
   los ~112 que mide a 24px. Entra. Lo que cede por debajo de 1000 de cuadrícula es el chevron y un
   par de puntos de la cifra, no la fila de cuatro.
 */
-@media (min-width: 1100px) {
+/* 790 de TABLERO y no 1100 de ventana (13-10-2026, noche). Es el mismo número visto desde donde
+   se decide: con el corte en la ventana, a 1100 el contenido medía 812 y las cuatro entraban; con
+   el corte en el tablero, las cuatro entran siempre que haya 790 de tablero, mida lo que mida el
+   menú y esté la ventana donde esté. Es el punto 5 del encargo: cuatro por fila «cuando quepan
+   correctamente», y quien sabe si caben es la fila, no la pantalla. */
+@container tablero (min-width: 790px) {
   :root[data-portal='admin'] .lx-home-kpis {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
@@ -5006,11 +5011,13 @@ a.lx-list-row {
   align-items: start;
 }
 
-@media (min-width: 1000px) {
-  /* El reparto lo pone cada fila con su variable; esta regla sólo fija el corte, en un sitio, para
-     que los bloques se muevan juntos el día que cambie. Por omisión 65/35 (la fila de operación
-     baja a 60/40); la fila de analítica lo invierte a 58/42 desde el 08-10-2026, cuando la
-     ocupación pasó a ser la columna ancha y el gráfico de ingresos la angosta. */
+/* El reparto lo pone cada fila con su variable; esta regla sólo fija el corte, en un sitio, para
+   que los bloques se muevan juntos el día que cambie.
+
+   760 de TABLERO y no 1000 de ventana: es el ancho que le quedaba al contenido con aquel corte y
+   un menú de 240, o sea el número que de verdad se estaba midiendo. Por debajo, los dos gráficos
+   se apilan — que es el punto 6 del encargo: lado a lado «cuando haya espacio suficiente». */
+@container tablero (min-width: 760px) {
   .lx-home-grid {
     grid-template-columns: minmax(0, var(--lx-home-grid-main, 65fr)) minmax(0, var(--lx-home-grid-side, 35fr));
   }
@@ -5028,7 +5035,10 @@ a.lx-list-row {
    columnas; acá hacen falta tres y se escriben enteras. */
 /* La base vuelve a TRES columnas (13-10-2026). El reparto fino lo pone la regla acotada al
    administrador, más abajo; acá va el número de columnas, que es lo que comparten los portales. */
-@media (min-width: 1200px) {
+/* 940 de TABLERO: el ancho que quedaba con el corte viejo de 1200 de ventana y un menú de 228.
+   Es el punto 7 del encargo —«reorganizar las tarjetas inferiores cuando el ancho disponible no
+   permita mostrarlas correctamente»— medido sobre el ancho disponible de verdad. */
+@container tablero (min-width: 940px) {
   .lx-home-grid--operation {
     grid-template-columns: minmax(0, 40fr) minmax(0, 30fr) minmax(0, 30fr);
   }
@@ -5036,7 +5046,7 @@ a.lx-list-row {
 /* Entre 1000 y 1199 la fila se queda en dos columnas —tres a ese ancho dejan los accesos rápidos
    en 2×2 de 120px— y el tercer bloque ocupa el renglón entero. Es lo que la tabla de responsive
    pide para 900-1199: «fila inferior en 2 columnas o apilada». */
-@media (min-width: 1000px) and (max-width: 1199px) {
+@container tablero (min-width: 700px) and (max-width: 939px) {
   /* Mitad y mitad, no el 65/35 que `.lx-home-grid` trae por omisión: con dos columnas, la de los
      accesos rápidos es la que necesita ancho y la actividad es texto que se lee igual de bien en
      la mitad. */
@@ -5100,7 +5110,23 @@ a.lx-list-row {
 }
 
 /* El contenedor del Inicio: una columna con el espaciado de la escala, y el pie empujado abajo. */
+/*
+  El tablero es un CONTENEDOR de consulta (13-10-2026, noche).
+
+  Hasta hoy las filas se reorganizaban con consultas de VENTANA: dos columnas de gráficos a
+  partir de 1000px de ventana, tres tarjetas abajo a partir de 1200. Pero lo que decide si tres
+  tarjetas caben no es el ancho de la ventana: es el que queda DESPUÉS del menú lateral y del
+  relleno. A 1200 de ventana el tablero tiene 940; a 1366, con el menú más estrecho, tiene 1106.
+  Los números de la ventana eran un proxy del ancho real, y un proxy se equivoca en los bordes —
+  que es justo donde se nota.
+
+  Con esto las filas preguntan por su propio ancho y los cortes dejan de depender de cuánto mida
+  el menú ese día. `inline-size` y no `size`: sólo se contiene el ancho, así que el alto lo sigue
+  poniendo el contenido y el desplazamiento vertical funciona igual.
+*/
 .lx-home {
+  container-type: inline-size;
+  container-name: tablero;
   display: flex;
   flex: 1;
   flex-direction: column;
@@ -7693,7 +7719,7 @@ a.lx-list-row {
 
    La alternativa era achicar el anillo a ese ancho, y medida tampoco alcanza: con 120 a la lista le
    quedan 109px de nombre y «San Rafael - Multiplaza» sigue sin entrar. */
-@media (max-width: 1199px) {
+@container tablero (max-width: 939px) {
   :root[data-portal='admin'] .lx-home .lx-occupancy {
     flex-direction: column;
     align-items: stretch;
@@ -7707,10 +7733,10 @@ a.lx-list-row {
    A 1024 el gráfico conservaba su alto mientras la columna se angostaba y la tarjeta llegaba a
    343px contra los 260-310 de la tabla, rompiendo el equilibrio de la fila A —que es justo lo que
    la orden llama «alturas visualmente equilibradas». */
-@media (max-width: 1199px) {
+@container tablero (max-width: 939px) {
   :root[data-portal='admin'] .lx-bars__track {
-    /* 130: el alto que deja la fila A en 260, el suelo del rango, con la columna estrecha de
-       1024. Con 120 la fila caía a 252 y con el original de 160 subía a 343. */
+    /* 130. Con la fila apilada o en dos columnas el gráfico tiene todo el ancho, así que puede
+       permitirse más alto que los 96 de la fila de dos columnas. */
     height: 130px;
   }
 }
@@ -7742,7 +7768,7 @@ a.lx-list-row {
        estirada, y eso es justo lo que `align-items: start` impide.
      - Ningún `min-height`, por lo mismo: el «Paso D» pide «tarjetas con altura por contenido, no
        relleno vacío». */
-@media (min-width: 1200px) {
+@container tablero (min-width: 940px) {
   :root[data-portal='admin'] .lx-home-grid--operation {
     grid-template-columns: minmax(0, 40fr) minmax(0, 30fr) minmax(0, 30fr);
     align-items: start;
@@ -7771,10 +7797,10 @@ a.lx-list-row {
      dejaría fuera del rango en cuanto el rótulo del eje cambie de ancho. */
   min-height: 252px;
 }
-@media (min-width: 1200px) {
+@container tablero (min-width: 940px) {
   :root[data-portal='admin'] .lx-bars__track {
-    /* 150. Sube cuatro respecto de ayer porque la línea del día más reciente se va —era la
-       duplicación que el §1 manda corregir— y esa altura vuelve al gráfico, que es de quien era. */
+    /* 150. La pisa el bloque de 96 que viene después; se conserva porque es el valor del que se
+       partió y el comentario explica de dónde salía. */
     height: 150px;
   }
 }
@@ -8083,47 +8109,23 @@ a.lx-list-row {
   La escala baja. `min-width: 1000px` la deja fuera de teléfonos y tabletas, que ya van en una
   columna y tienen su propio escalonado: ahí un viewport bajo es lo normal y no significa lo mismo.
 */
-@media (max-height: 760px) and (min-width: 1000px) {
-  /* La barra superior. 60, dentro de 56-64. Cuatro píxeles que no se ven y que se suman. */
-  :root[data-portal='admin'] .lx-page-layout {
-    --lx-topbar-height: 60px;
-  }
+/*
+  AQUÍ HABÍA UNA ESCALA POR ALTO, Y SE VA (13-10-2026, noche).
 
-  /* El saludo vuelve a 56 —el suelo de la escala de la mañana— en vez de los 63 que piden los dos
-     documentos cuando hay sitio. */
-  :root[data-portal='admin'] .lx-home__top {
-    min-height: 56px;
-  }
+  Comprimía el saludo, los KPI, las baldosas y los gráficos por debajo de sus tamaños cuando el
+  viewport bajaba de 760px. Dos razones para quitarla:
 
-  /* El KPI. 94, dentro de los 88-102 del caso pequeño. El alto lo fija el mínimo y lo acompaña el
-     relleno: con sólo bajar el mínimo la tarjeta se quedaba donde ya medía su contenido. */
-  :root[data-portal='admin'] .lx-metric {
-    min-height: 94px;
-  }
-  :root[data-portal='admin'] .lx-metric__hit {
-    padding: 10px var(--lx-space-4);
-  }
+    1. Estaba MUERTA. El bloque de compactación que vino después fija los mismos elementos a
+       valores aún menores y sin condición, así que estas reglas se evaluaban y las pisaba la
+       siguiente. Una regla que no puede ganar nunca es una regla que alguien va a leer creyendo
+       que explica lo que ve.
+    2. Y aunque hubiera estado viva, hacía lo que el encargo de ahora prohíbe por su nombre: «no
+       comprimir excesivamente los componentes para forzar que todo quepa». Cuando el alto no
+       alcanza, lo correcto es desplazarse, y eso ya funciona.
 
-  /* El ritmo entre filas: 10, el suelo de los 10-12 del caso pequeño. Son seis filas, o sea 12px
-     recuperados sin tocar una sola tarjeta. */
-  .lx-page-layout__content:has(> .lx-home) {
-    gap: var(--lx-space-2);
-  }
-
-  /* Las baldosas de acceso. 42, el suelo de 42-50, que sigue siendo un objetivo de dedo válido. */
-  :root[data-portal='admin'] .lx-home .lx-quick-tile {
-    min-height: 42px;
-  }
-
-  /* La fila de gráficos. El piso de la tarjeta baja a 206 y la pista de barras de 150 a 118: las
-     dos cosas, porque la fila está `stretch` y si bajara sólo una, la otra mandaría. */
-  :root[data-portal='admin'] .lx-home-grid--analytics > .lx-card {
-    min-height: 206px;
-  }
-  :root[data-portal='admin'] .lx-bars__track {
-    height: 118px;
-  }
-}
+  Lo que SÍ se adapta al espacio no se va: está más abajo, y ahora responde al ancho del propio
+  tablero en vez de al de la ventana.
+*/
 
 /* =================================================================================================
    EL INICIO DEL ADMINISTRADOR, COMPACTADO DE VERDAD (13-10-2026, tarde)
@@ -8259,7 +8261,7 @@ a.lx-list-row {
    barras pasa de 124 a 96. Son 28px que se le quitan al dibujo y no al dato — las siete barras,
    el eje, las etiquetas y el total siguen enteros, y la proporción entre barras no cambia porque
    todas se miden contra el mismo máximo. */
-@media (min-width: 1200px) {
+@container tablero (min-width: 940px) {
   :root[data-portal='admin'] .lx-bars__track {
     height: 96px;
   }
@@ -8282,9 +8284,68 @@ a.lx-list-row {
   text-overflow: ellipsis;
 }
 :root[data-portal='admin'] .lx-home .lx-section-header__aside {
-  flex-shrink: 1;
+  /*
+    100 y no 1: en una caja flexible todos los hijos encogen en proporción a su tamaño base, así
+    que con el mismo factor el que más encoge es el TÍTULO, que es el más ancho — justo al revés
+    de lo que hace falta. Con el factor cien el enlace absorbe prácticamente todo el recorte y el
+    título no empieza a ceder hasta que el enlace ya está en su mínimo.
+  */
+  flex-shrink: 100;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/*
+  Y cuando ni así caben los dos, cede el TAMAÑO del título antes que su texto (13-10-2026, noche).
+
+  Medido: con el tablero a 1229px —un 1536 al 125% de zoom— la tarjeta de zonas queda en 293 y el
+  título a 19px necesita 200, el enlace 78 y el hueco 12: 290, que no entran con el relleno. Hasta
+  ahora cedía el título con puntos suspensivos, y el punto 8 del encargo lo prohíbe: «evitar que
+  títulos, valores, gráficos o botones se corten».
+
+  Tres píxeles de tipografía en las tarjetas estrechas los resuelven, y sólo ahí: en un monitor
+  grande la tarjeta pasa de 300 y no cambia nada. Consulta de CONTENEDOR porque lo que decide es
+  el ancho de esta tarjeta, que depende del reparto de su fila y no de la ventana.
+*/
+:root[data-portal='admin'] .lx-home-grid--operation > .lx-card,
+:root[data-portal='admin'] .lx-home-grid--analytics > .lx-card {
+  container-type: inline-size;
+  container-name: tarjeta;
+}
+@container tarjeta (max-width: 320px) {
+  :root[data-portal='admin'] .lx-home .lx-section-header__title {
+    font-size: 16px;
+  }
+}
+
+/*
+  La barra del ranking cede antes que el nombre de la zona (13-10-2026, noche).
+
+  Medido con el tablero a 1229px: la tarjeta de zonas queda en 293 y al nombre le tocan ~140,
+  mientras «San Rafael – Multiplaza» necesita 155. Se cortaba, y el punto 8 del encargo lo
+  prohíbe.
+
+  Lo que se quita es la BARRITA, no el dato: el porcentaje sigue escrito al lado, en cifras, y la
+  barra no es más que ese mismo número dibujado otra vez. Entre perder una redundancia visual y
+  perder el nombre de la zona, se pierde la redundancia. Al soltarla, el nombre pasa de 140 a
+  ~194 y entra con holgura.
+
+  Sólo en tarjetas estrechas; en un monitor grande la barra sigue ahí.
+*/
+@container tarjeta (max-width: 320px) {
+  :root[data-portal='admin'] .lx-home .lx-zone-rank__track {
+    display: none;
+  }
+  :root[data-portal='admin'] .lx-home .lx-zone-rank__row {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+  /* Y lo mismo en la lista del dónut, que tiene el mismo reparto y el mismo riesgo. */
+  :root[data-portal='admin'] .lx-home .lx-zone-row__track {
+    display: none;
+  }
+  :root[data-portal='admin'] .lx-home .lx-zone-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
 }
