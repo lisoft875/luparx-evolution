@@ -56,10 +56,9 @@ function comprobar(ok, mensaje, detalle) {
 function guionDeCamara(escenario) {
   return `
     window.__gum = { llamadas: 0, pistas: [], fallos: [], notas: [] };
-    const real = navigator.mediaDevices && navigator.mediaDevices.getUserMedia
-      ? navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices)
-      : null;
-    window.__gum.habiaReal = !!real;
+    // Sólo para el diagnóstico: si la página no tuviera getUserMedia, soporteDeCamara()
+    // contestaría «no disponible en este navegador» y la fila diría otra cosa.
+    window.__gum.habiaReal = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
     const fallar = (nombre) => {
       const e = new Error(nombre);
       e.name = nombre;
@@ -75,13 +74,39 @@ function guionDeCamara(escenario) {
           if ('${escenario}' === 'notFound') return fallar('NotFoundError');
           if ('${escenario}' === 'busy') return fallar('NotReadableError');
           if ('${escenario}' === 'failed') return fallar('TypeError');
-          if (!real) return fallar('NotFoundError');
+          if ('${escenario}' === 'overconstrained' && window.__gum.llamadas === 1) {
+            // El primer intento falla por restricciones; el segundo —el que abrirCamara hace sin
+            // condiciones desde el 13-10— tiene que llegar acá y salir bien.
+            return fallar('OverconstrainedError');
+          }
+          /*
+            La cámara «que funciona» es un LIENZO, no una cámara.
+
+            Primero esto llamaba al getUserMedia de verdad con un aparato de vídeo simulado por
+            bandera de Chromium. La corrida del 13-10 lo cobró: NotSupportedError «Not supported»
+            —el navegador de esa máquina no entrega captura de medios en ese modo— y los tres
+            fallos que salieron no decían nada de la aplicación, decían que ahí no hay cámara.
+
+            canvas.captureStream() devuelve un MediaStream de verdad, con una pista de vídeo de
+            verdad que se reproduce en un <video> y que stop() deja en «ended». O sea que
+            ejercita el camino ENTERO de la pantalla —abrir, pintar, contar pistas, apagarlas al
+            cerrar— sin depender de que la máquina que corre el arnés tenga cámara ni de una
+            bandera del navegador. Comprobado antes de usarlo: 1 pista, «live», readyState 4 en
+            el vídeo, y «ended» después de cerrar.
+
+            Lo que esto NO prueba, y conviene no confundirlo: que el sensor de un aparato concreto
+            responda. Eso sólo lo prueba una persona con un teléfono en la mano.
+          */
           let stream;
           try {
-            stream = await real(restricciones);
+            const lienzo = document.createElement('canvas');
+            lienzo.width = 320;
+            lienzo.height = 240;
+            const pincel = lienzo.getContext('2d');
+            pincel.fillStyle = '#0b2b47';
+            pincel.fillRect(0, 0, 320, 240);
+            stream = lienzo.captureStream(10);
           } catch (e) {
-            // El fallo REAL del navegador, con su nombre y su mensaje. Sin esto, un
-            // «No se pudo abrir» en la salida del arnés no dice nada de por qué.
             window.__gum.fallos.push((e && e.name) + ': ' + (e && e.message));
             throw e;
           }
@@ -230,11 +255,15 @@ async function resumen(page) {
 }
 
 (async () => {
-  // El aparato de vídeo falso es lo que hace comprobable el camino feliz: sin él, la máquina donde
-  // corre esto no tiene cámara y el único escenario que se podría probar sería «no hay cámara».
-  const browser = await chromium.launch({
-    args: ['--use-fake-device-for-media-stream'],
-  });
+  /*
+    Sin banderas de cámara, y a propósito.
+
+    La primera versión lanzaba Chromium con `--use-fake-device-for-media-stream` para tener una
+    cámara simulada. En la máquina donde se corre el arnés eso contestó `NotSupportedError`, y los
+    tres fallos resultantes no decían nada de la aplicación. El camino feliz ya no depende del
+    navegador: el escenario «ok» fabrica su propio `MediaStream` con un lienzo.
+  */
+  const browser = await chromium.launch();
   console.log(`\n${BASE}/inspector · ${CUENTA}\n`);
 
   const erroresJs = [];
@@ -394,6 +423,30 @@ async function resumen(page) {
       'con la cámara tomada por otra aplicación se dice eso y no «bloqueada»',
       camara ? `tono=${camara.tono} · ${camara.texto}` : 'sin fila',
     );
+    await ctx.close();
+  }
+
+  // --- La resolución pedida no encaja: hay cámara, y hay que decirlo ---------------------------
+  {
+    /*
+      `abrirCamara` pide la cámara trasera a 1920×1080 como PREFERENCIA (`ideal`), que en teoría
+      ningún navegador puede rechazar. En la práctica hay cámaras que contestan
+      `OverconstrainedError` igual, y hasta el 13-10 eso se traducía como «No hay cámara en este
+      aparato» — una afirmación falsa: la cámara está, lo que no encaja es la resolución.
+
+      Desde ese día hay un segundo intento sin condiciones. Esta prueba lo comprueba por su
+      efecto: el primer intento falla, el segundo entrega imagen, y la fila acaba en verde.
+    */
+    const { ctx, p } = await escenario({ camara: 'overconstrained' });
+    await abrirPermisos(p);
+    const fila = (await probarCamaraYCerrar(p)).find((f) => f.clave === 'camera');
+    comprobar(
+      fila?.tono === 'ok',
+      'si la resolución pedida no encaja, se reintenta sin condiciones en vez de decir «no hay cámara»',
+      fila ? `tono=${fila.tono} · ${fila.texto} · ${await diagnosticoGum(p)}` : 'sin fila',
+    );
+    const llamadas = await p.evaluate(() => window.__gum?.llamadas ?? 0);
+    comprobar(llamadas === 2, '  y el reintento es UNO, no un bucle', `llamadas=${llamadas}`);
     await ctx.close();
   }
 

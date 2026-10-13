@@ -1490,8 +1490,18 @@ async function medir(page, dedo) {
           ...v,
           nombre: `${v.nombre} · viewport real`,
           height: v.height - CHROME_MACOS,
-          // Con el viewport corto manda la escala baja: saludo, KPI y gráficos se compactan.
-          bajo: true,
+          /*
+            `bajo` se CALCULA, no se supone. Lo puse en `true` para todos los viewports reales y
+            la corrida lo cobró en el sitio exacto: a 1920×1080 el viewport real son 788px, que
+            está por encima del corte de 760 de la hoja, así que ahí manda la escala de
+            escritorio y la hoja hace bien en no compactar nada. El arnés exigía KPI de 88-102 y
+            gráficos de 205-235 donde la pantalla tiene sitio de sobra para 108 y 252.
+
+            Es la misma trampa de siempre, en su variante más tonta: una condición escrita a mano
+            donde ya existe el número que la decide. El corte vive en la hoja de estilos; acá se
+            reproduce, no se reinventa.
+          */
+          bajo: v.height - CHROME_MACOS <= 760,
           anchoTope: v.anchoTope,
         },
       ]);
@@ -1637,7 +1647,7 @@ async function medir(page, dedo) {
         okInicio(m.columnas === 3, `  la fila inferior tiene tres columnas`, `son ${m.columnas}`);
         okInicio(m.pila === 0, '  y no ha vuelto la pila de dos tarjetas', `pilas: ${m.pila}`);
         if (m.columnas === 3) {
-          console.log(`  ··  reparto ${m.reparto.join('/')} (la referencia pide ~36/31/33)`);
+          console.log(`  ··  reparto ${m.reparto.join('/')} (la figura A pide ~40/30/30)`);
         }
         // §2 para 1920: el techo y el centrado.
         if (v.anchoTope) {
