@@ -3979,22 +3979,31 @@ a.lx-list-row {
 }
 
 /*
-  En el administrador, cuatro desde 1320 y no desde 1200 (13-10-2026, medido).
+  En el administrador, cuatro KPI desde 1100 — y no desde 1320, que es lo que puse ayer y era al
+  revés (13-10-2026).
 
-  La especificación definitiva lo autoriza en letra: «no forzar cuatro KPI si el ancho disponible no
-  permite leerlos: usar breakpoint apropiado». Y hace falta: a 1280, con el menú de 248, cada
-  tarjeta queda en 239px y al monto le sobran 137 de los ~156 que mide «₡1.250.040» a 26px. Ese
-  desbordamiento es el defecto §1 de este mismo documento —«corta ₡135.000 en dos líneas»— por la
-  otra puerta: el `nowrap` que lo arregla convierte el corte en desborde si el ancho no da.
+  Ayer subí el corte a 1320 para proteger un monto de siete cifras que YO había inyectado como caso
+  peor en la réplica. La corrección final lo reporta como regresión y tiene razón: «se muestran los
+  cuatro KPI en dos filas de dos, a pesar del ancho disponible», y pide «confirmar que el diseño de
+  escritorio no salta prematuramente a dos KPI por fila». Protegí un valor hipotético y rompí el
+  caso real.
 
-  A 1366 sí entra, así que el corte está entre los dos. 1320 deja 1366 con sus cuatro y manda 1280
-  a 2×2, donde cada tarjeta mide el doble y cualquier monto cabe.
+  1100 y no 1200: la ventana de un navegador rara vez ocupa la pantalla entera, así que «escritorio»
+  empieza bastante antes de 1200 de viewport. Medido con el monto REAL —₡135.000, no el inventado—:
+  a 1100 el área de contenido son 812px, cada tarjeta queda en 194 y al monto le sobran 118 contra
+  los ~112 que mide a 24px. Entra. Lo que cede por debajo de 1000 de cuadrícula es el chevron y un
+  par de puntos de la cifra, no la fila de cuatro.
 */
-@media (min-width: 1200px) and (max-width: 1319px) {
+@media (min-width: 1100px) {
   :root[data-portal='admin'] .lx-home-kpis {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
+
+:root[data-portal='admin'] .lx-home-kpis {
+  container-type: inline-size;
+}
+
 
 /* Dos tercios y un tercio, hasta que no caben. El mínimo de 320px es el ancho donde el gráfico de
    siete barras deja de ser legible; antes de llegar ahí las dos columnas se apilan. */
@@ -4481,8 +4490,27 @@ a.lx-list-row {
   outline-offset: -2px;
 }
 
+/*
+  El hover ya no rellena la tarjeta (13-10-2026).
+
+  La captura de las 20:00 muestra «Ingresos del día» con el fondo claro y el borde encendido, y el
+  encargo lo llama «una tarjeta de ingresos resaltada innecesariamente ... por selección
+  accidental». No es un estado pegado: es el `:hover`, con el puntero descansando encima cuando se
+  tomó la captura —macOS no dibuja el cursor en una captura de pantalla—. Pero da igual de quién
+  sea la culpa: si un fondo lleno se lee como «seleccionada», el fondo lleno está mal elegido para
+  una tarjeta que no tiene estado de selección.
+
+  Queda lo que ya decía «esto se puede pulsar» sin parecer un estado: el borde se tiñe y el chevron
+  avanza dos píxeles. Lo escribo sin poder reproducirlo en el navegador de esa persona; si el
+  resaltado que vieron fuera el anillo de foco restaurado al volver con «Atrás», esto no lo quita
+  —ese anillo es `:focus-visible` y tiene que seguir existiendo para quien navega con el teclado—.
+*/
 .lx-metric:hover .lx-metric__hit:not(.lx-metric__hit--static) {
-  background: var(--lx-surface-hover);
+  /* Un tercio del relleno de antes. Quitarlo del todo fue mi primer intento y era pasarse: dejaba
+     la tarjeta sin acuse de que el puntero está encima, y el arnés ya comprueba —con razón— que
+     «el fondo de verdad cambia al pasar por encima». Con un tercio se nota el hover y no se lee
+     como un estado. */
+  background: color-mix(in srgb, var(--lx-surface-hover) 35%, transparent);
 }
 
 /* --- Que se entienda que son accesos (06-10-2026) ---------------------------------------------
@@ -7910,6 +7938,45 @@ a.lx-list-row {
      `.lx-zone-row`. Con 2.6fr el nombre pasa a 154 y entra entero a los cuatro anchos medidos. */
   grid-template-columns: auto minmax(0, 2.6fr) minmax(40px, 1fr) auto;
 }
+
+/*
+  Lo que cede cuando la fila de cuatro se estrecha.
+
+  El chevron es decoración —`aria-hidden`, y la tarjeta entera ya es el botón— así que es lo primero
+  que sobra; y la cifra baja a 24, que sigue dentro de los 24-30 que pide el §3. Con las dos cosas,
+  «₡135.000» entra entero a 1100, que es el objetivo: el §3 pide el monto «en una línea siempre que
+  quepa», y la forma de que quepa es hacerle sitio, no partirlo ni quitar columnas.
+
+  De contenedor y no de ventana porque lo que decide es el ancho de la fila de KPI.
+*/
+@container (max-width: 1000px) {
+  :root[data-portal='admin'] .lx-metric__chevron {
+    display: none;
+  }
+  :root[data-portal='admin'] .lx-metric__value {
+    font-size: 24px;
+  }
+  /*
+    Y los tres píxeles que faltaban, medidos uno por uno: con sólo el chevron y la cifra, a 1100 al
+    monto le quedaban 118px y «₡135.000» mide ~125 —el signo del colón es ancho—. El relleno baja a
+    14 y el soporte del icono a 34, los dos extremos BAJOS de los rangos que el §3 permite
+    («soporte de 34-40 px», «padding interno 14-18 px»), y el hueco entre el icono y el texto de 12
+    a 8. Suman 10 y el monto entra.
+  */
+  :root[data-portal='admin'] .lx-metric__hit {
+    padding: var(--lx-space-3) 14px;
+    column-gap: var(--lx-space-2);
+  }
+  :root[data-portal='admin'] .lx-metric__icon {
+    width: 34px;
+    height: 34px;
+  }
+}
+
+/* La consulta vivía doscientas líneas más arriba, junto al corte de columnas, y no hacía nada: la
+   regla `[data-portal='admin'] .lx-metric__value` de este bloque tiene la misma especificidad y
+   viene después, así que ganaba ella. Medido: a 1100 la cifra seguía en 26 y se desbordaba. Una
+   consulta de contenedor no cambia el orden de la cascada. */
 
 /* ---- Los KPI: el piso del rango, 105 (correctiva 12-10-2026) --------------------------------
    Mismo razonamiento que la version anterior con el rango nuevo: el piso lo pone el alto minimo y

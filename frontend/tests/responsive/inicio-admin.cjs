@@ -55,22 +55,27 @@ const TAMANOS = [
   { nombre: 'tablet vertical',  width: 768, height: 1024, dedo: true, kpisEsperados: 2 },
   { nombre: 'tablet apaisada',  width: 1024, height: 768, dedo: true, kpisEsperados: 2 },
   /*
-    DOS a 1280, no cuatro (13-10-2026).
+    CUATRO a 1280 otra vez, y la ida y vuelta vale la pena contarla.
 
-    Lo cambié en la hoja de estilos y se me olvidó acá, y la corrida lo cazó: «2 KPIs en la primera
-    fila, se esperaban 4». El arnés estaba pidiendo lo contrario de lo que la especificación
-    autoriza — que es el defecto que este proyecto ya pagó tres veces y que el commit anterior
-    decía estar evitando.
+    Ayer subí el corte a 1320 para que «₡1.250.040» no se desbordara — un monto de siete cifras que
+    yo mismo había inyectado en la réplica como caso peor. La correccion final lo reporta como
+    regresión: «se muestran los cuatro KPI en dos filas de dos, a pesar del ancho disponible».
+    Protegí un valor hipotético y rompí el real.
 
-    Por qué dos: con el menú de 248, a 1280 cada tarjeta queda en 239px y a «₡1.250.040» le faltan
-    19. La §5 de la definitiva lo autoriza en letra: «no forzar cuatro KPI si el ancho disponible no
-    permite leerlos: usar breakpoint apropiado». A 1366 sí entran, así que el corte va en 1320.
+    Ahora el corte está en 1100 y lo que cede al estrecharse es el adorno —el chevron, dos puntos
+    de la cifra, dos píxeles del icono y del relleno— en vez de la fila de cuatro. Medido con el
+    monto REAL: entra sin desbordarse de 1100 para arriba.
   */
-  { nombre: 'laptop',           width: 1280, height: 800, dedo: false, kpisEsperados: 2 },
+  { nombre: 'laptop',           width: 1280, height: 800, dedo: false, kpisEsperados: 4 },
   /* 1366x768 lo pide la correctiva por nombre dos veces: la prueba H —«revisar también con
      1366 × 768 y 1024 × 768»— y la entrega, que exige su captura. Es además el ancho donde la
      etiqueta del KPI se parte en dos renglones, o sea donde el techo de 120 se pone a prueba. */
   { nombre: 'laptop 1366',      width: 1366, height: 768, dedo: false, kpisEsperados: 4 },
+  /* «Probar ancho intermedio y confirmar que el diseño de escritorio no salta prematuramente a dos
+     KPI por fila» (paso 7.5). 1152 es el ancho que una ventana no maximizada ocupa de verdad, o el
+     que deja una pantalla de 1440 al 125% de zoom — que es la hipótesis más probable de la captura
+     de las 20:00. */
+  { nombre: 'ventana 1152',     width: 1152, height: 720, dedo: false, kpisEsperados: 4 },
   { nombre: 'escritorio',       width: 1440, height: 900, dedo: false, kpisEsperados: 4 },
   { nombre: 'escritorio grande',width: 1920, height: 1080, dedo: false, kpisEsperados: 4 },
 ];
