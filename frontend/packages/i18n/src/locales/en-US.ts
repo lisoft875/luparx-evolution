@@ -1275,6 +1275,22 @@ export const enUS: Record<TranslationKey, string> = {
     'iPhone or iPad, installed app: Settings -> find LuParX in the list -> Camera and Location.',
   'inspector.help.permissions.settings.safari':
     'iPad or iPhone in Safari: tap "aA" in the address bar -> Website Settings -> Camera and Location. Also Settings -> Safari -> Camera and Location.',
+  'inspector.help.permissions.settings.chrome':
+    'Chrome: click the padlock (or settings icon) to the left of the address → Location → Allow. Then come back here and tap "Check location".',
+  'inspector.help.permissions.settings.edge':
+    'Edge: click the padlock to the left of the address → Permissions for this site → Location → Allow. Then come back here and tap "Check location".',
+  'inspector.help.permissions.settings.firefox':
+    'Firefox: click the padlock to the left of the address → clear the block on "Access your location". Then come back here and tap "Check location".',
+  'inspector.help.permissions.settings.safariMac':
+    'Safari on Mac: Safari menu → Settings → Websites → Location → set "Allow" for staging.luparx.com. If the Mac has location turned off: System Settings → Privacy & Security → Location Services.',
+  'inspector.help.permissions.settings.otro':
+    'In this browser the permission is changed from the icon to the left of the address, under the site permissions. Then come back here and tap "Check location".',
+  'inspector.help.diag.location.insecure': 'Not available without a secure connection',
+  'inspector.help.diag.location.insecureNote':
+    'Browsers only hand over location on secure pages (https). Open the https address and check again. This is not a permission or a device problem.',
+  'inspector.help.diag.location.unsupported': 'This browser does not offer location',
+  'inspector.help.diag.location.unsupportedNote':
+    'This browser cannot read location from a page. A citation is still issued, without coordinates.',
   'inspector.help.permissions.settings.android':
     'Android: Settings -> Apps -> the browser or LuParX -> Permissions.',
   'inspector.help.permissions.recheck': 'Check again',

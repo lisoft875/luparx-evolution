@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@luparx/auth';
 import {
@@ -44,8 +44,11 @@ import { probeServer, type ServerReach } from '../lib/serverProbe';
 import {
   aparato,
   comprobarUbicacion,
+  soporteDeUbicacion,
   ultimaComprobacion,
+  type Aparato,
   type ComprobacionGuardada,
+  type SoporteDeUbicacion,
 } from '../lib/locationCheck';
 import { GUIAS, pasoDeGuia, tituloDeGuia } from '../lib/helpGuides';
 import { useCitationQueue, useIsOnline } from '../lib/queries';
@@ -121,6 +124,14 @@ interface Medicion {
   almacenamiento: boolean;
   /** Si este aparato tiene receptor de posición. Sin él no hay permiso que arreglar. */
   hayUbicacion: boolean;
+  /**
+   * Y si la ubicación se puede pedir siquiera, con su causa.
+   *
+   * <p>Separa lo que hasta hoy se decía todo igual: «este navegador no la implementa», «la página
+   * no es segura» y «este aparato no tiene receptor». Los tres se arreglan en sitios distintos y
+   * el segundo ni siquiera es un problema del aparato.</p>
+   */
+  soporteUbicacion: SoporteDeUbicacion;
 }
 
 /**
@@ -199,6 +210,13 @@ export function HelpPage(): React.JSX.Element {
    * <p>Nunca guarda la fotografía. En modo prueba ni siquiera se toma una.</p>
    */
   const [camaraPrueba, setCamaraPrueba] = useState<'ok' | ProblemaDeCamara | 'cancelled' | null>(null);
+  /*
+    Si hay una lectura de posición en vuelo. En una referencia y no en el estado, a propósito: el
+    oyente de cambio de permiso tiene que poder consultarlo SIN que su valor entre en las
+    dependencias del efecto. Si entrara, cada lectura volvería a montar los oyentes, y un oyente
+    que se desmonta a mitad de su propia respuesta es como se pierde una actualización.
+  */
+  const leyendo = useRef(false);
   /**
    * La ventana con la imagen en vivo, y a qué panel hay que volver al cerrarla.
    *
@@ -260,6 +278,7 @@ export function HelpPage(): React.JSX.Element {
       // En un build nativo la cámara la entrega el plugin, no el navegador, así que preguntarle a
       // `getUserMedia` por el soporte dentro de la WebView respondería sobre la API equivocada.
       soporteCamara: hasNativeCamera() ? 'ok' : soporteDeCamara(),
+      soporteUbicacion: soporteDeUbicacion(),
       ubicacion,
       almacenamiento: almacenamientoDisponible(),
       hayUbicacion: hayReceptorDeUbicacion(),
@@ -279,6 +298,80 @@ export function HelpPage(): React.JSX.Element {
     // llamada de red al abrirlo sería trabajo que nadie pidió.
     if (panel === 'diag') void medirRed();
   }, [panel, medir, medirRed]);
+
+  /**
+   * Enterarse de que el permiso cambió MIENTRAS la pantalla estaba abierta.
+   *
+   * <p>El paso 6 del encargo lo pide por su nombre: «después de regresar de los ajustes, permitir
+   * pulsar “Volver a comprobar” y actualizar el resultado sin recargar innecesariamente toda la
+   * aplicación». Hasta hoy había que volver Y pulsar; si la persona volvía y miraba, la fila
+   * seguía diciendo «denegado» y parecía que habilitarlo no había servido de nada.</p>
+   *
+   * <p>Dos avisos, porque ningún entorno da los dos:</p>
+   *
+   * <ul>
+   *   <li><b>`permissions.query().onchange`</b>: Chrome y Edge lo disparan en el instante en que
+   *       se cambia el permiso del sitio, incluso con la pestaña al fondo. Es el camino bueno.</li>
+   *   <li><b>`visibilitychange`</b>: Safari no implementa la consulta de geolocalización, así que
+   *       ahí no hay aviso ninguno; lo que sí hay es el momento en que la persona vuelve a la
+   *       pestaña después de pasar por los Ajustes. Ese es el momento de releer.</li>
+   * </ul>
+   *
+   * <p>Lo que esto hace es RELEER, que no abre ningún diálogo. Pedir la posición automáticamente
+   * sería el bucle de solicitudes que el encargo prohíbe. La única lectura real automática ocurre
+   * cuando el permiso acaba de pasar a concedido: ahí ya no hay diálogo que abrir —está
+   * concedido— y es justo lo que la persona vino a ver.</p>
+   */
+  useEffect(() => {
+    if (panel !== 'permissions' && panel !== 'diag') return undefined;
+    let vivo = true;
+    let estado: PermissionStatus | null = null;
+
+    const alCambiar = (): void => {
+      if (!vivo) return;
+      void (async () => {
+        const ahora = await locationPermissionState();
+        if (!vivo) return;
+        await medir();
+        // Pasó a concedido: una lectura real, que ya no puede abrir ningún aviso, y así al volver
+        // de los ajustes las coordenadas están puestas sin tener que pulsar nada.
+        if (ahora === 'granted' && !leyendo.current) {
+          leyendo.current = true;
+          setPidiendo('location');
+          try {
+            const leido = await comprobarUbicacion();
+            if (vivo) setGps(leido);
+          } finally {
+            leyendo.current = false;
+            if (vivo) {
+              setRegistro(ultimaComprobacion());
+              setPidiendo(null);
+            }
+          }
+        }
+      })();
+    };
+
+    const alVolver = (): void => {
+      if (document.visibilityState === 'visible') alCambiar();
+    };
+    document.addEventListener('visibilitychange', alVolver);
+
+    void navigator.permissions
+      ?.query({ name: 'geolocation' as PermissionName })
+      .then((s) => {
+        if (!vivo) return;
+        estado = s;
+        s.addEventListener('change', alCambiar);
+      })
+      .catch(() => undefined);
+
+    return () => {
+      vivo = false;
+      document.removeEventListener('visibilitychange', alVolver);
+      estado?.removeEventListener('change', alCambiar);
+    };
+  }, [panel, medir]);
 
   /**
    * Abre un panel.
@@ -536,6 +629,23 @@ export function HelpPage(): React.JSX.Element {
     filas.push(filaDeCamara());
 
     const ubicacion = medicion?.ubicacion ?? 'asksOnUse';
+    const soporte = medicion?.soporteUbicacion ?? 'ok';
+    /*
+      El soporte manda sobre el permiso, igual que en la cámara. Sin HTTPS no hay permiso que
+      valga —el navegador no entrega la posición y hace bien— y hasta hoy ese caso se contaba como
+      «este aparato no ofrece ubicación», que manda a buscar un receptor GPS que no es el problema.
+    */
+    if (soporte !== 'ok') {
+      filas.push({
+        key: 'location',
+        tone: 'unavailable',
+        icon: <IconPin />,
+        title: t('inspector.help.diag.location'),
+        state: t(`inspector.help.diag.location.${soporte}`),
+        note: t(`inspector.help.diag.location.${soporte}Note`),
+      });
+      return filas;
+    }
     const hayReceptor = medicion?.hayUbicacion ?? true;
     /*
       La causa, cuando la última lectura falló. Son tres y llevan a tres sitios distintos: el
@@ -874,12 +984,19 @@ export function HelpPage(): React.JSX.Element {
     En Android, la suya. En el resto, ninguna: inventar una ruta de ajustes para un escritorio que
     no sabemos cuál es sería peor que no decir nada.
   */
-  const instrucciones: TranslationKey[] =
-    aparato() === 'ios'
-      ? ['inspector.help.permissions.settings.safari', 'inspector.help.permissions.settings.ios']
-      : aparato() === 'android'
-        ? ['inspector.help.permissions.settings.android']
-        : [];
+  const INSTRUCCIONES: Readonly<Record<Aparato, TranslationKey[]>> = {
+    ios: ['inspector.help.permissions.settings.safari', 'inspector.help.permissions.settings.ios'],
+    android: ['inspector.help.permissions.settings.android'],
+    chrome: ['inspector.help.permissions.settings.chrome'],
+    edge: ['inspector.help.permissions.settings.edge'],
+    firefox: ['inspector.help.permissions.settings.firefox'],
+    safari: ['inspector.help.permissions.settings.safariMac'],
+    // Un navegador que no reconocemos SIGUE teniendo el permiso en el mismo sitio —el icono a la
+    // izquierda de la dirección—, así que se dice eso en vez de no decir nada. Esta rama existe
+    // porque la anterior devolvía una lista vacía y el desplegable se abría en blanco.
+    otro: ['inspector.help.permissions.settings.otro'],
+  };
+  const instrucciones: TranslationKey[] = INSTRUCCIONES[aparato()];
 
   return (
     <InspectorShell title={t('inspector.help.title')} onBack={() => navigate('/more')}>

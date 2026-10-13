@@ -1323,6 +1323,26 @@ export const esCR = {
     'iPad o iPhone en Safari: tocá «aA» en la barra de direcciones → Ajustes del sitio web → Cámara y Ubicación. También en Ajustes → Safari → Cámara y Ubicación.',
   'inspector.help.permissions.settings.android':
     'Android: Ajustes → Aplicaciones → el navegador o LuParX → Permisos.',
+  /* Escritorio. Hasta el 13-10 por la tarde no había ninguno, y el desplegable se abría vacío
+     justo en el entorno desde el que se prueba. En escritorio el permiso NO está en los ajustes
+     del sistema: está en el candado de la barra de direcciones, que es otro sitio y otra frase. */
+  'inspector.help.permissions.settings.chrome':
+    'Chrome: tocá el candado (o el icono de ajustes) a la izquierda de la dirección → Ubicación → Permitir. Después volvé acá y tocá «Comprobar ubicación».',
+  'inspector.help.permissions.settings.edge':
+    'Edge: tocá el candado a la izquierda de la dirección → Permisos para este sitio → Ubicación → Permitir. Después volvé acá y tocá «Comprobar ubicación».',
+  'inspector.help.permissions.settings.firefox':
+    'Firefox: tocá el candado a la izquierda de la dirección → quitá el bloqueo de «Acceder a su ubicación». Después volvé acá y tocá «Comprobar ubicación».',
+  'inspector.help.permissions.settings.safariMac':
+    'Safari en Mac: menú Safari → Ajustes → Sitios web → Ubicación → poné «Permitir» para staging.luparx.com. Si el Mac tiene la ubicación apagada, además: Ajustes del Sistema → Privacidad y seguridad → Localización.',
+  'inspector.help.permissions.settings.otro':
+    'En este navegador el permiso se cambia desde el icono que hay a la izquierda de la dirección, en los permisos del sitio. Después volvé acá y tocá «Comprobar ubicación».',
+  /* Y los tres estados que antes se decían todos igual, «no disponible». */
+  'inspector.help.diag.location.insecure': 'No disponible sin conexión segura',
+  'inspector.help.diag.location.insecureNote':
+    'El navegador sólo entrega la ubicación en páginas seguras (https). Entrá por la dirección con https y volvé a comprobar. No es un problema de permisos ni del aparato.',
+  'inspector.help.diag.location.unsupported': 'Este navegador no ofrece ubicación',
+  'inspector.help.diag.location.unsupportedNote':
+    'Este navegador no permite leer la ubicación desde una página. La boleta se emite igual, sin coordenadas.',
   'inspector.help.permissions.recheck': 'Volver a comprobar',
   'inspector.help.permissions.apiNote':
     'El navegador no siempre deja leer el estado exacto de un permiso ni volver a preguntar desde la página: por eso el cambio se hace en los ajustes y acá sólo se vuelve a leer.',
