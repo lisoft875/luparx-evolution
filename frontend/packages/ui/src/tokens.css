@@ -5027,8 +5027,11 @@ a.lx-list-row {
 
    Sólo el portal administrativo: los otros tres no están en este encargo. */
 :root[data-portal='admin'] .lx-page-layout__sidebar {
-  width: 240px;
-  flex: 0 0 240px;
+  /* 256 (boceto del 12-10-2026, que pide 250-270). Venia de 240. La regla ya estaba acotada al
+     administrador desde antes y se edita esa en vez de añadir otra: dos reglas para el mismo
+     selector es como se llega a cambiar una y que la pantalla no se entere. */
+  width: 256px;
+  flex: 0 0 256px;
 }
 
 /* El contenedor del Inicio: una columna con el espaciado de la escala, y el pie empujado abajo. */
@@ -6167,8 +6170,11 @@ a.lx-list-row {
    del documento —«reducir drásticamente el protagonismo del gráfico de recaudación»— y se hace con
    las dos variables que `.lx-home-grid` ya publica, sin una cuadrícula nueva. */
 .lx-home-grid--analytics {
-  --lx-home-grid-main: 58fr;
-  --lx-home-grid-side: 42fr;
+  /* 54/46 (boceto del 12-10). Era 58/42 desde el 09-10, cuando la orden era «reducir el
+     protagonismo del grafico de recaudacion»; el boceto aprobado lo dibuja mas parejo porque el
+     grafico recupero su eje y su total. La ocupacion sigue siendo la ancha. */
+  --lx-home-grid-main: 54fr;
+  --lx-home-grid-side: 46fr;
 }
 
 /* El dónut y la lista de zonas, uno al lado del otro. */
@@ -7119,12 +7125,19 @@ a.lx-list-row {
    Una fila compacta al final del tablero, antes del estado de los servicios. Sólo existe cuando
    hay algo que atender: el componente no la dibuja vacía, así que acá no hay estado «sin
    incidencias» que estilar — y eso es deliberado, no un olvido. */
+/* 56 de alto, el centro de los 50-64 del boceto: una FRANJA y no una tarjeta. Sigue apareciendo
+   solo con una incidencia real —lo decide `HomePage`, que no la monta si la lista esta vacia— y
+   por eso acá no hace falta ningun `:empty`: cuando no hay nada, el elemento no existe. */
 .lx-home-attention {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  min-height: 56px;
   gap: var(--lx-space-2) var(--lx-space-5);
-  padding: var(--lx-space-3) var(--lx-space-4);
+  /* Relleno de 8 y no de 12: con 12 la franja medía 70 y con 10, 66 — las dos por encima del techo
+     de 64 que pide el boceto, porque la insignia del contador es más alta que el texto. El alto lo
+     pone el `min-height` de arriba, así que esto sólo quita el aire sobrante. */
+  padding: var(--lx-space-2) var(--lx-space-4);
   border: 1px solid color-mix(in srgb, var(--lx-danger) 45%, var(--lx-border));
   border-radius: var(--lx-radius-lg);
   background: color-mix(in srgb, var(--lx-danger) 8%, var(--lx-surface));
@@ -7172,6 +7185,15 @@ a.lx-list-row {
 }
 
 /* El total de la semana, en su propia línea sobre el gráfico (§7: cada elemento con su zona). */
+/* El día más reciente del rango, debajo del total semanal (boceto del 12-10-2026). Discreto a
+   propósito: el titular del bloque es la semana, y esto es el pie de la última barra. */
+.lx-home__week-today {
+  margin: 2px 0 0;
+  color: var(--lx-text-muted);
+  font-size: var(--lx-text-meta-size);
+  font-variant-numeric: tabular-nums;
+}
+
 .lx-home__week-total {
   margin: 0 0 var(--lx-space-2);
   font-size: 26px;
@@ -7459,7 +7481,11 @@ a.lx-list-row {
    municipal · Montes de Oca»— el contenido ya mide ~52, de modo que 56 es piso y no estiramiento,
    y el techo lo sigue poniendo el contenido. */
 :root[data-portal='admin'] .lx-home__top {
-  min-height: 56px;
+  /* 64 (boceto aprobado, 12-10-2026). La correctiva de la manana pedia 50-62 y este documento, que
+     es posterior, pide 60-75 con la imagen delante. Donde dos encargos dan numeros distintos para
+     el mismo bloque manda el mas reciente — es la regla que este proyecto ya usa, y queda escrita
+     acá para que la proxima lectura no crea que 56 se perdio por descuido. */
+  min-height: 64px;
   align-items: center;
 }
 /* Medido en la replica: con el h1 al tamaño de título de página —30px con interlineado 43.5— el
@@ -7494,7 +7520,7 @@ a.lx-list-row {
   /* 15 arriba y abajo (12-10-2026), el centro de los 14-16 de la tabla. Medido en la replica: con
      la etiqueta en un renglon la tarjeta cae en ~102 y el piso de 108 la sube al rango; con la
      etiqueta en dos renglones llega a ~118 y se queda debajo del techo de 120. */
-  padding: 15px var(--lx-space-4);
+  padding: var(--lx-space-4);
   row-gap: 4px;
 }
 :root[data-portal='admin'] .lx-metric__label {
@@ -7513,10 +7539,12 @@ a.lx-list-row {
   line-height: 1.2;
 }
 :root[data-portal='admin'] .lx-metric__icon {
-  /* «Icono 16-20 px en contenedor 30-34 px». 32 es el centro del rango del contenedor; el glifo
-     son los 18 del `<svg>` en HomePage. Venia de 36, que a su vez venia de los 40 del sistema. */
-  width: 32px;
-  height: 32px;
+  /* El boceto del 12-10 pide «iconos de 18-22 px dentro de contenedor de 38-42 px» y la imagen los
+     dibuja asi: la caja tintada es una pieza visible de la tarjeta, no una viñeta. 40 es el centro
+     del rango; el glifo son los 20 del `<svg>` en HomePage, dentro de 18-22.
+     Venia de 32, de la correctiva de la manana, que pedia 30-34. */
+  width: 40px;
+  height: 40px;
 }
 
 /* ---- Fila A: las dos tarjetas con la misma altura ------------------------------------------
@@ -7575,6 +7603,29 @@ a.lx-list-row {
   padding: 6px 0;
 }
 
+/* ---- Ocupacion por debajo de 1200: el anillo encima y las zonas a lo ancho (13-10-2026) -----
+   A 1536 el anillo de 150 y las cuatro zonas conviven en una fila, que es lo que el boceto dibuja.
+   A 1024 no: la columna del 54% deja 189px para la lista y «San Rafael - Multiplaza» se parte en
+   dos renglones, con lo que la fila de zona pasa de 28 a 45. No es un recorte —no se pierde una
+   letra— pero deja la lista desigual y las barras a distintas alturas.
+
+   Apilar es lo que el §8 llama «paneles reorganizados sin corte» para 900-1199, y es ademas lo que
+   `.lx-occupancy` ya hace por debajo de 720 con el mismo razonamiento escrito al lado. La tarjeta
+   crece de alto a ese ancho, y eso esta bien: el rango de 250-285 es la medida de la referencia de
+   1536, no una altura fija para todas las pantallas.
+
+   La alternativa era achicar el anillo a ese ancho, y medida tampoco alcanza: con 120 a la lista le
+   quedan 109px de nombre y «San Rafael - Multiplaza» sigue sin entrar. */
+@media (max-width: 1199px) {
+  :root[data-portal='admin'] .lx-home .lx-occupancy {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  :root[data-portal='admin'] .lx-home .lx-occupancy .lx-donut {
+    align-self: center;
+  }
+}
+
 /* ---- Ingresos: que la tarjeta no crezca al estrecharse la columna ---------------------------
    A 1024 el gráfico conservaba su alto mientras la columna se angostaba y la tarjeta llegaba a
    343px contra los 260-310 de la tabla, rompiendo el equilibrio de la fila A —que es justo lo que
@@ -7606,6 +7657,26 @@ a.lx-list-row {
   :root[data-portal='admin'] .lx-home-grid--operation {
     align-items: start;
   }
+  /*
+    «Igual altura visual: 210-245 px» y «alturas equilibradas» (boceto del 12-10).
+
+    Esto parece contradecir a la correctiva de la manana —«altura segun contenido, NO igualar a la
+    tarjeta mas alta», «evitar align-items: stretch»— y no lo hace, porque son dos mecanismos
+    distintos con resultados distintos:
+
+      `stretch`   la mas alta decide, y una actividad con UN evento se convierte en un rectangulo
+                  de 318px con dos renglones flotando. Es el defecto que la correctiva prohibio y
+                  por eso `align-items: start` se queda.
+      `min-height` un PISO comun. Las tres miden al menos 210 y ninguna estira a ninguna: la que
+                  tiene poco contenido queda en el piso, no en el alto de su vecina. El resultado
+                  es la fila pareja del boceto sin el rectangulo vacio de la captura.
+
+    El techo lo pone el contenido y se queda dentro de 245 con los cuatro accesos, las cuatro zonas
+    y hasta cinco eventos, que es lo que estos bloques dibujan como maximo.
+  */
+  :root[data-portal='admin'] .lx-home-grid--operation > .lx-card {
+    min-height: 210px;
+  }
 }
 
 /* Por debajo de 1200 la fila deja de ser tres columnas parecidas y vuelve a ser dos de contenido
@@ -7625,11 +7696,16 @@ a.lx-list-row {
    semana vacía —por debajo del rango— y con él las dos columnas de la fila miden lo mismo en los
    dos estados, con datos y sin ellos. El techo lo pone el contenido y se queda dentro de 270. */
 :root[data-portal='admin'] .lx-home-grid--analytics > .lx-card {
-  min-height: 228px;
+  /* 256, el centro de los 250-285 del boceto. Venia de 228 (correctiva de la manana, 220-245) y de
+     244 antes. Sube porque el anillo pasa a 150 y el grafico recupera alto de pista. */
+  min-height: 256px;
 }
 @media (min-width: 1200px) {
   :root[data-portal='admin'] .lx-bars__track {
-    height: 136px;
+    /* 146. Primero puse 160 y la fila medía 291, seis por encima del techo de 285: la línea del
+       día más reciente, que este mismo encargo añade, cuesta su renglón. Medido, con 146 la fila
+       cae dentro del rango con el total, el día y el eje completos. */
+    height: 146px;
   }
 }
 
@@ -7659,25 +7735,48 @@ a.lx-list-row {
    es el ancho que le toco a esta columna, no el de la pantalla. */
 :root[data-portal='admin'] .lx-home .lx-quick-grid {
   gap: var(--lx-space-2);
+  container-type: inline-size;
 }
 :root[data-portal='admin'] .lx-home .lx-quick-tile {
-  /* 66: el piso de los 62-76. Medido: con las dos lineas de texto el contenido son ~33px y con
-     el relleno de 10 la baldosa cae en 53, asi que el piso es lo que la pone en el rango; el
-     techo lo deja el contenido, que no puede crecer porque ni titulo ni ayuda se parten. */
-  min-height: 66px;
-  padding: 10px var(--lx-space-3);
+  /* 70, el centro de los 65-75 del boceto. La tercera columna es la flecha, que la imagen dibuja
+     en las cuatro baldosas: sin ella el acceso no se lee como navegable, que es justo lo que el
+     §3 pide al llamarlos «clicables, con foco de teclado y navegacion correcta». */
+  min-height: 70px;
+  padding: var(--lx-space-2) var(--lx-space-3);
   gap: 0 var(--lx-space-2);
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas: 'icono titulo flecha';
+  align-items: center;
 }
 :root[data-portal='admin'] .lx-home .lx-quick-tile__icon {
-  /* El glifo son los 18 del `<svg>`; esto es su caja. 28 y no los 32 del sistema: en una baldosa
-     de 66 un cuadrado de 32 es casi la mitad del alto. */
-  width: 28px;
-  height: 28px;
+  /* «Iconos 18-20 px en contenedor de 34-38 px». 36 es el centro; el glifo son los 18 del `<svg>`.
+     Venia de 28, de la correctiva de la manana. */
+  width: 36px;
+  height: 36px;
+}
+:root[data-portal='admin'] .lx-home .lx-quick-tile__go {
+  grid-area: flecha;
+  display: inline-flex;
+  align-self: center;
+  color: var(--lx-text-subtle);
 }
 :root[data-portal='admin'] .lx-home .lx-quick-tile__title {
-  /* «Titulo 12-13 px». */
   font-size: 13px;
   line-height: 1.25;
+  /*
+    Dos renglones antes de recortar, que es como el boceto dibuja «Registrar espacio».
+
+    La correctiva de la manana lo dejaba en UNO con puntos suspensivos, y con la flecha ocupando
+    ahora una tercera columna al titulo le quedan ~95px: en un solo renglon «Registrar espacio» se
+    cortaria, y el §5 pide que los cuatro accesos se lean. Dos renglones caben de sobra en los
+    65-75 de alto. `line-clamp` pone el tope: tres renglones si harian crecer la baldosa.
+  */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  white-space: normal;
+  overflow: hidden;
 }
 /* La descripcion no se dibuja en esta pantalla. La §7 la marca OPCIONAL y la aritmetica decide:
    la baldosa mas ancha que da la columna del 30% son 166px a 1536, de los que el icono y su hueco
@@ -7692,8 +7791,32 @@ a.lx-list-row {
 :root[data-portal='admin'] .lx-home .lx-quick-tile__hint {
   display: none;
 }
-:root[data-portal='admin'] .lx-home .lx-quick-tile {
-  grid-template-areas: 'icono titulo';
+
+/*
+  La flecha, sólo donde cabe (medido el 13-10-2026).
+
+  El boceto aprobado la dibuja en las cuatro baldosas, y a 1536 entra. A 1366 no: la columna del
+  30% deja la baldosa en 139px y el adorno —caja del icono 36, hueco 8, flecha 16, hueco 8, relleno
+  24— se come 92, dejando 47px de texto. Medido así, los CUATRO títulos salían cortados: «Crea
+  zona», «Regi espa», «Busc plac». El §5 pide que los cuatro accesos se lean.
+
+  Lo que cede es la flecha y no el título, porque la baldosa ENTERA es el enlace y la flecha va
+  `aria-hidden`: quitarla no le quita nada a nadie —ni al teclado ni al lector de pantalla—
+  mientras que un título cortado sí se lo quita a todo el mundo. Sin ella al texto le quedan 71px
+  y «Registrar» entra.
+
+  Consulta de CONTENEDOR y no de ventana, por la razón de siempre: lo que decide es el ancho que le
+  tocó a esta columna, no el de la pantalla. Y esta vez el umbral SÍ se cruza —340 a 1536 y 290 a
+  1366—, que es lo que faltaba la vez anterior que escribí una.
+*/
+@container (max-width: 330px) {
+  :root[data-portal='admin'] .lx-home .lx-quick-tile__go {
+    display: none;
+  }
+  :root[data-portal='admin'] .lx-home .lx-quick-tile {
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas: 'icono titulo';
+  }
 }
 
 /* ---- «Zonas mas utilizadas»: filas de 30-34 (correctiva 12-10-2026) ------------------------
@@ -7721,7 +7844,9 @@ a.lx-list-row {
    105 exactos porque 105 deja la cuadricula a tres pixeles del suelo y cualquier etiqueta un poco
    mas larga la baja del rango. */
 :root[data-portal='admin'] .lx-metric {
-  min-height: 108px;
+  /* 124: el centro de los 118-136 del boceto. Con la etiqueta en un renglon la tarjeta queda en
+     124 por este piso y con dos llega a ~134, que sigue dentro. */
+  min-height: 124px;
 }
 
 /* =================================================================================================

@@ -370,6 +370,9 @@ export function HomePage(): React.JSX.Element {
      cobró en ella. La §6 de la correctiva decide cómo se dibuja eso. */
   const todoEnCero = barras.length > 0 && barras.every((b) => b.value === 0);
 
+  /** El último día de la serie: el de hoy, que es el que rotula la última barra del gráfico. */
+  const ultimoDia = serie.data?.days?.length ? serie.data.days[serie.data.days.length - 1] : null;
+
   const eventos: AuditEvent[] = useMemo(
     () => (actividad.data?.items ?? []).filter((e) => e.action in ACTOS).slice(0, EVENTOS_A_MOSTRAR),
     [actividad.data],
@@ -628,13 +631,18 @@ export function HomePage(): React.JSX.Element {
                         caption={t('admin.home.occupancy.total')}
                         emptyLabel={t('admin.home.occupancy.noBase')}
                         title={t('admin.home.zones.title')}
-                        /* 124 (correctiva 12-10-2026). Venía de 136, que venía de los 168 por
-                           omisión; la §5 pide ahora «reducir dónut a 115-135 px de diámetro
-                           aprox.» y 124 es el centro de ese rango. El motivo es el mismo de
-                           siempre y por eso el número baja otra vez en vez de discutirse: el
-                           anillo suelta ancho que la lista de zonas está pidiendo. El componente
-                           escala su grosor con el diámetro, así que no hay nada más que ajustar. */
-                        size={124}
+                        /* 150 (boceto aprobado del 12-10-2026, que pide «anillo de 140-160 px»).
+
+                           Este número ha bajado tres veces y ahora sube: 168 por omisión → 136 el
+                           09-10 → 124 en la correctiva de la mañana → 150 acá. No es indecisión
+                           mía: cada encargo trajo su rango y éste viene con la imagen aprobada
+                           delante, donde el anillo es claramente la pieza principal del bloque.
+                           Donde dos documentos dan medidas distintas manda el más reciente.
+
+                           La lista de zonas no pierde por esto: la fila analítica pasa de 228 a
+                           256 de alto y el reparto de 58/42 a 54/46, así que la columna de
+                           ocupación es más ancha que antes aunque el anillo crezca. */
+                        size={150}
                       />
                       {/* De qué se compone el porcentaje. La referencia lo pone bajo el número y
                           son dos cifras que el panel ya daba: estadías corriendo sobre bahías en
@@ -681,9 +689,22 @@ export function HomePage(): React.JSX.Element {
                     `SectionHeader`, que es lo que el punto 7 pide al decir «no superponer fecha,
                     total y título: cada elemento debe tener su propia zona de layout». */}
                 {serie.data && serie.data.totalMinor > 0 ? (
-                  <p className="lx-home__week-total">
-                    {dinero(serie.data.totalMinor, serie.data.currencyCode)}
-                  </p>
+                  <>
+                    <p className="lx-home__week-total">
+                      {dinero(serie.data.totalMinor, serie.data.currencyCode)}
+                    </p>
+                    {/* El último día del rango, debajo del total: es lo que el boceto dibuja y es
+                        lo que da nombre a la última barra del gráfico. Sale de la misma serie que
+                        ya está cargada —`days`, su último elemento— así que no hay ni una consulta
+                        más ni una cifra que pueda discrepar con el gráfico que tiene al lado. */}
+                    {ultimoDia ? (
+                      <p className="lx-home__week-today">
+                        {formatDate(`${ultimoDia.date}T12:00:00`, locale, { day: 'numeric', month: 'long' })}
+                        {' · '}
+                        {dinero(ultimoDia.totalMinor, serie.data.currencyCode)}
+                      </p>
+                    ) : null}
+                  </>
                 ) : null}
                 {serie.isLoading ? (
                   // Un bloque del tamaño del gráfico, no la palabra «Cargando»: así la pantalla no
@@ -1039,7 +1060,15 @@ function QuickActions(): React.JSX.Element {
             {acceso.icon}
           </span>
           <span className="lx-quick-tile__title">{t(acceso.title)}</span>
+          {/* La ayuda sigue en el marcado y el CSS del Inicio no la dibuja: a ningún ancho de la
+              columna del 30% cabe entera, y una descripción recortada no informa más que ninguna.
+              Se queda porque la misma clase la usan otras pantallas, donde sí entra. */}
           <span className="lx-quick-tile__hint">{t(acceso.hint)}</span>
+          {/* La flecha que el boceto dibuja en las cuatro baldosas. `aria-hidden` porque el
+              destino ya lo dice el propio enlace: anunciarla sería leerlo dos veces. */}
+          <span className="lx-quick-tile__go" aria-hidden="true">
+            <IconChevronRight size={16} />
+          </span>
         </Link>
       ))}
     </div>
