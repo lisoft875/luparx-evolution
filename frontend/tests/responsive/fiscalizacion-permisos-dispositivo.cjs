@@ -467,6 +467,57 @@ async function resumen(page) {
       fila?.texto,
     );
     comprobar(fila?.tono === 'ok', '  y la fila queda en orden', `tono=${fila?.tono}`);
+    comprobar(
+      /Precisión aproximada|precisión/i.test(fila?.texto ?? ''),
+      '  con su precisión estimada al lado',
+      fila?.texto,
+    );
+    const cuando = (await p.getByRole('dialog').first().textContent()) ?? '';
+    comprobar(
+      /Última comprobación|última comprobación/i.test(cuando),
+      '  y la hora de la comprobación',
+      cuando.replace(/\s+/g, ' ').slice(0, 120),
+    );
+
+    /*
+      LOS MAPAS. Lo que se comprueba es la URL, no que se abra: abrirla llevaría el arnés a
+      Google y no probaría nada de LuParX. Lo que puede romperse acá es el FORMATO de la
+      coordenada —en es-CR la coma es el separador decimal y las dos URL esperan punto— y que
+      los enlaces aparezcan cuando NO hay posición, que es lo que el §3 prohíbe.
+    */
+    const mapas = await p.evaluate(() =>
+      [...document.querySelectorAll('.lx-help-maps a')].map((a) => ({
+        texto: (a.textContent ?? '').trim(),
+        href: a.getAttribute('href'),
+        destino: a.getAttribute('target'),
+        rel: a.getAttribute('rel'),
+      })),
+    );
+    comprobar(mapas.length === 2, 'con una posición real aparecen los dos enlaces de mapa', JSON.stringify(mapas));
+    const g = mapas.find((m) => /google/i.test(m.href ?? ''));
+    const w = mapas.find((m) => /waze/i.test(m.href ?? ''));
+    comprobar(
+      /^https:\/\/www\.google\.com\/maps\/search\/\?api=1&query=-?\d+\.\d{6},-?\d+\.\d{6}$/.test(g?.href ?? ''),
+      '  el de Google Maps lleva la coordenada con punto decimal',
+      g?.href,
+    );
+    comprobar(
+      /^https:\/\/waze\.com\/ul\?ll=-?\d+\.\d{6}%2C-?\d+\.\d{6}&navigate=yes$/.test(w?.href ?? ''),
+      '  y el de Waze la lleva con la coma codificada',
+      w?.href,
+    );
+    comprobar(
+      mapas.every((m) => m.destino === '_blank' && /noopener/.test(m.rel ?? '')),
+      '  los dos abren aparte, sin perder la pantalla de Ayuda',
+      JSON.stringify(mapas.map((m) => [m.destino, m.rel])),
+    );
+    // Y que las coordenadas del enlace sean LAS DE LA LECTURA, no unas cualesquiera.
+    const enFila = (fila?.texto ?? '').match(/(-?\d+\.\d{4,})/g) ?? [];
+    comprobar(
+      enFila.length >= 2 && (g?.href ?? '').includes(enFila[0].slice(0, 7)),
+      '  y son las mismas que muestra la fila, no otras',
+      `fila=${enFila.slice(0, 2).join(', ')} · enlace=${g?.href}`,
+    );
     await ctx.close();
   }
 
@@ -485,6 +536,11 @@ async function resumen(page) {
       !/Todo está funcionando correctamente/.test(await resumen(p)),
       '  y el resumen NO dice que todo está bien (§4)',
     );
+    /* La otra mitad del §3: «si no hay una ubicación válida, informa al inspector y no
+       construyas una ruta con coordenadas ficticias». Con el permiso denegado no hay posición,
+       así que no puede haber enlaces — ni activos ni grises. */
+    const sinMapas = await p.locator('.lx-help-maps a').count();
+    comprobar(sinMapas === 0, '  y sin posición no se ofrece ningún mapa', `enlaces=${sinMapas}`);
     await ctx.close();
   }
 
@@ -516,6 +572,8 @@ async function resumen(page) {
       'con el tiempo agotado se dice eso, y no «denegado»',
       fila?.texto,
     );
+    const sinMapas = await p.locator('.lx-help-maps a').count();
+    comprobar(sinMapas === 0, '  y con el tiempo agotado tampoco hay mapas', `enlaces=${sinMapas}`);
     await ctx.close();
   }
 

@@ -1307,6 +1307,10 @@ export const esCR = {
   'inspector.help.permissions.recheckNote':
     'Relee el permiso de la cámara, intenta una lectura real de la ubicación, vacía la cola y le pregunta al servidor por la sesión. La cámara se prueba con su propio botón.',
   'inspector.help.diag.location.fix': 'Última lectura: {{lat}}, {{lon}}',
+  /* Los dos mapas, que sólo existen con una posición real delante. «Abrir en» y no «Navegar a»:
+     Google Maps recibe una chincheta, no una ruta, y el inspector decide qué hace con ella. */
+  'inspector.help.diag.location.openMaps': 'Abrir en Google Maps',
+  'inspector.help.diag.location.openWaze': 'Abrir en Waze',
   'inspector.help.diag.location.accuracy': 'Precisión aproximada: {{m}} m',
   'inspector.help.diag.location.accuracyUnknown': 'El aparato no informó la precisión.',
   'inspector.help.diag.location.timeout': 'No se obtuvo la posición a tiempo',

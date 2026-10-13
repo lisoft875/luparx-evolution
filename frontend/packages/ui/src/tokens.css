@@ -8349,3 +8349,17 @@ a.lx-list-row {
     grid-template-columns: minmax(0, 1fr) auto;
   }
 }
+
+/* Los dos enlaces de mapa de la Ayuda del fiscalizador: uno al lado del otro cuando caben y
+   apilados cuando no, que en un teléfono de 320px es lo que pasa. `flex: 1` para que midan lo
+   mismo: son dos opciones equivalentes y una más ancha que la otra sugiere una preferencia que
+   no existe. */
+.lx-help-maps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--lx-space-2);
+}
+.lx-help-maps > .lx-btn {
+  flex: 1 1 10rem;
+  text-decoration: none;
+}

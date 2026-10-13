@@ -50,6 +50,7 @@ import {
   type ComprobacionGuardada,
   type SoporteDeUbicacion,
 } from '../lib/locationCheck';
+import { enlaceGoogleMaps, enlaceWaze } from '../lib/mapLinks';
 import { GUIAS, pasoDeGuia, tituloDeGuia } from '../lib/helpGuides';
 import { useCitationQueue, useIsOnline } from '../lib/queries';
 import { lastSyncAt } from '../lib/citationQueue';
@@ -503,6 +504,43 @@ export function HelpPage(): React.JSX.Element {
     }
     setVistaCamara(panel ?? 'permissions');
     setPanel(null);
+  }
+
+  /**
+   * Los dos enlaces de mapa, y SÓLO con una posición real delante.
+   *
+   * <p>El §3 del encargo los pide «una vez obtenida una ubicación real» y prohíbe lo contrario con
+   * todas las letras: «si no hay una ubicación válida, informa al inspector y no construyas una
+   * ruta con coordenadas ficticias». Por eso esto devuelve `null` en los cuatro estados que no son
+   * una lectura buena —denegado, sin receptor, tiempo agotado y «todavía no se ha comprobado»— y
+   * los botones sencillamente no existen. Un botón de mapa gris no informa de nada; uno que
+   * aparece cuando hay coordenadas dice por su sola presencia que las hay.</p>
+   *
+   * <p>Y no se abre nada solo: el §3 también lo prohíbe —«no abras aplicaciones externas
+   * automáticamente»—. Son dos enlaces que esperan a que alguien los pulse.</p>
+   */
+  function mapasDeLaPosicion(): React.JSX.Element | null {
+    if (gps?.outcome !== 'ok') return null;
+    const { latitude, longitude } = gps.position;
+    const maps = enlaceGoogleMaps(latitude, longitude);
+    const waze = enlaceWaze(latitude, longitude);
+    if (!maps || !waze) return null;
+    return (
+      <div className="lx-help-maps">
+        {/*
+          `target="_blank"` con `rel="noopener noreferrer"`: en un teléfono con la aplicación
+          instalada el sistema la abre y LuParX se queda donde estaba —que es lo que pide el §3,
+          «el retorno a LuParX»—, y en escritorio se abre en otra pestaña sin perder la pantalla
+          de Ayuda ni la sesión.
+        */}
+        <a className="lx-btn lx-btn--secondary" href={maps} target="_blank" rel="noopener noreferrer">
+          {t('inspector.help.diag.location.openMaps')}
+        </a>
+        <a className="lx-btn lx-btn--secondary" href={waze} target="_blank" rel="noopener noreferrer">
+          {t('inspector.help.diag.location.openWaze')}
+        </a>
+      </div>
+    );
   }
 
   /** El permiso, dicho en palabras. Los tres estados existen porque los tres pasan de verdad. */
@@ -1071,6 +1109,10 @@ export function HelpPage(): React.JSX.Element {
           toneLabels={etiquetasDeTono}
           checks={filas}
         />
+        {/* Y los mapas, debajo de la lista y sólo si la lectura salió bien. Van en los DOS
+            paneles porque la fila de ubicación está en los dos: que el inspector tenga que
+            acordarse de en cuál comprobó sería un detalle inventado por la pantalla. */}
+        {mapasDeLaPosicion()}
       </Modal>
 
       {/*
@@ -1096,6 +1138,7 @@ export function HelpPage(): React.JSX.Element {
             toneLabels={etiquetasDeTono}
             checks={permisos}
           />
+          {mapasDeLaPosicion()}
           {/*
             «Volver a comprobar», y desde el 13-10-2026 comprueba de verdad.
 

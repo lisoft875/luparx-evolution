@@ -1260,6 +1260,8 @@ export const enUS: Record<TranslationKey, string> = {
   'inspector.help.permissions.howTo': 'How to enable permissions on this device',
   'inspector.help.permissions.recheckNote':
     'Re-reads the camera permission, attempts a real location reading, flushes the queue and asks the server about the session. The camera is tested with its own button.',
+  'inspector.help.diag.location.openMaps': 'Open in Google Maps',
+  'inspector.help.diag.location.openWaze': 'Open in Waze',
   'inspector.help.diag.location.fix': 'Last reading: {{lat}}, {{lon}}',
   'inspector.help.diag.location.accuracy': 'Approximate accuracy: {{m}} m',
   'inspector.help.diag.location.accuracyUnknown': 'The device did not report accuracy.',
