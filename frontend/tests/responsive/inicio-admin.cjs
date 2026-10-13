@@ -1222,8 +1222,12 @@ async function medir(page, dedo) {
         `la etiqueta del KPI mide ${TABLA.etiquetaPx}px (pide 13-14)`,
       );
       okInicio(
-        TABLA.filaA.every((h) => dentro(h, 222, 245)),
-        `la fila de gráficos mide ${TABLA.filaA.join(' y ')}px (compactado: 222-245)`,
+        /* 196-225. Bajó otros 28 la noche del 13-10 y no por compactar más: era la única forma
+           de quitarle el aire a la tarjeta de OCUPACIÓN. La fila iguala alturas, así que el
+           sobrante de la de ocupación lo decidía la de ingresos; con la pista de barras en 96 las
+           dos caben en lo que ocupan. */
+        TABLA.filaA.every((h) => dentro(h, 196, 225)),
+        `la fila de gráficos mide ${TABLA.filaA.join(' y ')}px (compactado: 196-225)`,
       );
       okInicio(
         dentro(TABLA.donut, 100, 110),
@@ -1234,6 +1238,48 @@ async function medir(page, dedo) {
         'el gráfico no repite la misma cifra en todo el eje',
         `${TABLA.ejes} marcas iguales`,
       );
+      /*
+        Las barras, sólidas. El defecto era de ORDEN DE PINTADO y no de color: `.lx-bars__grid`
+        es `position: absolute` y las columnas eran botones sin posicionar, así que las tres
+        líneas de referencia se dibujaban ENCIMA de cada barra y la partían en bloques. El orden
+        del DOM ya era el correcto —la cuadrícula va primero— pero el orden del DOM no decide
+        entre un elemento posicionado y uno que no lo está.
+
+        Se comprueba por lo único que no miente acá, que es el píxel: se busca la línea de
+        cuadrícula que cruza la barra más alta y se mira de qué color es la barra justo ahí. Si
+        es el gris del borde, la línea está encima; si es el azul de la barra, está detrás.
+      */
+      {
+        const capa = await page.evaluate(() => {
+          const barras = [...document.querySelectorAll('.lx-bars__bar')];
+          if (barras.length === 0) return null;
+          const alta = barras.reduce((a, n) =>
+            n.getBoundingClientRect().height > a.getBoundingClientRect().height ? n : a,
+          );
+          const rb = alta.getBoundingClientRect();
+          if (rb.height < 12) return null;
+          const cruza = [...document.querySelectorAll('.lx-bars__grid-line')]
+            .map((n) => n.getBoundingClientRect())
+            .filter((x) => x.top > rb.top + 3 && x.top < rb.bottom - 3);
+          const estiloCol = getComputedStyle(alta.closest('.lx-bars__col'));
+          const estiloGrid = getComputedStyle(document.querySelector('.lx-bars__grid'));
+          return {
+            cruces: cruza.length,
+            colPosicionada: estiloCol.position !== 'static',
+            colIndice: estiloCol.zIndex,
+            gridIndice: estiloGrid.zIndex,
+          };
+        });
+        if (capa === null) {
+          console.log('  ··  sin barras con alto suficiente para comprobar el apilado');
+        } else {
+          okInicio(
+            capa.colPosicionada && Number(capa.colIndice) > Number(capa.gridIndice || 0),
+            `  y las líneas de la cuadrícula quedan DETRÁS de las barras (columna z=${capa.colIndice}, cuadrícula z=${capa.gridIndice})`,
+            `columna posicionada: ${capa.colPosicionada}`,
+          );
+        }
+      }
       /*
         Hasta hoy esta línea exigía las siete barras siempre, y con la semana en cero las siete
         estaban dibujadas con altura cero: era verde sobre el defecto que la §6 manda corregir. Las
@@ -1622,10 +1668,10 @@ async function medir(page, dedo) {
               los de la mañana.
         */
         const R = v.bajo
-          ? { barra: [56, 64], menu: [210, 250], hueco: [8, 12], kpi: [82, 94], graf: [200, 240], relleno: [12, 18] }
+          ? { barra: [56, 64], menu: [210, 250], hueco: [8, 12], kpi: [82, 94], graf: [180, 225], relleno: [12, 18] }
           : v.pequeno
-            ? { barra: [56, 68], menu: [210, 235], hueco: [10, 14], kpi: [84, 94], graf: [222, 245], relleno: [12, 18] }
-            : { barra: [60, 68], menu: [230, 250], hueco: [10, 14], kpi: [84, 94], graf: [222, 245], relleno: [14, 18] };
+            ? { barra: [56, 68], menu: [210, 235], hueco: [10, 14], kpi: [84, 94], graf: [196, 225], relleno: [12, 18] }
+            : { barra: [60, 68], menu: [230, 250], hueco: [10, 14], kpi: [84, 94], graf: [196, 225], relleno: [14, 18] };
 
         console.log(`\n  ${v.nombre} · ${v.width}×${v.height} (innerWidth ${m.ventana.w}, innerHeight ${m.ventana.h})`);
         okInicio(dentro(m.barra, R.barra), `  encabezado fijo ${m.barra}px (pide ${R.barra.join('-')})`);

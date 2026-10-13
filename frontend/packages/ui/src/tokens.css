@@ -8219,3 +8219,72 @@ a.lx-list-row {
   padding: var(--lx-space-4);
   gap: 10px;
 }
+
+/* =================================================================================================
+   TRES ARREGLOS VISUALES DEL INICIO (13-10-2026, noche)
+   =================================================================================================
+
+   1. LAS LÍNEAS DE LA CUADRÍCULA PINTABAN ENCIMA DE LAS BARRAS.
+
+   El comentario de `BarChart.tsx` dice «las líneas de referencia van detrás», y el orden del DOM
+   lo respeta: la cuadrícula se dibuja antes que las columnas. Pero el orden del DOM no decide
+   aquí. `.lx-bars__grid` es `position: absolute` y `.lx-bars__col` es un botón sin posicionar, y
+   el orden de pintado de CSS coloca TODO lo posicionado por encima de lo no posicionado, venga
+   antes o después en el documento. Resultado: tres líneas grises cruzando cada barra, que es lo
+   que se reportó como «barras divididas en bloques».
+
+   No se arregla moviendo nada de sitio: se arregla poniendo a las columnas en la misma capa que
+   la cuadrícula —`position: relative`— y ordenándolas con `z-index`. Entonces sí manda el orden
+   del DOM, que ya era el correcto.
+
+   Esto toca el componente de barras, que es compartido. Es una corrección de un defecto, no un
+   cambio de diseño: en todas las pantallas que lo usan la intención escrita era la misma. */
+.lx-bars__grid {
+  z-index: 0;
+}
+.lx-bars__col {
+  position: relative;
+  z-index: 1;
+}
+
+/* 2. EL AIRE DE LA TARJETA DE OCUPACIÓN.
+
+   Medido a 1536: la tarjeta mide 234 y su contenido 187 —encabezado 28, anillo 104, su hueco 8,
+   la línea de «x / y espacios» 19, y 28 de relleno—. Los 47 que sobran no son de esta tarjeta:
+   son de la de al lado. La fila iguala alturas (`align-items: stretch`, que las dos tablas
+   anteriores pidieron por escrito) y la de ingresos necesita más alto, así que la de ocupación
+   crece hasta alcanzarla y reparte el sobrante arriba y abajo.
+
+   O sea que el aire se quita por el otro lado: bajando lo que mide la de ingresos. La pista de
+   barras pasa de 124 a 96. Son 28px que se le quitan al dibujo y no al dato — las siete barras,
+   el eje, las etiquetas y el total siguen enteros, y la proporción entre barras no cambia porque
+   todas se miden contra el mismo máximo. */
+@media (min-width: 1200px) {
+  :root[data-portal='admin'] .lx-bars__track {
+    height: 96px;
+  }
+}
+
+/* 3. EL TÍTULO DE «ZONAS MÁS UTILIZADAS», EN UN RENGLÓN.
+
+   Medido: a 1366 y por encima entra en uno; a 1280 la cabecera tiene 269px y necesita ~290
+   —título ~200 a 19px, «Ver detalle ›» ~78 y 12 de hueco— así que el título se parte en dos y la
+   tarjeta crece 27px.
+
+   Lo que cede es el ENLACE y no el título. Un título partido es un defecto de composición en el
+   sitio donde más se nota; el enlace de al lado puede acortarse con puntos suspensivos y sigue
+   siendo pulsable, y a los anchos donde esto se valida —1536 y más— no cede nada porque no hace
+   falta. Acotado a las tarjetas del Inicio del administrador: la misma cabecera la usan otras
+   veintitantas pantallas y ahí no hay nada que arreglar. */
+:root[data-portal='admin'] .lx-home .lx-section-header__title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+:root[data-portal='admin'] .lx-home .lx-section-header__aside {
+  flex-shrink: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
