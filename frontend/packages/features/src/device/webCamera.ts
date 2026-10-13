@@ -103,6 +103,15 @@ export async function estadoDeCamara(): Promise<EstadoDeCamara> {
 export async function abrirCamara(): Promise<{ stream: MediaStream } | { problema: ProblemaDeCamara }> {
   const soporte = soporteDeCamara();
   if (soporte !== 'ok') return { problema: soporte };
+
+  const traducir = (error: unknown): ProblemaDeCamara => {
+    const nombre = (error as DOMException)?.name ?? '';
+    if (nombre === 'NotAllowedError' || nombre === 'SecurityError') return 'denied';
+    if (nombre === 'NotFoundError') return 'notFound';
+    if (nombre === 'NotReadableError' || nombre === 'AbortError') return 'busy';
+    return 'failed';
+  };
+
   try {
     const stream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } },
@@ -110,11 +119,26 @@ export async function abrirCamara(): Promise<{ stream: MediaStream } | { problem
     });
     return { stream };
   } catch (error) {
-    const nombre = (error as DOMException)?.name ?? '';
-    if (nombre === 'NotAllowedError' || nombre === 'SecurityError') return { problema: 'denied' };
-    if (nombre === 'NotFoundError' || nombre === 'OverconstrainedError') return { problema: 'notFound' };
-    if (nombre === 'NotReadableError' || nombre === 'AbortError') return { problema: 'busy' };
-    return { problema: 'failed' };
+    /*
+      Un segundo intento, sin pedir nada en particular (13-10-2026).
+
+      Las preferencias de arriba son `ideal`, o sea consejos: en teoría ningún navegador falla por
+      no poder cumplirlas. En la práctica hay cámaras —y entornos de prueba con aparatos de vídeo
+      simulados— que contestan `OverconstrainedError` igual, y hasta hoy esa respuesta se traducía
+      como «No hay cámara en este aparato», que es una afirmación FALSA: la cámara está, lo que no
+      encaja es la resolución que se le pidió.
+
+      Así que ante ese caso —y sólo ante ése— se vuelve a pedir la cámara sin condiciones. Si la
+      segunda también falla, manda lo que diga la segunda. Un «no hay cámara» de verdad llega acá
+      como `NotFoundError`, se va por el camino de arriba y no gasta un segundo intento.
+    */
+    if ((error as DOMException)?.name !== 'OverconstrainedError') return { problema: traducir(error) };
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      return { stream };
+    } catch (segundo) {
+      return { problema: traducir(segundo) };
+    }
   }
 }
 

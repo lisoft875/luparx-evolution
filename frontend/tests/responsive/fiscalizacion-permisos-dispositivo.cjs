@@ -55,10 +55,11 @@ function comprobar(ok, mensaje, detalle) {
  */
 function guionDeCamara(escenario) {
   return `
-    window.__pistas = [];
+    window.__gum = { llamadas: 0, pistas: [], fallos: [], notas: [] };
     const real = navigator.mediaDevices && navigator.mediaDevices.getUserMedia
       ? navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices)
       : null;
+    window.__gum.habiaReal = !!real;
     const fallar = (nombre) => {
       const e = new Error(nombre);
       e.name = nombre;
@@ -69,13 +70,31 @@ function guionDeCamara(escenario) {
       value: {
         ...(navigator.mediaDevices ?? {}),
         getUserMedia: async (restricciones) => {
+          window.__gum.llamadas++;
           if ('${escenario}' === 'denied') return fallar('NotAllowedError');
           if ('${escenario}' === 'notFound') return fallar('NotFoundError');
           if ('${escenario}' === 'busy') return fallar('NotReadableError');
           if ('${escenario}' === 'failed') return fallar('TypeError');
           if (!real) return fallar('NotFoundError');
-          const stream = await real(restricciones);
-          stream.getVideoTracks().forEach((t) => window.__pistas.push(t));
+          let stream;
+          try {
+            stream = await real(restricciones);
+          } catch (e) {
+            // El fallo REAL del navegador, con su nombre y su mensaje. Sin esto, un
+            // «No se pudo abrir» en la salida del arnés no dice nada de por qué.
+            window.__gum.fallos.push((e && e.name) + ': ' + (e && e.message));
+            throw e;
+          }
+          /*
+            La contabilidad del arnés va en su propio try: si ESTO lanzara, la excepción saldría
+            por \`getUserMedia\` y la aplicación reportaría una cámara rota que en realidad se
+            abrió. Una sonda que puede provocar el fallo que mide no sirve para medirlo.
+          */
+          try {
+            stream.getVideoTracks().forEach((t) => window.__gum.pistas.push(t));
+          } catch (e) {
+            window.__gum.notas.push('contabilidad: ' + e);
+          }
           return stream;
         },
       },
@@ -93,6 +112,16 @@ function guionDeCamara(escenario) {
       };
     }
   `;
+}
+
+/** Lo que la sonda vio, para imprimirlo cuando algo no sale como se esperaba. */
+async function diagnosticoGum(page) {
+  const g = await page
+    .evaluate(() => window.__gum ?? null)
+    .catch(() => null);
+  if (!g) return 'sin sonda';
+  return `llamadas=${g.llamadas} habiaReal=${g.habiaReal} pistas=${g.pistas.length}`
+    + ` fallos=[${g.fallos.join(' | ')}] notas=[${g.notas.join(' | ')}]`;
 }
 
 /** Y el de ubicación, con las cuatro salidas que `probePosition` sabe distinguir. */
@@ -263,16 +292,29 @@ async function resumen(page) {
       '  y el panel de permisos se aparta: una sola ventana modal a la vez',
     );
     const vivo = await p.locator('video.lx-camera__video').count();
-    comprobar(vivo === 1, '  «Comprobar la cámara» abre la vista en vivo', `videos=${vivo}`);
-    const reproduciendo = await p
-      .locator('video.lx-camera__video')
-      .evaluate((v) => v.readyState > 0 && !!v.srcObject)
-      .catch(() => false);
-    comprobar(reproduciendo, '  y el vídeo tiene una fuente de verdad');
-    const hayObturador = await p.getByRole('button', { name: /Tomar foto/i }).count();
-    comprobar(hayObturador === 0, '  sin obturador: en una prueba no se toma ninguna fotografía');
-    const hayCerrar = await p.getByRole('button', { name: /^Cerrar$/i }).count();
-    comprobar(hayCerrar > 0, '  y con un botón claro de cerrar');
+    comprobar(
+      vivo === 1,
+      '  «Comprobar la cámara» abre la vista en vivo',
+      `videos=${vivo} · ${await diagnosticoGum(p)}`,
+    );
+    /*
+      Las tres de abajo sólo se comprueban si la vista llegó a abrirse, y no por indulgencia: sin
+      vista, «no hay obturador» y «hay un botón de cerrar» salen en verde porque no hay NADA
+      —el botón de cerrar que encuentran es la X del encabezado—. Una prueba que pasa cuando la
+      pantalla falló es peor que una que no existe. La corrida del 13-10 las dio por buenas con la
+      cámara caída, y es la segunda vez este mes que una medición sobrevive a lo que medía.
+    */
+    if (vivo === 1) {
+      const reproduciendo = await p
+        .locator('video.lx-camera__video')
+        .evaluate((v) => !!v.srcObject)
+        .catch(() => false);
+      comprobar(reproduciendo, '  y el vídeo tiene una fuente de verdad');
+      const hayObturador = await p.getByRole('button', { name: /Tomar foto/i }).count();
+      comprobar(hayObturador === 0, '  sin obturador: en una prueba no se toma ninguna fotografía');
+      const hayCerrar = await p.getByRole('button', { name: /^Cerrar$/i }).count();
+      comprobar(hayCerrar > 1, '  y con un botón de cerrar propio, además de la X del encabezado');
+    }
 
     await p.getByRole('button', { name: /^Cerrar$/i }).first().click();
     await p.waitForSelector('.lx-diag__row', { timeout: 8000 }).catch(() => undefined);
@@ -281,17 +323,17 @@ async function resumen(page) {
       (await p.locator('.lx-diag__row').count()) > 0,
       '  al cerrar se vuelve al panel de permisos, no a ninguna otra parte',
     );
-    const pistas = await p.evaluate(() => (window.__pistas ?? []).map((t) => t.readyState));
+    const pistas = await p.evaluate(() => (window.__gum?.pistas ?? []).map((t) => t.readyState));
     comprobar(
       pistas.length > 0 && pistas.every((e) => e === 'ended'),
       '  al cerrar, TODAS las pistas de vídeo quedan apagadas',
-      `pistas=${JSON.stringify(pistas)}`,
+      `pistas=${JSON.stringify(pistas)} · ${await diagnosticoGum(p)}`,
     );
     const despues = (await filas(p)).find((f) => f.clave === 'camera');
     comprobar(
       despues?.tono === 'ok' && /entregó imagen|Habilitada/i.test(despues.texto),
       '  y ahora sí: comprobada, el aparato entregó imagen',
-      despues ? `tono=${despues.tono} · ${despues.texto}` : 'sin fila',
+      despues ? `tono=${despues.tono} · ${despues.texto} · ${await diagnosticoGum(p)}` : 'sin fila',
     );
     await ctx.close();
   }
@@ -464,9 +506,20 @@ async function resumen(page) {
     const barra = await p.locator('.lx-bottom-tab-bar__tab').count();
     comprobar(barra >= 4, 'al cerrar el panel, la barra inferior sigue completa', `pestañas=${barra}`);
 
-    await p.goto(`${BASE}/inspector/citations/new`, { waitUntil: 'domcontentloaded' });
-    await p.waitForTimeout(2400);
-    const boton = await p.getByRole('button', { name: /foto|evidencia/i }).count();
+    /*
+      `/cite`, no `/citations/new`.
+
+      La corrida del 13-10 marcó tres fallos acá y los tres eran MÍOS: inventé una ruta que no
+      existe. `App.tsx` monta `/cite` para el formulario y `/citations/:id` para el detalle, así que
+      `/citations/new` entraba al detalle de una boleta llamada «new» —que se dibujó sin romperse,
+      por eso no hubo ni un error de consola— y ahí no hay ni botón de foto ni formulario.
+
+      No era una regresión: este commit no toca la emisión de boletas. Pero el arnés la acusó, que
+      es exactamente la clase de fallo que hace perder un despliegue arreglando lo que no está roto.
+    */
+    await p.goto(`${BASE}/inspector/cite`, { waitUntil: 'domcontentloaded' });
+    await p.waitForTimeout(2600);
+    const boton = await p.getByRole('button', { name: /Tomar fotograf|evidencia/i }).count();
     comprobar(boton > 0, 'la emisión de boletas conserva su acción de adjuntar evidencia', `botones=${boton}`);
     const entrada = await p.locator('input[type="file"][capture]').count();
     comprobar(
@@ -474,8 +527,8 @@ async function resumen(page) {
       '  y sigue usando el selector del sistema, que es el mecanismo que vale como prueba',
       `inputs=${entrada}`,
     );
-    const placa = await p.locator('input').first().count();
-    comprobar(placa > 0, '  y el formulario sigue en pie');
+    const placa = await p.locator('input').count();
+    comprobar(placa > 0, '  y el formulario sigue en pie', `campos=${placa}`);
     await ctx.close();
   }
 
