@@ -7792,10 +7792,20 @@ a.lx-list-row {
    semana vacía —por debajo del rango— y con él las dos columnas de la fila miden lo mismo en los
    dos estados, con datos y sin ellos. El techo lo pone el contenido y se queda dentro de 270. */
 :root[data-portal='admin'] .lx-home-grid--analytics > .lx-card {
-  /* 252. La mañana pedía 240-270 y la tarde 245-270, así que el suelo sube a 245 y éste se pone
-     siete por encima: con la semana en cero la tarjeta cae al piso, y un piso en 245 justos la
-     dejaría fuera del rango en cuanto el rótulo del eje cambie de ancho. */
-  min-height: 252px;
+  /*
+    Esta declaración está MUERTA y se queda en 200, que es la que manda.
+
+    Pedía 252 cuando las tablas de la mañana pedían 245-270. El bloque de compactación de la
+    tarde fija el mismo selector en 200 y viene después, así que 252 no puede ganar nunca. Se
+    deja el valor bajo para que lo que se lee sea lo que pasa: un piso de 252 escrito acá, con
+    las tarjetas midiendo 206, es la clase de rastro que hace perder media hora a quien
+    diagnostique esto mañana.
+
+    Medido ahora mismo a 1536: las dos tarjetas miden 206 y su contenido termina en el mismo
+    píxel, así que el piso NO manda — manda el contenido. No hay altura mínima excesiva que
+    quitar; la holgura que queda son 10px en ocupación y 17 en ingresos, que es el centrado.
+  */
+  min-height: 200px;
 }
 @container tablero (min-width: 940px) {
   :root[data-portal='admin'] .lx-bars__track {
@@ -8362,4 +8372,37 @@ a.lx-list-row {
 .lx-help-maps > .lx-btn {
   flex: 1 1 10rem;
   text-decoration: none;
+}
+
+/* =================================================================================================
+   EL ENCABEZADO PEGAJOSO TAPABA LO QUE EL NAVEGADOR TRAÍA A LA VISTA (13-10-2026, noche)
+   =================================================================================================
+   Medido en el Inicio del administrador a 1536×668: de 24 elementos enfocables del tablero, NUEVE
+   acababan con su borde superior en y=0 —o sea, enteros detrás de la barra de 64px— cuando algo
+   los llevaba a la vista.
+
+   «Algo» es más frecuente de lo que parece y no hace falta tocar un ancla para provocarlo:
+
+     - tabular con el teclado hasta una tarjeta que está fuera de pantalla;
+     - un `scrollIntoView()` de cualquier componente;
+     - volver a una pantalla y que el navegador restaure la posición del foco.
+
+   En los tres casos el navegador alinea el elemento con el borde superior del CONTENEDOR DE
+   SCROLL, y el contenedor de scroll es el documento: la barra pegajosa flota por encima y no
+   entra en esa cuenta. El resultado es contenido que existe, que tiene el foco puesto, y que no
+   se ve — que es la definición de inaccesible.
+
+   `scroll-padding-top` en el elemento que hace el scroll es exactamente el remedio que la
+   especificación de CSS prevé para esto: le dice al navegador que el «arriba» útil empieza más
+   abajo. Una línea, y vale para el teclado, para las anclas y para cualquier `scrollIntoView`
+   futuro, sin tener que acordarse de poner `scroll-margin` en cada componente nuevo.
+
+   Va en `:root[data-portal='admin']` —que ES el `<html>`, porque ahí vive `data-portal`— y no en
+   `.lx-page-layout`: la propiedad la tiene que leer el contenedor de scroll, y ése es el
+   documento. Es también la razón de que el valor esté escrito y no salga de `--lx-topbar-height`:
+   ese token se declara en `.lx-page-layout`, que es un descendiente, y desde `html` no se ve.
+   Los 8 de más son aire para que el elemento no quede pegado al filo de la barra.
+   ================================================================================================= */
+:root[data-portal='admin'] {
+  scroll-padding-top: 72px;
 }

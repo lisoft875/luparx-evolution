@@ -1717,6 +1717,38 @@ async function medir(page, dedo) {
           m.contenedor === 'inline-size',
           `  y el tablero es contenedor de consulta (container-type: ${m.contenedor})`,
         );
+        /*
+          Y que nada quede DETRÁS del encabezado pegajoso.
+
+          Es un defecto que ninguna medida de caja ve: las tarjetas miden lo que deben y están
+          donde deben; lo que falla es a dónde LLEVA el navegador cuando algo pide entrar en
+          pantalla. Al tabular con el teclado, con un `scrollIntoView` o al restaurar el foco, el
+          navegador alinea el elemento con el borde del contenedor de scroll —el documento— y la
+          barra pegajosa flota por encima sin entrar en esa cuenta.
+
+          Medido antes del arreglo a 1536×668: nueve de veinticuatro elementos enfocables del
+          tablero acababan con su borde superior en y=0, enteros detrás de la barra de 64px. Así
+          que se comprueba moviéndolos de verdad, uno por uno, no leyendo la propiedad.
+        */
+        const tapados = await pt.evaluate(async () => {
+          const barra = document.querySelector('.lx-page-layout__header');
+          const alto = barra ? barra.getBoundingClientRect().height : 0;
+          const fuera = [];
+          for (const n of document.querySelectorAll('.lx-home a, .lx-home button, .lx-metric')) {
+            n.scrollIntoView();
+            await new Promise((r) => setTimeout(r, 0));
+            if (n.getBoundingClientRect().top < alto - 1) {
+              fuera.push(String(n.className || n.tagName).slice(0, 28));
+            }
+          }
+          window.scrollTo(0, 0);
+          return { fuera, alto: Math.round(alto), relleno: getComputedStyle(document.documentElement).scrollPaddingTop };
+        });
+        okInicio(
+          tapados.fuera.length === 0,
+          `  y nada queda detrás del encabezado al traerlo a la vista (barra ${tapados.alto}px, scroll-padding ${tapados.relleno})`,
+          `${tapados.fuera.length} tapados: ${tapados.fuera.slice(0, 4).join(', ')}`,
+        );
         if (m.columnas === 3) {
           console.log(`  ··  reparto ${m.reparto.join('/')} (la figura A pide ~40/30/30)`);
         }
