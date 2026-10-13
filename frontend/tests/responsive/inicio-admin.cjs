@@ -54,7 +54,19 @@ const TAMANOS = [
   { nombre: 'móvil grande',     width: 430, height: 745, dedo: true,  kpisEsperados: 1 },
   { nombre: 'tablet vertical',  width: 768, height: 1024, dedo: true, kpisEsperados: 2 },
   { nombre: 'tablet apaisada',  width: 1024, height: 768, dedo: true, kpisEsperados: 2 },
-  { nombre: 'laptop',           width: 1280, height: 800, dedo: false, kpisEsperados: 4 },
+  /*
+    DOS a 1280, no cuatro (13-10-2026).
+
+    Lo cambié en la hoja de estilos y se me olvidó acá, y la corrida lo cazó: «2 KPIs en la primera
+    fila, se esperaban 4». El arnés estaba pidiendo lo contrario de lo que la especificación
+    autoriza — que es el defecto que este proyecto ya pagó tres veces y que el commit anterior
+    decía estar evitando.
+
+    Por qué dos: con el menú de 248, a 1280 cada tarjeta queda en 239px y a «₡1.250.040» le faltan
+    19. La §5 de la definitiva lo autoriza en letra: «no forzar cuatro KPI si el ancho disponible no
+    permite leerlos: usar breakpoint apropiado». A 1366 sí entran, así que el corte va en 1320.
+  */
+  { nombre: 'laptop',           width: 1280, height: 800, dedo: false, kpisEsperados: 2 },
   /* 1366x768 lo pide la correctiva por nombre dos veces: la prueba H —«revisar también con
      1366 × 768 y 1024 × 768»— y la entrega, que exige su captura. Es además el ancho donde la
      etiqueta del KPI se parte en dos renglones, o sea donde el techo de 120 se pone a prueba. */
