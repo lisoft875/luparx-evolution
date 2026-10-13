@@ -1239,13 +1239,9 @@ export const enUS: Record<TranslationKey, string> = {
   'inspector.help.diag.connection.unauthorizedNote': 'The network is fine. Sign in again.',
   'inspector.help.diag.connection.retest': 'Check again',
 
-  'inspector.help.diag.camera.test': 'Test camera',
-  'inspector.help.diag.camera.testing': 'Opening the camera…',
-  'inspector.help.diag.camera.testOk': 'The camera responded. The test photo was not saved.',
+  'inspector.help.diag.camera.deniedEvidence':
+    'This blocks the test here; a citation photograph may still work, because the phone\'s own picker takes it.',
   'inspector.help.diag.camera.testCancelled': 'You cancelled the test. No photo was saved.',
-  'inspector.help.diag.camera.unavailable': 'This device offers no camera',
-  'inspector.help.diag.camera.unavailableNote':
-    'There is nothing to fix in settings: citations are issued without a photograph, except for the types that require one.',
 
   'inspector.help.diag.location.test': 'Test location',
 
@@ -1263,7 +1259,7 @@ export const enUS: Record<TranslationKey, string> = {
     'Checking again cannot grant it: the browser does not ask again once denied. It is enabled in the device settings, and this check then detects it.',
   'inspector.help.permissions.howTo': 'How to enable permissions on this device',
   'inspector.help.permissions.recheckNote':
-    'Attempts a real location reading. It is the only way to know whether a change in settings has taken effect.',
+    'Re-reads the camera permission, attempts a real location reading, flushes the queue and asks the server about the session. The camera is tested with its own button.',
   'inspector.help.diag.location.fix': 'Last reading: {{lat}}, {{lon}}',
   'inspector.help.diag.location.accuracy': 'Approximate accuracy: {{m}} m',
   'inspector.help.diag.location.accuracyUnknown': 'The device did not report accuracy.',
@@ -1383,9 +1379,6 @@ export const enUS: Record<TranslationKey, string> = {
   'inspector.help.diag.session.noTenantNote':
     'Your session is open but no municipality has been chosen, so nothing can be checked or issued.',
   'inspector.help.diag.session.chooseTenant': 'Choose a municipality',
-  'inspector.help.diag.camera': 'Camera',
-  'inspector.help.diag.camera.deniedNote':
-    'Without the camera you will not be able to attach evidence. Turn it on in the phone settings, under LuParX permissions.',
   'inspector.help.diag.location': 'Location',
   'inspector.help.diag.location.deniedNote':
     'The citation is issued all the same, without coordinates. Turn it on in the phone settings, under LuParX permissions.',
@@ -1393,7 +1386,6 @@ export const enUS: Record<TranslationKey, string> = {
   'inspector.help.diag.permission.asks': 'Asked for when used',
   'inspector.help.diag.permission.denied': 'Permission denied',
   'inspector.help.diag.permission.working': 'Asking…',
-  'inspector.help.diag.camera.allow': 'Allow the camera',
   'inspector.help.diag.location.allow': 'Allow location',
   'inspector.help.diag.location.allowNote':
     'With permission granted, a plate check records where it was made. Without it the citation is issued all the same, with no coordinates.',
@@ -2766,6 +2758,9 @@ export const enUS: Record<TranslationKey, string> = {
   'device.camera.note.asksOnUse': 'The browser asks for it at the moment of use. Check it here to find out whether it really answers.',
   'device.camera.note.granted': 'Checked: the device delivered an image.',
   'device.capture.title': 'Take a photograph',
+  'device.capture.testTitle': 'Test the camera',
+  'device.capture.close': 'Close',
+  'device.capture.testOk': 'The camera is delivering an image. Closing turns it off.',
   'device.capture.shutter': 'Take photo',
   'device.capture.again': 'Retake',
   'device.capture.use': 'Use this photo',

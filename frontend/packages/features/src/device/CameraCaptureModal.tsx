@@ -13,8 +13,35 @@ import {
 export interface CameraCaptureModalProps {
   open: boolean;
   onClose: () => void;
-  /** Se llama con la fotografía confirmada. Cerrar la ventana es responsabilidad de quien la abre. */
-  onCapture: (foto: FotoTomada) => void;
+  /**
+   * Se llama con la fotografía confirmada. Cerrar la ventana es responsabilidad de quien la abre.
+   *
+   * <p>Opcional desde el 13-10-2026: en modo {@link soloVista} no hay disparador, así que no hay
+   * fotografía que entregar y exigir el callback obligaría a escribir uno vacío.</p>
+   */
+  onCapture?: (foto: FotoTomada) => void;
+  /**
+   * Mirar la cámara sin tomar nada.
+   *
+   * <p>Lo pide el «Prompt de permisos del dispositivo» (13-10-2026) para el fiscalizador: «con
+   * permiso concedido, abrir una vista de prueba con imagen en vivo o vista previa y un botón claro
+   * para cerrar». Una PRUEBA no necesita obturador — el vídeo en vivo ya demuestra que el aparato
+   * entrega imagen— y no tenerlo resuelve de raíz la otra regla del mismo encargo: «las fotos
+   * tomadas durante la prueba son temporales: no adjuntarlas ni guardarlas en una boleta real». No
+   * se guardan porque no se toman.</p>
+   *
+   * <p>Es aditivo: sin esta bandera la ventana se comporta exactamente como antes, que es como la
+   * usa el Ciudadano para la evidencia de una impugnación.</p>
+   */
+  soloVista?: boolean;
+  /**
+   * Cómo terminó el intento de abrir la cámara, para quien necesite PINTAR ese resultado fuera.
+   *
+   * <p>La ventana ya muestra el motivo dentro; esto existe porque la fila de «Permisos del
+   * dispositivo» tiene que quedar en el estado correcto después de cerrarse, y adivinarlo desde
+   * fuera volviendo a abrir la cámara sería pedir el permiso dos veces.</p>
+   */
+  onEstado?: (resultado: 'ok' | ProblemaDeCamara) => void;
   /**
    * Qué hacer cuando la cámara no está: adjuntar un archivo ya tomado.
    *
@@ -48,6 +75,8 @@ export function CameraCaptureModal({
   onClose,
   onCapture,
   onAttachFile,
+  soloVista = false,
+  onEstado,
 }: CameraCaptureModalProps): React.JSX.Element {
   const { t } = useTranslation();
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -61,6 +90,14 @@ export function CameraCaptureModal({
     detenerCamara(streamRef.current);
     streamRef.current = null;
   }, []);
+
+  /* En una referencia y no en las dependencias del efecto: si `onEstado` llega como una función
+     nueva en cada pintada del padre —que es lo normal— ponerla en el array reabriría la cámara en
+     cada render, y reabrir la cámara es pedir el permiso otra vez. */
+  const avisar = useRef(onEstado);
+  useEffect(() => {
+    avisar.current = onEstado;
+  }, [onEstado]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -77,9 +114,14 @@ export function CameraCaptureModal({
       setAbriendo(false);
       if ('problema' in resultado) {
         setProblema(resultado.problema);
+        avisar.current?.(resultado.problema);
         return;
       }
       streamRef.current = resultado.stream;
+      /* «Se abrió» no es lo mismo que «entrega imagen»: un stream sin pista de vídeo es un stream
+         vacío, y el encargo pide comprobar que la cámara «puede abrirse Y entregar imagen». Es la
+         misma condición que ya comprueba `probarCamara()` en el módulo compartido. */
+      avisar.current?.(resultado.stream.getVideoTracks().length > 0 ? 'ok' : 'notFound');
       if (videoRef.current) {
         videoRef.current.srcObject = resultado.stream;
         // `play()` rechaza si la ventana se cerró mientras tanto; no es un error que mostrar.
@@ -116,7 +158,7 @@ export function CameraCaptureModal({
 
   function confirmar(): void {
     if (!tomada) return;
-    onCapture(tomada);
+    onCapture?.(tomada);
     setTomada(null);
     onClose();
   }
@@ -127,7 +169,12 @@ export function CameraCaptureModal({
   }
 
   return (
-    <Modal open={open} onClose={cerrar} title={t('device.capture.title')} closeLabel={t('device.capture.cancel')}>
+    <Modal
+      open={open}
+      onClose={cerrar}
+      title={soloVista ? t('device.capture.testTitle') : t('device.capture.title')}
+      closeLabel={soloVista ? t('device.capture.close') : t('device.capture.cancel')}
+    >
       <div className="lx-camera">
         {problema ? (
           <>
@@ -175,9 +222,26 @@ export function CameraCaptureModal({
                 {t('device.capture.opening')}
               </p>
             ) : null}
-            <Button type="button" fullWidth disabled={abriendo} onClick={() => void disparar()}>
-              {t('device.capture.shutter')}
-            </Button>
+            {/* En modo prueba no hay obturador: lo que se comprueba es que el aparato entrega
+                imagen, y eso ya se está viendo. Lo que sí hay es una salida evidente, porque el
+                encargo pide «un botón claro para cerrar» y la X del encabezado no lo es cuando lo
+                que llena la pantalla es un vídeo. */}
+            {soloVista ? (
+              <>
+                {!abriendo ? (
+                  <p className="lx-text-meta" role="status" style={{ margin: 0 }}>
+                    {t('device.capture.testOk')}
+                  </p>
+                ) : null}
+                <Button type="button" variant="secondary" fullWidth onClick={cerrar}>
+                  {t('device.capture.close')}
+                </Button>
+              </>
+            ) : (
+              <Button type="button" fullWidth disabled={abriendo} onClick={() => void disparar()}>
+                {t('device.capture.shutter')}
+              </Button>
+            )}
           </>
         )}
       </div>

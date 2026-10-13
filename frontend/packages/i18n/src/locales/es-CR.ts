@@ -1280,13 +1280,12 @@ export const esCR = {
   'inspector.help.diag.connection.unauthorizedNote': 'La red está bien. Volvé a entrar con tu usuario.',
   'inspector.help.diag.connection.retest': 'Comprobar de nuevo',
 
-  'inspector.help.diag.camera.test': 'Probar cámara',
-  'inspector.help.diag.camera.testing': 'Abriendo la cámara…',
-  'inspector.help.diag.camera.testOk': 'La cámara respondió. La foto de prueba no se guardó.',
   'inspector.help.diag.camera.testCancelled': 'Cancelaste la prueba. No se guardó ninguna foto.',
-  'inspector.help.diag.camera.unavailable': 'Este aparato no ofrece cámara',
-  'inspector.help.diag.camera.unavailableNote':
-    'No hay nada que arreglar en los ajustes: las boletas se emiten sin fotografía, salvo los tipos que la exigen.',
+  /* Lo que esta pantalla NO puede afirmar con el permiso bloqueado: que no se puedan tomar fotos
+     de una boleta. En navegador la evidencia entra por el selector del sistema, que no usa el
+     permiso de la página. Decir «la cámara no funciona» sería un parte falso al revés. */
+  'inspector.help.diag.camera.deniedEvidence':
+    'Esto bloquea la prueba de acá; la foto de una boleta puede seguir funcionando, porque la toma el selector del teléfono.',
 
   'inspector.help.diag.location.test': 'Probar ubicación',
 
@@ -1306,7 +1305,7 @@ export const esCR = {
     'Comprobar de nuevo no puede concederlo: el navegador no vuelve a preguntar una vez denegado. Se habilita en los ajustes del aparato y después esta comprobación lo detecta.',
   'inspector.help.permissions.howTo': 'Cómo habilitar los permisos en este aparato',
   'inspector.help.permissions.recheckNote':
-    'Intenta una lectura real de la ubicación. Es la única forma de saber si un cambio en los ajustes ya tomó efecto.',
+    'Relee el permiso de la cámara, intenta una lectura real de la ubicación, vacía la cola y le pregunta al servidor por la sesión. La cámara se prueba con su propio botón.',
   'inspector.help.diag.location.fix': 'Última lectura: {{lat}}, {{lon}}',
   'inspector.help.diag.location.accuracy': 'Precisión aproximada: {{m}} m',
   'inspector.help.diag.location.accuracyUnknown': 'El aparato no informó la precisión.',
@@ -1431,9 +1430,6 @@ export const esCR = {
   'inspector.help.diag.session.noTenantNote':
     'Tu sesión está abierta pero no hay una municipalidad elegida, así que no se puede consultar ni emitir.',
   'inspector.help.diag.session.chooseTenant': 'Elegir municipalidad',
-  'inspector.help.diag.camera': 'Cámara',
-  'inspector.help.diag.camera.deniedNote':
-    'Sin cámara no vas a poder adjuntar evidencia. Se activa en los ajustes del teléfono, en los permisos de LuParX.',
   'inspector.help.diag.location': 'Ubicación',
   'inspector.help.diag.location.deniedNote':
     'La boleta se emite igual, sin coordenadas. Se activa en los ajustes del teléfono, en los permisos de LuParX.',
@@ -1441,7 +1437,6 @@ export const esCR = {
   'inspector.help.diag.permission.asks': 'Se pide al usarla',
   'inspector.help.diag.permission.denied': 'Permiso denegado',
   'inspector.help.diag.permission.working': 'Pidiendo…',
-  'inspector.help.diag.camera.allow': 'Permitir la cámara',
   'inspector.help.diag.location.allow': 'Permitir la ubicación',
   'inspector.help.diag.location.allowNote':
     'Con el permiso dado, la consulta de placa guarda dónde se hizo. Sin él la boleta se emite igual, sin coordenadas.',
@@ -2873,6 +2868,10 @@ export const esCR = {
   'device.camera.note.asksOnUse': 'El navegador la pide en el momento de usarla. Comprobala acá para saber si de verdad responde.',
   'device.camera.note.granted': 'Comprobada: el aparato entregó imagen.',
   'device.capture.title': 'Tomar una fotografía',
+  /* La misma ventana, en modo prueba: no se toma nada y por eso no se llama igual. */
+  'device.capture.testTitle': 'Probar la cámara',
+  'device.capture.close': 'Cerrar',
+  'device.capture.testOk': 'La cámara está entregando imagen. Al cerrar se apaga.',
   'device.capture.shutter': 'Tomar foto',
   'device.capture.again': 'Repetir',
   'device.capture.use': 'Usar esta foto',

@@ -1,7 +1,12 @@
 import * as React from 'react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@luparx/auth';
+import {
+  CameraCaptureModal,
+  soporteDeCamara,
+  type ProblemaDeCamara,
+} from '@luparx/features';
 import { formatDateTime, useTranslation, type TranslationKey } from '@luparx/i18n';
 import {
   Alert,
@@ -31,7 +36,6 @@ import {
   cameraPermissionState,
   hasNativeCamera,
   locationPermissionState,
-  requestCameraPermission,
   takeNativePhoto,
   type PermissionReadiness,
   type PositionProbe,
@@ -103,6 +107,16 @@ const ACCIONES: { clave: ClavePanel; icono: React.ReactNode }[] = [
 /** Lo que las comprobaciones asíncronas devuelven. `null` mientras se están midiendo. */
 interface Medicion {
   camara: PermissionReadiness;
+  /**
+   * Si este aparato puede entregar la cámara, y si no, por qué.
+   *
+   * <p>Es una pregunta distinta del permiso y manda sobre él: un permiso concedido en un navegador
+   * que no implementa `getUserMedia`, o en una página servida sin HTTPS, no sirve de nada. Lo
+   * contesta `soporteDeCamara()` del paquete compartido, el mismo que usa el Ciudadano — dos
+   * lecturas distintas de la misma capacidad es como se llega a que dos pantallas del mismo
+   * aparato digan cosas distintas.</p>
+   */
+  soporteCamara: 'ok' | ProblemaDeCamara;
   ubicacion: PermissionReadiness;
   almacenamiento: boolean;
   /** Si este aparato tiene receptor de posición. Sin él no hay permiso que arreglar. */
@@ -174,18 +188,47 @@ export function HelpPage(): React.JSX.Element {
   const [gps, setGps] = useState<PositionProbe | null>(null);
   /** Y la que quedó registrada —cuándo y con qué resultado—, que sobrevive a cerrar la pantalla. */
   const [registro, setRegistro] = useState<ComprobacionGuardada | null>(() => ultimaComprobacion());
-  /** Cómo terminó la última prueba de cámara. Nunca guarda la fotografía. */
-  const [camaraPrueba, setCamaraPrueba] = useState<'ok' | 'cancelled' | null>(null);
+  /**
+   * Cómo terminó la ÚLTIMA prueba real de cámara, o `null` si no se ha hecho ninguna.
+   *
+   * <p>Esto es lo que distingue «el navegador dice que el permiso está concedido» de «lo probamos
+   * y el aparato entregó imagen», que es la distinción que el §4 del encargo exige por su nombre.
+   * Mientras valga `null` la fila NO puede estar en verde: puede decir, como mucho, que el permiso
+   * no está bloqueado.</p>
+   *
+   * <p>Nunca guarda la fotografía. En modo prueba ni siquiera se toma una.</p>
+   */
+  const [camaraPrueba, setCamaraPrueba] = useState<'ok' | ProblemaDeCamara | 'cancelled' | null>(null);
+  /**
+   * La ventana con la imagen en vivo, y a qué panel hay que volver al cerrarla.
+   *
+   * <p>`null` es «cerrada». Guarda el panel de origen porque la fila de cámara vive en DOS —el
+   * diagnóstico y los permisos— y cerrar la prueba tiene que devolver a donde se estaba, no a una
+   * pantalla elegida por sorteo.</p>
+   *
+   * <p>Y guarda el panel porque la vista se abre con el panel CERRADO, a propósito. Dos ventanas
+   * modales encima de la otra comparten el mismo oyente de Escape sobre `document` en fase de
+   * captura: `stopPropagation` no detiene al hermano registrado en el mismo nodo, así que una sola
+   * pulsación cerraría las dos y además las dos trampas de foco se pelearían por el tabulador.
+   * Cerrar una para abrir la otra evita el problema entero en vez de parchearlo en un componente
+   * que usan las cuatro aplicaciones.</p>
+   */
+  const [vistaCamara, setVistaCamara] = useState<ClavePanel | null>(null);
   const [sincronizando, setSincronizando] = useState(false);
   /** Qué se está pidiendo ahora mismo, para que su botón lo diga y no se pueda pulsar dos veces. */
   const [pidiendo, setPidiendo] = useState<'camera' | 'location' | 'network' | null>(null);
   /*
-    La cámara del navegador es un `<input type="file" capture>` y no una API: en Safari no existe
-    ningún permiso de cámara que pedir desde la página, la decisión la toma el selector del sistema
-    en el momento de usarla. Así que «Probar cámara» en el navegador es pulsar este input, y el
-    archivo que devuelve se descarta sin leerlo.
+    Ya no hay un `<input type="file" capture>` acá, y vale la pena dejar escrito por qué se fue.
+
+    Era el mecanismo de «Probar cámara» en navegador: pulsar un input oculto y descartar el archivo.
+    En un teléfono eso abre la cámara y la prueba tenía sentido. En una computadora `capture` se
+    IGNORA —así lo manda la especificación— y lo que se abre es el selector de archivos. Reportado
+    desde staging el 13-10-2026 con la captura delante: el botón abría un explorador de archivos y
+    no demostraba nada de la cámara.
+
+    Lo reemplaza `abrirCamara()` del paquete compartido, que es la cámara de verdad en los dos
+    sitios y además distingue los cinco motivos por los que puede no abrirse.
   */
-  const inputCamara = useRef<HTMLInputElement | null>(null);
 
   const fallidas = rows.filter((row) => row.state === 'FAILED').length;
   const enviadas = rows.filter((row) => row.state === 'SENT').length;
@@ -214,6 +257,9 @@ export function HelpPage(): React.JSX.Element {
     const [camara, ubicacion] = await Promise.all([cameraPermissionState(), locationPermissionState()]);
     setMedicion({
       camara,
+      // En un build nativo la cámara la entrega el plugin, no el navegador, así que preguntarle a
+      // `getUserMedia` por el soporte dentro de la WebView respondería sobre la API equivocada.
+      soporteCamara: hasNativeCamera() ? 'ok' : soporteDeCamara(),
       ubicacion,
       almacenamiento: almacenamientoDisponible(),
       hayUbicacion: hayReceptorDeUbicacion(),
@@ -278,25 +324,76 @@ export function HelpPage(): React.JSX.Element {
     }
   }
 
-  /** El permiso de cámara, que en nativo sí tiene una solicitud de verdad. */
-  async function permitirCamara(): Promise<void> {
-    setPidiendo('camera');
+  /**
+   * «Volver a comprobar»: los cuatro estados, sin recargar la aplicación.
+   *
+   * <p>El §4 los nombra uno por uno —«cámara, ubicación, sincronización y sesión»— y hasta hoy
+   * este botón sólo reintentaba la ubicación. Lo que hace cada uno, y por qué no todos se tratan
+   * igual:</p>
+   *
+   * <ul>
+   *   <li><b>Cámara: se RELEE, no se abre.</b> Volver a abrirla sería pedir el permiso otra vez
+   *       sin que nadie lo haya pulsado, y el encargo prohíbe entrar en un bucle de solicitudes.
+   *       La prueba real tiene su propio botón en la fila, que es donde la persona decide.</li>
+   *   <li><b>Ubicación: se INTENTA de verdad.</b> Acá no hay nada que releer que sirva — en Safari
+   *       el estado que la página lee queda viejo después de habilitar el permiso en los Ajustes,
+   *       y la única prueba autoritativa es una lectura. Ya estaba así desde el 13-10.</li>
+   *   <li><b>Sincronización: se vacía la cola.</b> `flush()` es la misma función que usa
+   *       «Sincronizar ahora»; las filas son reactivas, así que la pantalla se entera sola.</li>
+   *   <li><b>Sesión: se le pregunta al servidor.</b> `probeServer` distingue «no contesta» de
+   *       «contesta que no sos vos», que es exactamente el estado de la sesión.</li>
+   * </ul>
+   *
+   * <p>La cámara NO se marca como comprobada por pasar por acá: si la prueba no se hizo, la fila
+   * sigue diciendo «Sin comprobar». Es la otra mitad del §4 —«no mostrar “todo está funcionando
+   * correctamente” si una prueba falla o un estado no pudo verificarse»— y el componente de la
+   * lista ya la hace cumplir: con una sola fila en ámbar, el resumen deja de estar en verde.</p>
+   */
+  async function volverAComprobar(): Promise<void> {
+    setPidiendo('location');
     try {
-      await requestCameraPermission();
+      // En paralelo porque no dependen entre sí y quien mira esto está de pie en la calle.
+      const [posicion] = await Promise.all([
+        comprobarUbicacion(),
+        flush().catch(() => undefined),
+        medirRed(),
+      ]);
+      setGps(posicion);
     } finally {
+      setRegistro(ultimaComprobacion());
       setPidiendo(null);
       await medir();
     }
   }
 
+  /*
+    `permitirCamara()` se fue el 13-10-2026 y no vuelve como función muerta.
+
+    Pedía el permiso con `requestCameraPermission()` y nada más. El problema es que eso devuelve
+    `granted` en el navegador sin preguntarle a nadie —ahí el aviso lo dispara la PRIMERA lectura,
+    no una solicitud previa— de modo que el botón pintaba la fila de verde sin haber abierto nada.
+    Es el defecto que el §2 nombra: «no considerar la cámara funcional solo porque el permiso
+    aparece concedido». Ahora hay un solo botón, «Comprobar la cámara», que ABRE la cámara; el
+    permiso se pide ahí, que es donde se puede comprobar lo que contestó.
+
+    `requestCameraPermission()` sigue viva y sigue haciendo falta: la usa la emisión de boletas en
+    el build nativo, con su explicación delante. Lo que se va es su uso en esta pantalla.
+  */
+
   /**
-   * «Probar cámara»: abre la captura real y NO guarda nada.
+   * «Probar cámara»: abre la cámara de verdad y NO guarda nada.
    *
-   * <p>El §2 pide las tres cosas: que la abra sólo una acción de la persona, que sea la captura de
-   * verdad y que se pueda cancelar sin guardar la foto. En nativo se distingue la cancelación
-   * —`takeNativePhoto` devuelve `null`—; en el navegador no, porque cerrar el selector del sistema
-   * no emite ningún evento. Así que en el navegador esta pantalla no afirma que cancelaste: no
-   * dice nada hasta que llega una imagen. Decir «cancelaste» sin saberlo sería inventar.</p>
+   * <p>Dos caminos porque hay dos cámaras, no porque haya dos mecanismos:</p>
+   *
+   * <ul>
+   *   <li><b>Nativo.</b> La cámara es el plugin de Capacitor y la prueba es abrirla con
+   *       `takeNativePhoto`, que es el MISMO mecanismo que usa la evidencia de una boleta — el §5
+   *       lo pide así. La fotografía se descarta sin leerla: sólo se mira si llegó. Acá sí se
+   *       distingue la cancelación, porque el plugin devuelve `null` al cancelar.</li>
+   *   <li><b>Navegador.</b> Se abre la ventana de vista en vivo, que usa `abrirCamara()` del
+   *       paquete compartido. El permiso se pide ahí, al pulsar, nunca al entrar en Ayuda; el
+   *       resultado vuelve por `onEstado`; y al cerrarse se apagan todas las pistas de vídeo.</li>
+   * </ul>
    */
   async function probarCamara(): Promise<void> {
     setCamaraPrueba(null);
@@ -311,17 +408,8 @@ export function HelpPage(): React.JSX.Element {
       }
       return;
     }
-    inputCamara.current?.click();
-  }
-
-  /** La foto de prueba llegó. Se cuenta como éxito y se suelta sin leerla ni guardarla. */
-  function camaraRespondio(evento: React.ChangeEvent<HTMLInputElement>): void {
-    const hubo = (evento.target.files?.length ?? 0) > 0;
-    // Limpiar el input permite volver a probar con la misma foto y, sobre todo, no deja el archivo
-    // colgando del DOM.
-    evento.target.value = '';
-    if (hubo) setCamaraPrueba('ok');
-    void medir();
+    setVistaCamara(panel ?? 'permissions');
+    setPanel(null);
   }
 
   /** El permiso, dicho en palabras. Los tres estados existen porque los tres pasan de verdad. */
@@ -329,6 +417,105 @@ export function HelpPage(): React.JSX.Element {
     if (estado === 'granted') return t('inspector.help.diag.permission.granted');
     if (estado === 'denied') return t('inspector.help.diag.permission.denied');
     return t('inspector.help.diag.permission.asks');
+  }
+
+  /**
+   * La fila de la cámara, con una regla de PRECEDENCIA que es la mitad del encargo.
+   *
+   *   1. Si el aparato no puede —sin `getUserMedia`, sin HTTPS, sin cámara conectada— eso manda
+   *      sobre cualquier permiso. Un permiso concedido en un navegador que no entrega la cámara no
+   *      sirve de nada, y el consejo que toca es otro: actualizar el navegador o entrar por https,
+   *      no revisar los permisos del sitio.
+   *   2. Si ya se probó, manda la prueba. Es el único dato que vio una imagen.
+   *   3. Si no, manda el permiso leído — y «concedido sin probar» NO es verde: es «Sin comprobar»,
+   *      que es la verdad. Lo pide el §4 por su nombre: «diferenciar claramente entre permiso
+   *      concedido y dispositivo probado con éxito».
+   *
+   * <p>Es la misma regla que ya aplica el panel del Ciudadano, escrita con las mismas palabras y
+   * usando las mismas claves de texto (`device.camera.*`): si las dos pantallas del mismo aparato
+   * describieran el mismo fallo con frases distintas, una de las dos estaría equivocada.</p>
+   */
+  function filaDeCamara(): DiagnosticCheck {
+    const soporte = medicion?.soporteCamara ?? 'ok';
+    const permiso = medicion?.camara ?? 'asksOnUse';
+    const base = { key: 'camera', icon: <IconEye />, title: t('device.camera.title') } as const;
+    const probar = {
+      label: t('device.camera.test'),
+      onClick: () => void probarCamara(),
+      busy: pidiendo === 'camera',
+      busyLabel: t('device.camera.testing'),
+      kind: 'permission' as const,
+    };
+
+    // 1. El aparato. `notFound` y `unsupported` no son fallos que arreglar: son ausencias.
+    if (soporte !== 'ok') {
+      return {
+        ...base,
+        tone: soporte === 'notFound' || soporte === 'unsupported' ? 'unavailable' : 'warning',
+        state: t(`device.camera.state.${soporte}`),
+        note: t(`device.camera.note.${soporte}`),
+      };
+    }
+
+    // 2. La prueba. Es lo único que vio una imagen, así que manda sobre lo que diga el permiso.
+    if (camaraPrueba === 'ok') {
+      return {
+        ...base,
+        tone: 'ok',
+        state: t('device.camera.state.granted'),
+        note: t('device.camera.note.granted'),
+        action: probar,
+      };
+    }
+    if (camaraPrueba === 'cancelled') {
+      // Sólo en nativo: el plugin devuelve `null` al cancelar. Cancelar no es un fallo y no pinta
+      // de ámbar nada; simplemente no se comprobó.
+      return {
+        ...base,
+        tone: 'warning',
+        state: t('device.camera.state.untested'),
+        note: t('inspector.help.diag.camera.testCancelled'),
+        action: probar,
+      };
+    }
+    if (camaraPrueba !== null) {
+      /*
+        La prueba falló, y el motivo exacto es lo que se muestra porque cada uno se arregla en un
+        sitio distinto. Con `denied` hay además algo que esta pantalla NO puede afirmar: que no se
+        puedan tomar fotos. En navegador la evidencia de una boleta entra por el selector del
+        sistema, que no necesita el permiso de la página; así que el estado dice qué está bloqueado
+        —la cámara PARA ESTE SITIO— y la nota añade que la boleta puede seguir funcionando. Decir
+        «la cámara no funciona» sería un parte falso en la dirección contraria.
+      */
+      return {
+        ...base,
+        tone: camaraPrueba === 'notFound' ? 'unavailable' : 'warning',
+        state: t(`device.camera.state.${camaraPrueba}`),
+        note:
+          camaraPrueba === 'denied'
+            ? `${t('device.camera.note.denied')} ${t('inspector.help.diag.camera.deniedEvidence')}`
+            : t(`device.camera.note.${camaraPrueba}`),
+        action: camaraPrueba === 'notFound' ? undefined : probar,
+      };
+    }
+
+    // 3. El permiso, sin prueba. Ninguno de estos estados es verde.
+    return {
+      ...base,
+      tone: 'warning',
+      state: permiso === 'denied' ? t('device.camera.state.denied') : t('device.camera.state.untested'),
+      note:
+        permiso === 'denied'
+          ? `${t('device.camera.note.denied')} ${t('inspector.help.diag.camera.deniedEvidence')}`
+          : t('device.camera.note.asksOnUse'),
+      /*
+        El botón se ofrece TAMBIÉN con el permiso denegado, por la misma razón que ya está escrita
+        en la fila de ubicación: esto no CONCEDE el permiso, lo COMPRUEBA. Si alguien acaba de
+        habilitarlo en los ajustes del navegador, intentar abrir la cámara es la única prueba
+        autoritativa; si sigue bloqueado, el intento vuelve con `denied` y la fila lo dice.
+      */
+      action: probar,
+    };
   }
 
   /**
@@ -346,49 +533,7 @@ export function HelpPage(): React.JSX.Element {
    */
   function comprobacionesPermisos(): DiagnosticCheck[] {
     const filas: DiagnosticCheck[] = [];
-    const hayCamara = typeof navigator !== 'undefined';
-    const camara = medicion?.camara ?? 'asksOnUse';
-    filas.push({
-      key: 'camera',
-      tone: !hayCamara ? 'unavailable' : camara === 'denied' ? 'warning' : 'ok',
-      icon: <IconEye />,
-      title: t('inspector.help.diag.camera'),
-      state: hayCamara ? textoPermiso(camara) : t('inspector.help.diag.camera.unavailable'),
-      note: !hayCamara
-        ? t('inspector.help.diag.camera.unavailableNote')
-        : camara === 'denied'
-          ? t('inspector.help.diag.camera.deniedNote')
-          : camaraPrueba === 'ok'
-            ? t('inspector.help.diag.camera.testOk')
-            : camaraPrueba === 'cancelled'
-              ? t('inspector.help.diag.camera.testCancelled')
-              : undefined,
-      /*
-        Un permiso denegado no trae botón de permiso: en el teléfono se activa en los ajustes del
-        sistema y volver a pedirlo desde acá no abre nada —sería un control muerto—. Lo que sí
-        trae, siempre que haya algo que abrir, es «Probar cámara», que es una comprobación y no una
-        concesión: con el permiso ya dado sigue siendo útil para ver si la cámara responde.
-      */
-      action: !hayCamara
-        ? undefined
-        : camara === 'asksOnUse' && hasNativeCamera()
-          ? {
-              label: t('inspector.help.diag.camera.allow'),
-              onClick: () => void permitirCamara(),
-              busy: pidiendo === 'camera',
-              busyLabel: t('inspector.help.diag.permission.working'),
-              kind: 'permission',
-            }
-          : camara === 'denied'
-            ? undefined
-            : {
-                label: t('inspector.help.diag.camera.test'),
-                onClick: () => void probarCamara(),
-                busy: pidiendo === 'camera',
-                busyLabel: t('inspector.help.diag.camera.testing'),
-                kind: 'permission',
-              },
-    });
+    filas.push(filaDeCamara());
 
     const ubicacion = medicion?.ubicacion ?? 'asksOnUse';
     const hayReceptor = medicion?.hayUbicacion ?? true;
@@ -744,16 +889,31 @@ export function HelpPage(): React.JSX.Element {
         {t('inspector.help.lead')}
       </p>
 
-      {/* El input de la prueba de cámara en el navegador. Fuera de la tarjeta y oculto: lo dispara
-          el botón del diagnóstico, nunca se ve, y lo que devuelve se descarta sin leerlo. */}
-      <input
-        ref={inputCamara}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        hidden
-        data-testid="inspector-probar-camara"
-        onChange={camaraRespondio}
+      {/*
+        La prueba de cámara en navegador: la ventana compartida, en modo sólo vista.
+
+        Sin disparador y sin `onCapture`, así que durante la prueba no se toma ninguna fotografía
+        —que es la forma más corta de cumplir «las fotos tomadas durante la prueba son temporales:
+        no adjuntarlas ni guardarlas en una boleta real»—. El resultado del intento vuelve por
+        `onEstado` y es lo que pinta la fila; al cerrar, la propia ventana apaga todas las pistas
+        de vídeo, también si se cierra con Escape o si esta pantalla se desmonta.
+
+        Se abre con el panel de permisos CERRADO y al cerrarse lo vuelve a abrir, que es también lo
+        que el §5 pide —«al cerrar la prueba, volver a Ayuda y conservar la navegación inferior»—.
+        El motivo técnico está escrito junto a `vistaCamara`: dos ventanas modales a la vez se
+        pelean por Escape y por el tabulador.
+      */}
+      <CameraCaptureModal
+        open={vistaCamara !== null}
+        soloVista
+        onEstado={(resultado) => setCamaraPrueba(resultado)}
+        onClose={() => {
+          const volverA = vistaCamara;
+          setVistaCamara(null);
+          // `abrirPanel` vuelve a medir: si el permiso se acaba de conceder, `permissions.query`
+          // contesta otra cosa y la fila tiene que enterarse.
+          if (volverA) abrirPanel(volverA);
+        }}
       />
 
       <Card>
@@ -836,7 +996,7 @@ export function HelpPage(): React.JSX.Element {
             variant="secondary"
             fullWidth
             loading={pidiendo === 'location'}
-            onClick={() => void probarUbicacion()}
+            onClick={() => void volverAComprobar()}
           >
             {t('inspector.help.permissions.recheck')}
           </Button>
