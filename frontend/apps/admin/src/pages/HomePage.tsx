@@ -115,7 +115,20 @@ const EVENTOS_A_PEDIR = 10;
    bloques: actividad a la izquierda y DOS tarjetas apiladas a la derecha (accesos rápidos y el
    ranking de zonas). Con la derecha apilada, la izquierda necesita el alto, y el documento pide
    «4-5 eventos reales con hora». */
-const EVENTOS_A_MOSTRAR = 5;
+/*
+  Cuatro y no cinco (13-10-2026, medido en staging).
+
+  Con cinco eventos reales la tarjeta de actividad medía 338px contra los 210-245 que pide el
+  boceto, y arrastraba la fila inferior entera fuera de rango. No es un problema de relleno: cinco
+  filas de ~55px no caben en 245 ni apretándolas, y apretarlas hasta que quepan dejaría el icono
+  por debajo de los 30-34 que ese mismo documento pide para esta lista.
+
+  Lo que el boceto dibuja son TRES eventos. Cuatro es el techo que entra con las filas compactas de
+  abajo, y el resto sigue estando a un toque: «Ver todas» va a la bitácora completa, que es lo que
+  el §3 llama «una lista con límite y enlace». La petición al servidor no cambia —siguen pidiéndose
+  diez— porque el filtro por actos de negocio se aplica después.
+*/
+const EVENTOS_A_MOSTRAR = 4;
 const OCUPACION_ALTA = 85;
 const OCUPACION_MEDIA = 70;
 const ZONAS_EN_PORTADA = 5;

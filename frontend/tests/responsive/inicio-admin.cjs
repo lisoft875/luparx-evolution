@@ -704,7 +704,8 @@ async function medir(page, dedo) {
           [...new Set(ajenos)].join(', '),
         );
         const dibujables = bitacoraItems.filter((e) => ACTOS_DE_LA_PORTADA.has(e.action)).length;
-        const esperados = Math.min(dibujables, 5);
+        // Cuatro desde el 13-10-2026: ver `EVENTOS_A_MOSTRAR` en HomePage y la razón escrita ahí.
+        const esperados = Math.min(dibujables, 4);
         const pintados = await page.evaluate(() => document.querySelectorAll('.lx-feed__item').length);
         okInicio(
           pintados === esperados,
@@ -957,8 +958,8 @@ async function medir(page, dedo) {
         dibujó nada, y es lo que esta comprobación cuida ahora.
       */
       okInicio(
-        (comp.eventos >= 4 && comp.eventos <= 5) || (comp.eventos === 0 && comp.actividadVacia),
-        '  y la actividad muestra 4-5 eventos reales, o su estado vacío',
+        (comp.eventos >= 1 && comp.eventos <= 4) || (comp.eventos === 0 && comp.actividadVacia),
+        '  y la actividad muestra hasta 4 eventos reales, o su estado vacío',
         `eventos=${comp.eventos} vacíoDiseñado=${comp.actividadVacia}`,
       );
       if (comp.eventos === 0) {

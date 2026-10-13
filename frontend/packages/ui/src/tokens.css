@@ -7709,6 +7709,31 @@ a.lx-list-row {
   }
 }
 
+/* ---- Actividad reciente: filas compactas (13-10-2026) ---------------------------------------
+   El §3 pide «filas compactas: icono 30-34 px, título, actor y fecha» y el §2 que la fila inferior
+   mida 210-245. Medido en staging con cinco eventos: la tarjeta salía en 338.
+
+   La fila baja de ~55 a ~44: el relleno vertical pasa de 8 a 5 y los dos renglones de texto se
+   quedan con el interlineado justo en vez del 1.5 por omisión del navegador, que en un título de
+   14px regala siete píxeles por fila. El icono SUBE a 32, que es lo que el documento pide — la
+   altura que se recupera sale del aire entre renglones, no del icono.
+
+   Acotado al Inicio del administrador: la misma clase dibuja la actividad en Auditoría, donde las
+   filas son de lectura larga y su densidad se decidió para eso. */
+:root[data-portal='admin'] .lx-home .lx-feed__item {
+  padding: 5px 0;
+}
+:root[data-portal='admin'] .lx-home .lx-feed__icon {
+  width: 32px;
+  height: 32px;
+}
+:root[data-portal='admin'] .lx-home .lx-feed__title {
+  line-height: 1.3;
+}
+:root[data-portal='admin'] .lx-home .lx-feed__context {
+  line-height: 1.25;
+}
+
 /* ---- Las tarjetas del tablero: relleno 14 ----------------------------------------------------
    `--dense` vale 12 en todo el sistema y la tabla pide 14-18 para las tarjetas de esta pantalla.
    Sube sólo acá: `--dense` la usan también las tablas y los paneles de otras pantallas, donde los
