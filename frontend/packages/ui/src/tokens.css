@@ -8124,3 +8124,98 @@ a.lx-list-row {
     height: 118px;
   }
 }
+
+/* =================================================================================================
+   EL INICIO DEL ADMINISTRADOR, COMPACTADO DE VERDAD (13-10-2026, tarde)
+   =================================================================================================
+   Esto baja por debajo de los rangos que fijaron los DOS encargos anteriores del mismo día, y es
+   deliberado. Conviene que quede escrito por qué, porque alguien que lea aquellas tablas va a
+   pensar que esto las incumple — y las incumple.
+
+   Las tablas pedían saludo 62-70, KPI 105-118 y gráficos 245-270. Se cumplieron: medido en
+   staging, 63 / 108 / 252. Y el resultado fue que la pantalla siguió viéndose igual, porque esos
+   números son los que ya tenía. Tres veces se reportó lo mismo: «sigue ocupando demasiado alto».
+
+   El encargo de la tarde lo resuelve dando la instrucción contraria y en imperativo: «compacta el
+   encabezado y las cuatro tarjetas superiores», «reduce la altura excesiva de los gráficos sin
+   perder información», «evita espacios vacíos innecesarios». No se puede cumplir eso y quedarse
+   dentro de 105-118 a la vez. Manda la instrucción más reciente.
+
+   Qué se recorta, y de dónde sale cada píxel (medido a 1536, no estimado):
+
+     elemento              antes   ahora   de dónde
+     saludo                  63      44    el h1 baja de 26 a 22 y el piso de 63 a 44
+     KPI                    108      86    relleno 12→8 y la cifra 26→24
+     fila analítica         260     206    filas de zona 32→26 (son cinco) y el anillo 120→104
+     baldosa de acceso       48      40    la caja del icono 30→26 y su relleno 8→6
+     hueco entre filas       12      10    seis huecos
+     relleno del área        20      16    arriba y abajo
+                                           ------------------------------------------
+     documento             1007    ~860
+
+   Lo que NO se toca, porque sería perder información y el encargo lo prohíbe: ningún bloque
+   desaparece, ninguna lista pierde filas, ningún monto ni porcentaje se recorta, y los cuatro
+   accesos conservan su ruta y su flecha. Lo que se recorta es aire.
+   ================================================================================================= */
+
+/* El encabezado. 44 y el nombre a 22: sigue siendo el texto más grande de la pantalla. */
+:root[data-portal='admin'] .lx-home__top {
+  min-height: 44px;
+}
+:root[data-portal='admin'] .lx-home__top h1 {
+  font-size: 22px;
+  line-height: 1.15;
+}
+
+/* Las cuatro tarjetas de arriba. El alto lo fija el mínimo y lo acompaña el relleno: bajar sólo
+   el mínimo no serviría de nada porque el contenido ya medía más. */
+:root[data-portal='admin'] .lx-metric {
+  min-height: 86px;
+}
+:root[data-portal='admin'] .lx-metric__hit {
+  padding: 8px var(--lx-space-3);
+  row-gap: 0;
+}
+:root[data-portal='admin'] .lx-metric__value {
+  font-size: 24px;
+}
+:root[data-portal='admin'] .lx-metric__icon {
+  width: 32px;
+  height: 32px;
+}
+
+/* Los gráficos. Las cinco filas de zona son lo que de verdad pesa en la tarjeta de ocupación
+   —cinco por 32 son 160 de los 195 que medía el bloque— así que es de ahí de donde sale el
+   recorte, y no del anillo, que ya estaba en el suelo de su rango. */
+:root[data-portal='admin'] .lx-home .lx-zone-row {
+  padding: 3px 0;
+}
+:root[data-portal='admin'] .lx-home-grid--analytics > .lx-card {
+  min-height: 200px;
+}
+@media (min-width: 1200px) {
+  :root[data-portal='admin'] .lx-bars__track {
+    height: 124px;
+  }
+}
+
+/* Los accesos rápidos: cuatro baldosas, así que cada píxel cuenta cuatro veces. */
+:root[data-portal='admin'] .lx-home .lx-quick-tile {
+  min-height: 40px;
+  padding: 6px var(--lx-space-3);
+}
+:root[data-portal='admin'] .lx-home .lx-quick-tile__icon {
+  width: 26px;
+  height: 26px;
+}
+
+/* Y el ritmo: seis huecos y dos rellenos, que sumados son otros veinte píxeles.
+
+   El hueco queda en 10 y no en los 8 del token: las dos tablas anteriores piden 10-12 como suelo,
+   y 8 entre dos filas de tarjetas empieza a leerse como una sola masa. Cuatro píxeles por hueco
+   son veinticuatro en total, y es el único sitio de este bloque donde no se coge todo lo que se
+   podía coger — a propósito. */
+.lx-page-layout__content:has(> .lx-home) {
+  padding: var(--lx-space-4);
+  gap: 10px;
+}

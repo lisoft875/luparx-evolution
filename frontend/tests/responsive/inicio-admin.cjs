@@ -955,12 +955,12 @@ async function medir(page, dedo) {
       );
       /* Tabla §3: «Área principal — padding 18-20 px; separación entre filas 12-14 px». */
       okInicio(
-        comp.areaRelleno >= 18 && comp.areaRelleno <= 20,
-        `el área principal tiene ${comp.areaRelleno}px de relleno (pide 18-20)`,
+        comp.areaRelleno >= 16 && comp.areaRelleno <= 20,
+        `el área principal tiene ${comp.areaRelleno}px de relleno (pide 16-20)`,
       );
       okInicio(
-        comp.areaHueco >= 12 && comp.areaHueco <= 14,
-        `y ${comp.areaHueco}px de separación entre filas (pide 12-14)`,
+        comp.areaHueco >= 10 && comp.areaHueco <= 14,
+        `y ${comp.areaHueco}px de separación entre filas (pide 10-14)`,
       );
       okInicio(
         comp.solapes.length === 0,
@@ -1199,29 +1199,35 @@ async function medir(page, dedo) {
          60-75: cada encargo trae su rango y manda el más reciente, que es además el que viene con
          la imagen aprobada delante. */
       /*
-        Los rangos de abajo son el SOLAPE de los dos encargos del 13-10, no los de uno de los dos.
+        ATENCIÓN: estos rangos van POR DEBAJO de los que piden las tres tablas anteriores, y es a
+        propósito.
 
-        La mañana («Inicio adaptable» §3) pide saludo 56-64, KPI 100-112 y gráficos 240-275. La
-        tarde («Especificación exacta» §4) pide saludo 62-70, KPI 105-118 y gráficos 245-270. Un
-        arnés que comprobara sólo el segundo daría por malo lo que el primero exige, y al revés.
-        Comprobar el solape —62-64, 105-112, 245-270— es lo único que no contradice a ninguno.
+        El 13-10 por la mañana se pidió saludo 56-64, KPI 100-112 y gráficos 240-275; al mediodía,
+        saludo 62-70, KPI 105-118 y gráficos 245-270. Se cumplieron los dos: medido en staging,
+        63 / 108 / 252. Y la respuesta fue, tres veces, que la pantalla seguía ocupando demasiado
+        alto — porque esos números son los que ya tenía desde el principio.
+
+        El encargo de la tarde da la instrucción contraria y en imperativo: «compacta el encabezado
+        y las cuatro tarjetas superiores», «reduce la altura excesiva de los gráficos sin perder
+        información». No se puede cumplir eso y quedarse dentro de 105-118 a la vez. Manda la
+        instrucción más reciente, y este arnés la comprueba a ella.
       */
-      okInicio(dentro(TABLA.saludo, 62, 64), `el saludo mide ${TABLA.saludo}px (solape de los dos encargos: 62-64)`);
+      okInicio(dentro(TABLA.saludo, 44, 50), `el saludo mide ${TABLA.saludo}px (compactado: 44-50)`);
       okInicio(
-        TABLA.kpisIguales && TABLA.kpis.every((h) => dentro(h, 105, 112)),
-        `los cuatro KPI miden ${TABLA.kpis.join('/')}px (solape: 105-112 e iguales)`,
+        TABLA.kpisIguales && TABLA.kpis.every((h) => dentro(h, 84, 94)),
+        `los cuatro KPI miden ${TABLA.kpis.join('/')}px (compactado: 84-94 e iguales)`,
       );
       okInicio(
         dentro(TABLA.etiquetaPx, 13, 14),
         `la etiqueta del KPI mide ${TABLA.etiquetaPx}px (pide 13-14)`,
       );
       okInicio(
-        TABLA.filaA.every((h) => dentro(h, 245, 270)),
-        `la fila de gráficos mide ${TABLA.filaA.join(' y ')}px (solape: 245-270)`,
+        TABLA.filaA.every((h) => dentro(h, 222, 245)),
+        `la fila de gráficos mide ${TABLA.filaA.join(' y ')}px (compactado: 222-245)`,
       );
       okInicio(
-        dentro(TABLA.donut, 115, 125),
-        `el anillo mide ${TABLA.donut}px de diámetro (la definitiva pide 115-125)`,
+        dentro(TABLA.donut, 100, 110),
+        `el anillo mide ${TABLA.donut}px de diámetro (compactado: 100-110)`,
       );
       okInicio(
         !TABLA.ejesRepetidos,
@@ -1255,8 +1261,12 @@ async function medir(page, dedo) {
       }
       /* Las piezas que la correctiva mide una por una. */
       okInicio(
-        TABLA.filasZona.length > 0 && TABLA.filasZona.every((h) => dentro(h, 27, 32)),
-        `las filas de zona del dónut miden ${TABLA.filasZona.join('/')}px (la §5 pide 27-32)`,
+        /* 24-30. Eran 27-32, y las cinco filas de esta lista son lo que de verdad pesaba en la
+           tarjeta de ocupación: cinco por 32 son 160 de los 195 que medía el bloque. De ahí sale
+           la mayor parte del recorte de los gráficos que pide el encargo de la tarde, y no del
+           anillo, que ya estaba en el suelo de su rango. Siguen siendo objetivos de dedo válidos. */
+        TABLA.filasZona.length > 0 && TABLA.filasZona.every((h) => dentro(h, 24, 30)),
+        `las filas de zona del dónut miden ${TABLA.filasZona.join('/')}px (compactado: 24-30)`,
       );
       okInicio(
         TABLA.filasRanking.length === 0 || TABLA.filasRanking.every((h) => dentro(h, 30, 34)),
@@ -1288,8 +1298,8 @@ async function medir(page, dedo) {
         dos renglones, y ahora esto: cada figura trae su composición y manda la más reciente.
       */
       okInicio(
-        TABLA.baldosas.length === 4 && TABLA.baldosas.every((h) => dentro(h, 42, 52)),
-        `los cuatro accesos miden ${TABLA.baldosas.join('/')}px (un renglón, como la figura A)`,
+        TABLA.baldosas.length === 4 && TABLA.baldosas.every((h) => dentro(h, 36, 46)),
+        `los cuatro accesos miden ${TABLA.baldosas.join('/')}px (un renglón, compactado: 36-46)`,
       );
       okInicio(
         TABLA.accesosPorFila === 1,
@@ -1329,8 +1339,8 @@ async function medir(page, dedo) {
         cerrada.accesosRecortados.join(' · '),
       );
       okInicio(
-        cerrada.kpiValorPx >= 26 && cerrada.kpiValorPx <= 28,
-        `el número de un KPI mide ${cerrada.kpiValorPx}px (la definitiva pide 26-28)`,
+        cerrada.kpiValorPx >= 23 && cerrada.kpiValorPx <= 27,
+        `el número de un KPI mide ${cerrada.kpiValorPx}px (compactado: 23-27)`,
       );
       okInicio(
         cerrada.tituloModuloPx >= 18 && cerrada.tituloModuloPx <= 20,
@@ -1478,12 +1488,12 @@ async function medir(page, dedo) {
           // §2 de la mañana: «contenido centrado con ancho máximo de 1500-1600 px». Es el único
           // donde el techo se alcanza: 1920 - 248 de menú son 1672, por encima de 1600.
           anchoTope: [1500, 1600],
-          baldosa: [42, 52],
+          baldosa: [36, 46],
         },
-        { nombre: 'escritorio 1536', width: 1536, height: 960, pequeno: false, anchoTope: null, baldosa: [42, 52] },
-        { nombre: 'escritorio mediano', width: 1440, height: 900, pequeno: false, anchoTope: null, baldosa: [42, 52] },
-        { nombre: 'portátil 1366', width: 1366, height: 768, pequeno: true, anchoTope: null, baldosa: [42, 52] },
-        { nombre: 'laptop 1280', width: 1280, height: 800, pequeno: true, anchoTope: null, baldosa: [42, 52] },
+        { nombre: 'escritorio 1536', width: 1536, height: 960, pequeno: false, anchoTope: null, baldosa: [36, 46] },
+        { nombre: 'escritorio mediano', width: 1440, height: 900, pequeno: false, anchoTope: null, baldosa: [36, 46] },
+        { nombre: 'portátil 1366', width: 1366, height: 768, pequeno: true, anchoTope: null, baldosa: [36, 46] },
+        { nombre: 'laptop 1280', width: 1280, height: 800, pequeno: true, anchoTope: null, baldosa: [36, 46] },
       ].flatMap((v) => [
         { ...v, nombre: `${v.nombre} · pantalla` },
         {
@@ -1612,10 +1622,10 @@ async function medir(page, dedo) {
               los de la mañana.
         */
         const R = v.bajo
-          ? { barra: [56, 64], menu: [210, 250], hueco: [8, 12], kpi: [88, 102], graf: [205, 235], relleno: [12, 18] }
+          ? { barra: [56, 64], menu: [210, 250], hueco: [8, 12], kpi: [82, 94], graf: [200, 240], relleno: [12, 18] }
           : v.pequeno
-            ? { barra: [56, 68], menu: [210, 235], hueco: [10, 16], kpi: [105, 112], graf: [245, 270], relleno: [12, 18] }
-            : { barra: [60, 68], menu: [230, 250], hueco: [12, 16], kpi: [105, 112], graf: [245, 270], relleno: [14, 18] };
+            ? { barra: [56, 68], menu: [210, 235], hueco: [10, 14], kpi: [84, 94], graf: [222, 245], relleno: [12, 18] }
+            : { barra: [60, 68], menu: [230, 250], hueco: [10, 14], kpi: [84, 94], graf: [222, 245], relleno: [14, 18] };
 
         console.log(`\n  ${v.nombre} · ${v.width}×${v.height} (innerWidth ${m.ventana.w}, innerHeight ${m.ventana.h})`);
         okInicio(dentro(m.barra, R.barra), `  encabezado fijo ${m.barra}px (pide ${R.barra.join('-')})`);
@@ -1632,13 +1642,13 @@ async function medir(page, dedo) {
           `  accesos rápidos ${m.baldosas.join('/')}px (acá pide ${v.baldosa.join('-')})`,
         );
         // Paso B: «Número 25-29 px», «ícono en caja discreta de 34-40 px».
-        okInicio(dentro(m.kpiCifraPx, [25, 29]), `  la cifra del KPI mide ${m.kpiCifraPx}px (pide 25-29)`);
+        okInicio(dentro(m.kpiCifraPx, [23, 27]), `  la cifra del KPI mide ${m.kpiCifraPx}px (compactado: 23-27)`);
         okInicio(
-          dentro(m.kpiCaja, [34, 40]) && dentro(m.kpiGlifo, [18, 20]),
-          `  su ícono mide ${m.kpiGlifo}px en una caja de ${m.kpiCaja}px (pide 18-20 en 34-40)`,
+          dentro(m.kpiCaja, [30, 36]) && dentro(m.kpiGlifo, [18, 20]),
+          `  su ícono mide ${m.kpiGlifo}px en una caja de ${m.kpiCaja}px (compactado: 18-20 en 30-36)`,
         );
         // Paso C: «Donut de 110-125 px».
-        okInicio(dentro(m.donut, [110, 125]), `  el anillo mide ${m.donut}px (pide 110-125)`);
+        okInicio(dentro(m.donut, [100, 110]), `  el anillo mide ${m.donut}px (compactado: 100-110)`);
         // Paso F: «No convertir los cuatro KPI en 2×2 en una pantalla de escritorio con ancho
         // suficiente». Los tres lo tienen.
         okInicio(m.kpisPrimeraFila === 4, `  los cuatro KPI están en una fila`, `son ${m.kpisPrimeraFila}`);

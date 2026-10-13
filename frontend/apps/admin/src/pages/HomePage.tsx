@@ -647,8 +647,15 @@ export function HomePage(): React.JSX.Element {
                            El historial de este número: 168 por omisión → 136 el 09-10 → 124 el
                            12-10 → 150 el 13-10 → 120. Cada encargo trajo su rango y manda el más
                            reciente; éste se llama «definitiva» y su §1 pone el anillo en la lista
-                           de lo que «sigue sobredimensionado». 120 es el centro de 115-125. */
-                        size={120}
+                           de lo que «sigue sobredimensionado». 120 es el centro de 115-125.
+
+                           104 desde la tarde del 13-10: «reduce la altura excesiva de los
+                           gráficos sin perder información». Baja por debajo de los 110-125 que
+                           pedía la tabla de esa misma mañana, y es a propósito — la instrucción de
+                           la tarde es la que manda y las tres veces que se cumplió aquel rango la
+                           respuesta fue que la pantalla seguía igual de alta. El anillo no pierde
+                           información al encogerse: es una proporción, no una escala. */
+                        size={104}
                       />
                       {/* De qué se compone el porcentaje. La referencia lo pone bajo el número y
                           son dos cifras que el panel ya daba: estadías corriendo sobre bahías en
