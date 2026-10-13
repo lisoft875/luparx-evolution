@@ -319,7 +319,7 @@ async function medir(page, dedo) {
       /* Los tres anchos cuya captura pide la §12: 1536 y 1366 de escritorio y el 390 de mano, que
          sigue siendo el que enseña si algo se parte. 1440 y 768 se conservan de la entrega
          anterior porque son los que Javier ya tiene de referencia para comparar. */
-      const ENTREGA = [390, 768, 1366, 1440, 1536];
+      const ENTREGA = [390, 768, 1366, 1440, 1536, 1920];
       const nombreCaptura = `admin-inicio-${tam.width}x${tam.height}`;
       await page.screenshot({ path: `tests/responsive/capturas/${nombreCaptura}-vista.png` });
       if (ENTREGA.includes(tam.width)) {
@@ -750,17 +750,18 @@ async function medir(page, dedo) {
           graficoAncho: analitica[1] ? Math.round(analitica[1].getBoundingClientRect().width) : 0,
           ranking: document.querySelectorAll('.lx-zone-rank__row').length,
           rankingPuestos: [...document.querySelectorAll('.lx-zone-rank__pos')].map((n) => rec(n.textContent)),
-          /* La fila inferior pasó a TRES columnas el 12-10-2026 (40/30/30). Lo que se mide es
-             el reparto real y el desnivel, que es el defecto que la fila de dos producía: con un
-             solo evento de actividad, 288px de fondo vacío a media pantalla. */
+          /* La fila inferior es de TRES columnas (36/31/33), las de la referencia aprobada que
+             el «Paso D» de «Inicio adaptable» manda reproducir. Lo que se mide es el reparto real;
+             las alturas no, porque la asimetría está autorizada por escrito. */
           filaBanchos: [...document.querySelectorAll('.lx-home-grid--operation > *')].map((n) =>
             Math.round(n.getBoundingClientRect().width),
           ),
           filaBaltos: [...document.querySelectorAll('.lx-home-grid--operation > *')].map((n) =>
             Math.round(n.getBoundingClientRect().height),
           ),
-          // Cuántas tarjetas lleva la pila de la derecha. Dos: accesos y ranking.
-          pilaDerecha: document.querySelectorAll('.lx-home-stack > .lx-card').length,
+          // Ya no hay pila: si esta clase reaparece, es que volvió la distribución que el
+          // «Paso D» descarta, y vale la pena que el arnés lo diga en vez de dejarlo pasar.
+          pilaDerecha: document.querySelectorAll('.lx-home-stack').length,
           // La duplicación que el §1 manda corregir: la fecha y el monto del día repetidos debajo
           // del total semanal. Se comprueba por ausencia del nodo que los dibujaba.
           diaDuplicado: Boolean(document.querySelector('.lx-home__week-today')),
@@ -887,40 +888,42 @@ async function medir(page, dedo) {
         );
       }
       /*
-        La fila inferior vuelve a DOS columnas (especificación definitiva, §4): actividad a la
-        izquierda y una pila a la derecha con los accesos sobre el ranking. Fue dos, luego tres el
-        12-10, y otra vez dos.
+        La fila inferior es de TRES columnas: actividad, accesos y zonas, una al lado de otra.
 
-        Y con ella se va la comprobación de alturas. Las tres versiones de este arnés han pedido
-        cosas distintas sobre lo mismo —desnivel ≤2, luego «la actividad más baja que su vecina»,
-        luego «las tres entre 210 y 245»— porque cada encargo decía otra cosa. El §4 de la
-        definitiva cierra el asunto: «la fila inferior PUEDE ser asimétrica en altura, pero no debe
-        producir un rectángulo vacío enorme». O sea que la altura ya no es la pregunta; la pregunta
-        es si alguien estira la tarjeta, y eso se comprueba abajo mirando `align-items`.
+        Esta línea ha pedido dos columnas, luego tres, luego dos otra vez, y ahora tres. No es
+        indecisión del arnés: es que cada encargo trajo su composición y el arnés se corrige CON la
+        especificación, nunca contra ella. La que manda hoy es la del 13-10 y no deja hueco: «Paso
+        D — Reproducir la composición de la referencia aprobada; no imponer la nueva distribución
+        propuesta posteriormente», con esa referencia impresa en la página 1 del propio documento.
+
+        Las alturas siguen sin comprobarse, por la razón que ya estaba escrita acá: la asimetría
+        está autorizada por escrito y lo que importa es que nadie ESTIRE una tarjeta, que es lo que
+        mira `align-items`.
       */
       okInicio(
-        comp.filaBanchos.length === 2,
-        'la fila inferior tiene dos columnas (actividad y la pila de la derecha)',
+        comp.filaBanchos.length === 3,
+        'la fila inferior tiene tres columnas (actividad, accesos y zonas)',
         `son ${comp.filaBanchos.length}`,
       );
-      if (comp.filaBanchos.length === 2) {
+      if (comp.filaBanchos.length === 3) {
         const total = comp.filaBanchos.reduce((a, b) => a + b, 0);
         const reparto = comp.filaBanchos.map((w) => Math.round((w / total) * 100));
+        const esperado = [36, 31, 33];
         okInicio(
-          reparto[0] >= 55 && reparto[0] <= 60,
-          `  y se reparten ${reparto.join('/')} (la definitiva pide 55-60 / 40-45)`,
+          reparto.every((v, i) => Math.abs(v - esperado[i]) <= 3),
+          `  y se reparten ${reparto.join('/')} (la referencia pide ~${esperado.join('/')})`,
         );
         okInicio(
           comp.operacionAlineacion === 'start' || comp.operacionAlineacion === 'flex-start',
-          `  y la actividad no se estira para igualar la columna derecha (align-items: ${comp.operacionAlineacion})`,
+          `  y ninguna tarjeta se estira para igualar a su vecina (align-items: ${comp.operacionAlineacion})`,
         );
         console.log(`  ··  alturas ${comp.filaBaltos.join('/')}px con ${comp.eventos} eventos (la asimetría está permitida)`);
-        okInicio(
-          comp.pilaDerecha === 2,
-          '  y la columna derecha es una pila con los accesos sobre el ranking',
-          `tarjetas en la pila: ${comp.pilaDerecha}`,
-        );
       }
+      okInicio(
+        comp.pilaDerecha === 0,
+        '  y no ha vuelto la pila de dos tarjetas que el Paso D descarta',
+        `pilas encontradas: ${comp.pilaDerecha}`,
+      );
       okInicio(
         comp.menuAncho >= 240 && comp.menuAncho <= 250,
         `el menú lateral mide ${comp.menuAncho}px (la definitiva pide 240-250)`,
@@ -934,8 +937,10 @@ async function medir(page, dedo) {
         comp.barraSuperior >= 60 && comp.barraSuperior <= 64,
         `la barra superior mide ${comp.barraSuperior}px (la definitiva pide 64 y «no aumentar»)`,
       );
-      /* «Ancho restante fluido»: el contenido se queda con lo que el menú suelta, sin tope. A 1536
-         con un menú de 240 son 1296; con el tope viejo de 1200 se perdían 96px en márgenes. */
+      /* «Ancho restante fluido», pero con techo (§2 del 13-10: «contenido centrado con ancho
+         máximo de 1500-1600 px»). A 1536 el menú se lleva 248 y quedan 1288, por debajo del techo,
+         así que a ESTE ancho el contenido sigue usando todo lo que el menú suelta. El techo se
+         comprueba donde se nota, que es a 1920, en el bloque de los tres viewports. */
       okInicio(
         comp.contenidoAncho >= 1536 - comp.menuAncho - 2,
         `el contenido usa el ancho que deja el menú (${comp.contenidoAncho}px)`,
@@ -1243,9 +1248,23 @@ async function medir(page, dedo) {
         '  y ningún nombre del ranking queda con puntos suspensivos',
         TABLA.rankingRecortado.join(' · '),
       );
+      /*
+        64-70 a 1536, y la desviación respecto de los 46-54 de la tabla §3 está decidida a
+        propósito, no heredada.
+
+        A este ancho la columna de accesos mide 379 y su cuadrícula 351. «Registrar espacio» pide
+        109px de texto en un renglón, que en un 2×2 necesitaría una cuadrícula de 404. O sea que
+        acá sólo hay dos salidas: dos renglones por baldosa, o un título recortado. La referencia
+        aprobada de la página 1 dibuja exactamente dos renglones, y el propio §3 dice que sus
+        rangos son «de partida, no restricciones rígidas: nunca cortar números, etiquetas, barras
+        ni controles para cumplir un número».
+
+        El rango de 46-54 sí se comprueba, donde la baldosa SÍ es de un renglón: a 1920 y a 1366,
+        en el bloque de los tres viewports.
+      */
       okInicio(
-        TABLA.baldosas.length === 4 && TABLA.baldosas.every((h) => dentro(h, 50, 56)),
-        `los cuatro accesos miden ${TABLA.baldosas.join('/')}px (la definitiva pide 50-56)`,
+        TABLA.baldosas.length === 4 && TABLA.baldosas.every((h) => dentro(h, 62, 70)),
+        `los cuatro accesos miden ${TABLA.baldosas.join('/')}px (dos renglones, como la referencia)`,
       );
       okInicio(
         dentro(TABLA.baldosaTituloPx, 12, 13),
@@ -1391,6 +1410,186 @@ async function medir(page, dedo) {
       });
       okInicio(cero.valor === '0', 'un cero real se escribe 0, no «sin dato»', `dice «${cero.valor}»`);
       await ctxCero.close();
+    }
+
+    // --- 7. La tabla de «Inicio adaptable» §3, en sus tres viewports ----------------------------
+    //
+    // El documento del 13-10 no trae una escala, trae DOS: «Grande / mediano» y «Portátil
+    // pequeño», y nombra los tres anchos donde se comprueban. Hasta ese documento esta pantalla
+    // tenía una sola escala por encima de 1200, de modo que un 1366×768 —312px menos de alto que
+    // un 1080— recibía las alturas de un monitor de escritorio.
+    //
+    // Cada medida se comprueba contra la columna que le toca. Las dos desviaciones conocidas van
+    // escritas al lado de su línea, no escondidas en un rango ancho: un rango que abarca las dos
+    // escalas no comprueba ninguna.
+    {
+      const TRES = [
+        {
+          nombre: 'escritorio grande', width: 1920, height: 1080, pequeno: false,
+          // §2: «contenido centrado con ancho máximo de 1500-1600 px». Es el único de los tres
+          // donde el techo se alcanza: 1920 - 248 de menú son 1672, por encima de 1600.
+          anchoTope: [1500, 1600],
+          // A este ancho la cuadrícula de accesos pasa de 404 y el título entra en UN renglón, que
+          // es lo que el Paso D prefiere. Acá sí aplica el rango de la tabla.
+          baldosa: [46, 54],
+        },
+        {
+          nombre: 'escritorio mediano', width: 1440, height: 900, pequeno: false,
+          anchoTope: null,
+          // 62-70: dos renglones. Misma razón que a 1536, medida: la cuadrícula queda en 322 y un
+          // renglón necesitaría 404. La referencia aprobada dibuja dos renglones.
+          baldosa: [62, 70],
+        },
+        {
+          nombre: 'portátil pequeño', width: 1366, height: 768, pequeno: true,
+          anchoTope: null,
+          baldosa: [42, 56],
+        },
+      ];
+      const ctxTres = await browser.newContext({
+        storageState: estado,
+        locale: 'es-CR',
+        ignoreHTTPSErrors: true,
+      });
+      const pt = await ctxTres.newPage();
+      console.log('\n-- la tabla §3 en los tres viewports del 13-10 --');
+      for (const v of TRES) {
+        await pt.setViewportSize({ width: v.width, height: v.height });
+        await pt.goto(`${BASE}/admin/`, { waitUntil: 'domcontentloaded' });
+        await pt.waitForTimeout(2400);
+        await pt.screenshot({ path: `tests/responsive/capturas/adaptable-${v.width}x${v.height}-vista.png` });
+        await pt.screenshot({ path: `tests/responsive/capturas/adaptable-${v.width}x${v.height}-completa.png`, fullPage: true });
+
+        const m = await pt.evaluate(() => {
+          const alto = (sel) => {
+            const n = document.querySelector(sel);
+            return n ? Math.round(n.getBoundingClientRect().height) : null;
+          };
+          const ancho = (sel) => {
+            const n = document.querySelector(sel);
+            return n ? Math.round(n.getBoundingClientRect().width) : null;
+          };
+          const px = (sel, prop) => {
+            const n = document.querySelector(sel);
+            return n ? Math.round(parseFloat(getComputedStyle(n)[prop])) : null;
+          };
+          const fila = [...document.querySelectorAll('.lx-home-grid--operation > *')];
+          const kpis = [...document.querySelectorAll('.lx-home-kpis .lx-metric')];
+          const primeraFila = kpis.filter(
+            (n) => Math.abs(n.getBoundingClientRect().top - kpis[0].getBoundingClientRect().top) < 4,
+          ).length;
+          return {
+            ventana: { w: window.innerWidth, h: window.innerHeight },
+            barra: alto('.lx-page-layout__header'),
+            menu: ancho('.lx-page-layout__sidebar'),
+            contenido: ancho('.lx-page-layout__content'),
+            // El centrado: lo que queda a cada lado del contenido dentro del hueco que deja el menú.
+            margenIzq: (() => {
+              const c = document.querySelector('.lx-page-layout__content');
+              const b = document.querySelector('.lx-page-layout__body');
+              const m = document.querySelector('.lx-page-layout__sidebar');
+              if (!c || !b || !m) return null;
+              return Math.round(c.getBoundingClientRect().left - m.getBoundingClientRect().right);
+            })(),
+            huecoFilas: px('.lx-home', 'rowGap'),
+            rellenoTarjeta: px('.lx-home .lx-card--dense', 'paddingTop'),
+            kpiAlto: kpis.length ? Math.round(kpis[0].getBoundingClientRect().height) : null,
+            kpisPrimeraFila: primeraFila,
+            kpiCifraPx: px('.lx-metric__value', 'fontSize'),
+            kpiGlifo: ancho('.lx-metric__icon svg'),
+            kpiCaja: ancho('.lx-metric__icon'),
+            graficos: [...document.querySelectorAll('.lx-home-grid--analytics > *')].map((n) =>
+              Math.round(n.getBoundingClientRect().height),
+            ),
+            donut: ancho('.lx-donut'),
+            baldosas: [...document.querySelectorAll('.lx-quick-tile')].map((n) =>
+              Math.round(n.getBoundingClientRect().height),
+            ),
+            columnas: fila.length,
+            reparto: (() => {
+              const total = fila.reduce((a, n) => a + n.getBoundingClientRect().width, 0);
+              return fila.map((n) => Math.round((n.getBoundingClientRect().width / total) * 100));
+            })(),
+            // Lo que el §6 manda comprobar en los tres: nada cortado, nada encima de nada, sin
+            // scroll horizontal, y los bloques todos presentes.
+            recortados: [
+              ...document.querySelectorAll(
+                '.lx-metric__value, .lx-metric__label, .lx-quick-tile__title, .lx-zone-row__name, .lx-zone-rank__name, .lx-feed__title',
+              ),
+            ]
+              .filter((n) => n.scrollWidth > n.clientWidth + 1)
+              .map((n) => (n.textContent || '').trim().slice(0, 28)),
+            partidas: [...document.querySelectorAll('.lx-metric__value')]
+              .filter((n) => n.getClientRects().length > 1)
+              .map((n) => (n.textContent || '').trim()),
+            desborde: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
+            bloques: [...document.querySelectorAll('.lx-section-header__title, .lx-home-attention__title, .lx-home__status-label')].map(
+              (n) => (n.textContent || '').trim(),
+            ),
+            pila: document.querySelectorAll('.lx-home-stack').length,
+          };
+        });
+
+        const dentro = (val, [min, max]) => val !== null && val >= min && val <= max;
+        const R = v.pequeno
+          ? { barra: [56, 64], menu: [210, 235], hueco: [10, 12], kpi: [88, 102], graf: [205, 235], relleno: [12, 14] }
+          : { barra: [60, 68], menu: [230, 250], hueco: [12, 16], kpi: [100, 112], graf: [240, 275], relleno: [14, 18] };
+
+        console.log(`\n  ${v.nombre} · ${v.width}×${v.height} (innerWidth ${m.ventana.w}, innerHeight ${m.ventana.h})`);
+        okInicio(dentro(m.barra, R.barra), `  encabezado fijo ${m.barra}px (pide ${R.barra.join('-')})`);
+        okInicio(dentro(m.menu, R.menu), `  menú lateral ${m.menu}px (pide ${R.menu.join('-')})`);
+        okInicio(dentro(m.huecoFilas, R.hueco), `  separación entre cards ${m.huecoFilas}px (pide ${R.hueco.join('-')})`);
+        okInicio(dentro(m.kpiAlto, R.kpi), `  KPI ${m.kpiAlto}px de alto (pide ${R.kpi.join('-')})`);
+        okInicio(
+          m.graficos.length > 0 && m.graficos.every((h) => dentro(h, R.graf)),
+          `  gráficos ${m.graficos.join(' y ')}px (pide ${R.graf.join('-')})`,
+        );
+        okInicio(dentro(m.rellenoTarjeta, R.relleno), `  relleno de cards ${m.rellenoTarjeta}px (pide ${R.relleno.join('-')})`);
+        okInicio(
+          m.baldosas.length === 4 && m.baldosas.every((h) => dentro(h, v.baldosa)),
+          `  accesos rápidos ${m.baldosas.join('/')}px (acá pide ${v.baldosa.join('-')})`,
+        );
+        // Paso B: «Número 25-29 px», «ícono en caja discreta de 34-40 px».
+        okInicio(dentro(m.kpiCifraPx, [25, 29]), `  la cifra del KPI mide ${m.kpiCifraPx}px (pide 25-29)`);
+        okInicio(
+          dentro(m.kpiCaja, [34, 40]) && dentro(m.kpiGlifo, [18, 20]),
+          `  su ícono mide ${m.kpiGlifo}px en una caja de ${m.kpiCaja}px (pide 18-20 en 34-40)`,
+        );
+        // Paso C: «Donut de 110-125 px».
+        okInicio(dentro(m.donut, [110, 125]), `  el anillo mide ${m.donut}px (pide 110-125)`);
+        // Paso F: «No convertir los cuatro KPI en 2×2 en una pantalla de escritorio con ancho
+        // suficiente». Los tres lo tienen.
+        okInicio(m.kpisPrimeraFila === 4, `  los cuatro KPI están en una fila`, `son ${m.kpisPrimeraFila}`);
+        okInicio(m.partidas.length === 0, '  y ningún monto se parte en dos renglones', m.partidas.join(' · '));
+        // Paso D: la composición de la referencia.
+        okInicio(m.columnas === 3, `  la fila inferior tiene tres columnas`, `son ${m.columnas}`);
+        okInicio(m.pila === 0, '  y no ha vuelto la pila de dos tarjetas', `pilas: ${m.pila}`);
+        if (m.columnas === 3) {
+          console.log(`  ··  reparto ${m.reparto.join('/')} (la referencia pide ~36/31/33)`);
+        }
+        // §2 para 1920: el techo y el centrado.
+        if (v.anchoTope) {
+          okInicio(
+            dentro(m.contenido, v.anchoTope),
+            `  el contenido topa en ${m.contenido}px (pide ${v.anchoTope.join('-')})`,
+          );
+          okInicio(
+            m.margenIzq !== null && m.margenIzq > 10,
+            `  y queda centrado en el hueco del menú (${m.margenIzq}px a la izquierda)`,
+          );
+        }
+        // §6: nada cortado, nada tapado, sin scroll horizontal.
+        okInicio(m.recortados.length === 0, '  ningún texto queda con puntos suspensivos', m.recortados.join(' · '));
+        okInicio(!m.desborde, '  y no hay scroll horizontal');
+        for (const bloque of ['Ocupación en tiempo real', 'Ingresos esta semana', 'Actividad reciente', 'Accesos rápidos', 'Zonas más utilizadas']) {
+          okInicio(
+            m.bloques.some((t) => t.includes(bloque)),
+            `  «${bloque}» sigue presente`,
+            m.bloques.join(' · '),
+          );
+        }
+      }
+      await ctxTres.close();
     }
     await ctx.close();
   }

@@ -752,22 +752,21 @@ export function HomePage(): React.JSX.Element {
               </Card>
             </div>
 
-            {/* --- E. fila 3: actividad | (accesos rápidos sobre zonas más utilizadas) ---------
-                DOS columnas otra vez, 57/43, con la pila a la derecha. Lo pide el §4 de la
-                especificación definitiva: «Actividad reciente (aprox. 55-60 %) y columna derecha
-                (40-45 %) con Accesos rápidos arriba y Zonas más utilizadas debajo».
+            {/* --- E. fila 3: actividad | accesos rápidos | zonas más utilizadas --------------
+                TRES columnas, 38/29/33, que es lo que dibuja la referencia aprobada. El «Paso D»
+                de «Inicio adaptable» (13-10-2026) lo ordena sin margen: «Reproducir la composición
+                de la referencia aprobada; no imponer la nueva distribución propuesta
+                posteriormente» — y la distribución propuesta posteriormente era justamente la pila
+                de dos tarjetas que había acá.
 
-                Esta fila fue dos columnas, luego tres el 12-10, y vuelve a dos. El motivo de pasar
-                a tres fue real y está medido: con UN evento de actividad la columna izquierda
-                medía 115px contra 404 de la pila, o sea 288px de fondo vacío. Lo que evita ahora
-                que eso vuelva no es el número de columnas sino la regla que el mismo §4 escribe al
-                lado: «Actividad reciente no debe estirarse para igualar artificialmente la altura
-                de toda la columna derecha. La fila inferior puede ser asimétrica en altura, pero
-                no debe producir un rectángulo vacío enorme». O sea: `align-items: start` y ningún
-                `min-height` —que es lo que hay— más una actividad que ya no cae a 115 porque la
-                municipalidad tiene eventos y el tope son cuatro. Si volviera a quedar un solo
-                evento, la tarjeta sería corta y a su lado habría aire; eso es asimetría, no un
-                rectángulo vacío, y es exactamente lo que el documento autoriza. */}
+                El reparto está medido sobre esa referencia, no elegido: 461 / 348 / 383 px sobre
+                1223 de contenido.
+
+                El defecto que en su día motivó la pila —con UN evento, actividad en 115px contra
+                404 de la pila, 288 de fondo vacío— no puede reaparecer acá: nacía de que la
+                derecha fuese una pila que suma alturas, y ya no hay pila. Cada tarjeta mide lo
+                suyo, `align-items: start`, y ningún `min-height`: el mismo Paso D pide «tarjetas
+                con altura por contenido, no relleno vacío». */}
             <div className="lx-home-grid lx-home-grid--operation">
               <Card className="lx-card--dense">
                 <SectionHeader
@@ -821,19 +820,15 @@ export function HomePage(): React.JSX.Element {
                 )}
               </Card>
 
-              {/* La columna derecha: los accesos encima del ranking, que es el orden que pide el
-                  §4. `.lx-home-stack` vuelve a montarse —se había borrado el 12-10 al pasar la
-                  fila a tres columnas— con la misma regla de entonces. */}
-              <div className="lx-home-stack">
-                <Card className="lx-card--dense">
-                  <SectionHeader title={t('admin.home.quick.title')} />
-                  <QuickActions />
-                </Card>
+              <Card className="lx-card--dense">
+                <SectionHeader title={t('admin.home.quick.title')} />
+                <QuickActions />
+              </Card>
 
-                {/* «Zonas más utilizadas». Mismo dato que la lista del dónut —`occupancy.zones`,
-                    ordenado una sola vez más arriba— leído de otra manera: ahí es «cuán llena está
-                    cada una», acá es «cuáles son las que más se usan». */}
-                <Card className="lx-card--dense">
+              {/* «Zonas más utilizadas». Mismo dato que la lista del dónut —`occupancy.zones`,
+                  ordenado una sola vez más arriba— leído de otra manera: ahí es «cuán llena está
+                  cada una», acá es «cuáles son las que más se usan». */}
+              <Card className="lx-card--dense">
                 <SectionHeader
                   title={t('admin.home.rank.title')}
                   aside={
@@ -852,8 +847,7 @@ export function HomePage(): React.JSX.Element {
                 ) : (
                   <ZoneRanking zonas={zonasPorUso} emptyLabel={t('admin.home.rank.empty')} />
                 )}
-                </Card>
-              </div>
+              </Card>
             </div>
 
             {/* --- G. Atención requerida, SÓLO con incidencias reales --------------------------

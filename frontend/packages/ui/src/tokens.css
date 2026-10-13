@@ -5026,11 +5026,11 @@ a.lx-list-row {
 
    El reparto no usa las dos variables de `.lx-home-grid` porque esas describen una fila de DOS
    columnas; acá hacen falta tres y se escriben enteras. */
-/* La base vuelve a dos columnas con la pila a la derecha (especificación definitiva, §4). El
-   reparto fino lo pone la regla acotada al administrador, más abajo. */
+/* La base vuelve a TRES columnas (13-10-2026). El reparto fino lo pone la regla acotada al
+   administrador, más abajo; acá va el número de columnas, que es lo que comparten los portales. */
 @media (min-width: 1200px) {
   .lx-home-grid--operation {
-    grid-template-columns: minmax(0, 57fr) minmax(0, 43fr);
+    grid-template-columns: minmax(0, 36fr) minmax(0, 31fr) minmax(0, 33fr);
   }
 }
 /* Entre 1000 y 1199 la fila se queda en dos columnas —tres a ese ancho dejan los accesos rápidos
@@ -5038,12 +5038,15 @@ a.lx-list-row {
    pide para 900-1199: «fila inferior en 2 columnas o apilada». */
 @media (min-width: 1000px) and (max-width: 1199px) {
   /* Mitad y mitad, no el 65/35 que `.lx-home-grid` trae por omisión: con dos columnas, la de los
-     accesos rápidos es la que necesita ancho —son cuatro baldosas en 2×2— y la actividad es texto
-     que se lee igual de bien en la mitad.
-     La regla que mandaba el tercer hijo a la fila entera se va con las tres columnas: ahora los
-     hijos son dos y el segundo es la pila. */
+     accesos rápidos es la que necesita ancho y la actividad es texto que se lee igual de bien en
+     la mitad. */
   .lx-home-grid--operation {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  /* Y el tercero —zonas más utilizadas— ocupa el renglón entero en vez de dejar medio vacío al
+     lado. Vuelve con las tres columnas, de donde se había ido el 13-10 por la mañana. */
+  .lx-home-grid--operation > :nth-child(3) {
+    grid-column: 1 / -1;
   }
 }
 
@@ -5130,8 +5133,18 @@ a.lx-list-row {
     Medido: a 1536 el menú se lleva 240 y quedan 1296; con el tope, 96px se iban en márgenes
     laterales del contenido y la fila de cuatro KPI se angostaba por nada. La tabla de la
     especificación pide «ancho restante fluido», que es exactamente esto.
+
+    Pero fluido no quiere decir sin techo (13-10-2026, «Inicio adaptable» §2). A 1920 el contenido
+    medía 1672 y cada KPI 399px: una tarjeta con una palabra y un número ocupando cuatro quintos
+    del ancho de una hoja. La orden lo nombra —«sin tarjetas estiradas por el espacio sobrante;
+    contenido centrado con ancho máximo de 1500-1600 px»— así que el tope vuelve, pero en 1560 y no
+    en los 1200 del layout general: 1560 es ancho de tablero, 1200 es ancho de formulario.
+
+    Dónde empieza a notarse: el contenido llega a 1560 con una ventana de 1808 (1560 + 248 de menú).
+    Por debajo de eso no cambia nada, y los tres tamaños de la tabla —1440, 1366 y los de abajo—
+    siguen usando todo el ancho. El `margin: 0 auto` que centra ya viene de la regla base.
   */
-  max-width: none;
+  max-width: 1560px;
 }
 
 /* La cabecera del tablero: el nombre de la municipalidad a la izquierda y el estado del sistema a
@@ -6269,19 +6282,6 @@ a.lx-list-row {
   border-radius: var(--lx-radius-pill);
   vertical-align: middle;
   flex-shrink: 0;
-}
-
-/* La columna derecha de la fila inferior: los accesos rápidos encima del ranking de zonas.
-
-   Se borró el 12-10 al pasar la fila a tres columnas —«una clase sin uso es la que alguien vuelve
-   a escribir creyendo que hace falta»— y vuelve el 13-10 porque la especificación definitiva
-   vuelve a pedir la pila. La regla es la misma que tenía; se recuperó del historial en vez de
-   reescribirse de memoria. */
-.lx-home-stack {
-  display: flex;
-  flex-direction: column;
-  gap: var(--lx-card-gap);
-  min-width: 0;
 }
 
 /* ---- «Zonas más utilizadas»: una clasificación, no una medición --------------------------------
@@ -7708,26 +7708,34 @@ a.lx-list-row {
   }
 }
 
-/* ---- Fila inferior: dos columnas y la pila a la derecha (especificación definitiva) ---------
-   El §4 la vuelve a dibujar como estaba antes del 12-10: «Actividad reciente (aprox. 55-60 %) y
-   columna derecha (40-45 %) con Accesos rápidos arriba y Zonas más utilizadas debajo».
+/* ---- Fila inferior: TRES columnas, las de la referencia aprobada (13-10-2026) ---------------
+   El «Paso D» de «Inicio adaptable» no deja margen: «Reproducir la composición de la referencia
+   aprobada; no imponer la nueva distribución propuesta posteriormente». La referencia va impresa
+   en la página 1 de ese mismo documento y dibuja tres tarjetas una al lado de la otra —actividad,
+   accesos rápidos y zonas—, no dos con una pila.
 
-   Esta fila ha sido dos columnas, tres, y otra vez dos. Vale la pena dejar escrito qué cambia y
-   qué no, porque el defecto que motivó las tres sigue siendo real:
+   El reparto sale de medir ese dibujo: sobre 1223px de contenido las tarjetas miden 461 / 348 /
+   383, o sea 38 / 29 / 32 por ciento. Va 36 / 31 / 33, con dos puntos movidos de la actividad a
+   los accesos, y el motivo está medido: «Registrar espacio» necesita 109px de texto, y con el 29%
+   la baldosa de un 2×2 a 1440 deja 57. Con el 31% deja los 62 que necesita la palabra más larga
+   para partirse en dos renglones como los parte la referencia. Dos puntos porcentuales son la
+   diferencia entre reproducir el dibujo y recortar cuatro títulos.
 
-     - El defecto: con UN evento de actividad la columna izquierda medía 115px contra 404 de la
-       pila, o sea 288px de fondo vacío a media pantalla.
-     - Lo que NO lo arregla: estirar. `align-items: stretch` convierte ese hueco en una tarjeta de
-       404px con dos renglones flotando, que se lee peor. Por eso no vuelve.
-     - Lo que sí: que la actividad no esté en 115. El tope son cuatro eventos y la municipalidad
-       tiene más de uno, así que la tarjeta mide lo que miden sus filas. Y si algún día vuelve a
-       haber un solo evento, al lado queda aire — que es lo que el propio §4 autoriza: «la fila
+   Esta fila ha sido dos columnas, tres, y otra vez dos, y ahora tres. Lo que vale la pena dejar
+   escrito es por qué con tres NO vuelve el defecto que motivó las dos:
+
+     - El defecto medido era esto: con UN evento, actividad 115px contra 404 de la PILA, 288 de
+       fondo vacío. Nacía de que la derecha fuera una pila de dos tarjetas, que suma alturas.
+     - Con tres columnas no hay pila. Cada tarjeta mide lo suyo y `align-items: start` deja que la
+       fila sea desigual, que es lo que el propio encargo anterior autorizaba en letra: «la fila
        inferior puede ser asimétrica en altura, pero no debe producir un rectángulo vacío enorme».
-
-   O sea: `align-items: start`, ningún `min-height`, y la asimetría aceptada en letra. */
+       Un hueco al lado de una tarjeta corta es asimetría; un rectángulo vacío es una tarjeta
+       estirada, y eso es justo lo que `align-items: start` impide.
+     - Ningún `min-height`, por lo mismo: el «Paso D» pide «tarjetas con altura por contenido, no
+       relleno vacío». */
 @media (min-width: 1200px) {
   :root[data-portal='admin'] .lx-home-grid--operation {
-    grid-template-columns: minmax(0, 57fr) minmax(0, 43fr);
+    grid-template-columns: minmax(0, 36fr) minmax(0, 31fr) minmax(0, 33fr);
     align-items: start;
   }
 }
@@ -7887,27 +7895,26 @@ a.lx-list-row {
   Dos umbrales, los dos medidos con «Registrar espacio» —el título más largo de los cuatro, ~110px
   a 13px— y con la baldosa real de cada ancho:
 
-      ancho     baldosa   con flecha   sin flecha
-      1536        247        161 ✓        185 ✓
-      1366        211        125 ✓        149 ✓
-      1280        192        106 ✗        130 ✓
-      1024        163         77 ✗        101 ✗  → hace falta el segundo renglón
+  Con la columna derecha al 43% eso daba de sobra. Con las TRES columnas de la referencia
+  (13-10-2026) la de accesos baja al 31%, y la cuenta se rehízo entera, midiendo en vez de estimar.
+  Lo que necesita cada título, con la flecha puesta:
 
-  Así que de 400px de cuadrícula para abajo cede la flecha, y de 350 para abajo el título usa dos
-  renglones. La baldosa crece a ~66 ahí y se sale de los 50-56 de la tabla; es la desviación que el
-  §7 manda justificar, y la justificación es el §6: «texto sin recortes». Un rango de altura es un
-  objetivo de diseño; un título cortado es información perdida.
+      en un renglón   «Registrar espacio» 109px  →  baldosa 198  →  cuadrícula 404
+      en dos          «Registrar»          ~62px  →  baldosa 148  →  cuadrícula ~304
+
+  De ahí los dos cortes. Por encima de 410 el 2×2 cabe en un renglón, que es lo que el «Paso D»
+  prefiere —«accesos rápidos de una sola línea cuando sea posible»—. Entre 300 y 410 sigue siendo
+  un 2×2 pero el título usa dos renglones y la baldosa sube a 66: es exactamente lo que dibuja la
+  referencia aprobada, que a su ancho tampoco tenía sitio para un renglón. Por debajo de 300 ni
+  partiendo la palabra entra, así que ahí las cuatro baldosas se ponen una debajo de otra y
+  recuperan el renglón único con todo el ancho de la columna.
+
+  La baldosa de 66 se sale de los 46-54 de la tabla §3, y es la desviación que el §7 manda
+  justificar. La justificación la da el propio §3: «nunca cortar números, etiquetas, barras ni
+  controles para cumplir un número», y la da el §6, que manda comparar con la referencia — donde
+  esas baldosas tienen dos renglones.
 */
-@container (max-width: 400px) {
-  :root[data-portal='admin'] .lx-home .lx-quick-tile__go {
-    display: none;
-  }
-  :root[data-portal='admin'] .lx-home .lx-quick-tile {
-    grid-template-columns: auto minmax(0, 1fr);
-    grid-template-areas: 'icono titulo';
-  }
-}
-@container (max-width: 350px) {
+@container (max-width: 410px) {
   :root[data-portal='admin'] .lx-home .lx-quick-tile__title {
     display: -webkit-box;
     -webkit-box-orient: vertical;
@@ -7917,6 +7924,29 @@ a.lx-list-row {
   }
   :root[data-portal='admin'] .lx-home .lx-quick-tile {
     min-height: 66px;
+  }
+}
+@container (max-width: 300px) {
+  /*
+    Sobre la BALDOSA y no sobre la cuadrícula, que fue el primer intento y no hizo nada.
+
+    `.lx-quick-grid` es el contenedor —lleva el `container-type`— y una consulta de contenedor
+    sólo alcanza a sus DESCENDIENTES, nunca a él mismo. Con `grid-template-columns` escrito acá
+    dentro, la regla se evalúa y se descarta: medido a 1366, las baldosas seguían en 137px y los
+    cuatro títulos salían con puntos suspensivos.
+
+    `grid-column: 1 / -1` en cada baldosa consigue lo mismo desde el lado que sí se puede tocar:
+    cada una ocupa las dos columnas, que es una columna. Y con el ancho entero el título vuelve a
+    un renglón, así que se deshace también el recorte de dos.
+  */
+  :root[data-portal='admin'] .lx-home .lx-quick-tile {
+    grid-column: 1 / -1;
+    /* Y vuelve el alto de un renglón: el bloque de 410 lo había subido a 66 para los dos. */
+    min-height: 53px;
+  }
+  :root[data-portal='admin'] .lx-home .lx-quick-tile__title {
+    display: block;
+    white-space: nowrap;
   }
 }
 
@@ -8028,4 +8058,82 @@ a.lx-list-row {
    donde ese valor SÍ es texto legible. Ver la nota larga en la paleta del portal. */
 :root[data-portal='inspector'] .lx-bottom-tab-bar__tab[aria-current='page'] {
   color: var(--lx-accent-chrome, var(--lx-primary));
+}
+
+/* =================================================================================================
+   EL INICIO DEL ADMINISTRADOR EN UN PORTÁTIL PEQUEÑO (13-10-2026, «Inicio adaptable» §3)
+   =================================================================================================
+   La tabla de ese documento tiene DOS columnas de medidas, no una: «Grande / mediano» y «Portátil
+   pequeño». Hasta hoy la hoja tenía una sola escala para todo lo que estuviera por encima de 1200,
+   y por eso un 1366×768 —que son 768px de alto, 312 menos que un 1080— recibía exactamente las
+   mismas alturas que un monitor de escritorio.
+
+   El corte va en 1400 porque los tres tamaños que el documento nombra caen a cada lado por sí
+   solos: 1920 y 1440 arriba, 1366 abajo. No es el ancho de ningún aparato concreto —el propio
+   documento avisa de que «1366×768 es un caso de prueba, no una afirmación sobre el tamaño exacto
+   de la computadora de la usuaria»—; es la frontera entre las dos columnas de su tabla.
+
+   Lo que baja, y a cuánto (medido, no estimado; el «antes» es lo que había a 1366):
+
+     elemento              antes    ahora    rango §3 portátil pequeño
+     barra superior          64       60       56-64
+     menú lateral           248      228      210-235
+     KPI (alto)             105       94       88-102
+     gráficos (alto)        260      ~228      205-235
+     acceso rápido           53       48       42-50
+
+   Lo que NO baja, y por qué: la separación entre tarjetas (12, ya dentro de 10-12), el relleno de
+   las tarjetas (14, ya dentro de 12-14), el glifo del KPI (20, que es el mínimo legible) y el
+   tamaño de la cifra (26, dentro de 25-29). La regla de cierre del mismo §3 manda: «nunca cortar
+   números, etiquetas, barras ni controles para cumplir un número».
+
+   Y lo que el documento autoriza expresamente si algo no cabe: «se permite scroll vertical natural
+   para conservar legibilidad y todas las secciones». Ninguna sección se oculta acá.
+   ================================================================================================= */
+@media (max-width: 1400px) {
+  /* La barra superior. El token se declara en `.lx-page-layout`, así que el override va ahí y no
+     en `:root` — esto ya costó una tarde una vez y está escrito arriba, junto al valor de 64. */
+  :root[data-portal='admin'] .lx-page-layout {
+    --lx-topbar-height: 60px;
+  }
+
+  /* El menú. 228, dentro de 210-235. Los 20px que suelta no se pierden: se los lleva el contenido,
+     que es donde está la densidad que falta. */
+  :root[data-portal='admin'] .lx-page-layout__sidebar {
+    width: 228px;
+    flex: 0 0 228px;
+  }
+
+  /* El KPI. 94, dentro de 88-102. El alto lo fija el `min-height` y lo acompaña el relleno: con
+     sólo bajar el mínimo la tarjeta se quedaba en 105 porque el contenido ya medía eso. */
+  :root[data-portal='admin'] .lx-metric {
+    min-height: 94px;
+  }
+  :root[data-portal='admin'] .lx-metric__hit {
+    padding: 10px var(--lx-space-4);
+  }
+
+  /* El glifo del KPI. La tabla pide 18-20 en grande y 18 en portátil pequeño; el `<svg>` sale de
+     HomePage con 20 escritos en los atributos, y el CSS gana a un atributo de presentación. Dos
+     píxeles, pero son dos píxeles dentro de una caja que no cambia, o sea más aire alrededor del
+     glifo, que es lo que la columna estrecha de la tabla pide en todas sus filas. */
+  :root[data-portal='admin'] .lx-metric__icon svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  /* Los accesos rápidos. 48, dentro de 42-50. */
+  :root[data-portal='admin'] .lx-home .lx-quick-tile {
+    min-height: 48px;
+  }
+
+  /* La fila de gráficos. El piso de la tarjeta baja de 244 a 206 —el suelo del rango— y la pista
+     de barras de 150 a 118, que es lo que lleva la tarjeta de ingresos de 260 a ~228. Las dos
+     cosas, porque la fila está `stretch`: si bajara sólo una, la otra mandaría. */
+  :root[data-portal='admin'] .lx-home-grid--analytics > .lx-card {
+    min-height: 206px;
+  }
+  :root[data-portal='admin'] .lx-bars__track {
+    height: 118px;
+  }
 }
