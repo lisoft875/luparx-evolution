@@ -1248,6 +1248,22 @@ export const enUS: Record<TranslationKey, string> = {
     'There is nothing to fix in settings: citations are issued without a photograph, except for the types that require one.',
 
   'inspector.help.diag.location.test': 'Test location',
+
+  /* --- Phase 1 of the two-phase brief (13-10-2026) ---------------------------------------------- */
+  'inspector.help.diag.location.check': 'Check location',
+  'inspector.help.diag.location.checking': 'Checking…',
+  'inspector.help.diag.location.lastCheck': 'Last check: {{cuando}} · {{resultado}}',
+  'inspector.help.diag.location.neverChecked': 'Last check: not done yet.',
+  'inspector.help.diag.location.result.ok': 'position obtained',
+  'inspector.help.diag.location.result.denied': 'permission denied',
+  'inspector.help.diag.location.result.timeout': 'did not answer in time',
+  'inspector.help.diag.location.result.unavailable': 'not available on this device',
+  'inspector.help.diag.location.denied': 'Location permission denied',
+  'inspector.help.diag.location.deniedWhy':
+    'Checking again cannot grant it: the browser does not ask again once denied. It is enabled in the device settings, and this check then detects it.',
+  'inspector.help.permissions.howTo': 'How to enable permissions on this device',
+  'inspector.help.permissions.recheckNote':
+    'Attempts a real location reading. It is the only way to know whether a change in settings has taken effect.',
   'inspector.help.diag.location.fix': 'Last reading: {{lat}}, {{lon}}',
   'inspector.help.diag.location.accuracy': 'Approximate accuracy: {{m}} m',
   'inspector.help.diag.location.accuracyUnknown': 'The device did not report accuracy.',

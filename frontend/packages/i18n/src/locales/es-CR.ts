@@ -1289,6 +1289,24 @@ export const esCR = {
     'No hay nada que arreglar en los ajustes: las boletas se emiten sin fotografía, salvo los tipos que la exigen.',
 
   'inspector.help.diag.location.test': 'Probar ubicación',
+
+  /* --- Fase 1 del encargo de las dos fases (13-10-2026) -----------------------------------------
+     La comprobación de ubicación que sí comprueba, su fecha y su resultado, y las instrucciones
+     del aparato que corresponde en vez de las de los tres. */
+  'inspector.help.diag.location.check': 'Comprobar ubicación',
+  'inspector.help.diag.location.checking': 'Comprobando…',
+  'inspector.help.diag.location.lastCheck': 'Última comprobación: {{cuando}} · {{resultado}}',
+  'inspector.help.diag.location.neverChecked': 'Última comprobación: aún no realizada.',
+  'inspector.help.diag.location.result.ok': 'se obtuvo la posición',
+  'inspector.help.diag.location.result.denied': 'permiso denegado',
+  'inspector.help.diag.location.result.timeout': 'no respondió a tiempo',
+  'inspector.help.diag.location.result.unavailable': 'no disponible en este aparato',
+  'inspector.help.diag.location.denied': 'Permiso de ubicación denegado',
+  'inspector.help.diag.location.deniedWhy':
+    'Comprobar de nuevo no puede concederlo: el navegador no vuelve a preguntar una vez denegado. Se habilita en los ajustes del aparato y después esta comprobación lo detecta.',
+  'inspector.help.permissions.howTo': 'Cómo habilitar los permisos en este aparato',
+  'inspector.help.permissions.recheckNote':
+    'Intenta una lectura real de la ubicación. Es la única forma de saber si un cambio en los ajustes ya tomó efecto.',
   'inspector.help.diag.location.fix': 'Última lectura: {{lat}}, {{lon}}',
   'inspector.help.diag.location.accuracy': 'Precisión aproximada: {{m}} m',
   'inspector.help.diag.location.accuracyUnknown': 'El aparato no informó la precisión.',

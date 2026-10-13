@@ -31,13 +31,18 @@ import {
   cameraPermissionState,
   hasNativeCamera,
   locationPermissionState,
-  probePosition,
   requestCameraPermission,
   takeNativePhoto,
   type PermissionReadiness,
   type PositionProbe,
 } from '../lib/capture';
 import { probeServer, type ServerReach } from '../lib/serverProbe';
+import {
+  aparato,
+  comprobarUbicacion,
+  ultimaComprobacion,
+  type ComprobacionGuardada,
+} from '../lib/locationCheck';
 import { GUIAS, pasoDeGuia, tituloDeGuia } from '../lib/helpGuides';
 import { useCitationQueue, useIsOnline } from '../lib/queries';
 import { lastSyncAt } from '../lib/citationQueue';
@@ -130,6 +135,19 @@ function hayReceptorDeUbicacion(): boolean {
   return Boolean(navigator.geolocation);
 }
 
+/**
+ * La ruta de la pantalla, sin los identificadores que lleve dentro.
+ *
+ * <p>`/citations/0193f2…` se convierte en `/citations/:id`. Lo que soporte necesita saber es DESDE
+ * QUÉ PANTALLA se reportó, no cuál boleta se estaba mirando.</p>
+ */
+function rutaSinIdentificadores(): string {
+  const bruta = `${window.location.pathname}${window.location.hash}`;
+  return bruta
+    .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, ':id')
+    .replace(/\/\d{3,}/g, '/:id');
+}
+
 /** Coordenadas con seis decimales, que es la precisión con la que se guardan en la boleta. */
 function coordenada(valor: number): string {
   return valor.toFixed(6);
@@ -154,6 +172,8 @@ export function HelpPage(): React.JSX.Element {
   const [red, setRed] = useState<ServerReach | null>(null);
   /** La última lectura de posición hecha desde esta pantalla, con su causa si falló. */
   const [gps, setGps] = useState<PositionProbe | null>(null);
+  /** Y la que quedó registrada —cuándo y con qué resultado—, que sobrevive a cerrar la pantalla. */
+  const [registro, setRegistro] = useState<ComprobacionGuardada | null>(() => ultimaComprobacion());
   /** Cómo terminó la última prueba de cámara. Nunca guarda la fotografía. */
   const [camaraPrueba, setCamaraPrueba] = useState<'ok' | 'cancelled' | null>(null);
   const [sincronizando, setSincronizando] = useState(false);
@@ -250,8 +270,9 @@ export function HelpPage(): React.JSX.Element {
   async function probarUbicacion(): Promise<void> {
     setPidiendo('location');
     try {
-      setGps(await probePosition());
+      setGps(await comprobarUbicacion());
     } finally {
+      setRegistro(ultimaComprobacion());
       setPidiendo(null);
       await medir();
     }
@@ -378,7 +399,12 @@ export function HelpPage(): React.JSX.Element {
     */
     const notaUbicacion = ((): string | undefined => {
       if (!hayReceptor) return t('inspector.help.diag.location.unavailableNote');
-      if (ubicacion === 'denied') return t('inspector.help.diag.location.deniedNote');
+      // Con el permiso denegado lo que falta no es la instrucción —ésa está en el panel de
+      // permisos— sino el porqué: que el botón de al lado no puede concederlo. Reportado desde un
+      // iPad: «"Volver a comprobar" no resuelve la situación».
+      if (ubicacion === 'denied' || gps?.outcome === 'denied') {
+        return t('inspector.help.diag.location.deniedWhy');
+      }
       if (gps?.outcome === 'timeout') return t('inspector.help.diag.location.timeoutNote');
       if (gps?.outcome === 'unavailable') return t('inspector.help.diag.location.unavailableNote');
       if (gps?.outcome === 'ok') {
@@ -401,7 +427,9 @@ export function HelpPage(): React.JSX.Element {
       title: t('inspector.help.diag.location'),
       state: !hayReceptor
         ? t('inspector.help.diag.location.unavailable')
-        : gps?.outcome === 'ok'
+        : gps?.outcome === 'denied'
+          ? t('inspector.help.diag.location.denied')
+          : gps?.outcome === 'ok'
           ? // La lectura real manda sobre el estado del permiso: si hay coordenadas, el permiso se
             // concedió, y además éste es el dato que el §2 pide mostrar.
             t('inspector.help.diag.location.fix', {
@@ -410,21 +438,33 @@ export function HelpPage(): React.JSX.Element {
             })
           : gps?.outcome === 'timeout'
             ? t('inspector.help.diag.location.timeout')
-            : textoPermiso(ubicacion),
+            : ubicacion === 'denied'
+              ? t('inspector.help.diag.location.denied')
+              : textoPermiso(ubicacion),
       note: notaUbicacion,
-      // Acá el botón funciona en los dos sitios, porque la lectura de posición dispara el aviso del
-      // sistema tanto en el teléfono como en el navegador. Con el permiso denegado no se ofrece:
-      // no abriría nada.
-      action:
-        hayReceptor && ubicacion !== 'denied'
-          ? {
-              label: t('inspector.help.diag.location.test'),
-              onClick: () => void probarUbicacion(),
-              busy: pidiendo === 'location',
-              busyLabel: t('inspector.help.diag.permission.working'),
-              kind: 'permission',
-            }
-          : undefined,
+      /*
+        El botón se ofrece TAMBIÉN con el permiso denegado, y eso cambió el 13-10-2026 por lo que se
+        vio en un iPad de verdad.
+
+        Antes no se ofrecía, con el razonamiento de que un control que no puede abrir ningún diálogo
+        es un control muerto. Era correcto sobre el diálogo y equivocado sobre el propósito: esto no
+        CONCEDE el permiso, lo COMPRUEBA. En Safari el estado que la página lee puede quedar viejo
+        después de que alguien lo habilite en los Ajustes, y la única prueba autoritativa es
+        intentar una lectura. Con el permiso denegado el intento vuelve al instante y sin abrir nada;
+        con el permiso recién habilitado, devuelve coordenadas y la pantalla se entera.
+
+        Por eso también cambia el rótulo: «Comprobar» y no «Probar». Y por eso la nota de abajo
+        explica que comprobar de nuevo no puede conceder nada — que es lo que faltaba decir.
+      */
+      action: hayReceptor
+        ? {
+            label: t('inspector.help.diag.location.check'),
+            onClick: () => void probarUbicacion(),
+            busy: pidiendo === 'location',
+            busyLabel: t('inspector.help.diag.location.checking'),
+            kind: 'permission',
+          }
+        : undefined,
     });
     return filas;
   }
@@ -636,7 +676,10 @@ export function HelpPage(): React.JSX.Element {
       `Versión: ${__LUPARX_VERSION__}`,
       `Compilación: ${__LUPARX_BUILD__ ?? 'no disponible'}`,
       `Entorno: ${__LUPARX_ENV__ ?? 'no disponible'}`,
-      `Pantalla de la app: ${window.location.pathname}${window.location.hash}`,
+      // La ruta con los identificadores sustituidos. Esto se pega en un mensaje a soporte y el §A
+      // paso 6 pide no incluir datos personales ni matrículas; un identificador de boleta no es
+      // ninguna de las dos, pero tampoco le sirve a nadie para contestar «¿dónde estabas?».
+      `Pantalla de la app: ${rutaSinIdentificadores()}`,
       `Fecha: ${new Date().toISOString()}`,
       `Conexión: ${online ? 'en línea' : 'sin conexión'}`,
       `Servidor: ${red ? red.state : 'sin medir'}`,
@@ -678,6 +721,20 @@ export function HelpPage(): React.JSX.Element {
   const filas = comprobaciones();
   const permisos = comprobacionesPermisos();
   const desconocido = t('inspector.help.about.unknown');
+  /*
+    Las instrucciones del aparato que la persona tiene en la mano. En iOS van las dos —Safari y la
+    aplicación instalada— porque el mismo iPad puede estar en cualquiera de los dos y la diferencia
+    no se ve desde la página: un `display-mode: standalone` distingue la instalada, pero una
+    instalada desde Safari comparte los permisos del sitio, así que afirmar cuál es sería adivinar.
+    En Android, la suya. En el resto, ninguna: inventar una ruta de ajustes para un escritorio que
+    no sabemos cuál es sería peor que no decir nada.
+  */
+  const instrucciones: TranslationKey[] =
+    aparato() === 'ios'
+      ? ['inspector.help.permissions.settings.safari', 'inspector.help.permissions.settings.ios']
+      : aparato() === 'android'
+        ? ['inspector.help.permissions.settings.android']
+        : [];
 
   return (
     <InspectorShell title={t('inspector.help.title')} onBack={() => navigate('/more')}>
@@ -762,24 +819,64 @@ export function HelpPage(): React.JSX.Element {
             toneLabels={etiquetasDeTono}
             checks={permisos}
           />
-          {/* «Volver a comprobar»: el §3 lo pide por su nombre, para después de cambiar los
-              ajustes del sistema. No reabre ningún diálogo —no podría— y eso es justo lo que la
-              nota de abajo explica. */}
-          <Button type="button" variant="secondary" fullWidth onClick={() => void medir()}>
+          {/*
+            «Volver a comprobar», y desde el 13-10-2026 comprueba de verdad.
+
+            Hasta hoy llamaba a `medir()`, que RELEE el estado del permiso. Desde un iPad se
+            reportó que «no resuelve la situación», y tenían razón: releer algo que no cambió no
+            cambia nada, y en Safari el estado leído puede además quedar viejo después de que
+            alguien habilite el permiso en los Ajustes. Ahora intenta una lectura real —`medir()`
+            viene detrás, dentro de `probarUbicacion`— que es la única prueba autoritativa.
+
+            Un intento por pulsación y ninguno automático: el §A paso 4 pide no entrar en un bucle
+            de solicitudes.
+          */}
+          <Button
+            type="button"
+            variant="secondary"
+            fullWidth
+            loading={pidiendo === 'location'}
+            onClick={() => void probarUbicacion()}
+          >
             {t('inspector.help.permissions.recheck')}
           </Button>
-          {/* Dónde se cambia de verdad. Tres sistemas y no uno: el aparato del encargo es un iPad
-              en Safari, donde el permiso NO está donde está el de una aplicación instalada. */}
-          <div>
-            <p className="lx-text-meta" style={{ margin: '0 0 var(--lx-space-1)', fontWeight: 600 }}>
-              {t('inspector.help.permissions.settings.title')}
-            </p>
-            <ul className="lx-guide__step" style={{ paddingLeft: 'var(--lx-space-4)' }}>
-              <li>{t('inspector.help.permissions.settings.safari')}</li>
-              <li>{t('inspector.help.permissions.settings.ios')}</li>
-              <li>{t('inspector.help.permissions.settings.android')}</li>
-            </ul>
-          </div>
+          <p className="lx-text-meta" style={{ margin: 0 }}>
+            {t('inspector.help.permissions.recheckNote')}
+          </p>
+          {/* Cuándo fue la última y qué contestó. El §A paso 3 lo pide por su nombre, y «aún no
+              realizada» es una respuesta tan válida como una fecha. */}
+          <p className="lx-text-meta" style={{ margin: 0 }}>
+            {registro
+              ? t('inspector.help.diag.location.lastCheck', {
+                  cuando: formatDateTime(registro.cuando, locale),
+                  resultado: t(
+                    `inspector.help.diag.location.result.${registro.resultado}` as TranslationKey,
+                  ),
+                })
+              : t('inspector.help.diag.location.neverChecked')}
+          </p>
+          {/*
+            Dónde se cambia de verdad — y SÓLO para este aparato (13-10-2026).
+
+            Hasta hoy se imprimían los tres párrafos juntos: iPad en Safari, aplicación instalada y
+            Android. El §F paso 9 lo prohíbe en letra —«evitar mostrar simultáneamente párrafos para
+            iPhone, iPad y Android; ofrecer la ayuda pertinente al dispositivo»— y además es pedirle
+            a alguien que busque su aparato en una lista mientras está de pie en la calle.
+
+            Plegado, porque es una instrucción larga que sólo hace falta cuando el permiso está
+            denegado; abierto de entrada empujaría el estado de los permisos fuera de la pantalla,
+            que es lo que esta persona vino a mirar.
+          */}
+          <details className="lx-guide">
+            <summary className="lx-guide__summary">{t('inspector.help.permissions.howTo')}</summary>
+            <div className="lx-guide__body">
+              <ul className="lx-guide__step">
+                {instrucciones.map((clave) => (
+                  <li key={clave}>{t(clave)}</li>
+                ))}
+              </ul>
+            </div>
+          </details>
           <p className="lx-text-meta" style={{ margin: 0 }}>
             {t('inspector.help.permissions.apiNote')}
           </p>
