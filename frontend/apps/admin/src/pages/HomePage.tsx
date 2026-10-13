@@ -383,8 +383,6 @@ export function HomePage(): React.JSX.Element {
      cobró en ella. La §6 de la correctiva decide cómo se dibuja eso. */
   const todoEnCero = barras.length > 0 && barras.every((b) => b.value === 0);
 
-  /** El último día de la serie: el de hoy, que es el que rotula la última barra del gráfico. */
-  const ultimoDia = serie.data?.days?.length ? serie.data.days[serie.data.days.length - 1] : null;
 
   const eventos: AuditEvent[] = useMemo(
     () => (actividad.data?.items ?? []).filter((e) => e.action in ACTOS).slice(0, EVENTOS_A_MOSTRAR),
@@ -644,18 +642,13 @@ export function HomePage(): React.JSX.Element {
                         caption={t('admin.home.occupancy.total')}
                         emptyLabel={t('admin.home.occupancy.noBase')}
                         title={t('admin.home.zones.title')}
-                        /* 150 (boceto aprobado del 12-10-2026, que pide «anillo de 140-160 px»).
+                        /* 120 (especificación definitiva: «diámetro 115-125 px»).
 
-                           Este número ha bajado tres veces y ahora sube: 168 por omisión → 136 el
-                           09-10 → 124 en la correctiva de la mañana → 150 acá. No es indecisión
-                           mía: cada encargo trajo su rango y éste viene con la imagen aprobada
-                           delante, donde el anillo es claramente la pieza principal del bloque.
-                           Donde dos documentos dan medidas distintas manda el más reciente.
-
-                           La lista de zonas no pierde por esto: la fila analítica pasa de 228 a
-                           256 de alto y el reparto de 58/42 a 54/46, así que la columna de
-                           ocupación es más ancha que antes aunque el anillo crezca. */
-                        size={150}
+                           El historial de este número: 168 por omisión → 136 el 09-10 → 124 el
+                           12-10 → 150 el 13-10 → 120. Cada encargo trajo su rango y manda el más
+                           reciente; éste se llama «definitiva» y su §1 pone el anillo en la lista
+                           de lo que «sigue sobredimensionado». 120 es el centro de 115-125. */
+                        size={120}
                       />
                       {/* De qué se compone el porcentaje. La referencia lo pone bajo el número y
                           son dos cifras que el panel ya daba: estadías corriendo sobre bahías en
@@ -701,23 +694,20 @@ export function HomePage(): React.JSX.Element {
                     había que leerlo barra por barra. En su propia línea y no dentro del
                     `SectionHeader`, que es lo que el punto 7 pide al decir «no superponer fecha,
                     total y título: cada elemento debe tener su propia zona de layout». */}
+                {/*
+                  Sólo el total de la semana. La línea «12 de octubre · ₡135.000» que estuvo acá
+                  unas horas el 13-10 se va, y conviene decir por qué: la añadí porque el boceto la
+                  dibuja, sabiendo que repetía la cifra del KPI «Ingresos del día» —el propio
+                  documento de ese boceto advierte contra los «titulares duplicados» y lo pensé al
+                  escribirla—. La captura de las 19:03 lo enseña: la fecha y el monto aparecen dos
+                  veces en la misma pantalla. El dato no era falso; era redundante, que para una
+                  pantalla densa es un defecto igual. Es duplicación de INTERFAZ, no de datos: la
+                  consulta no se toca.
+                */}
                 {serie.data && serie.data.totalMinor > 0 ? (
-                  <>
-                    <p className="lx-home__week-total">
-                      {dinero(serie.data.totalMinor, serie.data.currencyCode)}
-                    </p>
-                    {/* El último día del rango, debajo del total: es lo que el boceto dibuja y es
-                        lo que da nombre a la última barra del gráfico. Sale de la misma serie que
-                        ya está cargada —`days`, su último elemento— así que no hay ni una consulta
-                        más ni una cifra que pueda discrepar con el gráfico que tiene al lado. */}
-                    {ultimoDia ? (
-                      <p className="lx-home__week-today">
-                        {formatDate(`${ultimoDia.date}T12:00:00`, locale, { day: 'numeric', month: 'long' })}
-                        {' · '}
-                        {dinero(ultimoDia.totalMinor, serie.data.currencyCode)}
-                      </p>
-                    ) : null}
-                  </>
+                  <p className="lx-home__week-total">
+                    {dinero(serie.data.totalMinor, serie.data.currencyCode)}
+                  </p>
                 ) : null}
                 {serie.isLoading ? (
                   // Un bloque del tamaño del gráfico, no la palabra «Cargando»: así la pantalla no
@@ -762,20 +752,22 @@ export function HomePage(): React.JSX.Element {
               </Card>
             </div>
 
-            {/* --- E. fila 3: actividad | accesos rápidos | zonas más utilizadas ---------------
-                TRES columnas de 40/30/30 desde el 12-10-2026, que es lo que pide la tabla de la
-                «Especificación visual ejecutable» y lo que dibuja su referencia B.
+            {/* --- E. fila 3: actividad | (accesos rápidos sobre zonas más utilizadas) ---------
+                DOS columnas otra vez, 57/43, con la pila a la derecha. Lo pide el §4 de la
+                especificación definitiva: «Actividad reciente (aprox. 55-60 %) y columna derecha
+                (40-45 %) con Accesos rápidos arriba y Zonas más utilizadas debajo».
 
-                Eran dos: actividad a la izquierda y, a la derecha, una pila con los accesos encima
-                del ranking. Esa composición venía de la referencia anterior y tenía un defecto
-                medible que la captura de staging enseña: con UN solo evento de actividad —el
-                estado real de la municipalidad de prueba— la columna izquierda medía 115px y la
-                pila de la derecha 404, o sea 288px de fondo vacío a media pantalla. En tres
-                columnas la diferencia cae a la altura de una tarjeta, y la fila vuelve a leerse
-                como una fila.
-
-                La pila (`.lx-home-stack`) desaparece del árbol y su regla se borra de la hoja: no
-                queda nadie que la monte. */}
+                Esta fila fue dos columnas, luego tres el 12-10, y vuelve a dos. El motivo de pasar
+                a tres fue real y está medido: con UN evento de actividad la columna izquierda
+                medía 115px contra 404 de la pila, o sea 288px de fondo vacío. Lo que evita ahora
+                que eso vuelva no es el número de columnas sino la regla que el mismo §4 escribe al
+                lado: «Actividad reciente no debe estirarse para igualar artificialmente la altura
+                de toda la columna derecha. La fila inferior puede ser asimétrica en altura, pero
+                no debe producir un rectángulo vacío enorme». O sea: `align-items: start` y ningún
+                `min-height` —que es lo que hay— más una actividad que ya no cae a 115 porque la
+                municipalidad tiene eventos y el tope son cuatro. Si volviera a quedar un solo
+                evento, la tarjeta sería corta y a su lado habría aire; eso es asimetría, no un
+                rectángulo vacío, y es exactamente lo que el documento autoriza. */}
             <div className="lx-home-grid lx-home-grid--operation">
               <Card className="lx-card--dense">
                 <SectionHeader
@@ -829,16 +821,19 @@ export function HomePage(): React.JSX.Element {
                 )}
               </Card>
 
-              <Card className="lx-card--dense">
-                <SectionHeader title={t('admin.home.quick.title')} />
-                <QuickActions />
-              </Card>
+              {/* La columna derecha: los accesos encima del ranking, que es el orden que pide el
+                  §4. `.lx-home-stack` vuelve a montarse —se había borrado el 12-10 al pasar la
+                  fila a tres columnas— con la misma regla de entonces. */}
+              <div className="lx-home-stack">
+                <Card className="lx-card--dense">
+                  <SectionHeader title={t('admin.home.quick.title')} />
+                  <QuickActions />
+                </Card>
 
-              {/* «Zonas más utilizadas»: el bloque nuevo de la referencia. Mismo dato que la
-                  lista del dónut —`occupancy.zones`, ordenado una sola vez más arriba— leído de
-                  otra manera: ahí es «cuán llena está cada una», acá es «cuáles son las que más
-                  se usan». Las dos salen de la misma ordenación a propósito. */}
-              <Card className="lx-card--dense">
+                {/* «Zonas más utilizadas». Mismo dato que la lista del dónut —`occupancy.zones`,
+                    ordenado una sola vez más arriba— leído de otra manera: ahí es «cuán llena está
+                    cada una», acá es «cuáles son las que más se usan». */}
+                <Card className="lx-card--dense">
                 <SectionHeader
                   title={t('admin.home.rank.title')}
                   aside={
@@ -857,7 +852,8 @@ export function HomePage(): React.JSX.Element {
                 ) : (
                   <ZoneRanking zonas={zonasPorUso} emptyLabel={t('admin.home.rank.empty')} />
                 )}
-              </Card>
+                </Card>
+              </div>
             </div>
 
             {/* --- G. Atención requerida, SÓLO con incidencias reales --------------------------

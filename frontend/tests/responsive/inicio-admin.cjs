@@ -742,6 +742,19 @@ async function medir(page, dedo) {
           filaBaltos: [...document.querySelectorAll('.lx-home-grid--operation > *')].map((n) =>
             Math.round(n.getBoundingClientRect().height),
           ),
+          // Cuántas tarjetas lleva la pila de la derecha. Dos: accesos y ranking.
+          pilaDerecha: document.querySelectorAll('.lx-home-stack > .lx-card').length,
+          // La duplicación que el §1 manda corregir: la fecha y el monto del día repetidos debajo
+          // del total semanal. Se comprueba por ausencia del nodo que los dibujaba.
+          diaDuplicado: Boolean(document.querySelector('.lx-home__week-today')),
+          // Y el otro defecto del §1: un monto partido en dos renglones. `getClientRects()` da una
+          // caja por línea, así que más de una es un número roto.
+          cifrasPartidas: [...document.querySelectorAll('.lx-metric__value')]
+            .filter((n) => n.getClientRects().length > 1)
+            .map((n) => rec(n.textContent)),
+          cifrasDesbordadas: [...document.querySelectorAll('.lx-metric__value')]
+            .filter((n) => n.scrollWidth > n.clientWidth + 1)
+            .map((n) => rec(n.textContent)),
           operacionAlineacion: (() => {
             const f = document.querySelector('.lx-home-grid--operation');
             return f ? getComputedStyle(f).alignItems : null;
@@ -833,8 +846,8 @@ async function medir(page, dedo) {
         esta semana: una prueba que sobrevive a la especificación que la justificaba.
       */
       okInicio(
-        comp.donut !== null && comp.donut.ancho >= 140 && comp.donut.ancho <= 160,
-        '  y mide 140-160px, lo que pide el boceto aprobado',
+        comp.donut !== null && comp.donut.ancho >= 115 && comp.donut.ancho <= 125,
+        '  y mide 115-125px, lo que pide la especificación definitiva',
         comp.donut ? `${comp.donut.ancho}px` : 'sin dónut',
       );
       // La inversión que pide la sección 6: la ocupación pasa a ser la columna ancha.
@@ -852,65 +865,48 @@ async function medir(page, dedo) {
           Math.round((comp.graficoAncho / total) * 100),
         ];
         okInicio(
-          Math.abs(repartoA[0] - 54) <= 2 && Math.abs(repartoA[1] - 46) <= 2,
-          `  y se reparten ${repartoA.join('/')} (el boceto pide 54/46)`,
+          Math.abs(repartoA[0] - 55) <= 2 && Math.abs(repartoA[1] - 45) <= 2,
+          `  y se reparten ${repartoA.join('/')} (la definitiva pide 55/45)`,
         );
       }
-      /* La fila inferior, con la tabla del 12-10-2026: tres columnas de 40/30/30. */
+      /*
+        La fila inferior vuelve a DOS columnas (especificación definitiva, §4): actividad a la
+        izquierda y una pila a la derecha con los accesos sobre el ranking. Fue dos, luego tres el
+        12-10, y otra vez dos.
+
+        Y con ella se va la comprobación de alturas. Las tres versiones de este arnés han pedido
+        cosas distintas sobre lo mismo —desnivel ≤2, luego «la actividad más baja que su vecina»,
+        luego «las tres entre 210 y 245»— porque cada encargo decía otra cosa. El §4 de la
+        definitiva cierra el asunto: «la fila inferior PUEDE ser asimétrica en altura, pero no debe
+        producir un rectángulo vacío enorme». O sea que la altura ya no es la pregunta; la pregunta
+        es si alguien estira la tarjeta, y eso se comprueba abajo mirando `align-items`.
+      */
       okInicio(
-        comp.filaBanchos.length === 3,
-        'la fila inferior tiene tres columnas (actividad, accesos, zonas)',
+        comp.filaBanchos.length === 2,
+        'la fila inferior tiene dos columnas (actividad y la pila de la derecha)',
         `son ${comp.filaBanchos.length}`,
       );
-      if (comp.filaBanchos.length === 3) {
+      if (comp.filaBanchos.length === 2) {
         const total = comp.filaBanchos.reduce((a, b) => a + b, 0);
         const reparto = comp.filaBanchos.map((w) => Math.round((w / total) * 100));
         okInicio(
-          Math.abs(reparto[0] - 40) <= 2 && Math.abs(reparto[1] - 30) <= 2 && Math.abs(reparto[2] - 30) <= 2,
-          `  y se reparten ${reparto.join('/')} (la tabla pide 40/30/30)`,
+          reparto[0] >= 55 && reparto[0] <= 60,
+          `  y se reparten ${reparto.join('/')} (la definitiva pide 55-60 / 40-45)`,
         );
-        /* «Igual altura visual: 210-245 px» y «alturas equilibradas». Es un RANGO común y no un
-           desnivel de cero: el piso lo pone un `min-height` y no `align-items: stretch`, que es lo
-           que la correctiva del 12-10 prohibió y sigue prohibido —se comprueba justo abajo. */
-        okInicio(
-          comp.filaBaltos.every((h) => h >= 210 && h <= 245),
-          `  y las tres miden entre 210 y 245 (${comp.filaBaltos.join('/')})`,
-        );
-        /*
-          Esto comprobaba lo contrario hace unas horas: «las tres terminan en la misma línea
-          (desnivel <= 2)». La correctiva lo prohíbe en tres sitios —tabla §3 «altura según
-          contenido, NO igualar a la tarjeta más alta», §7 «con una sola actividad debe verse como
-          tarjeta compacta» y §10 «evitar align-items: stretch […]; usar align-items: start»—, así
-          que lo que se comprueba es lo inverso: que la fila NO esté igualada.
-
-          Dos mitades, porque fallan por separado: la regla de CSS (que nadie vuelva a poner
-          `stretch`) y su efecto medible (que la tarjeta de actividad, con pocos eventos, sea de
-          verdad más baja que su vecina más alta). La segunda sólo se afirma cuando hay poco que
-          mostrar: con cuatro o cinco eventos las tres columnas se emparejan solas y un desnivel de
-          cero sería correcto.
-        */
         okInicio(
           comp.operacionAlineacion === 'start' || comp.operacionAlineacion === 'flex-start',
-          `  y la fila no iguala alturas (align-items: ${comp.operacionAlineacion})`,
+          `  y la actividad no se estira para igualar la columna derecha (align-items: ${comp.operacionAlineacion})`,
         );
-        /*
-          Esta comprobación exigía ayer lo contrario —«con pocos eventos la actividad tiene que ser
-          MÁS BAJA que su vecina»— y se borra en vez de quedarse peleada con la de arriba.
-
-          Las dos salían del mismo defecto y de dos encargos distintos. La correctiva del 12-10
-          prohibió `align-items: stretch`, donde la tarjeta más alta decide y una actividad con un
-          evento se vuelve un rectángulo de 318px. El boceto del 13-10 pide la fila pareja de la
-          imagen. Lo que las concilia es el MECANISMO: un piso común de 210 deja a las tres en el
-          mismo rango sin que ninguna estire a ninguna. Así que lo que se comprueba es el rango
-          —arriba— y que el mecanismo prohibido siga prohibido —abajo—; un desnivel grande o pequeño
-          deja de ser la pregunta.
-        */
-        const desnivel = Math.max(...comp.filaBaltos) - Math.min(...comp.filaBaltos);
-        console.log(`  ··  la fila mide ${comp.filaBaltos.join('/')}px (desnivel ${desnivel}px, ${comp.eventos} eventos)`);
+        console.log(`  ··  alturas ${comp.filaBaltos.join('/')}px con ${comp.eventos} eventos (la asimetría está permitida)`);
+        okInicio(
+          comp.pilaDerecha === 2,
+          '  y la columna derecha es una pila con los accesos sobre el ranking',
+          `tarjetas en la pila: ${comp.pilaDerecha}`,
+        );
       }
       okInicio(
-        comp.menuAncho >= 250 && comp.menuAncho <= 270,
-        `el menú lateral mide ${comp.menuAncho}px (el boceto pide 250-270)`,
+        comp.menuAncho >= 240 && comp.menuAncho <= 250,
+        `el menú lateral mide ${comp.menuAncho}px (la definitiva pide 240-250)`,
       );
       okInicio(
         comp.menuRecortado === 0,
@@ -918,8 +914,8 @@ async function medir(page, dedo) {
         `${comp.menuRecortado} recortadas`,
       );
       okInicio(
-        comp.barraSuperior >= 64 && comp.barraSuperior <= 72,
-        `la barra superior mide ${comp.barraSuperior}px (pide 64-72)`,
+        comp.barraSuperior >= 60 && comp.barraSuperior <= 64,
+        `la barra superior mide ${comp.barraSuperior}px (la definitiva pide 64 y «no aumentar»)`,
       );
       /* «Ancho restante fluido»: el contenido se queda con lo que el menú suelta, sin tope. A 1536
          con un menú de 240 son 1296; con el tope viejo de 1200 se perdían 96px en márgenes. */
@@ -1005,6 +1001,21 @@ async function medir(page, dedo) {
         comp.etiquetasBarras.join(' · '),
       );
       okInicio(!comp.desborde, 'no hay desplazamiento horizontal a 1536px');
+      /* Los dos defectos que el §1 de la definitiva nombra uno por uno. */
+      okInicio(
+        comp.cifrasPartidas.length === 0,
+        'ninguna cifra de KPI se parte en dos renglones',
+        comp.cifrasPartidas.join(' · '),
+      );
+      okInicio(
+        comp.cifrasDesbordadas.length === 0,
+        '  ni se sale de su tarjeta',
+        comp.cifrasDesbordadas.join(' · '),
+      );
+      okInicio(
+        !comp.diaDuplicado,
+        'el total semanal no repite la fecha y el monto del día (ya están en su KPI)',
+      );
 
       /* --- Lo que la especificación cerrada del 09-10-2026 añade --------------------------------
          Su regla principal es «NO ELIMINAR INFORMACIÓN EXISTENTE» y nombra los ocho bloques que
@@ -1154,22 +1165,22 @@ async function medir(page, dedo) {
       /* 60-75 (boceto aprobado, 13-10-2026). Esta línea ha pedido 64-80, luego 50-62 y ahora
          60-75: cada encargo trae su rango y manda el más reciente, que es además el que viene con
          la imagen aprobada delante. */
-      okInicio(dentro(TABLA.saludo, 60, 75), `el saludo mide ${TABLA.saludo}px (el boceto pide 60-75)`);
+      okInicio(dentro(TABLA.saludo, 56, 64), `el saludo mide ${TABLA.saludo}px (la definitiva pide 56-64)`);
       okInicio(
-        TABLA.kpisIguales && TABLA.kpis.every((h) => dentro(h, 118, 136)),
-        `los cuatro KPI miden ${TABLA.kpis.join('/')}px (el boceto pide 118-136 e iguales)`,
+        TABLA.kpisIguales && TABLA.kpis.every((h) => dentro(h, 100, 110)),
+        `los cuatro KPI miden ${TABLA.kpis.join('/')}px (la definitiva pide 100-110 e iguales)`,
       );
       okInicio(
         dentro(TABLA.etiquetaPx, 13, 14),
         `la etiqueta del KPI mide ${TABLA.etiquetaPx}px (pide 13-14)`,
       );
       okInicio(
-        TABLA.filaA.every((h) => dentro(h, 250, 285)),
-        `la fila de gráficos mide ${TABLA.filaA.join(' y ')}px (el boceto pide 250-285)`,
+        TABLA.filaA.every((h) => dentro(h, 240, 270)),
+        `la fila de gráficos mide ${TABLA.filaA.join(' y ')}px (la definitiva pide 240-270)`,
       );
       okInicio(
-        dentro(TABLA.donut, 140, 160),
-        `el anillo mide ${TABLA.donut}px de diámetro (el boceto pide 140-160)`,
+        dentro(TABLA.donut, 115, 125),
+        `el anillo mide ${TABLA.donut}px de diámetro (la definitiva pide 115-125)`,
       );
       okInicio(
         !TABLA.ejesRepetidos,
@@ -1216,8 +1227,8 @@ async function medir(page, dedo) {
         TABLA.rankingRecortado.join(' · '),
       );
       okInicio(
-        TABLA.baldosas.length === 4 && TABLA.baldosas.every((h) => dentro(h, 65, 75)),
-        `los cuatro accesos miden ${TABLA.baldosas.join('/')}px (el boceto pide 65-75)`,
+        TABLA.baldosas.length === 4 && TABLA.baldosas.every((h) => dentro(h, 50, 56)),
+        `los cuatro accesos miden ${TABLA.baldosas.join('/')}px (la definitiva pide 50-56)`,
       );
       okInicio(
         dentro(TABLA.baldosaTituloPx, 12, 13),
@@ -1228,8 +1239,8 @@ async function medir(page, dedo) {
         `su ícono mide ${TABLA.baldosaGlifo}px (pide 16-18)`,
       );
       okInicio(
-        dentro(TABLA.kpiIconoCaja, 38, 42) && dentro(TABLA.kpiIconoGlifo, 18, 22),
-        `el ícono del KPI mide ${TABLA.kpiIconoGlifo}px en un contenedor de ${TABLA.kpiIconoCaja}px (el boceto pide 18-22 en 38-42)`,
+        dentro(TABLA.kpiIconoCaja, 36, 40) && dentro(TABLA.kpiIconoGlifo, 18, 20),
+        `el ícono del KPI mide ${TABLA.kpiIconoGlifo}px en un contenedor de ${TABLA.kpiIconoCaja}px (la definitiva pide 18-20 en 36-40)`,
       );
 
       const OBLIGATORIOS = [
@@ -1253,8 +1264,8 @@ async function medir(page, dedo) {
         cerrada.accesosRecortados.join(' · '),
       );
       okInicio(
-        cerrada.kpiValorPx >= 27 && cerrada.kpiValorPx <= 32,
-        `el número de un KPI mide ${cerrada.kpiValorPx}px (la correctiva pide 27-32)`,
+        cerrada.kpiValorPx >= 26 && cerrada.kpiValorPx <= 28,
+        `el número de un KPI mide ${cerrada.kpiValorPx}px (la definitiva pide 26-28)`,
       );
       okInicio(
         cerrada.tituloModuloPx >= 18 && cerrada.tituloModuloPx <= 20,
