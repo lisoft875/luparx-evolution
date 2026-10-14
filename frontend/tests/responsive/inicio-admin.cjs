@@ -1790,6 +1790,186 @@ async function medir(page, dedo) {
     await ctx.close();
   }
 
+  /* ================================================================================================
+     La guía de implementación visual del 14-10-2026, comprobada en el navegador
+     ================================================================================================
+
+     Lo que la guía pide es un cambio de COLOR, y un cambio de color es justo el que una prueba de
+     cajas no ve: las medidas siguen siendo las mismas, las columnas siguen siendo las mismas, y la
+     pantalla puede estar entera del color equivocado con todo en verde.
+
+     Se comprueba lo que de verdad se puede romper:
+
+       1. Que la paleta acotada LLEGUE. Que el `:has(.lx-home)` se evalúe en el navegador —y no sólo
+          en la hoja— sobre el lienzo, el cromo, la tarjeta y la baldosa destacada.
+       2. Que las cuatro tarjetas de KPI tengan CUATRO fondos distintos, que es lo que el paso 4
+          pide, y no cuatro veces el mismo con el icono de otro color.
+       3. Que el anillo use el degradado y no el azul plano, y que las barras de ingresos lleven un
+          degradado vertical.
+       4. Y lo que el §07 PROHÍBE: que el Panel —la pantalla de al lado, mismo portal— siga con el
+          lienzo de antes. Ésta es la que de verdad importa: un `:has()` mal escrito, o un token
+          puesto un bloque más arriba, repinta los cuatro portales y nadie se entera hasta que
+          alguien abre otra pantalla.
+
+     Los valores no se escriben a mano en una lista paralela: se leen de `tokens.css`, que es lo que
+     se despliega. Una prueba contra una copia de los hexadecimales comprueba la copia.
+  */
+  {
+    console.log('\n── La guía visual del 14-10: la paleta del Inicio, y sólo del Inicio ──');
+    const fs = require('node:fs');
+    const path = require('node:path');
+    const css = fs.readFileSync(
+      path.join(__dirname, '..', '..', 'packages', 'ui', 'src', 'tokens.css'),
+      'utf8',
+    );
+    /** El valor de un token dentro del PRIMER bloque cuyo selector es exactamente éste. */
+    const token = (selector, nombre) => {
+      const i = css.indexOf(`\n${selector} {`);
+      if (i < 0) return null;
+      const cuerpo = css.slice(css.indexOf('{', i) + 1, css.indexOf('\n}', i)).replace(/\/\*[\s\S]*?\*\//g, '');
+      const m = cuerpo.match(new RegExp(`^\\s*${nombre}\\s*:\\s*(.+?);\\s*$`, 'm'));
+      return m ? m[1].trim() : null;
+    };
+    const AMBITO = ":root[data-portal='admin']:has(.lx-home)";
+    const ADMIN = ":root[data-portal='admin']";
+    /** `#071629` → `rgb(7, 22, 41)`, que es como el navegador devuelve un color calculado. */
+    const aRgb = (hex) => {
+      const h = hex.trim().replace('#', '');
+      const p = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));
+      return `rgb(${p[0]}, ${p[1]}, ${p[2]})`;
+    };
+
+    const esperado = {
+      lienzo: token(AMBITO, '--lx-bg'),
+      cromo: token(AMBITO, '--lx-chrome'),
+      tarjeta: token(AMBITO, '--lx-surface'),
+    };
+    const lienzoViejo = token(ADMIN, '--lx-bg');
+    okInicio(
+      Boolean(esperado.lienzo && esperado.cromo && esperado.tarjeta && lienzoViejo),
+      `  los tokens salen de tokens.css (lienzo ${esperado.lienzo}, cromo ${esperado.cromo}, tarjeta ${esperado.tarjeta}; el del resto del admin sigue siendo ${lienzoViejo})`,
+      'falta alguno de los bloques en tokens.css',
+    );
+    okInicio(
+      esperado.lienzo !== lienzoViejo,
+      '  y el lienzo del Inicio no es el mismo que el del resto del portal (si lo fuera, esta prueba no probaría nada)',
+    );
+
+    const ctxColor = await browser.newContext({
+      storageState: estado,
+      locale: 'es-CR',
+      ignoreHTTPSErrors: true,
+      viewport: { width: 1536, height: 960 },
+    });
+    const pc = await ctxColor.newPage();
+
+    await pc.goto(`${BASE}/admin/`, { waitUntil: 'domcontentloaded' });
+    await pc.waitForTimeout(2400);
+    await pc.screenshot({ path: 'tests/responsive/capturas/guia-visual-inicio-1536x960.png' });
+    await pc.screenshot({ path: 'tests/responsive/capturas/guia-visual-inicio-1536x960-completa.png', fullPage: true });
+
+    const v = await pc.evaluate(() => {
+      const cs = (n) => (n ? getComputedStyle(n) : null);
+      const fondoDe = (sel) => {
+        const e = cs(document.querySelector(sel));
+        return e ? e.backgroundColor : null;
+      };
+      const kpis = [...document.querySelectorAll('.lx-home-kpis .lx-metric')].map(
+        (n) => getComputedStyle(n).backgroundColor,
+      );
+      const arco = document.querySelector('.lx-donut__value');
+      const barras = [...document.querySelectorAll('.lx-bars__bar')].map(
+        (n) => getComputedStyle(n).backgroundImage,
+      );
+      const activo = document.querySelector('.lx-nav-link--active');
+      return {
+        lienzo: cs(document.body).backgroundColor,
+        cromo: fondoDe('.lx-page-layout__header'),
+        tarjeta: fondoDe('.lx-home-grid--analytics > .lx-card'),
+        baldosa: fondoDe('.lx-quick-tile'),
+        kpis,
+        arco: arco ? getComputedStyle(arco).stroke : null,
+        barras,
+        activo: activo ? getComputedStyle(activo).backgroundImage : null,
+        tieneHome: Boolean(document.querySelector('.lx-home')),
+      };
+    });
+
+    okInicio(v.tieneHome, '  el Inicio sigue siendo el que lleva `.lx-home` (el gancho del ámbito)');
+    /*
+      El lienzo se compara por INCLUSIÓN y no por igualdad: `body` lleva dos degradados radiales
+      encima del color, así que `backgroundColor` da el color base y `background` da la pila
+      entera. Lo que se exige es que el color base sea el nuevo.
+    */
+    okInicio(v.lienzo === aRgb(esperado.lienzo), `  el lienzo es ${v.lienzo}`, `se esperaba ${aRgb(esperado.lienzo)}`);
+    okInicio(v.cromo === aRgb(esperado.cromo), `  la cabecera es ${v.cromo}`, `se esperaba ${aRgb(esperado.cromo)}`);
+    okInicio(v.tarjeta === aRgb(esperado.tarjeta), `  la tarjeta es ${v.tarjeta}`, `se esperaba ${aRgb(esperado.tarjeta)}`);
+    okInicio(
+      v.baldosa === aRgb('#12366a'),
+      `  y la baldosa de acceso rápido lleva la «tarjeta destacada» de la guía (${v.baldosa})`,
+      `se esperaba ${aRgb('#12366a')}`,
+    );
+
+    // Paso 4: cuatro matices, no cuatro iconos de colores sobre el mismo fondo.
+    okInicio(v.kpis.length === 4, `  hay cuatro tarjetas de KPI`, `son ${v.kpis.length}`);
+    okInicio(
+      new Set(v.kpis).size === 4,
+      `  y las cuatro tienen un fondo distinto: ${v.kpis.join(' · ')}`,
+      `sólo ${new Set(v.kpis).size} fondo(s) distinto(s)`,
+    );
+
+    // Paso 5: el anillo con el degradado, que en CSS calculado se ve como un `url(#...)`.
+    okInicio(
+      typeof v.arco === 'string' && v.arco.includes('url('),
+      `  el anillo de ocupación usa el degradado (${v.arco})`,
+      'sigue con un color plano',
+    );
+    // Paso 6: degradado vertical en las barras de ingresos.
+    okInicio(
+      v.barras.length > 0 && v.barras.every((b) => b.includes('linear-gradient')),
+      `  las ${v.barras.length} barras de ingresos llevan degradado vertical`,
+      v.barras.slice(0, 2).join(' · '),
+    );
+    // Paso 3: el «Inicio» activo, con degradado y no con un plano.
+    okInicio(
+      typeof v.activo === 'string' && v.activo.includes('linear-gradient'),
+      '  el «Inicio» activo del menú lleva degradado',
+      String(v.activo),
+    );
+
+    /*
+      Y la prohibición del §07, que es la mitad del trabajo: la pantalla de al lado.
+
+      Si esto falla, lo que hay no es un color feo: es que el ámbito no acota y el rediseño se
+      derramó sobre el portal entero.
+    */
+    await pc.goto(`${BASE}/admin/dashboard`, { waitUntil: 'domcontentloaded' });
+    await pc.waitForTimeout(2400);
+    await pc.screenshot({ path: 'tests/responsive/capturas/guia-visual-panel-1536x960.png' });
+    const panel = await pc.evaluate(() => ({
+      lienzo: getComputedStyle(document.body).backgroundColor,
+      cromo: (() => {
+        const n = document.querySelector('.lx-page-layout__header');
+        return n ? getComputedStyle(n).backgroundColor : null;
+      })(),
+      tieneHome: Boolean(document.querySelector('.lx-home')),
+      titulo: (document.querySelector('h1')?.textContent ?? '').trim().slice(0, 40),
+    }));
+    okInicio(!panel.tieneHome && panel.titulo.length > 0, `  el Panel cargó y no es el Inicio («${panel.titulo}»)`);
+    okInicio(
+      panel.lienzo === aRgb(lienzoViejo),
+      `  el Panel conserva su lienzo de siempre (${panel.lienzo})`,
+      `se esperaba ${aRgb(lienzoViejo)} y el rediseño se le derramó encima`,
+    );
+    okInicio(
+      panel.cromo !== aRgb(esperado.cromo),
+      `  y su cabecera tampoco es la del Inicio (${panel.cromo})`,
+      'la cabecera del Inicio llegó al Panel',
+    );
+
+    await ctxColor.close();
+  }
+
   await browser.close();
   console.log(`\n===== ${TAMANOS.length} tamaños · ${fallos} con problemas =====`);
   process.exit(fallos > 0 ? 1 : 0);

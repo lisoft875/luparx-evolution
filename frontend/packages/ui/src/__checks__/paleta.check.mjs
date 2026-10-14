@@ -67,6 +67,21 @@ const PLATAFORMA = new Map([...OSCURO, ...tokensDe(":root[data-portal='platform'
   mirar colores, y el que se usa al sol.
 */
 const FISCALIZACION = new Map([...OSCURO, ...tokensDe(":root[data-portal='inspector']")]);
+/*
+  El Inicio del administrador acota su propia paleta (guía visual del 14-10-2026): el mismo portal
+  oscuro, pero con el lienzo, el cromo, la tarjeta, los bordes y los tres acentos redefinidos
+  dentro de `:has(.lx-home)`. Es un tema a todos los efectos y por eso se revisa como tal: si no se
+  midiera, sería justo la paleta donde una deriva no la ve nadie, porque es la primera pantalla que
+  se abre y la que se mira para ver datos, no colores.
+
+  El motivo por el que ese bloque existe —y el de cada hexadecimal que NO es el del documento— está
+  escrito en `tokens.css`, junto a las reglas.
+*/
+const ADMIN_INICIO = new Map([
+  ...OSCURO,
+  ...tokensDe(":root[data-portal='admin']"),
+  ...tokensDe(":root[data-portal='admin']:has(.lx-home)"),
+]);
 const PLATAFORMA_CLARA = new Map([
   ...CLARO,
   ...tokensDe(":root[data-portal='platform']"),
@@ -304,6 +319,7 @@ revisarTema('TEMA CLARO', CLARO, false);
 revisarTema('PLATAFORMA · OSCURO', PLATAFORMA, true);
 revisarTema('FISCALIZACIÓN · OSCURO', FISCALIZACION, true);
 revisarTema('PLATAFORMA · CLARO', PLATAFORMA_CLARA, false);
+revisarTema('ADMIN · INICIO', ADMIN_INICIO, true);
 
 console.log(`\n${fallos === 0 ? 'Toda la paleta pasa.' : `${fallos} combinación(es) por debajo del mínimo.`}\n`);
 process.exit(fallos > 0 ? 1 : 0);

@@ -57,9 +57,29 @@ export function OccupancyDonut({
   const vuelta = 2 * Math.PI * radio;
   const acotado = percent == null ? 0 : Math.max(0, Math.min(100, percent));
   const arco = (vuelta * acotado) / 100;
+  /*
+    El degradado del arco, y por que se publica como variable en vez de pintarse aqui.
+
+    La guia visual del 14-10-2026 pide el anillo del Inicio del administrador en un degradado
+    azul->cian. Un `stroke` con un degradado SVG necesita un `url(#id)`, y un `id` no se puede
+    escribir en una hoja de estilos: lo tiene que generar el componente, y tiene que ser distinto
+    en cada instancia o dos anillos en la misma pagina comparten definicion.
+
+    Asi que el componente SIEMPRE define el degradado y SIEMPRE publica su `url(#...)` en
+    `--lx-donut-gradiente`, pero no lo usa. Quien decide usarlo es la hoja, desde el ambito que le
+    corresponda. Por defecto los dos extremos valen `--lx-primary`, de modo que un anillo que no
+    opte por el degradado se ve exactamente igual que antes de este cambio: en fiscalizacion, en el
+    Panel y en cualquier pantalla futura, el azul plano de siempre.
+  */
+  /* `useId` devuelve algo como «:r0:». Los dos puntos son legales en un `id` de HTML5 pero
+     convierten cualquier selector CSS futuro en algo que hay que escapar, asi que se quitan. */
+  const idArco = `lx-donut-${React.useId().replace(/:/g, '')}`;
 
   return (
-    <div className={['lx-donut', className].filter(Boolean).join(' ')} style={{ width: size }}>
+    <div
+      className={['lx-donut', className].filter(Boolean).join(' ')}
+      style={{ width: size, ['--lx-donut-gradiente']: `url(#${idArco})` } as React.CSSProperties}
+    >
       <svg
         className="lx-donut__ring"
         width={size}
@@ -68,6 +88,12 @@ export function OccupancyDonut({
         role="img"
         aria-label={percent == null ? `${title}: ${emptyLabel}` : `${title}: ${acotado}%`}
       >
+        <defs>
+          <linearGradient id={idArco} x1="0" y1="1" x2="1" y2="0">
+            <stop offset="0" style={{ stopColor: 'var(--lx-donut-de, var(--lx-primary))' }} />
+            <stop offset="1" style={{ stopColor: 'var(--lx-donut-a, var(--lx-primary))' }} />
+          </linearGradient>
+        </defs>
         {/* La pista: el total. Siempre entera, también cuando el valor es cero — es lo que dice
             que el cero es un cero medido y no un dibujo que no llegó. */}
         <circle

@@ -8406,3 +8406,236 @@ a.lx-list-row {
 :root[data-portal='admin'] {
   scroll-padding-top: 72px;
 }
+
+/* =================================================================================================
+   GUÍA DE IMPLEMENTACIÓN VISUAL — INICIO DEL ADMINISTRADOR (14-10-2026)
+   =================================================================================================
+
+   Paso 1 de la guía: «Definir variables de color, superficie, borde, sombra, gradiente y texto
+   DENTRO DEL ÁMBITO DEL INICIO, o reutilizar tokens oficiales sin modificar globales.»
+
+   EL ÁMBITO. `:root[data-portal='admin']:has(.lx-home)`.
+
+   `:root` ES el `<html>`: ahí vive `data-portal`. Y `.lx-home` sólo existe en el Inicio del
+   administrador. Así que el selector es verdadero en una pantalla y en una sola — el Panel, Zonas,
+   Usuarios, Auditoría y los otros dos portales no lo ven nunca. Tiene que declararse en `html` y no
+   en `.lx-page-layout` por una razón concreta: el fondo de la aplicación se pinta en `<body>`
+   (`background: ... var(--lx-bg)`), y `.lx-page-layout` es transparente a propósito. Un token
+   redefinido en un descendiente de `<body>` no cambiaría el lienzo.
+
+   Especificidad (0,3,0) contra los (0,2,0) del bloque `:root[data-portal='admin']` de la línea
+   7159: este gana sin `!important`.
+
+   LOS COLORES, Y DÓNDE ME APARTÉ DE LA GUÍA. Los hexadecimales del documento se respetan para
+   fondo, cromo, tarjeta, tarjeta destacada, borde, texto y texto secundario. Los tres acentos
+   necesitaron una distinción que la guía no hace pero su propio paso 8 obliga a hacer: un color
+   de RELLENO y un color de TEXTO no pueden ser el mismo cuando el fondo es oscuro.
+
+     · «Azul de marca #2563FF» da 3.10 sobre la tarjeta y 2.45 sobre la tarjeta destacada. Como
+       texto no llega al 4.5 de AA en ninguna de las dos. Se usa, entonces, exactamente como lo
+       dibuja la referencia: RELLENO — el botón primario, el degradado de las barras, el pie del
+       anillo, la pastilla del «Inicio» activo. Encima lleva blanco, que da 4.88. Como borde de
+       control da 3.10 sobre tarjeta y 3.73 sobre el lienzo: cumple el 3.0 de la 1.4.11.
+     · Para el texto azul (enlaces «Ver detalle», el nombre en «Hola, Admin») se usa #58A6FF, el
+       mismo tono subido en luminosidad hasta 5.98 / 7.19 / 4.72 sobre tarjeta, lienzo y destacada.
+     · «Violeta #7B61FF» da 3.59 sobre la tarjeta: vale para el punto y la barra de una zona —son
+       gráficos, y el dato lo lleva el porcentaje de al lado—, no para texto. El violeta de texto
+       es #A294FF (5.91).
+     · El cian #00D4FF da 8.53 y no necesitó ajuste.
+
+   La guía lo autoriza en su propio paso 4: «Ajustar sólo si la identidad vigente del repositorio
+   define equivalentes oficiales. Mantener coherencia y contraste.» Aquí el que manda es el
+   contraste, y la tabla medida va en el informe.
+
+   LO QUE NO SE TOCA (§07). Ni un endpoint, ni un cálculo, ni un dato. Ni un elemento de los que el
+   boceto dibuja y la aplicación no tiene. La franja de servicios se queda como está porque YA hace
+   lo que el paso 7 pide: `HomePage.tsx` sólo da verde a un `ok` comprobado y pone un anillo
+   punteado —ni verde ni ámbar— en la pasarela sin verificar y en la fiscalización sin actividad.
+   ================================================================================================= */
+:root[data-portal='admin']:has(.lx-home) {
+  /* --- Superficies: los cuatro planos de la guía ---------------------------------------------- */
+  --lx-bg: #071629;
+  /* El documento pide #08182D. Da 1.02 contra el lienzo: la barra lateral y la cabecera
+     desaparecerían dentro del fondo, y el comprobador de paleta lo rechaza (piso 1.05, puesto el
+     25-09-2026 cuando se reportó «toda la interfaz se ve como un solo bloque azul»). Subido un
+     escalón, al mismo tono: 1.06. */
+  --lx-chrome: #091c34;
+  --lx-surface: #102742;
+  /* «Tarjeta destacada» #12366A: va en la BALDOSA de un acceso rápido, que es donde la referencia
+     la dibuja, y por eso se pone abajo como regla y no aquí como token.
+     `--lx-surface-2` no es «la tarjeta destacada»: es el plano hundido que usan la pastilla del
+     ranking, la pista del anillo, los campos y el fondo suave de CADA estado —éxito, aviso,
+     peligro, info, violeta, ámbar, teal—. Subirlo a #12366A dejaba siete de esos pares por debajo
+     de 4.5 de golpe. Se queda donde está, un escalón sobre la tarjeta. */
+  --lx-surface-2: #16314f;
+  --lx-surface-hover: #1c3e66;
+  --lx-bg-elevated: var(--lx-surface);
+
+  /* --- Bordes --------------------------------------------------------------------------------- */
+  /* El de la guía. Separa planos; no identifica controles, y por eso no necesita el 3.0. */
+  --lx-border: #294c70;
+  /* El que SÍ identifica un control —el borde de un campo, de una baldosa pulsable—: 3.56 sobre la
+     tarjeta y 4.29 sobre el lienzo. El #294C70 da 1.70 y dejaría un campo sin contorno visible. */
+  --lx-border-strong: #4a7fb0;
+
+  /* --- Texto ---------------------------------------------------------------------------------- */
+  --lx-text: #f5f8ff;
+  --lx-text-muted: #9db1c8;
+  --lx-text-subtle: #8aa0b8;
+
+  /* --- Azul, cian y violeta ------------------------------------------------------------------- */
+  /* Texto y trazos finos. NO es el #2563FF: ver la nota de arriba. */
+  --lx-primary: #58a6ff;
+  --lx-primary-2: #00d4ff;
+  --lx-primary-strong: #9cc6ff;
+  /* El azul de marca, en el único sitio donde la guía lo pone: detrás de algo, no encima. */
+  --lx-primary-fill: #2563ff;
+  --lx-primary-fill-hover: #1d53db;
+  --lx-primary-soft: color-mix(in srgb, #2563ff 22%, transparent);
+  --lx-focus-ring: #58a6ff;
+  --lx-accent-icon: #2563ff;
+  /* El violeta #7B61FF del documento da 3.59 sobre la tarjeta: sirve para el punto y la barra de
+     una zona —gráficos—, no para texto. Éste es el mismo tono subido hasta pasar AA también
+     encima de su propio fondo suave, que es donde el violeta siempre se pierde. */
+  --lx-accent-violet: #bbb1ff;
+  /* Igual que el violeta: el #FF6268 heredado da 4.13 sobre su fondo suave con la tarjeta nueva. */
+  --lx-danger-text: #ff7d82;
+  --lx-accent-amber: #e0a33a;
+
+  --lx-success: #2bd18c;
+  --lx-warning: #e0a33a;
+
+  /* --- Las series del tablero ------------------------------------------------------------------
+     `--lx-series-N` es lo que `HomePage.tsx` pone en línea en el punto de cada zona. Son gráficos:
+     el violeta puede ser el de la guía. El orden —azul, cian, violeta, ámbar— es el de la
+     referencia. */
+  --lx-series-1: #2563ff;
+  --lx-series-2: #00d4ff;
+  --lx-series-3: #7b61ff;
+  --lx-series-4: #e0a33a;
+  --lx-series-5: var(--lx-text-subtle);
+}
+
+/* --- Pasos 2 a 7 de la guía, dentro del mismo ámbito -----------------------------------------
+   Cada regla lleva el paso que la pide. Todas cuelgan de `:root[data-portal='admin']:has(.lx-home)`:
+   ninguna existe fuera del Inicio del administrador. */
+
+/* Paso 3 — «"Inicio" activo con degradado azul y un borde cian discreto».
+   El degradado sustituye al color plano mezclado al 22%; la barra izquierda de 4px se queda, que
+   es lo que la v1.1 §3 pide y lo que se ve de reojo sin leer. El borde cian va al 30%: a tope
+   taparía la barra, que es el indicador fuerte. */
+:root[data-portal='admin']:has(.lx-home) .lx-nav-link--active {
+  background: linear-gradient(90deg, #12366a 0%, #0d2951 100%);
+  border: 1px solid color-mix(in srgb, #00d4ff 30%, transparent);
+  color: var(--lx-primary-strong);
+  box-shadow: inset 4px 0 0 #2563ff;
+}
+
+/* Paso 4 — «Las cuatro tarjetas de KPI diferenciadas por matiz: azul, cian, ámbar discreto y verde
+   azulado». El matiz viene del `tone` que `HomePage.tsx` ya le pasa a cada `MetricCard`; no hay
+   marcado nuevo ni props nuevas: la tarjeta se tiñe por el icono que contiene.
+   Las cuatro superficies quedan entre 1.18 y 1.27 contra el lienzo —se distinguen sin gritar— y el
+   texto secundario #9DB1C8 da entre 6.53 y 7.01 sobre ellas. */
+:root[data-portal='admin']:has(.lx-home) .lx-metric:has(.lx-metric__icon--info) {
+  background-color: #0f2c58;
+  border-color: #2f5c9e;
+}
+:root[data-portal='admin']:has(.lx-home) .lx-metric:has(.lx-metric__icon--primary) {
+  background-color: #062f45;
+  border-color: #1a6a86;
+}
+:root[data-portal='admin']:has(.lx-home) .lx-metric:has(.lx-metric__icon--warning) {
+  background-color: #2e2715;
+  border-color: #64521f;
+}
+:root[data-portal='admin']:has(.lx-home) .lx-metric:has(.lx-metric__icon--success) {
+  background-color: #0a3128;
+  border-color: #1d6349;
+}
+/* El bloque del icono. `--info` era gris (#A3B3C7, el token del sistema): en la referencia es el
+   azul de marca. El glifo va en el azul claro —el relleno es #2563FF y un glifo del mismo color
+   sobre su propio soft no se vería—. */
+:root[data-portal='admin']:has(.lx-home) .lx-metric__icon--info {
+  background: color-mix(in srgb, #2563ff 22%, transparent);
+  color: #58a6ff;
+}
+
+/* Paso 5 — «Anillo y barras de zona en azul, cian, violeta y ámbar».
+   El arco del anillo pasa a degradado azul→cian. El `url(#…)` lo publica el componente como
+   `--lx-donut-gradiente`, y aquí sólo se decide usarlo: fuera de este ámbito el anillo sigue
+   siendo el azul plano de siempre, en fiscalización y en el Panel. */
+:root[data-portal='admin']:has(.lx-home) .lx-donut {
+  --lx-donut-de: #2563ff;
+  --lx-donut-a: #00d4ff;
+}
+:root[data-portal='admin']:has(.lx-home) .lx-donut__value {
+  stroke: var(--lx-donut-gradiente, var(--lx-primary));
+}
+/* La pista es el total, no un plano levantado: con `--lx-surface-2` (#12366A) competía con el
+   arco. Un navy por debajo de la tarjeta. */
+:root[data-portal='admin']:has(.lx-home) .lx-donut__track {
+  stroke: #0b2340;
+}
+/* Las barras de zona son gráficos: el azul de marca, no el azul de texto. El ámbar del umbral
+   (>=70%) y el rojo del lleno (>=85%) los sigue decidiendo `HomePage.tsx`; aquí sólo cambia el
+   valor del azul. */
+:root[data-portal='admin']:has(.lx-home) .lx-zone-row__fill,
+:root[data-portal='admin']:has(.lx-home) .lx-zone-rank__fill {
+  background: #2563ff;
+}
+:root[data-portal='admin']:has(.lx-home) .lx-zone-row__track,
+:root[data-portal='admin']:has(.lx-home) .lx-zone-rank__track {
+  background: #0b2340;
+}
+/* La pastilla con el número de orden del ranking. En la referencia va en el color de su serie.
+   Fondo tenue y cifra en claro, el mismo patrón que ya usa el bloque del icono de un KPI: una
+   pastilla rellena a tope dejaría la cifra de 11px por debajo de AA. */
+:root[data-portal='admin']:has(.lx-home) .lx-zone-rank__pos {
+  border-radius: var(--lx-radius-pill);
+}
+:root[data-portal='admin']:has(.lx-home) .lx-zone-rank__row:nth-child(1) .lx-zone-rank__pos {
+  background: color-mix(in srgb, #e0a33a 20%, transparent);
+  color: #e0a33a;
+}
+:root[data-portal='admin']:has(.lx-home) .lx-zone-rank__row:nth-child(2) .lx-zone-rank__pos {
+  background: color-mix(in srgb, #2563ff 24%, transparent);
+  color: #58a6ff;
+}
+:root[data-portal='admin']:has(.lx-home) .lx-zone-rank__row:nth-child(3) .lx-zone-rank__pos {
+  background: color-mix(in srgb, #7b61ff 22%, transparent);
+  color: #a294ff;
+}
+:root[data-portal='admin']:has(.lx-home) .lx-zone-rank__row:nth-child(4) .lx-zone-rank__pos {
+  background: color-mix(in srgb, #00d4ff 18%, transparent);
+  color: #00d4ff;
+}
+
+/* Paso 6 — «Degradado vertical azul-cian en las barras de ingresos. La rejilla ya va por detrás.»
+   Cian arriba y azul abajo, como la referencia: la barra se aclara hacia su tope, que es donde
+   está el dato. `background-size`/`repeat` no hacen falta: cada barra es su propia caja y el
+   degradado se mide contra ella, así que una barra baja no queda con un trozo del degradado.
+   La rejilla por detrás ya está resuelta (z-index 0 contra 1 en `.lx-bars__col`): no se repite. */
+:root[data-portal='admin']:has(.lx-home) .lx-bars__bar {
+  background: linear-gradient(180deg, #00d4ff 0%, #2563ff 100%);
+}
+:root[data-portal='admin']:has(.lx-home) .lx-bars__col--on .lx-bars__bar {
+  background: linear-gradient(180deg, #5fe0ff 0%, #4b86ff 100%);
+}
+
+/* Paso 7 — «Tarjetas inferiores con la misma familia de superficie».
+   Las tres ya son `.lx-card` y heredan `--lx-surface`: nada que hacer. Las baldosas de acceso
+   rápido suben a `--lx-surface-2` (#12366A, la «tarjeta destacada» de la guía) por el token, que
+   es lo que la referencia dibuja. Lo único que falta es el bloque del icono, que con el nuevo
+   `--lx-primary-soft` quedaría azul sobre azul. */
+:root[data-portal='admin']:has(.lx-home) .lx-quick-tile {
+  /* La «tarjeta destacada» #12366A de la guía, en el único sitio donde la referencia la dibuja. */
+  background: #12366a;
+  border-color: color-mix(in srgb, #00d4ff 18%, var(--lx-border));
+}
+:root[data-portal='admin']:has(.lx-home) .lx-quick-tile:hover {
+  background: #1a4585;
+}
+:root[data-portal='admin']:has(.lx-home) .lx-quick-tile__icon {
+  background: color-mix(in srgb, #00d4ff 16%, transparent);
+  color: #00d4ff;
+}
