@@ -81,6 +81,28 @@ const TAMANOS = [
 ];
 
 /** Los números de la imagen de referencia. Ninguno puede salir de la base en staging. */
+/*
+  Las medidas que se comprueban en MÁS DE UN SITIO, declaradas una sola vez.
+
+  Esto no es aseo. Es el defecto concreto que dejó este arnés en rojo dos despliegues seguidos: el
+  diámetro del anillo se comprobaba en tres lugares y la caja del icono del KPI en dos, cada uno con
+  el rango de una especificación distinta, y los rangos se contradecían. Un número con dos rangos
+  incompatibles es un arnés que NO PUEDE estar en verde: pase lo que pase en la pantalla, uno de los
+  dos falla. Y lo que reportaba en rojo no era un defecto, era una decisión ya tomada.
+
+  Manda el rango COMPACTADO, y no por ser el que pasa: es el de la última orden. La «especificación
+  exacta» de la mañana del 13-10 pedía anillo de 115-125 y caja de icono de 36-40; esa misma tarde
+  la orden fue «compacta el encabezado y las cuatro tarjetas superiores, reduce la altura excesiva
+  de los gráficos», y al día siguiente «quiero conservar el diseño actual porque en el monitor
+  grande se ve muy bien». El diseño que Javier aprobó mirándolo es el de 104px y 32px. La
+  especificación de la mañana quedó atrás ese mismo día.
+
+  Si mañana se decide volver a agrandarlos, se cambia AQUÍ y cambia en todas partes.
+*/
+const ANILLO = [100, 110];
+const KPI_ICONO_CAJA = [30, 36];
+const KPI_ICONO_GLIFO = [18, 20];
+
 const CIFRAS_DEL_MOCKUP = ['1,248,350', '1.248.350', '1248350'];
 
 async function entrar(context) {
@@ -864,8 +886,8 @@ async function medir(page, dedo) {
         esta semana: una prueba que sobrevive a la especificación que la justificaba.
       */
       okInicio(
-        comp.donut !== null && comp.donut.ancho >= 115 && comp.donut.ancho <= 125,
-        '  y mide 115-125px, lo que pide la especificación definitiva',
+        comp.donut !== null && comp.donut.ancho >= ANILLO[0] && comp.donut.ancho <= ANILLO[1],
+        `  y mide ${ANILLO[0]}-${ANILLO[1]}px`,
         comp.donut ? `${comp.donut.ancho}px` : 'sin dónut',
       );
       // La inversión que pide la sección 6: la ocupación pasa a ser la columna ancha.
@@ -1230,8 +1252,8 @@ async function medir(page, dedo) {
         `la fila de gráficos mide ${TABLA.filaA.join(' y ')}px (compactado: 196-225)`,
       );
       okInicio(
-        dentro(TABLA.donut, 100, 110),
-        `el anillo mide ${TABLA.donut}px de diámetro (compactado: 100-110)`,
+        dentro(TABLA.donut, ...ANILLO),
+        `el anillo mide ${TABLA.donut}px de diámetro (compactado: ${ANILLO.join('-')})`,
       );
       okInicio(
         !TABLA.ejesRepetidos,
@@ -1360,8 +1382,8 @@ async function medir(page, dedo) {
         `su ícono mide ${TABLA.baldosaGlifo}px (pide 16-18)`,
       );
       okInicio(
-        dentro(TABLA.kpiIconoCaja, 36, 40) && dentro(TABLA.kpiIconoGlifo, 18, 20),
-        `el ícono del KPI mide ${TABLA.kpiIconoGlifo}px en un contenedor de ${TABLA.kpiIconoCaja}px (la definitiva pide 18-20 en 36-40)`,
+        dentro(TABLA.kpiIconoCaja, ...KPI_ICONO_CAJA) && dentro(TABLA.kpiIconoGlifo, ...KPI_ICONO_GLIFO),
+        `el ícono del KPI mide ${TABLA.kpiIconoGlifo}px en un contenedor de ${TABLA.kpiIconoCaja}px (compactado: ${KPI_ICONO_GLIFO.join('-')} en ${KPI_ICONO_CAJA.join('-')})`,
       );
 
       const OBLIGATORIOS = [
@@ -1694,11 +1716,11 @@ async function medir(page, dedo) {
         // Paso B: «Número 25-29 px», «ícono en caja discreta de 34-40 px».
         okInicio(dentro(m.kpiCifraPx, [23, 27]), `  la cifra del KPI mide ${m.kpiCifraPx}px (compactado: 23-27)`);
         okInicio(
-          dentro(m.kpiCaja, [30, 36]) && dentro(m.kpiGlifo, [18, 20]),
-          `  su ícono mide ${m.kpiGlifo}px en una caja de ${m.kpiCaja}px (compactado: 18-20 en 30-36)`,
+          dentro(m.kpiCaja, KPI_ICONO_CAJA) && dentro(m.kpiGlifo, KPI_ICONO_GLIFO),
+          `  su ícono mide ${m.kpiGlifo}px en una caja de ${m.kpiCaja}px (compactado: ${KPI_ICONO_GLIFO.join('-')} en ${KPI_ICONO_CAJA.join('-')})`,
         );
         // Paso C: «Donut de 110-125 px».
-        okInicio(dentro(m.donut, [100, 110]), `  el anillo mide ${m.donut}px (compactado: 100-110)`);
+        okInicio(dentro(m.donut, ANILLO), `  el anillo mide ${m.donut}px (compactado: ${ANILLO.join('-')})`);
         // Paso F: «No convertir los cuatro KPI en 2×2 en una pantalla de escritorio con ancho
         // suficiente». Los tres lo tienen.
         okInicio(m.kpisPrimeraFila === 4, `  los cuatro KPI están en una fila`, `son ${m.kpisPrimeraFila}`);
@@ -1892,6 +1914,7 @@ async function medir(page, dedo) {
         barras,
         activo: activo ? getComputedStyle(activo).backgroundImage : null,
         tieneHome: Boolean(document.querySelector('.lx-home')),
+        vacioIngresos: Boolean(document.querySelector('.lx-home-grid--analytics .lx-empty-state--inline')),
       };
     });
 
@@ -1924,12 +1947,31 @@ async function medir(page, dedo) {
       `  el anillo de ocupación usa el degradado (${v.arco})`,
       'sigue con un color plano',
     );
-    // Paso 6: degradado vertical en las barras de ingresos.
-    okInicio(
-      v.barras.length > 0 && v.barras.every((b) => b.includes('linear-gradient')),
-      `  las ${v.barras.length} barras de ingresos llevan degradado vertical`,
-      v.barras.slice(0, 2).join(' · '),
-    );
+    /*
+      Paso 6: degradado vertical en las barras de ingresos.
+
+      Con una condición que la primera versión de esta prueba no tenía y que la corrida del
+      14-10 cobró en el sitio: SI HAY BARRAS. Cuando la semana suma cero el Inicio no dibuja un
+      gráfico de ejes vacío —dice «Sin recaudación registrada en este período» en un bloque
+      compacto, y hace bien—, así que no hay ninguna barra que pintar. Exigir siete degradados
+      ahí es exigir que la pantalla invente datos para poder aprobar una prueba de color.
+
+      Es el mismo patrón que el arnés ya usa doscientas líneas más arriba para el mismo gráfico:
+      o siete barras y ningún estado vacío, o ninguna barra y el estado vacío puesto.
+    */
+    if (v.barras.length > 0) {
+      okInicio(
+        v.barras.every((b) => b.includes('linear-gradient')),
+        `  las ${v.barras.length} barras de ingresos llevan degradado vertical`,
+        v.barras.slice(0, 2).join(' · '),
+      );
+    } else {
+      okInicio(
+        v.vacioIngresos,
+        '  no hay barras porque la semana sumó cero, y el estado vacío está puesto: el degradado no aplica hoy',
+        'ni barras ni estado vacío: el gráfico no dibujó nada y eso sí es un defecto',
+      );
+    }
     // Paso 3: el «Inicio» activo, con degradado y no con un plano.
     okInicio(
       typeof v.activo === 'string' && v.activo.includes('linear-gradient'),
