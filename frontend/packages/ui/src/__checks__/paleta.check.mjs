@@ -212,6 +212,39 @@ function revisarTema(nombre, mapa, oscuro) {
     medir(`--lx-text-subtle sobre ${superficie}`, textoSobre(mapa, '--lx-text-subtle', superficie, superficie), 4.5);
   }
 
+  /*
+    El CAMPO, que hasta hoy no se medía.
+
+    `--lx-surface-input` es un quinto plano que sólo declara Fiscalización: los campos se hunden
+    respecto de la tarjeta en vez de elevarse. Es donde se escribe la placa —el dato que mueve toda
+    la pantalla— y donde vive el texto de ayuda de cada formulario, y no entraba en ninguna de las
+    listas de arriba. Un hueco así es el que deja pasar un placeholder ilegible al sol.
+
+    Se mide sólo donde el token existe: los demás temas no lo declaran y no hay nada que medir.
+  */
+  if (mapa.has('--lx-surface-input')) {
+    console.log('\n-- el campo hundido (sólo donde el tema lo declara) --');
+    for (const tinta of ['--lx-text', '--lx-text-muted', '--lx-text-subtle', '--lx-primary']) {
+      medir(`${tinta} sobre --lx-surface-input`, textoSobre(mapa, tinta, '--lx-surface-input', '--lx-surface-input'), 4.5);
+    }
+    /*
+      Y que el campo se DISTINGA de la tarjeta donde vive. Sólo en oscuro: en claro el campo es casi
+      blanco sobre una tarjeta blanca —`#fbfcff` contra blanco, 1.03— y lo que lo identifica es el
+      borde oscuro, igual que en el escalonado de capas de más abajo. Exigir un escalón ahí sería
+      exigir que el tema claro deje de ser un tema claro.
+
+      No se mide `--lx-border-strong` contra el campo, aunque la primera versión de esta sección lo
+      hacía: los dos sitios del archivo que pintan `--lx-surface-input` llevan
+      `border: 1px solid var(--lx-border)`, no el fuerte. Medir el fuerte ahí es medir una pareja
+      que no se toca en ninguna pantalla — el mismo error que esta prueba se reprocha a sí misma
+      doscientas líneas más abajo. El `--lx-border-strong` ya se mide donde sí se usa.
+    */
+    if (oscuro) {
+      medir('campo → tarjeta (que se distingan)', escalon(mapa, '--lx-surface', '--lx-surface-input'), 1.05);
+    }
+    console.log(`  ··  el contorno del campo (--lx-border) da ${textoSobre(mapa, '--lx-border', '--lx-surface-input', '--lx-surface-input').toFixed(2)} sobre el campo: es decoración, lo que identifica el control es el escalón de fondo y su etiqueta`);
+  }
+
   console.log('\n-- el acento como texto (enlaces, botones fantasma) --');
   for (const superficie of SUPERFICIES) {
     medir(`--lx-primary sobre ${superficie}`, textoSobre(mapa, '--lx-primary', superficie, superficie), 4.5);

@@ -673,6 +673,172 @@ async function boletaYPendientes(page, tamano, ancho) {
   }
 }
 
+/* ================================================================================================
+   La identidad visual de LuParX en Inspector (14-10-2026)
+   ================================================================================================
+
+   El encargo es un cambio de COLOR, y un cambio de color es el que esta clase de prueba no ve: las
+   cajas siguen midiendo lo mismo, las barras siguen donde estaban, y la pantalla puede estar entera
+   del color equivocado con todo en verde.
+
+   Se comprueba lo que de verdad puede romperse:
+
+     1. Que la paleta LLEGUE, y llegue a TODAS las pantallas. El cambio es de tokens, no de una
+        pantalla: si sólo cambiara el Inicio, el portal quedaría a dos colores.
+     2. Que el botón primario sea el azul de marca CON blanco legible encima, y que la pestaña
+        activa de la barra inferior no sea ese mismo azul —sobre el cromo da 3.65 y no se leería—.
+     3. Y la trampa que ya está escrita en tokens.css y que nadie va a recordar dentro de un mes:
+        `[data-density='outdoor']` redefine `--lx-border` como un blanco al 16% y tiene la MISMA
+        especificidad que la paleta del portal. Hoy gana la paleta porque su bloque va DESPUÉS en
+        el archivo. Si alguien reordena el archivo, el borde de la identidad desaparece sin que
+        falle nada más. Acá se comprueba el color que el navegador calculó, que es el único que
+        sabe quién ganó.
+
+   Los valores no se escriben a mano: se leen de `tokens.css`, que es lo que se despliega.
+*/
+async function identidadVisual(page) {
+  console.log('\n── La identidad visual de LuParX en Inspector ──');
+
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const css = fs.readFileSync(
+    path.join(__dirname, '..', '..', 'packages', 'ui', 'src', 'tokens.css'),
+    'utf8',
+  );
+  const SEL = ":root[data-portal='inspector']";
+  const token = (nombre) => {
+    const i = css.indexOf(`\n${SEL} {`);
+    if (i < 0) return null;
+    const cuerpo = css.slice(css.indexOf('{', i) + 1, css.indexOf('\n}', i)).replace(/\/\*[\s\S]*?\*\//g, '');
+    const m = cuerpo.match(new RegExp(`^\\s*${nombre}\\s*:\\s*(.+?);\\s*$`, 'm'));
+    return m ? m[1].trim() : null;
+  };
+  const aRgb = (hex) => {
+    const h = hex.trim().replace('#', '');
+    const p = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));
+    return `rgb(${p[0]}, ${p[1]}, ${p[2]})`;
+  };
+  /** El contraste de dos colores `rgb(...)`, para no declarar legible lo que no se midió. */
+  const contraste = (a, b) => {
+    const n = (c) => c.match(/\d+/g).slice(0, 3).map(Number);
+    const lum = (c) => {
+      const v = n(c).map((x) => x / 255).map((x) => (x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4));
+      return 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2];
+    };
+    const [x, y] = [lum(a), lum(b)];
+    return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+  };
+
+  const ESPERADO = {
+    lienzo: token('--lx-bg'),
+    cromo: token('--lx-chrome'),
+    tarjeta: token('--lx-surface'),
+    campo: token('--lx-surface-input'),
+    borde: token('--lx-border'),
+    relleno: token('--lx-primary-fill'),
+  };
+  ok(
+    Object.values(ESPERADO).every(Boolean),
+    `  los valores salen de tokens.css (lienzo ${ESPERADO.lienzo}, cromo ${ESPERADO.cromo}, tarjeta ${ESPERADO.tarjeta}, campo ${ESPERADO.campo})`,
+    `falta algún token en ${SEL}`,
+  );
+  if (!Object.values(ESPERADO).every(Boolean)) return;
+
+  /*
+    1. La paleta, en todas las pantallas del portal. No sólo el Inicio: un cambio de tokens que
+    llegue a una pantalla y no a otra deja el portal a dos colores, y eso no lo ve nadie que mire
+    sólo la primera.
+  */
+  const PANTALLAS = [
+    ['/inspector/', 'Inicio'],
+    ['/inspector/cite', 'Nueva boleta'],
+    ['/inspector/citations', 'Mis boletas'],
+    ['/inspector/queue', 'Pendientes'],
+    ['/inspector/more', 'Más'],
+    ['/inspector/help', 'Ayuda'],
+    ['/inspector/profile', 'Perfil'],
+  ];
+  for (const [ruta, nombre] of PANTALLAS) {
+    await page.goto(`${BASE}${ruta}`, { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(1400);
+    const v = await page.evaluate(() => {
+      const fondo = (s) => { const n = document.querySelector(s); return n ? getComputedStyle(n).backgroundColor : null; };
+      return {
+        lienzo: getComputedStyle(document.body).backgroundColor,
+        cromo: fondo('.lx-app-bar--inspector') ?? fondo('.lx-bottom-tab-bar'),
+        tarjeta: fondo('.lx-card'),
+        portal: document.documentElement.dataset.portal,
+        densidad: document.documentElement.dataset.density,
+        // El color que el navegador CALCULÓ para el borde: quién ganó el empate con `outdoor`.
+        borde: getComputedStyle(document.documentElement).getPropertyValue('--lx-border').trim(),
+        titulo: (document.querySelector('h1, h2')?.textContent ?? '').trim().slice(0, 30),
+      };
+    });
+    ok(
+      v.portal === 'inspector' && v.densidad === 'outdoor',
+      `  ${nombre}: cargó en el portal correcto (portal=${v.portal}, densidad=${v.densidad})`,
+      `«${v.titulo}»`,
+    );
+    ok(v.lienzo === aRgb(ESPERADO.lienzo), `  ${nombre}: el lienzo es ${v.lienzo}`, `se esperaba ${aRgb(ESPERADO.lienzo)}`);
+    // El cromo y la tarjeta sólo donde esa pantalla los dibuja; no todas tienen tarjeta.
+    if (v.cromo) ok(v.cromo === aRgb(ESPERADO.cromo), `  ${nombre}: el cromo es ${v.cromo}`, `se esperaba ${aRgb(ESPERADO.cromo)}`);
+    if (v.tarjeta) ok(v.tarjeta === aRgb(ESPERADO.tarjeta), `  ${nombre}: la tarjeta es ${v.tarjeta}`, `se esperaba ${aRgb(ESPERADO.tarjeta)}`);
+    /*
+      3. La trampa del orden. `[data-density='outdoor']` pone `--lx-border` en
+      `rgba(255, 255, 255, 0.16)` y empata en especificidad con la paleta del portal; gana el que
+      va después en el archivo. Si un día gana `outdoor`, esto lo dice en la pantalla donde pasa.
+    */
+    ok(
+      v.borde.toLowerCase() === ESPERADO.borde.toLowerCase(),
+      `  ${nombre}: el borde es el de la identidad (${v.borde})`,
+      `calculó ${v.borde} en vez de ${ESPERADO.borde} — [data-density='outdoor'] le ganó el empate, revisar el orden de los bloques en tokens.css`,
+    );
+  }
+
+  /*
+    2. Los dos papeles del azul, que es donde el documento pide una cosa y la medición otra.
+    El relleno con su texto encima, y la pestaña activa, que NO puede ser el mismo azul.
+  */
+  await page.goto(`${BASE}/inspector/`, { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(1600);
+  const azul = await page.evaluate(() => {
+    const boton = document.querySelector('.lx-plate-row__go') ?? document.querySelector('.lx-btn--primary');
+    const activa = document.querySelector('.lx-bottom-tab-bar__tab[aria-current="page"]');
+    const cromo = document.querySelector('.lx-bottom-tab-bar');
+    return {
+      botonFondo: boton ? getComputedStyle(boton).backgroundColor : null,
+      botonTexto: boton ? getComputedStyle(boton).color : null,
+      activaTinta: activa ? getComputedStyle(activa).color : null,
+      cromoFondo: cromo ? getComputedStyle(cromo).backgroundColor : null,
+    };
+  });
+  ok(
+    azul.botonFondo === aRgb(ESPERADO.relleno),
+    `  el botón primario lleva el azul de marca (${azul.botonFondo})`,
+    `se esperaba ${aRgb(ESPERADO.relleno)}`,
+  );
+  if (azul.botonFondo && azul.botonTexto) {
+    const r = contraste(azul.botonTexto, azul.botonFondo);
+    ok(r >= 4.5, `  y su texto encima da ${r.toFixed(2)} (AA pide 4.5)`, `${azul.botonTexto} sobre ${azul.botonFondo}`);
+  }
+  if (azul.activaTinta && azul.cromoFondo) {
+    const r = contraste(azul.activaTinta, azul.cromoFondo);
+    ok(
+      r >= 4.5,
+      `  la pestaña activa da ${r.toFixed(2)} sobre el cromo de la barra (AA pide 4.5)`,
+      `${azul.activaTinta} sobre ${azul.cromoFondo} — el azul de marca da 3.65 ahí y por eso la tinta es otra`,
+    );
+    ok(
+      azul.activaTinta !== aRgb(ESPERADO.relleno),
+      '  y no es el azul de relleno, que ahí no se leería',
+      `la pestaña activa está pintada con ${azul.activaTinta}`,
+    );
+  }
+
+  await page.screenshot({ path: 'tests/responsive/capturas/inspector-identidad-inicio.png' });
+  await page.screenshot({ path: 'tests/responsive/capturas/inspector-identidad-inicio-completa.png', fullPage: true });
+}
+
 (async () => {
   const navegador = await chromium.launch();
   const context = await navegador.newContext({ viewport: TAMANOS[1] });
@@ -697,6 +863,10 @@ async function boletaYPendientes(page, tamano, ancho) {
     await consultaFunciona(page, tamano.nombre);
     await boletaYPendientes(page, tamano.nombre, tamano.width);
   }
+
+  // Una sola vez, no por tamaño: el color no depende del ancho de la ventana, y recorrer siete
+  // pantallas cinco veces serían treinta y cinco cargas para comprobar el mismo hexadecimal.
+  await identidadVisual(page);
 
   await navegador.close();
   console.log(`\n${fallos === 0 ? 'Sin fallos.' : `${fallos} fallo(s).`}`);

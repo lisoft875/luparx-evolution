@@ -6688,74 +6688,90 @@ a.lx-list-row {
 }
 
 /* ==============================================================================================
-   FISCALIZACIÓN · paleta propia del portal (12-10-2026, «Especificación definitiva del Inicio»)
+   FISCALIZACIÓN · la identidad visual de LuParX (14-10-2026)
 
-   La especificación da diez colores por su valor: fondo #061B30, cabecera #06223B, tarjetas
-   #0B2B47, campos #061E36, borde tenue #22506B, acento azul #0788FF, texto #F6FAFF, secundario
-   #A9BED0, éxito #20C997 y advertencia #F0A520. Nueve entran tal cual.
+   Sustituye a la paleta del 12-10. Las dos son de Javier y las dos dan sus colores por el valor;
+   lo que cambia es el encargo. La del 12-10 era «la especificación definitiva del Inicio» de ESTE
+   portal, resuelta en su propio azul; la de hoy pide lo contrario — «trasladar la identidad visual
+   aprobada de LuParX al aplicativo Inspector»— y unificar los portales. Por eso el fondo, el cromo
+   y la tarjeta pasan a ser LOS MISMOS que los del Inicio del administrador: no se parecen, son el
+   mismo valor.
 
-   El bloque va DESPUÉS de `[data-density='outdoor']` a propósito: esa regla —la densidad exterior
-   del fiscalizador— redefine `--lx-border` como un blanco al 16%, y las dos tienen la misma
-   especificidad. Si este bloque fuera antes, el borde #22506B no se vería nunca.
+   Queda dicho porque no es un refinamiento: es cambiar diez colores que se habían elegido y medido
+   hace dos días. Los de la especificación anterior —#061B30, #06223B, #0B2B47, #061E36, #22506B,
+   #0788FF— ya no están en el archivo.
 
-   ── El décimo: el azul, que no puede ser uno solo ─────────────────────────────────────────────
+   ── Lo que el documento pide y la medición no deja hacer ──────────────────────────────────────
 
-   #0788FF no puede hacer los dos trabajos que una interfaz le pide a su acento, y esta vez se
-   puede demostrar que NINGÚN azul podría:
+   Tres de los diez colores no pueden usarse como el documento los nombra. Los tres se resuelven
+   igual que en el Administrador —el mismo valor, para que «unificar» sea verdad— y con el número
+   al lado:
 
-     · como TEXTO sobre la tarjeta (#0B2B47) da 4.12, y hace falta 4.5;
-     · con TEXTO BLANCO encima da 3.51, y hace falta 4.5.
+     · «Azul principal #2563FF — acciones y elementos activos». Como TEXTO da 3.10 sobre la
+       tarjeta y 3.65 sobre el cromo; hace falta 4.5. Es el mismo callejón que ya se demostró en
+       este portal el 12-10 con el #0788FF, y la cuenta no ha cambiado: para ser texto sobre esa
+       tarjeta un color necesita cierta luminancia, y para aguantar blanco encima, como mucho otra
+       más baja; los dos requisitos no se cruzan. Así que el #2563FF es RELLENO —el botón BUSCAR,
+       el único botón primario azul de la pantalla— con blanco encima a 4.88, y la TINTA (enlaces,
+       iconos, foco, la pestaña activa de la barra inferior) es #58A6FF: 5.98 sobre la tarjeta,
+       7.05 sobre el cromo, 7.19 sobre el lienzo.
+     · «Violeta #7B61FF — acento secundario». 3.59 sobre la tarjeta. El token queda en #BBB1FF,
+       que pasa también sobre su propio fondo suave. Y NO se pinta nada nuevo con él: hoy ninguna
+       pantalla de Fiscalización usa violeta, y el §4 prohíbe agregar elementos. Existe para quien
+       lo necesite y para que el comprobador lo vigile.
+     · «Cabecera / superficies oscuras #08182D». Da 1.02 contra el lienzo: la barra de arriba y la
+       de abajo desaparecerían dentro del fondo. Subido un escalón al mismo tono, #091C34, da 1.06
+       — el mismo valor y la misma razón que en el Administrador.
 
-   Para ser texto sobre esa tarjeta, un color necesita una luminancia de al menos 0.271; para
-   aguantar blanco encima, de 0.183 como mucho. Los dos requisitos no se cruzan — no es que este
-   azul esté mal elegido, es que el papel es doble. Así que son dos tokens, como ya lo son en el
-   Ciudadano y en el Administrador por la misma cuenta:
+   ── Lo que NO se toca, porque ya funciona (§5) ────────────────────────────────────────────────
 
-     · TINTA   → #31B4FF. 6.40 sobre la tarjeta: texto, iconos, enlaces, foco.
-     · RELLENO → #0670D6. Blanco encima da 4.89: el botón BUSCAR, que es el único botón primario
-                 azul de la pantalla.
+     · `--lx-surface-2` sigue siendo `var(--lx-surface)`. El documento da «superficie destacada
+       #12366A», pero ese token NO es la tarjeta destacada: es el plano hundido que usan los
+       fondos suaves de CADA estado. Con un tono más claro ahí, los cinco textos de estado caen
+       por debajo de 4.5 — se midió el 12-10 y sigue siendo cierto. El #12366A va a
+       `--lx-surface-hover`, que es el «énfasis moderado» que el documento describe.
+     · El verde #20C997 y el ámbar #F0A520 se quedan. El documento no los nombra y sobre las
+       superficies nuevas dan 7.09 y 7.27: no hay nada que arreglar.
+     · El bloque sigue DESPUÉS de `[data-density='outdoor']`, que es lo que lo hace funcionar: esa
+       regla redefine `--lx-border` como un blanco al 16% y tiene la MISMA especificidad que ésta.
+       Si este bloque subiera en el archivo, el borde de la identidad no se vería nunca.
 
-   El #0788FF de la especificación no se pierde: sobre el CROMO —la cabecera y la barra inferior,
-   #06223B— da 4.60 y ahí sí es texto legible, que es donde la referencia lo dibuja (la pestaña
-   «Consulta» activa). Vive en `--lx-accent-chrome`.
-
-   Quién lo verifica: `packages/ui/src/__checks__/paleta.check.mjs`, que lee ESTE archivo y mide
-   este tema como uno más. `npm run checks`.
+   Quién lo verifica: `packages/ui/src/__checks__/paleta.check.mjs` mide este tema como uno más.
    ============================================================================================== */
 :root[data-portal='inspector'] {
-  --lx-bg: #061b30;
-  --lx-chrome: #06223b;
-  --lx-surface: #0b2b47;
-  /*
-    UN solo tono de tarjeta, que es lo que la especificación da y lo que la referencia dibuja: las
-    métricas, la consulta y «Última consulta» son el mismo plano sobre el fondo.
-
-    Y además es lo único que pasa la medición. Con un `surface-2` un paso más claro, los cinco
-    textos de estado sobre su propio fondo suave caen por debajo de 4.5; con el tono de la tarjeta
-    pasan los cinco. La comprobación está en paleta.check.mjs y se midió el 12-10-2026.
-  */
+  --lx-bg: #071629;
+  /* #08182D del documento, subido un escalón: ver la nota de arriba. */
+  --lx-chrome: #091c34;
+  --lx-surface: #102742;
+  /* Conservado a propósito. La razón, arriba. */
   --lx-surface-2: var(--lx-surface);
-  --lx-surface-hover: #123a5c;
+  /* La «superficie destacada» #12366A del documento, en el papel que sí tiene aquí. */
+  --lx-surface-hover: #12366a;
   --lx-bg-elevated: var(--lx-surface);
-  /* Los campos se HUNDEN respecto de la tarjeta, no se elevan: es el valor que la especificación
-     da para ellos y es la convención que el sistema ya usa. */
-  --lx-surface-input: #061e36;
-  --lx-border: #22506b;
-  --lx-border-strong: #2f6688;
-  --lx-text: #f6faff;
-  --lx-text-muted: #a9bed0;
-  --lx-text-subtle: #9bb1c6;
+  /* Los campos se HUNDEN respecto de la tarjeta, no se elevan: la convención del sistema, y la de
+     la especificación anterior, que esto no cambia. 1.14 contra la tarjeta. */
+  --lx-surface-input: #0a1c30;
+  --lx-border: #294c70;
+  /* El que identifica un control —el contorno de un campo, de un selector—: 4.05 sobre el campo
+     hundido y 3.56 sobre la tarjeta. El #294C70 del documento da 1.93 ahí y dejaría la placa sin
+     contorno visible, que en una pantalla que se usa al sol no es un detalle. */
+  --lx-border-strong: #4a7fb0;
+  --lx-text: #f5f8ff;
+  --lx-text-muted: #9db1c8;
+  --lx-text-subtle: #8aa0b8;
 
-  --lx-primary: #31b4ff;
-  --lx-primary-2: #66c9ff;
-  --lx-primary-strong: #66c9ff;
-  --lx-primary-text: #31b4ff;
-  --lx-primary-fill: #0670d6;
-  --lx-primary-fill-hover: #0561bb;
-  --lx-primary-soft: color-mix(in srgb, #31b4ff 14%, transparent);
-  --lx-focus-ring: #31b4ff;
-  /* El azul de la especificación, donde SÍ es legible: sobre el cromo, 4.60. */
-  --lx-accent-chrome: #0788ff;
+  --lx-primary: #58a6ff;
+  --lx-primary-2: #00d4ff;
+  --lx-primary-strong: #9cc6ff;
+  --lx-primary-text: #58a6ff;
+  --lx-primary-fill: #2563ff;
+  --lx-primary-fill-hover: #1d53db;
+  --lx-primary-soft: color-mix(in srgb, #2563ff 22%, transparent);
+  --lx-focus-ring: #58a6ff;
+  /* La pestaña activa de la barra inferior. Era el #0788FF de la especificación anterior; con el
+     cromo nuevo el azul de marca da 3.65 y éste 7.05. */
+  --lx-accent-chrome: #58a6ff;
+  --lx-accent-violet: #bbb1ff;
 
   --lx-success: #20c997;
   --lx-warning: #f0a520;
