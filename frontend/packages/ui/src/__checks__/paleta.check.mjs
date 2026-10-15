@@ -77,6 +77,11 @@ const FISCALIZACION = new Map([...OSCURO, ...tokensDe(":root[data-portal='inspec
   El motivo por el que ese bloque existe —y el de cada hexadecimal que NO es el del documento— está
   escrito en `tokens.css`, junto a las reglas.
 */
+/*
+  El Ciudadano tiene paleta propia desde el 09-10 y NO se estaba midiendo: cinco temas en la lista
+  y el portal con más pantallas de los cuatro fuera de ella. Entra ahora, con el encargo del 14-10.
+*/
+const CIUDADANO = new Map([...OSCURO, ...tokensDe(":root[data-portal='citizen']")]);
 const ADMIN_INICIO = new Map([
   ...OSCURO,
   ...tokensDe(":root[data-portal='admin']"),
@@ -352,6 +357,7 @@ revisarTema('TEMA CLARO', CLARO, false);
 revisarTema('PLATAFORMA · OSCURO', PLATAFORMA, true);
 revisarTema('FISCALIZACIÓN · OSCURO', FISCALIZACION, true);
 revisarTema('PLATAFORMA · CLARO', PLATAFORMA_CLARA, false);
+revisarTema('CIUDADANO · OSCURO', CIUDADANO, true);
 revisarTema('ADMIN · INICIO', ADMIN_INICIO, true);
 
 console.log(`\n${fallos === 0 ? 'Toda la paleta pasa.' : `${fallos} combinación(es) por debajo del mínimo.`}\n`);

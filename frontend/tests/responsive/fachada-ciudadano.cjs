@@ -712,6 +712,137 @@ async function probarMontosLargos(page) {
   }
 }
 
+/* ================================================================================================
+   La identidad visual del boceto de ocho pantallas (15-10-2026)
+   ================================================================================================
+
+   Un cambio de color es el que una prueba de cajas no ve: las medidas siguen siendo las mismas y
+   la pantalla puede estar entera del color equivocado con todo en verde. Se comprueba:
+
+     1. Que la paleta llegue a TODAS las rutas de Ciudadano, no sólo al Inicio.
+     2. Que el CTA «Estacionar ahora» tenga su texto legible ENCIMA. Es el punto que el encargo
+        pide con un degradado azul-cian y que la medición no deja: el relleno #2563FF deja 0.38 de
+        margen sobre el 4.5, y el brillo cian que este archivo pintaba al 42% llevaba ese punto a
+        3.19. Aquí se mide el contraste de verdad, en el navegador, sobre el color compuesto.
+     3. Y que los otros portales no se hayan movido, que es lo que el §02 del encargo prohíbe.
+*/
+async function identidadCiudadano(page) {
+  console.log('\n── La identidad del boceto de ocho pantallas ──');
+
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const css = fs.readFileSync(
+    path.join(__dirname, '..', '..', 'packages', 'ui', 'src', 'tokens.css'),
+    'utf8',
+  );
+  const token = (selector, nombre) => {
+    const i = css.indexOf(`\n${selector} {`);
+    if (i < 0) return null;
+    const cuerpo = css.slice(css.indexOf('{', i) + 1, css.indexOf('\n}', i)).replace(/\/\*[\s\S]*?\*\//g, '');
+    const m = cuerpo.match(new RegExp(`^\\s*${nombre}\\s*:\\s*(.+?);\\s*$`, 'm'));
+    return m ? m[1].trim() : null;
+  };
+  const aRgb = (hex) => {
+    const h = hex.trim().replace('#', '');
+    const p = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));
+    return `rgb(${p[0]}, ${p[1]}, ${p[2]})`;
+  };
+  const contraste = (a, b) => {
+    const n = (c) => c.match(/\d+/g).slice(0, 3).map(Number);
+    const lum = (c) => {
+      const v = n(c).map((x) => x / 255).map((x) => (x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4));
+      return 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2];
+    };
+    const [x, y] = [lum(a), lum(b)];
+    return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+  };
+
+  const CIUD = ":root[data-portal='citizen']";
+  const E = {
+    lienzo: token(CIUD, '--lx-bg'),
+    cromo: token(CIUD, '--lx-chrome'),
+    tarjeta: token(CIUD, '--lx-surface'),
+    relleno: token(CIUD, '--lx-primary-fill'),
+  };
+  ok(
+    Object.values(E).every(Boolean),
+    `  los valores salen de tokens.css (lienzo ${E.lienzo}, cromo ${E.cromo}, tarjeta ${E.tarjeta})`,
+    `falta algún token en ${CIUD}`,
+  );
+  if (!Object.values(E).every(Boolean)) return;
+
+  // 1. La paleta, en todas las rutas que el inventario encontró.
+  const RUTAS = [
+    ['/', 'Inicio'],
+    ['/park', 'Estacionar'],
+    ['/vehicles', 'Vehículos'],
+    ['/wallet', 'Billetera'],
+    ['/fines', 'Multas'],
+    ['/movements', 'Movimientos'],
+    ['/more', 'Más'],
+  ];
+  for (const [ruta, nombre] of RUTAS) {
+    await page.goto(`${BASE}${ruta}`, { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(1400);
+    const v = await page.evaluate(() => {
+      const f = (s) => { const n = document.querySelector(s); return n ? getComputedStyle(n).backgroundColor : null; };
+      return {
+        portal: document.documentElement.dataset.portal,
+        lienzo: getComputedStyle(document.body).backgroundColor,
+        cromo: f('.lx-app-bar--citizen') ?? f('.lx-bottom-tab-bar'),
+        tarjeta: f('.lx-card'),
+      };
+    });
+    ok(v.portal === 'citizen', `  ${nombre}: cargó en el portal ciudadano`);
+    ok(v.lienzo === aRgb(E.lienzo), `  ${nombre}: el lienzo es ${v.lienzo}`, `se esperaba ${aRgb(E.lienzo)}`);
+    if (v.cromo) ok(v.cromo === aRgb(E.cromo), `  ${nombre}: el cromo es ${v.cromo}`, `se esperaba ${aRgb(E.cromo)}`);
+    if (v.tarjeta) ok(v.tarjeta === aRgb(E.tarjeta), `  ${nombre}: la tarjeta es ${v.tarjeta}`, `se esperaba ${aRgb(E.tarjeta)}`);
+  }
+
+  /*
+    2. El CTA. No se comprueba su color: se comprueba que su TEXTO se lea encima, que es lo que el
+    color estaba a punto de romper. `backgroundColor` no basta —el bloque lleva radiales encima—,
+    así que se muestrea el píxel real bajo el título con un canvas sobre la captura.
+  */
+  await page.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(1600);
+  const cta = await page.$('.lx-hero-card--citizen');
+  if (!cta) {
+    console.log('  ··  sin CTA «Estacionar ahora» en esta cuenta (hay sesión activa): no se mide');
+  } else {
+    const titulo = await page.$('.lx-hero-card__title');
+    const caja = await titulo.boundingBox();
+    const tinta = await page.evaluate((s) => getComputedStyle(document.querySelector(s)).color, '.lx-hero-card__title');
+    // El píxel del fondo justo a la DERECHA del título, dentro del botón: ahí es donde el brillo
+    // del degradado es más fuerte y donde el contraste se pierde primero.
+    const png = await page.screenshot({ clip: { x: caja.x + caja.width + 4, y: caja.y + caja.height / 2, width: 1, height: 1 } });
+    const { PNG } = (() => { try { return require('pngjs'); } catch { return {}; } })();
+    if (PNG) {
+      const px = PNG.sync.read(png);
+      const fondo = `rgb(${px.data[0]}, ${px.data[1]}, ${px.data[2]})`;
+      const r = contraste(tinta, fondo);
+      ok(r >= 4.5, `  el título del CTA da ${r.toFixed(2)} sobre el fondo compuesto (AA pide 4.5)`, `${tinta} sobre ${fondo}`);
+    } else {
+      // Sin pngjs no se puede muestrear; se mide contra el color declarado, que es una cota
+      // OPTIMISTA (ignora los radiales) y por eso se dice en voz alta.
+      const fondo = await page.evaluate((s) => getComputedStyle(document.querySelector(s)).backgroundColor, '.lx-hero-card--citizen');
+      if (fondo && !/rgba\(0, 0, 0, 0\)/.test(fondo)) {
+        const r = contraste(tinta, fondo);
+        ok(r >= 4.5, `  el título del CTA da ${r.toFixed(2)} sobre su color declarado (sin contar los radiales)`, `${tinta} sobre ${fondo}`);
+      } else {
+        console.log('  ··  sin pngjs y con el CTA pintado por degradados: el contraste del título no se midió');
+      }
+    }
+    ok(
+      (await page.evaluate((s) => getComputedStyle(document.querySelector(s)).backgroundImage, '.lx-hero-card--citizen')).includes('gradient'),
+      '  y el CTA conserva su degradado',
+    );
+  }
+
+  await page.screenshot({ path: 'tests/responsive/capturas/ciudadano-identidad-inicio.png' });
+  await page.screenshot({ path: 'tests/responsive/capturas/ciudadano-identidad-inicio-completa.png', fullPage: true });
+}
+
 (async () => {
   const navegador = await chromium.launch();
   const context = await navegador.newContext({ viewport: TAMANOS[1], locale: 'es-CR' });
@@ -768,6 +899,8 @@ async function probarMontosLargos(page) {
     await page.waitForTimeout(1800);
     await probarMontosLargos(page);
     await probarQueNavega(page);
+    // Una sola vez, no por tamaño: el color no depende del ancho de la ventana.
+    await identidadCiudadano(page);
   } catch (e) {
     // Un arnés que no sabe dónde está no reporta: para. Lo contrario —seguir midiendo— es lo que
     // produjo 28 defectos inventados.

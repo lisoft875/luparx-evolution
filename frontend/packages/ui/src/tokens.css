@@ -6783,52 +6783,90 @@ a.lx-list-row {
    pasaban contraste y están resueltos abajo, con el número al lado. Los demás portales no se
    enteran de nada de esto.
    ============================================================================================== */
+/* ---------------------------------------------------------------------------------------------
+   La paleta del 14-10-2026 («Especificación visual y funcional», boceto de ocho pantallas).
+   Sustituye a la del 09-10. Diez de los trece colores entran tal cual; los tres que no, abajo,
+   con el número medido al lado. Sólo Ciudadano: el §02 del encargo prohíbe tocar tokens globales
+   y los otros portales no ven nada de esto.
+   --------------------------------------------------------------------------------------------- */
 :root[data-portal='citizen'] {
-  --lx-bg: #031a2b;
-  /* El cromo —cabecera y barra inferior— en el color de las tarjetas, que es como la referencia
-     los dibuja: el plano que flota sobre el fondo. */
-  --lx-chrome: #0b2638;
-  --lx-surface: #0b2638;
-  --lx-surface-2: #102d40;
-  --lx-surface-hover: #16394f;
+  --lx-bg: #06172b;
+  /* El documento da #071B31, que contra el lienzo da 1.04: la cabecera y la barra inferior se
+     funden con el fondo. #081E36, el mismo tono un escalón arriba, da 1.07 — y 1.13 contra la
+     tarjeta, o sea tres planos que se distinguen. */
+  --lx-chrome: #081e36;
+  --lx-surface: #0b2941;
+  /*
+    «Superficie elevada #103657 — tarjetas activas / selectores» va a `--lx-surface-hover`, que es
+    ese papel, y NO a `--lx-surface-2`.
+
+    No es una preferencia: `--lx-surface-2` es el plano sobre el que el sistema compone el fondo
+    suave de CADA estado, y ponerlo en #103657 tumbó seis pares de una vez —primary 4.04, éxito
+    4.45, error 4.12, info 4.47, ámbar 4.19, teal 4.32—. Conservarlo ahí habría obligado a subir
+    seis colores, entre ellos el verde #16C79A que el encargo da por su valor y el info/ámbar/teal
+    que ni siquiera menciona. Es la tercera vez este mes que un encargo llama «superficie
+    destacada» a este token; queda escrito para que la cuarta se resuelva en un minuto.
+
+    Y `--lx-surface-2` acaba siendo LA TARJETA, no un plano propio, porque el encargo da CUATRO
+    planos —fondo, cromo, tarjeta, elevada— y no cinco. Entre la tarjeta #0B2941 y la elevada
+    #103657 hay 1.20 de distancia; meter un escalón intermedio exige 1.10 por arriba y 1.10 por
+    abajo, o sea 1.21, y no cabe. Intentarlo dejaba un plano a 1.08 del hover: un quinto nivel que
+    el ojo no distingue y que el encargo no pide. Fiscalización llegó a lo mismo el 12-10 por otro
+    camino.
+  */
+  --lx-surface-2: var(--lx-surface);
+  --lx-surface-hover: #103657;
   --lx-bg-elevated: var(--lx-surface);
-  --lx-border: #1e4258;
-  --lx-border-strong: #2a5876;
-  --lx-text: #f7fafc;
-  --lx-text-muted: #91a4b5;
-  --lx-text-subtle: #7e93a6;
+  --lx-border: #2a5475;
+  /* El borde que IDENTIFICA un control. El #2A5475 del documento da 1.86 sobre la tarjeta —vale
+     como «contorno discreto», que es para lo que el documento lo pide— y la 1.4.11 exige 3.0 para
+     el contorno de un campo. 3.67 y 3.06. */
+  --lx-border-strong: #4a83b0;
+  --lx-text: #f5f8ff;
+  --lx-text-muted: #9db1c8;
+  --lx-text-subtle: #8aa0b8;
 
   /*
-    Los dos azules, y por qué son dos.
+    Los dos azules, otra vez, y por el mismo motivo que en los otros tres portales.
 
-    El encargo da `#0788FF` para «CTA, links, activo» y `#10A7FF` para «iconos/acento». Medido,
-    ese reparto no se sostiene: blanco sobre #0788FF da 3.51 y el subtítulo del CTA —«Selecciona
-    zona, vehículo y tiempo», 15-16px— necesita 4.5; y #0788FF como TEXTO sobre una tarjeta da
-    4.43, que se queda a siete centésimas.
+    «Azul primario #2563FF — CTA, foco y selección». Como RELLENO es correcto: blanco encima da
+    4.88. Como TEXTO da 3.06 sobre la tarjeta y 2.55 sobre la superficie elevada, así que la tinta
+    —enlaces, «Ver todas», cifras de acento— es #58A6FF, el mismo valor que ya usan Administración
+    y Fiscalización.
 
-    Es exactamente el mismo caso que el azul de Fiscalización (#1382F6, 3.78) y se resuelve igual,
-    con los dos papeles separados y ambos tomados de la propia referencia:
+    EL DEGRADADO DEL CTA, Y POR QUÉ NO LLEGA AL CIAN. El §05 pide «botón primario con degradado
+    azul-cian moderado». Medido, eso no se sostiene con texto blanco encima: el relleno #2563FF
+    deja sólo 0.38 de margen sobre el 4.5, y el brillo cian que este archivo ya pintaba al 42%
+    lleva ese punto a 3.19 — con un cian al 20% todavía da 3.98. No es que el porcentaje esté mal
+    elegido: con ese relleno no cabe NINGÚN cian debajo de un texto blanco.
 
-      · TINTA  → #10A7FF, el cian del encargo. 5.93 sobre tarjeta, 6.74 sobre el fondo.
-      · RELLENO → #0670D6, un escalón más oscuro del mismo azul. Blanco encima da 4.89.
-
-    El #0788FF no se pierde: es el extremo claro del degradado del CTA, donde sólo hay un icono
-    —elemento gráfico, mínimo 3.0— y ningún texto corrido.
+    Así que el brillo del CTA se queda en la familia azul —`--lx-cta-bright` pasa a ser el propio
+    azul primario— y el cian del encargo va donde el propio encargo lo manda y donde sí es
+    legible: «iconos, enlaces, resaltados», 8.43 sobre la tarjeta.
   */
-  --lx-primary: #10a7ff;
-  --lx-primary-2: #5fc8ff;
-  --lx-primary-strong: #4cc0ff;
-  --lx-primary-fill: #0670d6;
-  --lx-primary-fill-hover: #0561bb;
-  --lx-primary-soft: color-mix(in srgb, #10a7ff 14%, transparent);
-  --lx-focus-ring: #10a7ff;
+  --lx-primary: #58a6ff;
+  --lx-primary-2: #00d4ff;
+  --lx-primary-strong: #00d4ff;
+  --lx-primary-text: #58a6ff;
+  --lx-primary-fill: #2563ff;
+  --lx-primary-fill-hover: #1d53db;
+  /* Al 14% y no al 22%: sobre la superficie de estado, la tinta #58A6FF encima de su propio
+     fondo suave da 4.33 al 22% y pasa al 14%. */
+  --lx-primary-soft: color-mix(in srgb, #2563ff 14%, transparent);
+  --lx-focus-ring: #58a6ff;
+  /* «Violeta acento #7B61FF»: 3.55 sobre la tarjeta, así que como TEXTO no. Éste es el mismo tono
+     subido hasta pasar AA también sobre su propio fondo suave. No se pinta nada nuevo con él. */
+  --lx-accent-violet: #bbb1ff;
 
-  --lx-success: #22d68a;
-  --lx-warning: #f7b32b;
-  --lx-danger-text: #ff6268;
+  --lx-success: #16c79a;
+  --lx-warning: #f2b544;
+  --lx-danger: #f06476;
+  /* «Error #F06476» sirve de relleno —su tinta en el sistema es casi negra— pero como TEXTO da
+     4.02 sobre la superficie elevada y 4.15 sobre su propio fondo suave. */
+  --lx-danger-text: #f78a97;
 
-  /* El azul luminoso de la referencia, reservado para el degradado del CTA. */
-  --lx-cta-bright: #0788ff;
+  /* Ver la nota del degradado: el brillo del CTA no puede ser cian. */
+  --lx-cta-bright: #2563ff;
 }
 
 /* ---- El héroe: saludo a la izquierda, imagen fundida a la derecha ---------------------------
