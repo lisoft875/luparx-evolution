@@ -52,6 +52,57 @@ function ok(condicion, mensaje, detalle) {
   }
 }
 
+/**
+ * La paleta aprobada del portal, leída de `tokens.css` — el archivo que se despliega.
+ *
+ * Un solo lector para las dos tandas de color de este script: la de cada viewport en
+ * `pantallaInicial` y el barrido de siete pantallas en `identidadVisual`. Dos parsers del mismo
+ * bloque son dos cosas que pueden discrepar.
+ *
+ * Y los valores NO se escriben a mano acá. Escritos a mano ya fallaron: la tanda por viewport
+ * esperaba la paleta de la mañana del 15-10 (#061B30…) cuando la segunda guía del mismo día ya la
+ * había reemplazado por la unificada, así que el script reportó seis defectos sobre una pantalla
+ * correcta. Un hexadecimal copiado es una cuarta fuente de verdad —después del documento, el token
+ * y el navegador— y es la única que envejece sola.
+ *
+ * Lo que sigue siendo una comprobación de verdad es la pareja: el token aprobado contra el color
+ * que el navegador CALCULÓ. Eso detecta un token que nadie aplica, y detecta un empate de
+ * especificidad perdido (ver la trampa de `[data-density='outdoor']` en `identidadVisual`).
+ */
+function paletaDelInspector() {
+  const fuente = require('node:fs').readFileSync(
+    require('node:path').join(__dirname, '..', '..', 'packages', 'ui', 'src', 'tokens.css'),
+    'utf8',
+  );
+  const SELECTOR = ":root[data-portal='inspector']";
+  const desde = fuente.indexOf(`\n${SELECTOR} {`);
+  if (desde < 0) throw new Error(`no encontré el bloque ${SELECTOR} en tokens.css`);
+  const bloque = fuente
+    .slice(fuente.indexOf('{', desde) + 1, fuente.indexOf('\n}', desde))
+    .replace(/\/\*[\s\S]*?\*\//g, '');
+  const token = (nombre) => {
+    const m = bloque.match(new RegExp(`^\\s*${nombre}\\s*:\\s*(.+?);\\s*$`, 'm'));
+    return m ? m[1].trim() : null;
+  };
+  const aRgb = (valor) => {
+    const h = valor.trim().replace('#', '');
+    const c = [0, 2, 4].map((n) => parseInt(h.slice(n, n + 2), 16));
+    return `rgb(${c[0]}, ${c[1]}, ${c[2]})`;
+  };
+  const hex = {
+    lienzo: token('--lx-bg'),
+    cromo: token('--lx-chrome'),
+    tarjeta: token('--lx-surface'),
+    campo: token('--lx-surface-input'),
+    borde: token('--lx-border'),
+    relleno: token('--lx-primary-fill'),
+  };
+  const faltan = Object.entries(hex).filter(([, v]) => !v).map(([k]) => k);
+  if (faltan.length > 0) throw new Error(`faltan tokens en ${SELECTOR}: ${faltan.join(', ')}`);
+  const rgb = Object.fromEntries(Object.entries(hex).map(([k, v]) => [k, aRgb(v)]));
+  return { ...rgb, hex, aRgb, token };
+}
+
 async function entrar(context) {
   const page = await context.newPage();
   await page.goto(`${BASE}/inspector/login`, { waitUntil: 'domcontentloaded' });
@@ -470,12 +521,17 @@ async function pantallaInicial(page, tamano, ancho) {
      y de texto sobre la tarjeta —los dos requisitos no se cruzan—, así que son dos tokens. El
      #0788FF sí se usa donde es legible: la pestaña activa de la barra inferior, sobre el cromo,
      donde da 4.60. La cuenta entera está en tokens.css. */
-  ok(vista.colores.fondo === 'rgb(6, 27, 48)', `${tamano}: el fondo es #061B30`, vista.colores.fondo);
-  ok(vista.colores.cabecera === 'rgb(6, 34, 59)', `${tamano}: la cabecera es #06223B`, vista.colores.cabecera);
-  ok(vista.colores.tarjeta === 'rgb(11, 43, 71)', `${tamano}: las tarjetas son #0B2B47`, vista.colores.tarjeta);
-  ok(vista.colores.borde === 'rgb(34, 80, 107)', `${tamano}: el borde es #22506B`, vista.colores.borde);
-  ok(vista.colores.campo === 'rgb(6, 30, 54)', `${tamano}: los campos son #061E36`, vista.colores.campo);
-  ok(vista.colores.buscar === 'rgb(6, 112, 214)', `${tamano}: BUSCAR lleva el azul de relleno medido`, vista.colores.buscar);
+  const esperado = paletaDelInspector();
+  ok(vista.colores.fondo === esperado.lienzo, `${tamano}: el fondo es ${esperado.hex.lienzo}`, vista.colores.fondo);
+  ok(vista.colores.cabecera === esperado.cromo, `${tamano}: la cabecera es ${esperado.hex.cromo}`, vista.colores.cabecera);
+  ok(vista.colores.tarjeta === esperado.tarjeta, `${tamano}: las tarjetas son ${esperado.hex.tarjeta}`, vista.colores.tarjeta);
+  ok(vista.colores.borde === esperado.borde, `${tamano}: el borde es ${esperado.hex.borde}`, vista.colores.borde);
+  ok(vista.colores.campo === esperado.campo, `${tamano}: los campos son ${esperado.hex.campo}`, vista.colores.campo);
+  ok(
+    vista.colores.buscar === esperado.relleno,
+    `${tamano}: BUSCAR lleva el azul de relleno medido (${esperado.hex.relleno})`,
+    vista.colores.buscar,
+  );
 }
 
 /**
@@ -486,7 +542,7 @@ async function consultaFunciona(page, tamano) {
   const escribir = async (placa, bahia) => {
     await page.fill('.lx-plate-row input', '');
     await page.fill('.lx-plate-row input', placa);
-    const campoBahia = page.locator('.lx-fiscal-consulta input[name="spaceCode"]');
+    const campoBahia = page.locator('.lx-fiscal-ask input[name="spaceCode"]');
     await campoBahia.fill(bahia ?? '');
   };
 
@@ -517,7 +573,9 @@ async function consultaFunciona(page, tamano) {
   if (respondio.veredicto) {
     const sitio = await page.evaluate(() => {
       const v = document.querySelector('.lx-verdict__plate').closest('.lx-card');
-      const f = document.querySelector('.lx-fiscal-consulta .lx-card');
+      // `.lx-fiscal-ask` ES la tarjeta del formulario, no su contenedor: `Card` pone el
+      // `className` que recibe junto a `lx-card`, en el mismo nodo.
+      const f = document.querySelector('.lx-fiscal-ask');
       return { veredicto: Math.round(v.getBoundingClientRect().y), formulario: Math.round(f.getBoundingClientRect().y) };
     });
     ok(sitio.veredicto > sitio.formulario, `${tamano}: la respuesta aparece bajo el formulario`, JSON.stringify(sitio));
@@ -699,25 +757,6 @@ async function boletaYPendientes(page, tamano, ancho) {
 async function identidadVisual(page) {
   console.log('\n── La identidad visual de LuParX en Inspector ──');
 
-  const fs = require('node:fs');
-  const path = require('node:path');
-  const css = fs.readFileSync(
-    path.join(__dirname, '..', '..', 'packages', 'ui', 'src', 'tokens.css'),
-    'utf8',
-  );
-  const SEL = ":root[data-portal='inspector']";
-  const token = (nombre) => {
-    const i = css.indexOf(`\n${SEL} {`);
-    if (i < 0) return null;
-    const cuerpo = css.slice(css.indexOf('{', i) + 1, css.indexOf('\n}', i)).replace(/\/\*[\s\S]*?\*\//g, '');
-    const m = cuerpo.match(new RegExp(`^\\s*${nombre}\\s*:\\s*(.+?);\\s*$`, 'm'));
-    return m ? m[1].trim() : null;
-  };
-  const aRgb = (hex) => {
-    const h = hex.trim().replace('#', '');
-    const p = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));
-    return `rgb(${p[0]}, ${p[1]}, ${p[2]})`;
-  };
   /** El contraste de dos colores `rgb(...)`, para no declarar legible lo que no se midió. */
   const contraste = (a, b) => {
     const n = (c) => c.match(/\d+/g).slice(0, 3).map(Number);
@@ -729,20 +768,14 @@ async function identidadVisual(page) {
     return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
   };
 
-  const ESPERADO = {
-    lienzo: token('--lx-bg'),
-    cromo: token('--lx-chrome'),
-    tarjeta: token('--lx-surface'),
-    campo: token('--lx-surface-input'),
-    borde: token('--lx-border'),
-    relleno: token('--lx-primary-fill'),
-  };
-  ok(
-    Object.values(ESPERADO).every(Boolean),
-    `  los valores salen de tokens.css (lienzo ${ESPERADO.lienzo}, cromo ${ESPERADO.cromo}, tarjeta ${ESPERADO.tarjeta}, campo ${ESPERADO.campo})`,
-    `falta algún token en ${SEL}`,
+  // El mismo lector que usa la tanda por viewport: un solo parser del bloque del portal, para
+  // que las dos no puedan discrepar.
+  const { aRgb, token, hex: ESPERADO } = paletaDelInspector();
+  // Sin guarda de «falta algún token»: `paletaDelInspector` lanza nombrando el que falte, y un
+  // script que siguiera adelante sin paleta compararía contra `undefined` y lo llamaría defecto.
+  dato(
+    `los valores salen de tokens.css (lienzo ${ESPERADO.lienzo}, cromo ${ESPERADO.cromo}, tarjeta ${ESPERADO.tarjeta}, campo ${ESPERADO.campo})`,
   );
-  if (!Object.values(ESPERADO).every(Boolean)) return;
 
   /*
     1. La paleta, en todas las pantallas del portal. No sólo el Inicio: un cambio de tokens que
