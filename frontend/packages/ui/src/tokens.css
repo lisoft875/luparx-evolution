@@ -7537,6 +7537,22 @@ a.lx-list-row {
 
    La safe-area se mueve del relleno interno al margen: flotando, lo que tiene que respetar la
    franja del gesto es el hueco de abajo, no un relleno dentro de la píldora. */
+/*
+  La cabecera, con el color que el encargo del 14-10 le da.
+
+  `.lx-app-bar` se pinta con `--lx-surface` —el color de las tarjetas— porque la comparten cuatro
+  portales, y hasta hoy daba igual: la paleta del Ciudadano tenía `--lx-chrome` y `--lx-surface`
+  con EL MISMO valor (#0B2638), a propósito, «el plano que flota sobre el fondo».
+
+  El encargo nuevo los separa —«Header / barra inferior #071B31 · Áreas persistentes» frente a
+  «Superficie tarjeta #0B2941»— y entonces la regla compartida deja la cabecera del color de las
+  tarjetas. Lo cazó el arnés en seis rutas de siete: en Multas no hay cabecera y por eso pasaba.
+  La barra inferior ya tenía su regla propia y nunca estuvo afectada.
+*/
+:root[data-portal='citizen'] .lx-app-bar--citizen {
+  background: var(--lx-chrome);
+}
+
 :root[data-portal='citizen'] .lx-bottom-tab-bar {
   margin: 0 12px calc(12px + env(safe-area-inset-bottom));
   padding-bottom: 0;

@@ -275,9 +275,19 @@ async function medirFachada(page, tamano, ancho, placaDelServidor) {
       v.heroConFoto ? 'con fotografía se esperan 175-215' : 'sin fotografía, la altura la da el contenido',
     );
     ok(/^hola/i.test(v.saludo), `${tamano}: empieza con el saludo`, `«${v.saludo}»`);
+    /*
+      30-36 era de la tabla del 09-10. El encargo del 14-10 da otra jerarquía y es posterior:
+      «encabezado 24-28 px». La pantalla mide 26 a 390 y 24 a 360/375 —el `clamp` la reduce en
+      pantallas angostas, que es lo que debe hacer— y el arnés la reprobaba en los dos tamaños más
+      pequeños por dos píxeles, contra un rango que ninguna especificación vigente pide.
+
+      Es el mismo defecto que el arnés del Inicio administrativo tenía con el anillo y la caja del
+      icono: una prueba que sobrevive a la especificación que la justificaba. Se actualiza al rango
+      vigente, no se borra.
+    */
     ok(
-      v.saludoPx >= 26 && v.saludoPx <= 36,
-      `${tamano}: el saludo mide ${v.saludoPx}px (pide 30-36; 26 por debajo de 380px)`,
+      v.saludoPx >= 24 && v.saludoPx <= 28,
+      `${tamano}: el saludo mide ${v.saludoPx}px (el 14-10 pide 24-28 para encabezado)`,
     );
     ok(Number(v.saludoPeso) >= 700, `${tamano}: y va en peso 700-800`, `peso=${v.saludoPeso}`);
     // El punto 10 dice no aceptar «foto rectangular sin integración/degradado».
