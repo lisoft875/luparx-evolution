@@ -6688,93 +6688,91 @@ a.lx-list-row {
 }
 
 /* ==============================================================================================
-   FISCALIZACIÓN · la identidad visual de LuParX (14-10-2026)
+   FISCALIZACIÓN · la paleta de la referencia de seis pantallas (15-10-2026)
 
-   Sustituye a la paleta del 12-10. Las dos son de Javier y las dos dan sus colores por el valor;
-   lo que cambia es el encargo. La del 12-10 era «la especificación definitiva del Inicio» de ESTE
-   portal, resuelta en su propio azul; la de hoy pide lo contrario — «trasladar la identidad visual
-   aprobada de LuParX al aplicativo Inspector»— y unificar los portales. Por eso el fondo, el cromo
-   y la tarjeta pasan a ser LOS MISMOS que los del Inicio del administrador: no se parecen, son el
-   mismo valor.
+   Tercera paleta de este portal en cuatro días, y la tercera es de Javier como las dos anteriores:
+   la del 12-10 («especificación definitiva del Inicio»), la del 14-10 («trasladar la identidad de
+   LuParX», que unificaba con el Administrador) y ésta, que viene con una referencia de seis
+   pantallas dibujadas y unos azules más saturados.
 
-   Queda dicho porque no es un refinamiento: es cambiar diez colores que se habían elegido y medido
-   hace dos días. Los de la especificación anterior —#061B30, #06223B, #0B2B47, #061E36, #22506B,
-   #0788FF— ya no están en el archivo.
+   DECIDIDO EL 15-10, PREGUNTADO ANTES DE ESCRIBIR: el Administrador NO se mueve. Esta paleta
+   aparta al Inspector de los valores del Inicio administrativo que ayer se unificaron —tarjeta
+   #06264A contra #102742, azul #086BFF contra #2563FF— y se hace a sabiendas, porque el encargo
+   de hoy pide igualar la referencia adjunta y la referencia es de este portal.
 
-   ── Lo que el documento pide y la medición no deja hacer ──────────────────────────────────────
+   El documento llama a sus valores «paleta visual aproximada» y pide «mantener contraste legible».
+   Siete entran tal cual. Los cuatro que no, con el número al lado:
 
-   Tres de los diez colores no pueden usarse como el documento los nombra. Los tres se resuelven
-   igual que en el Administrador —el mismo valor, para que «unificar» sea verdad— y con el número
-   al lado:
+     · «Botones azules #086BFF / #087BFF». El #086BFF sirve de RELLENO —blanco puro encima da
+       4.61— y ése es el botón BUSCAR y el EMITIR BOLETA de la referencia. Como TEXTO da 3.29 y no
+       vale; la TINTA es #58A6FF (6.01 sobre la tarjeta). El #087BFF no sirve para ninguno de los
+       dos papeles: 3.82 como texto y 3.97 con blanco encima. No se usa.
+       Y un detalle que cuesta ver: el botón necesita BLANCO PURO. El texto principal #F4F8FF da
+       4.33 sobre ese azul — siete centésimas por debajo. `--lx-primary-contrast` ya es #ffffff en
+       el sistema, así que no hay que tocarlo, pero conviene saber por qué no puede cambiarse aquí.
+     · «Fondo #031326 / #04172B». Usados como lienzo y cromo dan 1.03 entre ellos: la cabecera y
+       la barra inferior desaparecerían dentro del fondo. El cromo sube a #061C33 (1.09 contra el
+       lienzo, 1.13 contra la tarjeta): tres planos que se distinguen, que es lo que la referencia
+       dibuja.
+     · «Multas/errores #D94C58». Se queda TAL CUAL como relleno, y pasa, porque la tinta de ese
+       token en el sistema es casi negra (`--lx-danger-ink`, #2A0409): 4.56. Lo que no puede es ser
+       TEXTO sobre la tarjeta —3.70— ni sobre su propio fondo suave —3.36—, así que el texto de
+       error es #F07E86 (5.81 y 4.83).
+     · «Bordes #075A91». 2.08 sobre la tarjeta: perfecto como contorno discreto, que es lo que el
+       documento pide, pero insuficiente para el borde que IDENTIFICA un campo (1.4.11 pide 3.0).
+       Ése es #1289D6, el mismo tono subido: 4.03 sobre la tarjeta y 4.54 sobre el campo.
 
-     · «Azul principal #2563FF — acciones y elementos activos». Como TEXTO da 3.10 sobre la
-       tarjeta y 3.65 sobre el cromo; hace falta 4.5. Es el mismo callejón que ya se demostró en
-       este portal el 12-10 con el #0788FF, y la cuenta no ha cambiado: para ser texto sobre esa
-       tarjeta un color necesita cierta luminancia, y para aguantar blanco encima, como mucho otra
-       más baja; los dos requisitos no se cruzan. Así que el #2563FF es RELLENO —el botón BUSCAR,
-       el único botón primario azul de la pantalla— con blanco encima a 4.88, y la TINTA (enlaces,
-       iconos, foco, la pestaña activa de la barra inferior) es #58A6FF: 5.98 sobre la tarjeta,
-       7.05 sobre el cromo, 7.19 sobre el lienzo.
-     · «Violeta #7B61FF — acento secundario». 3.59 sobre la tarjeta. El token queda en #BBB1FF,
-       que pasa también sobre su propio fondo suave. Y NO se pinta nada nuevo con él: hoy ninguna
-       pantalla de Fiscalización usa violeta, y el §4 prohíbe agregar elementos. Existe para quien
-       lo necesite y para que el comprobador lo vigile.
-     · «Cabecera / superficies oscuras #08182D». Da 1.02 contra el lienzo: la barra de arriba y la
-       de abajo desaparecerían dentro del fondo. Subido un escalón al mismo tono, #091C34, da 1.06
-       — el mismo valor y la misma razón que en el Administrador.
+   ── La navegación en cian ─────────────────────────────────────────────────────────────────────
 
-   ── Lo que NO se toca, porque ya funciona (§5) ────────────────────────────────────────────────
+   «Navegación inferior oscura con sección activa en cian». Hasta ayer la pestaña activa era azul.
+   Ahora es el cian #00C8F5, que sobre el cromo da 8.66 — y el foco también, que en una pantalla
+   que se usa al sol es donde más se agradece.
 
-     · `--lx-surface-2` sigue siendo `var(--lx-surface)`. El documento da «superficie destacada
-       #12366A», pero ese token NO es la tarjeta destacada: es el plano hundido que usan los
-       fondos suaves de CADA estado. Con un tono más claro ahí, los cinco textos de estado caen
-       por debajo de 4.5 — se midió el 12-10 y sigue siendo cierto. El #12366A va a
-       `--lx-surface-hover`, que es el «énfasis moderado» que el documento describe.
-     · El verde #20C997 y el ámbar #F0A520 se quedan. El documento no los nombra y sobre las
-       superficies nuevas dan 7.09 y 7.27: no hay nada que arreglar.
-     · El bloque sigue DESPUÉS de `[data-density='outdoor']`, que es lo que lo hace funcionar: esa
-       regla redefine `--lx-border` como un blanco al 16% y tiene la MISMA especificidad que ésta.
-       Si este bloque subiera en el archivo, el borde de la identidad no se vería nunca.
+   ── Lo que NO se toca (el encargo pide cambios «mínimos y reversibles») ───────────────────────
 
-   Quién lo verifica: `packages/ui/src/__checks__/paleta.check.mjs` mide este tema como uno más.
+     · `--lx-surface-2` sigue siendo `var(--lx-surface)`. Las «superficies elevadas #0A315C» del
+       documento van a `--lx-surface-hover`, que es ese papel. `--lx-surface-2` es el fondo suave
+       de cada estado, y subirlo tumba el verde por debajo de 4.5 — el verde #00B99A da 4.77 sobre
+       su suave con la tarjeta de hoy, o sea que no sobra nada.
+     · El bloque sigue DESPUÉS de `[data-density='outdoor']`, que es lo que lo hace funcionar.
+     · Ni una línea de lógica. El único archivo de aplicación que cambia es éste.
    ============================================================================================== */
 :root[data-portal='inspector'] {
-  --lx-bg: #071629;
-  /* #08182D del documento, subido un escalón: ver la nota de arriba. */
-  --lx-chrome: #091c34;
-  --lx-surface: #102742;
+  --lx-bg: #031326;
+  /* #04172B del documento, un escalón arriba: ver la nota. */
+  --lx-chrome: #061c33;
+  --lx-surface: #06264a;
   /* Conservado a propósito. La razón, arriba. */
   --lx-surface-2: var(--lx-surface);
-  /* La «superficie destacada» #12366A del documento, en el papel que sí tiene aquí. */
-  --lx-surface-hover: #12366a;
+  /* Las «superficies elevadas #0A315C», en el papel que sí tienen aquí. */
+  --lx-surface-hover: #0a315c;
   --lx-bg-elevated: var(--lx-surface);
-  /* Los campos se HUNDEN respecto de la tarjeta, no se elevan: la convención del sistema, y la de
-     la especificación anterior, que esto no cambia. 1.14 contra la tarjeta. */
-  --lx-surface-input: #0a1c30;
-  --lx-border: #294c70;
-  /* El que identifica un control —el contorno de un campo, de un selector—: 4.05 sobre el campo
-     hundido y 3.56 sobre la tarjeta. El #294C70 del documento da 1.93 ahí y dejaría la placa sin
-     contorno visible, que en una pantalla que se usa al sol no es un detalle. */
-  --lx-border-strong: #4a7fb0;
-  --lx-text: #f5f8ff;
-  --lx-text-muted: #9db1c8;
-  --lx-text-subtle: #8aa0b8;
+  /* Los campos se HUNDEN respecto de la tarjeta: 1.13 por debajo, y el texto encima da 16.05. */
+  --lx-surface-input: #041c38;
+  --lx-border: #075a91;
+  --lx-border-strong: #1289d6;
+  --lx-text: #f4f8ff;
+  --lx-text-muted: #a9c0d8;
+  --lx-text-subtle: #8fa6bf;
 
+  /* Tinta y relleno, que no pueden ser el mismo azul. Ver la nota. */
   --lx-primary: #58a6ff;
-  --lx-primary-2: #00d4ff;
-  --lx-primary-strong: #9cc6ff;
+  --lx-primary-2: #00c8f5;
+  --lx-primary-strong: #00c8f5;
   --lx-primary-text: #58a6ff;
-  --lx-primary-fill: #2563ff;
-  --lx-primary-fill-hover: #1d53db;
-  --lx-primary-soft: color-mix(in srgb, #2563ff 22%, transparent);
-  --lx-focus-ring: #58a6ff;
-  /* La pestaña activa de la barra inferior. Era el #0788FF de la especificación anterior; con el
-     cromo nuevo el azul de marca da 3.65 y éste 7.05. */
-  --lx-accent-chrome: #58a6ff;
+  --lx-primary-fill: #086bff;
+  --lx-primary-fill-hover: #0757c9;
+  --lx-primary-soft: color-mix(in srgb, #086bff 22%, transparent);
+  /* El foco en cian: es lo que se ve al sol. 7.65 sobre la tarjeta. */
+  --lx-focus-ring: #00c8f5;
+  /* La pestaña activa de la barra inferior, que el documento pide en cian: 8.66 sobre el cromo. */
+  --lx-accent-chrome: #00c8f5;
   --lx-accent-violet: #bbb1ff;
 
-  --lx-success: #20c997;
-  --lx-warning: #f0a520;
+  --lx-success: #00b99a;
+  --lx-warning: #f5a900;
+  --lx-danger: #d94c58;
+  --lx-danger-text: #f07e86;
 }
 
 /* ==============================================================================================

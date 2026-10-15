@@ -833,6 +833,19 @@ async function identidadVisual(page) {
       '  y no es el azul de relleno, que ahí no se leería',
       `la pestaña activa está pintada con ${azul.activaTinta}`,
     );
+    /*
+      Y que sea el CIAN. El encargo del 15-10 lo pide con esas palabras —«navegación inferior
+      oscura con sección activa en cian»— y hasta el 14-10 era azul. Un contraste alto no basta
+      para dar esto por hecho: el azul claro de ayer también lo tenía.
+    */
+    const cian = token('--lx-primary-2');
+    if (cian) {
+      ok(
+        azul.activaTinta === aRgb(cian),
+        `  y es el cian de la referencia (${azul.activaTinta})`,
+        `se esperaba ${aRgb(cian)}`,
+      );
+    }
   }
 
   await page.screenshot({ path: 'tests/responsive/capturas/inspector-identidad-inicio.png' });
