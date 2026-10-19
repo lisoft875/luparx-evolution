@@ -7,6 +7,7 @@ import { InspectorShell } from '../components/InspectorShell';
 import { useCitationQueue, useIsOnline } from '../lib/queries';
 import { discardQueued, type QueuedCitationState } from '../lib/citationQueue';
 import { codeMessage } from '../lib/apiErrors';
+import { escrituraDegradada, suscribirAlmacenamiento } from '../lib/almacenamiento';
 import { useAuth } from '@luparx/auth';
 
 const STATE_KEYS: Record<QueuedCitationState, TranslationKey> = {
@@ -41,9 +42,19 @@ export function QueuePage(): React.JSX.Element {
   const online = useIsOnline();
   const [confirmDiscard, setConfirmDiscard] = useState<string | null>(null);
 
+  /*
+    Si el aparato dejó de guardar, esta pantalla es la que MÁS tiene que decirlo: lo que lista son
+    boletas que el fiscalizador cree a salvo. En memoria lo están; tras cerrar la aplicación, no.
+  */
+  const almacenamientoRoto = React.useSyncExternalStore(suscribirAlmacenamiento, escrituraDegradada, () => null);
+
   return (
     <InspectorShell>
       <h1 className="lx-text-screen-title">{t('inspector.queue.title')}</h1>
+
+      {almacenamientoRoto ? (
+        <Alert tone="danger">{t(`inspector.storage.degraded.${almacenamientoRoto}`)}</Alert>
+      ) : null}
 
       {queue.rows.length === 0 ? (
         <Card>

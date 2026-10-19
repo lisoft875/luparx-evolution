@@ -49,3 +49,23 @@ export function filterMovements(movements: WalletTransaction[], filter: Movement
   const types = FILTER_TYPES[filter];
   return types ? movements.filter((movement) => types.includes(movement.type)) : movements;
 }
+
+
+/**
+ * ¿Este movimiento es saldo de PRUEBA?
+ *
+ * <p>Una recarga con origen `DEV` la creó el simulador de pagos: no la pagó nadie. El servidor la
+ * manda rotulada precisamente para que la pantalla pueda delatarla, y hasta hoy el cliente tiraba
+ * ese campo. Un saldo simulado que en pantalla se ve igual que uno pagado es exactamente lo que no
+ * puede pasar con dinero municipal (CONTRACT.md v0.46).</p>
+ */
+export function esSaldoDePrueba(movimiento: Pick<WalletTransaction, 'source'>): boolean {
+  return movimiento.source === 'DEV';
+}
+
+/** ¿Hay alguna fila de prueba en la lista? Decide si la pantalla entera lleva el rótulo. */
+export function hayMovimientosDePrueba(
+  movimientos: readonly Pick<WalletTransaction, 'source'>[],
+): boolean {
+  return movimientos.some(esSaldoDePrueba);
+}

@@ -960,6 +960,43 @@ body {
   border-color: var(--lx-danger-soft);
 }
 
+/* La fila de botones de un aviso: la oferta de retomar un borrador, y cualquier otra que ofrezca
+   dos salidas.
+
+   Por qué existe: `.lx-btn` es `white-space: nowrap` y `flex-shrink: 0`, que es lo correcto para
+   un botón normal y lo que desborda cuando el rótulo es largo y la caja estrecha. A 320 px,
+   «Retomar el borrador y reemplazar» pedía 317 px dentro de una caja de 254 y se salía de la
+   pantalla, arrastrando el documento entero a 350 px de ancho. Envolver no ayudaba: el elemento
+   individual no cabía en la línea.
+
+   Acá, y sólo acá, el botón puede partir su rótulo y encoger. `flex: 0 1 auto` —encoger sí,
+   crecer no— deja la fila igual donde ya cabía: medido a 768 px, los dos botones conservan su
+   ancho natural y su posición. Sin media query y sin ningún valor atado a un dispositivo. */
+.lx-oferta__acciones {
+  display: flex;
+  gap: var(--lx-space-2);
+  flex-wrap: wrap;
+}
+.lx-oferta__acciones > .lx-btn {
+  white-space: normal;
+  flex: 0 1 auto;
+  min-width: 0;
+  text-align: center;
+  /* El alto deja de ser fijo para que quepan dos líneas; `min-height` sigue garantizando los
+     44 px del objetivo táctil. */
+  height: auto;
+  padding-top: var(--lx-space-2);
+  padding-bottom: var(--lx-space-2);
+}
+
+/* El rótulo de un saldo que creó el simulador. Ámbar, no rojo: no es un error, es una advertencia
+   sobre el ORIGEN del dinero. Va en negrita y con la palabra completa porque la única forma de
+   que esto falle es que alguien no lo lea. */
+.lx-saldo-prueba {
+  color: var(--lx-warning);
+  font-weight: 600;
+}
+
 .lx-table-wrapper {
   overflow-x: auto;
   border: 1px solid var(--lx-border);
@@ -1233,10 +1270,13 @@ body {
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
-  /* A 36 px hit target in the corner the reference puts it in — the "×" glyph it replaced was a
-     10 px tap target that only worked with a mouse. */
-  width: 36px;
-  height: 36px;
+  /* El objetivo táctil del cierre, en la esquina donde lo pone la referencia. Pasó de 36 a 44 px
+     el 17-10-2026: 36 era mejor que el glifo «×» de 10 px que reemplazó, pero seguía por debajo
+     del mínimo de 44 px que el proyecto exige para cualquier control que se toca con el dedo, y
+     lo midió el arnés del recorrido del ciudadano en los ocho tamaños. El círculo crece; el icono
+     de adentro no. */
+  width: 44px;
+  height: 44px;
   padding: 0;
   border-radius: var(--lx-radius-pill);
   background: var(--lx-surface-2);
@@ -2654,7 +2694,23 @@ a.lx-list-row {
   align-items: center;
   gap: var(--lx-space-3);
   padding: var(--lx-space-2) var(--lx-space-4);
-  background: var(--lx-success-soft);
+  /*
+    Opaca a la fuerza, y es la corrección del defecto móvil del 16-10-2026.
+
+    `--lx-success-soft` es `color-mix(in srgb, var(--lx-success) 14%, transparent)`: medido sobre la
+    aplicación corriendo da `color(srgb … / 0.14)`, o sea **86 % transparente**. Esta barra PEGA
+    arriba (`.lx-top-chrome` es `position: sticky`), y un elemento pegado y translúcido no se
+    superpone por un error de z-index ni de orden: el contenido de la página pasa por debajo y se
+    VE a través, así que la tarjeta de la estadía aparece encima del texto de la pantalla. En
+    teléfono se nota más porque ahí la barra está casi siempre y el contenido empieza justo debajo.
+
+    El tinte se compone sobre el lienzo en la misma declaración —capa de color sólido encima de
+    `--lx-bg`—, así que el color que se ve es EL MISMO de antes y se vuelve opaco. No se toca el
+    token: lo usan las alertas y las tarjetas, donde ir translúcido sobre una superficie es
+    justamente lo correcto. Y no lleva media query: una barra pegada translúcida deja pasar el
+    contenido en cualquier ancho; el teléfono es donde se reportó, no donde está el defecto.
+  */
+  background: linear-gradient(var(--lx-success-soft), var(--lx-success-soft)), var(--lx-bg);
   border-bottom: 1px solid var(--lx-success);
   color: var(--lx-text);
 }
@@ -2665,7 +2721,8 @@ a.lx-list-row {
   padding-top: max(var(--lx-space-2), env(safe-area-inset-top));
 }
 .lx-sticky-timer-bar--warning {
-  background: var(--lx-warning-soft);
+  /* Mismo compuesto que arriba: el tinte de advertencia sobre el lienzo, opaco. */
+  background: linear-gradient(var(--lx-warning-soft), var(--lx-warning-soft)), var(--lx-bg);
   border-bottom-color: var(--lx-warning);
 }
 .lx-sticky-timer-bar__icon {
@@ -3066,6 +3123,26 @@ a.lx-list-row {
 .lx-auth-card__footer-line strong {
   font-weight: 700;
   color: var(--lx-text);
+}
+
+/*
+  Los dos enlaces de texto del ingreso llegan al mínimo táctil de 44 px.
+
+  Medido en el navegador contra el backend real el 18-10-2026: «¿Olvidaste tu contraseña?» daba
+  164×15 y «Crear cuenta» 95×18 a 390 px de ancho. Eran los dos únicos controles de todo el
+  recorrido por debajo del mínimo que el resto de la aplicación ya respeta.
+
+  Se agranda el ÁREA DE TOQUE, no la letra: el texto conserva su tamaño, su color y su posición
+  horizontal; `inline-flex` con `min-height` sólo le da alto al renglón, y el centrado vertical
+  evita que el texto se desplace dentro de él. El alcance es la tarjeta de autenticación, no
+  `.lx-link-button` en general, que se usa en filas donde 44 px de alto sí cambiarían el diseño.
+*/
+.lx-auth-card__link-row .lx-link-button,
+.lx-auth-card__footer-line a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
 }
 
 
@@ -8470,6 +8547,133 @@ a.lx-list-row {
    ================================================================================================= */
 :root[data-portal='admin'] {
   scroll-padding-top: 72px;
+}
+
+/* =================================================================================================
+   Combobox — un campo que busca mientras se escribe, con su lista DEBAJO y no flotando.
+
+   `.lx-listbox` es `position: fixed` porque `Select` la coloca con un portal y tiene que poder
+   abrirse sobre cualquier cosa. Acá la lista vive dentro de la tarjeta y empuja lo que tenga
+   debajo: eso quita el recorte por `overflow`, el reposicionamiento al desplazar y el portal
+   entero. Las reglas van DESPUÉS de `.lx-listbox` y FUERA del bloque del Inicio: después, para
+   ganar por orden sin inventar especificidad; fuera, porque el Inicio tiene su propio ámbito y
+   una regla suelta ahí dentro se lo rompe (lo comprueba `ambitoInicio.check.mjs`).
+
+   El campo NO trae estilos propios: usa `.lx-input`, y la etiqueta y la pista las pone
+   `FormField`. Un control que se pinta sus propios bordes es un control que se desalinea con el
+   resto del formulario en cuanto alguien toca un token.
+   ================================================================================================= */
+.lx-combobox {
+  position: relative;
+  min-width: 0;
+}
+
+.lx-combobox__lista {
+  position: static;
+  z-index: auto;
+  max-height: none;
+  width: 100%;
+}
+
+/* =================================================================================================
+   Mapa de zonas del ciudadano (CONTRACT.md v0.47).
+
+   Fuera del bloque con ámbito del Inicio del administrador, igual que el combobox: estas reglas son
+   del portal del ciudadano y no tienen nada que ver con aquel rediseño.
+
+   El alto compacto llega por `--lx-zonemap-alto` desde el componente, para que la pantalla decida
+   cuánto espacio le da sin que el componente conozca el formulario que lo contiene. Al ampliar pasa
+   a ocupar la ventana: `position: fixed` y no `100vh`, porque en iOS la barra del navegador cambia
+   la altura visible y `100vh` deja el botón de cerrar debajo del pliegue.
+   ================================================================================================= */
+.lx-zonemap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lx-space-2);
+  border: 1px solid var(--lx-border);
+  border-radius: var(--lx-radius-md);
+  background: #0d1a2a;
+  padding: var(--lx-space-3);
+  min-width: 0;
+}
+
+.lx-zonemap--ampliado {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  border-radius: 0;
+  padding-top: max(var(--lx-space-3), env(safe-area-inset-top, 0px));
+  padding-bottom: max(var(--lx-space-3), env(safe-area-inset-bottom, 0px));
+  padding-left: max(var(--lx-space-3), env(safe-area-inset-left, 0px));
+  padding-right: max(var(--lx-space-3), env(safe-area-inset-right, 0px));
+}
+
+.lx-zonemap__barra {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--lx-space-2);
+  flex-wrap: wrap;
+}
+
+.lx-zonemap__titulo {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #d7e2f0;
+  min-width: 0;
+}
+
+/* 44 px es el mínimo táctil; el botón de ampliar es el único control propio del mapa. */
+.lx-zonemap__accion {
+  min-height: 44px;
+  flex: 0 0 auto;
+}
+
+.lx-zonemap__lienzo {
+  flex: 1 1 auto;
+  min-height: var(--lx-zonemap-alto, 200px);
+  border-radius: var(--lx-radius-sm);
+  overflow: hidden;
+  background: #0d1a2a;
+}
+
+.lx-zonemap--ampliado .lx-zonemap__lienzo {
+  min-height: 0;
+}
+
+/* Carga, vacío, error y «sin proveedor» comparten caja: ocupan el mismo hueco que ocuparía el mapa,
+   así la pantalla no salta cuando el estado cambia. */
+.lx-zonemap__aviso {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: var(--lx-space-2);
+  min-height: var(--lx-zonemap-alto, 200px);
+  padding: var(--lx-space-3);
+  border-radius: var(--lx-radius-sm);
+  background: rgba(255, 255, 255, 0.04);
+  color: #b9c7da;
+  font-size: 0.9rem;
+}
+
+/* El aviso de «esto no es un límite oficial». Violeta, el mismo acento con el que se dibujan esas
+   geometrías, para que el texto y el polígono se lean como la misma cosa. */
+.lx-zonemap__noOficial {
+  margin: 0;
+  padding: var(--lx-space-2) var(--lx-space-3);
+  border-left: 3px solid #8b5cf6;
+  border-radius: var(--lx-radius-sm);
+  background: rgba(139, 92, 246, 0.12);
+  color: #e3dcfb;
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+/* MapLibre inyecta su propia hoja; esto sólo ajusta lo que choca con el lienzo oscuro. */
+.lx-zonemap .maplibregl-ctrl-attrib {
+  font-size: 0.7rem;
 }
 
 /* =================================================================================================

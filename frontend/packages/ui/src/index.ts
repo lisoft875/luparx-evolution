@@ -6,6 +6,8 @@ export { Textarea } from './components/Textarea';
 export type { TextareaProps } from './components/Textarea';
 export { Checkbox } from './components/Checkbox';
 export type { CheckboxProps } from './components/Checkbox';
+export { Combobox } from './components/Combobox';
+export type { ComboboxProps, ComboboxOption } from './components/Combobox';
 export { Select } from './components/Select';
 export type { SelectProps, SelectOption } from './components/Select';
 export { FormField } from './components/FormField';

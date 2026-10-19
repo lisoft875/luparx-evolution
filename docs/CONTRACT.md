@@ -3854,3 +3854,284 @@ versión anterior de la aplicación sigue arrancando contra este esquema.
 `CITATION_PAID`, con número de boleta, monto en unidades menores y si retiró un reclamo. La boleta
 guarda además el id del movimiento que la pagó: «¿con qué se pagó esto?» se contesta sin recorrer la
 billetera entera.
+
+# v0.42 — Encontrar una bahía por su código (normativo)
+
+Una municipalidad opera miles de bahías y la semilla de desarrollo ya crea diez mil. Hasta aquí,
+llegar a la bahía `LUP-0289` era escoger su zona —si uno se acordaba de cuál era— y pasar páginas.
+Esa pantalla dejó de ser utilizable justo cuando el catálogo creció, que es cuando más falta hace.
+
+## El endpoint
+
+`GET /api/v1/admin/parking/spaces` acepta **`code`**, opcional, junto a los ya existentes `zoneId`,
+`page` y `size`:
+
+```
+GET /api/v1/admin/parking/spaces?code=LUP-01        → las que EMPIEZAN por «LUP-01»
+GET /api/v1/admin/parking/spaces?code=lup-01        → las mismas: no distingue mayúsculas
+GET /api/v1/admin/parking/spaces?zoneId=…&code=A-1  → el prefijo, dentro de esa zona
+GET /api/v1/admin/parking/spaces?code=             → igual que no mandarlo
+```
+
+Tres decisiones, y por qué:
+
+- **Por el PRINCIPIO del código, no por coincidencia en cualquier posición.** Así se busca un número
+  pintado en el suelo: «las que empiezan por 02». Una búsqueda por el medio devolvería la `0289` al
+  escribir `28`, que no es lo que nadie quiso, y obligaría a recorrer la tabla entera.
+- **Sin distinguir mayúsculas.** Un código puede ser `A-12` y nadie recuerda cómo lo escribió.
+- **Sin `zoneId`, busca en TODA la municipalidad.** Es el caso que la búsqueda existe para resolver:
+  `uq_parking_spaces_code (tenant_id, code)` ya garantiza que el código es único dentro de la
+  municipalidad, de modo que se puede llegar a una bahía sin saber de antemano en qué zona está.
+  Acotado por `tenant_id`, como todo lo demás: una municipalidad nunca ve las bahías de otra.
+
+Aditivo: un cliente que no manda `code` recibe exactamente lo que recibía antes. No hay migración;
+si alguna municipalidad llegara a las centenas de miles de bahías, un índice
+`(tenant_id, code text_pattern_ops)` lo haría estrictamente mejor, y no hace falta antes.
+
+> Esto NO cambia la regla de `POST /citizen/parking/sessions`, que sigue exigiendo que la bahía
+> pertenezca a la zona enviada y respondiendo `PARKING_SPACE_NOT_FOUND` cuando no: ese endpoint es
+> público y la negativa deliberadamente muda impide mapear la municipalidad a base de tanteos. La
+> búsqueda de acá está detrás de `TENANT_MANAGE`.
+
+## En las pantallas
+
+- **Espacios** tiene un campo que busca mientras se escribe, **desde dos caracteres** y con 250 ms
+  de espera entre la última tecla y la consulta. Ofrece **diez** sugerencias —una lista que hay que
+  recorrer ya no es un atajo— y avisa cuando hay más en vez de callarlo. Cada sugerencia dice en qué
+  zona está la bahía, porque el código solo no lo dice.
+- Al escoger una, la tabla muestra **esa bahía y nada más**, y la zona de la bahía pasa a la URL
+  (`?zone=`), de modo que el selector de zona, el botón de agregar y el «Ver todas las bahías de la
+  zona» hablen de la zona donde la bahía efectivamente está. Volver a escribir, o pulsar «Ver
+  todas», devuelve la lista completa.
+- El `mocks/server.ts` filtra **igual**: por prefijo y sin distinguir mayúsculas. Un simulador más
+  generoso que producción deja pasar justo la pantalla que contra el backend real sale vacía.
+
+# v0.43 — Quitar una duración se puede deshacer (normativo)
+
+En **Política de parqueo**, pulsar una duración la quitaba de la lista sin decir nada. El cambio no
+se guardaba hasta pulsar Guardar, así que no se perdía nada irreversible; lo que se perdía era la
+certeza de qué acababa de pasar.
+
+La corrección **no** es un «¿está seguro?». Un diálogo de confirmación cobra un clic **siempre**,
+también en los aciertos, que son la mayoría, y la pregunta no aporta nada que la persona no supiera
+medio segundo antes. En su lugar queda un aviso —«Se quitó 45 min» con un **Deshacer**— que:
+
+- dice en voz alta **qué** desapareció, que es justo lo que el defecto escondía;
+- cobra el clic **sólo** cuando hubo error;
+- devuelve la duración **a su sitio**, ordenada, porque el reingreso pasa por la misma
+  canonicalización que todo lo demás (positivos, ordenados, sin repetidos);
+- **caduca solo** a los ocho segundos, para no quedarse en pantalla como un cartel viejo.
+
+Se anuncia con `role="status"`, de modo que un lector de pantalla lo diga sin robar el foco.
+
+# v0.44 — De dónde viene un polígono, y quién lo dio por bueno (normativo)
+
+Desde la v0.40 una zona puede tener perímetro. Lo que la API servía en `properties` era `code` y
+`name`: **ningún consumidor podía distinguir un límite oficial de un rectángulo de demostración**.
+Y había ocho rectángulos de demostración sembrados sobre barrios reales de San José.
+
+## Las cuatro columnas
+
+`parking_zones` suma `geom_source`, `geom_status`, `geom_verified_by` y `geom_verified_at`
+(`V43_0`, todas aditivas).
+
+| `geom_source` | Qué significa |
+|---|---|
+| `MUNICIPAL_OFFICIAL` | Viene de un acto o documento oficial de la municipalidad |
+| `GIS_IMPORT` | Importada de un archivo GIS |
+| `ADMIN_DRAWING` | Dibujada a mano en el portal. Es lo que deja todo `PUT` de geometría |
+| `DEMO` | Dato de demostración. **Nunca operativo** |
+
+`geom_status` es `UNVERIFIED`, `PENDING_REVIEW`, `VERIFIED` o `REJECTED`. **Lo pone una persona.**
+Ninguna regla de la plataforma mira vértices para decidirlo.
+
+## Las reglas
+
+1. **Una geometría `DEMO` no puede quedar `VERIFIED`.** Tres defensas, y son distintas:
+
+   | Dónde | Qué prohíbe |
+   |---|---|
+   | `ZoneGeometryReviewService` (422 `ZONE_GEOMETRY_DEMO_NOT_VERIFIABLE`) | aprobar una fila cuya procedencia **guardada** es `DEMO`, aunque la petición declare otra |
+   | `ck_parking_zones_geom_demo_never_verified` | el **estado** «DEMO y aprobada» |
+   | `trg_parking_zones_demo_never_verified` | la **transición**: aprobar una DEMO sin que el polígono haya cambiado en esa misma sentencia |
+
+   El CHECK solo no alcanzaba: un `UPDATE` que en la misma sentencia reescribe la procedencia y
+   pone `VERIFIED` le pasa por el lado, porque la fila resultante ya no dice `DEMO`. Se midió
+   contra PostGIS y pasaba; el disparador es lo que lo cierra.
+
+   Para volver oficial un rectángulo de demostración hay que **redibujarlo o importarlo**. Lo que
+   no se pretende: alguien con acceso directo a la tabla puede reescribir la procedencia en una
+   sentencia y aprobar en la siguiente — en ese punto ya falsificó el dato, ninguna restricción de
+   esquema lo impide, y para eso están los permisos de base y la bitácora.
+2. **Redibujar degrada el sello.** `PUT /zones/{id}/geometry` devuelve el estado a `UNVERIFIED` y
+   limpia autor y fecha en el mismo UPDATE. Un perímetro aprobado no se cambia por otro
+   conservando la aprobación.
+3. **Borrar el perímetro deja la fila limpia**: sin polígono no hay procedencia que declarar ni
+   revisión que sostener (`ck_parking_zones_geom_absent_is_clean`).
+4. **Un `VERIFIED` sin autor ni fecha no existe** (`ck_parking_zones_geom_verified_complete`).
+5. **Las ocho DEMO se conservan**, etiquetadas `DEMO` / `REJECTED`. La migración las marca por
+   `ST_Equals` contra el WKT literal que escribió la `V41_0` —igualdad con un valor conocido, no
+   una heurística—, acotado a la municipalidad de San José: si alguien ya redibujó esa zona, no se
+   toca. Esa cláusula de inquilino corrige de paso el defecto de la `V41_0`.
+
+## El extremo de revisión
+
+```
+PUT /api/v1/admin/parking/zones/{id}/geometry/review     (permiso TENANT_MANAGE)
+{ "decision": "VERIFIED", "source": "MUNICIPAL_OFFICIAL", "note": "Acuerdo municipal 14-2026" }
+→ 200 { "status": "VERIFIED", "source": "MUNICIPAL_OFFICIAL" }
+```
+
+`source` es la procedencia que **declara** quien revisa; omitirlo deja la que había. `note` **no**
+se guarda en la zona: viaja a la bitácora.
+
+`decision` admite `VERIFIED` o `REJECTED`, y nada más. «Sin verificar» es como está un perímetro
+antes de que alguien lo mire, no una decisión que se tome; y `PENDING_REVIEW` existe en el
+vocabulario pero todavía no tiene extremo, porque mandar a revisión trae su propia pregunta —a
+quién le toca— y se decide aparte (ADR 0029).
+
+| Negativa | Código | HTTP |
+|---|---|---|
+| La zona no tiene perímetro | `ZONE_GEOMETRY_MISSING` | 422 |
+| El perímetro es de demostración y se pidió aprobarlo | `ZONE_GEOMETRY_DEMO_NOT_VERIFIABLE` | 422 |
+| La zona es de otra municipalidad | `PARKING_ZONE_NOT_FOUND` | 404 |
+| Alguien la editó primero | `OPTIMISTIC_LOCK_CONFLICT` | 409 |
+
+Deja en la bitácora `PARKING_ZONE_GEOMETRY_VERIFIED` o `PARKING_ZONE_GEOMETRY_REJECTED`, con el
+antes y el después del estado y la procedencia, la nota, el actor y la municipalidad — **nunca el
+polígono**.
+
+## Lo que el ciudadano recibe
+
+`properties` del GeoJSON pasa de `{code, name}` a:
+
+```json
+{ "code": "SJ-MERCADO", "name": "Mercado Central",
+  "source": "MUNICIPAL_OFFICIAL", "status": "VERIFIED",
+  "verifiedAt": "2026-10-20T15:04:05Z" }
+```
+
+`verifiedBy` **no se expone**: el nombre de un funcionario municipal no le aporta nada a un
+ciudadano y es dato personal. Vive en el portal de administración y en la bitácora.
+
+**El filtro va en el servidor.** `luparx.geo.citizen-geometry-statuses`, por omisión `VERIFIED`,
+se añade al `WHERE`: una geometría no verificada sencillamente no existe para el ciudadano. Falla
+cerrado — un valor inventado en la configuración se descarta y se cae a `VERIFIED`, nunca a «todo».
+Una instalación de desarrollo puede ampliarlo a `VERIFIED,UNVERIFIED` y entonces cada polígono llega
+con su `status` para que el cliente lo rotule.
+
+> **Consecuencia que hay que decir antes y no después:** con el filtro cerrado, **el mapa del
+> ciudadano queda vacío hasta que una municipalidad verifique sus zonas**. Dado que hoy las únicas
+> geometrías existentes son las ocho de demostración, eso es exactamente lo correcto.
+
+El `mocks/server.ts` hace lo mismo: filtra por estado, degrada el sello al redibujar y contesta las
+dos mismas negativas al revisar. Un simulador más amable que producción deja pasar justo los
+defectos que este contrato viene a evitar.
+
+## Lo que NO cambia
+
+Tarifas, cobros, sesiones, validación de bahías y `GET /citizen/parking/zones` siguen igual.
+`requireUsableSpace` resuelve la bahía por su código y compara `zone_id`: **no mira geometría**.
+
+# v0.45 — Lo que no se guarda de un webhook de pagos (normativo)
+
+`gateway_notifications.payload` guarda el cuerpo que mandó el proveedor y **no se reescribe**: es la
+evidencia de qué nos dijeron y cuándo. Hasta ahora se guardaba **tal cual**.
+
+El problema no es lo que mandan hoy —no hay ningún proveedor integrado todavía— sino que lo que
+manda un proveedor lo decide el proveedor. Si alguno incluye el número de tarjeta en su webhook,
+ese número queda escrito para siempre en una tabla append-only, y eso ya no se arregla después.
+
+## La regla
+
+**El cuerpo se limpia antes de guardarse** (`SensitivePayloadRedactor`), sin saber nada de ningún
+proveedor:
+
+| Qué | Qué queda |
+|---|---|
+| Una tira de 13–19 dígitos que **pasa Luhn** (con o sin espacios o guiones) | `[DATO-DE-TARJETA-OCULTO]` |
+| El valor de un campo llamado `card_number`, `pan`, `cvv`, `cvc`, `security_code`, `expiry`, `exp_month`, `exp_year`, `track1/2`, `pin`… en JSON o en un formulario | `[OCULTO]`, conservando el nombre del campo |
+| Un cuerpo de más de 16 384 caracteres | se recorta, **diciéndolo** |
+
+Luhn es lo que separa un número de tarjeta de un identificador largo: una referencia de proveedor o
+una marca de tiempo en milisegundos tiene trece dígitos y **no** se oculta. Un falso positivo cuesta
+un número opaco en una copia de evidencia; un falso negativo cuesta un número de tarjeta guardado
+para siempre.
+
+**`body_sha256` se sigue calculando sobre el cuerpo ORIGINAL.** Es lo que descarta los reenvíos del
+proveedor y lo que permitiría recomprobar una firma; calcularlo sobre el texto limpio haría que dos
+cuerpos distintos que se limpian igual pasaran por el mismo, y el descarte de duplicados dejaría de
+ser cierto. La verificación de firma ocurre antes, sobre los bytes crudos, y no cambia.
+
+Nadie vuelve a leer el payload guardado para procesarlo, así que limpiarlo no le quita función a
+nada: si hiciera falta reprocesar, se le pide el evento al proveedor, que es el camino que el
+barrido de hand-offs abiertos ya usa.
+
+`card_last4` y la red **sí** se guardan, a propósito: son lo que un ciudadano reconoce en su estado
+de cuenta y no son datos sensibles. Lo que no existe en ninguna entidad es una columna para el
+número completo, el vencimiento o el código de seguridad.
+
+## SINPE Móvil
+
+`PaymentMethod.SINPE` es un valor del vocabulario que **ningún camino de producción construye**, y
+así sigue: no hay transferencia manual, ni captura de pantalla, ni confirmación simulada que valga
+como pago. Un pago existe cuando el proveedor lo confirma de forma verificable. `ReglasDePagosTest`
+lo mantiene en rojo si alguien lo implementa sin integración bancaria.
+
+## Etiquetas al ciudadano
+
+El API ya enviaba `stateLabelKey`, `paymentStateLabelKey` y `networkLabelKey` y el cliente no tenía
+traducción para tres familias —`payment.checkout.state.*`, `payment.purpose.*` y
+`payment.network.*`—, así que una pantalla de pago con tarjeta habría mostrado la clave cruda.
+Las trece claves que faltaban están puestas en los dos idiomas.
+
+# v0.46 — El saldo de prueba no se disfraza de dinero (normativo)
+
+El simulador de pagos existe desde la v0.33 y está bien guardado: `SimulatedPaymentGateway` sólo se
+construye bajo los perfiles `dev` y `demo` **y** con `luparx.payments.provider=SIMULATED`, y avisa
+por log en cada arranque que no cobra nada. Lo que faltaba es lo que pasa **después**.
+
+## 1 · El origen viaja en el movimiento, no sólo en el pago
+
+Hasta aquí, toda recarga con tarjeta se asentaba como `WalletTopupSource.CITIZEN`, también la que
+confirmaba el simulador. El rastro existía —`payments.provider` decía `SIMULATED`— pero a una tabla
+de distancia: quien miraba la billetera veía un saldo **indistinguible** de uno pagado de verdad.
+
+Ahora el puerto declara si una pasarela cobra o no:
+
+```java
+default boolean isSimulated() { return false; }
+```
+
+Por omisión **false**: una pasarela nueva se considera real mientras no diga lo contrario. Es el
+lado seguro del error —marcar de prueba un cobro real lo escondería; marcar de real uno de prueba lo
+deja a la vista— y evita la lista de nombres en otro archivo que alguien tiene que acordarse de
+ampliar. El saldo que acredita una pasarela simulada se asienta con origen **`DEV`**.
+
+`WalletTransactionResponse` suma `source` y `sourceLabelKey`, de modo que el ciudadano pueda ver
+`MODO PRUEBA · saldo simulado` en su propio movimiento. En un cargo el valor es nulo: un cargo no
+tiene origen de recarga.
+
+## 2 · Una instalación operativa no arranca contra una base con saldo de prueba
+
+Las guardas sobre el bean no alcanzan, porque **los datos sobreviven al cambio de perfil**: una base
+de desarrollo que alguien promueve, o una copia restaurada en el servidor equivocado, llega con
+saldo que nadie pagó, y a partir de ahí compra estacionamiento real y paga multas reales. Para
+entonces el simulador ya no está, así que no hay nada que mirar salvo el dato.
+
+`TestMoneyStartupCheck` cuenta al arrancar los movimientos con origen `DEV`. Si hay alguno y ningún
+perfil activo es `dev`, `demo` ni `test`, **la aplicación no arranca**, con un mensaje que dice
+cuántos son y que revise `SPRING_DATASOURCE_URL`. Falla cerrado: una instalación sin perfil
+declarado se trata como operativa.
+
+La salida existe y hay que escribirla —`luparx.payments.allow-test-money-in-production=true`—
+porque una guarda sin escape se desactiva comentándola, y eso no deja rastro de quién decidió qué.
+Con la propiedad puesta la aplicación arranca y lo advierte en cada arranque.
+
+## 3 · Lo que esto NO resuelve
+
+- **No hay experiencia de pago con tarjeta para el ciudadano.** Los extremos `/citizen/checkouts`
+  existen en el servidor; el `api-client` no los expone y ninguna pantalla los usa.
+- El tipo `WalletTransaction` del cliente no coincide con `WalletTransactionResponse` del servidor
+  (`amountMinor`/`reference` contra `amount`/`balanceAfter`/`sessionId`). Precede a este cambio.
+- **SINPE Móvil sigue sin implementarse**, y no se asume que tenga confirmación automática.

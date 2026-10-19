@@ -8,6 +8,7 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
+    "./map": "./src/map/index.ts",
     "./tokens.css": "./src/tokens.css",
     "./tailwind.css": "./src/tailwind.css"
   },
@@ -17,7 +18,8 @@
   "dependencies": {
     "@luparx/api-client": "*",
     "@luparx/i18n": "*",
-    "libphonenumber-js": "^1.11.20"
+    "libphonenumber-js": "^1.11.20",
+    "maplibre-gl": "^4.7.1"
   },
   "peerDependencies": {
     "react": "^18.3.1",

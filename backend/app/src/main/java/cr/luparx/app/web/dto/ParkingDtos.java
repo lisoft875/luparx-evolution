@@ -5,7 +5,10 @@ import cr.luparx.parking.model.ParkingSessionStatus;
 import cr.luparx.parking.model.ParkingSpaceStatus;
 import cr.luparx.parking.model.TimeCreditSource;
 import cr.luparx.parking.model.VehicleType;
+import cr.luparx.parking.model.WalletTopupSource;
 import cr.luparx.parking.model.WalletTransactionType;
+import cr.luparx.parking.model.ZoneGeometrySource;
+import cr.luparx.parking.model.ZoneGeometryStatus;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -420,13 +423,25 @@ public final class ParkingDtos {
     }
 
     /** Signed: a negative amount is money that left the wallet. */
+    /**
+     * Un movimiento de la billetera del ciudadano.
+     *
+     * <p>{@code source} y {@code sourceLabelKey} viajan sólo en las recargas, y existen por una
+     * razón concreta: un saldo creado por el SIMULADOR de pagos se asienta con origen {@code DEV},
+     * y el ciudadano tiene que poder verlo. Un saldo de prueba que en pantalla no se distingue de
+     * uno pagado es exactamente lo que no puede pasar con dinero municipal (CONTRACT.md v0.46).
+     * En una recarga real el valor es {@code CITIZEN}, {@code MUNICIPAL_COUNTER} o
+     * {@code PARTNER}; en un cargo es nulo, porque un cargo no tiene origen de recarga.</p>
+     */
     public record WalletTransactionResponse(
             UUID id,
             WalletTransactionType type,
             MoneyDto amount,
             MoneyDto balanceAfter,
             UUID sessionId,
-            Instant createdAt) {
+            Instant createdAt,
+            WalletTopupSource source,
+            String sourceLabelKey) {
     }
 
     // --- time credits ----------------------------------------------------------------------------
@@ -488,6 +503,56 @@ public final class ParkingDtos {
             ParkingSpaceStatus status,
             UUID zoneId,
             @Size(max = 16) String code) {
+    }
+
+    /**
+     * {@code PUT /admin/parking/zones/{id}/geometry/review} — una persona da por bueno, rechaza o
+     * manda a revisión el perímetro de una zona (CONTRACT.md v0.44, ADR 0029).
+     *
+     * <p>{@code source} es la procedencia que DECLARA quien revisa: aprobar un perímetro suele ir
+     * de la mano de decir de dónde salió («esto viene del acuerdo municipal tal»). Omitirlo deja
+     * la que había, que para un polígono dibujado en el portal es {@code ADMIN_DRAWING}.</p>
+     *
+     * <p>{@code note} NO se guarda en la zona: viaja a la bitácora, que es donde vive la evidencia
+     * y donde nadie la puede reescribir después.</p>
+     */
+    public record ZoneGeometryReviewRequest(
+            @NotNull ZoneGeometryStatus decision,
+            ZoneGeometrySource source,
+            @Size(max = 400) String note) {
+
+        /**
+         * Una revisión termina en aprobada o rechazada, y nada más.
+         *
+         * <p>{@code UNVERIFIED} significa «nadie lo ha mirado», y éste es el extremo con el que
+         * alguien lo mira: no se puede declarar por decisión propia que algo no fue revisado. Para
+         * quitarle el sello a un perímetro se lo rechaza, o se lo vuelve a dibujar —que lo degrada
+         * solo—, y en los dos casos queda el rastro de quién lo hizo.</p>
+         *
+         * <p>{@code PENDING_REVIEW} existe en el vocabulario y todavía no tiene extremo: mandar a
+         * revisión es un flujo con su propia pregunta —a quién le toca— y se decide aparte
+         * (ADR 0029). Aceptarlo acá significaría escribir en la bitácora una «decisión» que no
+         * decidió nada.</p>
+         */
+        @AssertTrue(message = "{error.geo.geometry.decisionInvalid}")
+        public boolean isDecisionRevisable() {
+            return decision == null
+                    || decision == ZoneGeometryStatus.VERIFIED
+                    || decision == ZoneGeometryStatus.REJECTED;
+        }
+
+        /**
+         * Nadie declara que está aprobando un dato de demostración. Es la misma regla que el
+         * servicio y la base sostienen; acá se contesta antes de tocar la fila.
+         */
+        @AssertTrue(message = "{error.geo.geometry.demoNotVerifiable}")
+        public boolean isDemoNotApproved() {
+            return decision != ZoneGeometryStatus.VERIFIED || source != ZoneGeometrySource.DEMO;
+        }
+    }
+
+    /** El estado en que quedó el perímetro después de la revisión. */
+    public record ZoneGeometryReviewResponse(ZoneGeometryStatus status, ZoneGeometrySource source) {
     }
 
     public record UpdateParkingZoneRequest(

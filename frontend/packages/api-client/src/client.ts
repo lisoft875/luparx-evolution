@@ -5,8 +5,12 @@ import {
   toParkingSession,
   toParkingSessions,
   toQuote,
+  toCheckoutResult,
   toTimeCredits,
   toWallet,
+  type WireCardPaymentAvailability,
+  type WireCheckoutResponse,
+  type WireCheckoutResult,
   type WireExtensionOption,
   type WireParkingRate,
   type WireParkingSession,
@@ -159,6 +163,8 @@ import type {
   ForgotPasswordRequest,
   GeoBoundingBox,
   GeoJsonGeometry,
+  ZoneGeometrySource,
+  ZoneGeometryStatus,
   InfractionType,
   InfractionTypeDraft,
   LoginRequest,
@@ -220,6 +226,9 @@ import type {
   VehicleAttributeCatalogEntry,
   VerifyEmailRequest,
   WalletResponse,
+  CardPaymentAvailability,
+  CheckoutStarted,
+  CheckoutResult,
   AppNotification,
   CitizenNotification,
   NotificationPreferences,
@@ -806,6 +815,81 @@ export class ApiClient {
       toWallet(await this.http.request<WireWallet>('GET', '/api/v1/citizen/wallet')),
   };
 
+  /**
+   * El pago con tarjeta del ciudadano: traspaso alojado al proveedor.
+   *
+   * <p><b>Acá no se toca una tarjeta.</b> `start` devuelve una `redirectUrl` a la que el navegador
+   * NAVEGA —nunca se pide con `fetch`—, el número se teclea en la página del proveedor, y de vuelta
+   * el único dato que decide si hubo pago es `credited` del servidor. Este cliente no tiene, y no
+   * debe tener, ningún campo para PAN, CVV ni vencimiento.</p>
+   */
+  readonly citizenCheckouts = {
+    /** Si esta municipalidad acepta tarjeta, con qué proveedor y entre qué montos. */
+    availability: async (): Promise<CardPaymentAvailability> => {
+      const wire = await this.http.request<WireCardPaymentAvailability>(
+        'GET', '/api/v1/citizen/card-payments');
+      return {
+        available: wire.available,
+        provider: wire.provider ?? null,
+        networks: wire.networks ?? [],
+        minimumMinor: wire.minimum.amountMinor,
+        maximumMinor: wire.maximum.amountMinor,
+        currencyCode: wire.minimum.currencyCode,
+      };
+    },
+
+    /**
+     * Abre el traspaso.
+     *
+     * <p>`idempotencyKey` es del que llama, no del transporte: tiene que acuñarse UNA vez por
+     * intento de recarga y repetirse en cada reintento, que es lo que hace que un doble clic o un
+     * reintento tras una desconexión devuelva el MISMO traspaso (`opened: false`) en lugar de
+     * abrir un segundo cobro.</p>
+     */
+    start: async (amountMinor: number, idempotencyKey: string): Promise<CheckoutStarted> => {
+      const wire = await this.http.request<WireCheckoutResponse>(
+        'POST', '/api/v1/citizen/checkouts',
+        { body: { amountMinor }, idempotencyKey });
+      return {
+        id: wire.id,
+        provider: wire.provider,
+        redirectUrl: wire.redirectUrl,
+        state: wire.state,
+        stateLabelKey: wire.stateLabelKey,
+        amountMinor: wire.amount.amountMinor,
+        currencyCode: wire.amount.currencyCode,
+        expiresAt: wire.expiresAt ?? null,
+        opened: wire.opened,
+      };
+    },
+
+    /** Vuelta de la página del proveedor. El token se quema; el resultado queda en `status`. */
+    returned: async (token: string): Promise<CheckoutResult> =>
+      toCheckoutResult(await this.http.request<WireCheckoutResult>(
+        'POST', '/api/v1/citizen/checkouts/return', { query: { token } })),
+
+    /** Dónde va el traspaso. De sólo lectura: no vuelve a preguntarle al proveedor. */
+    status: async (checkoutId: string): Promise<CheckoutResult> =>
+      toCheckoutResult(await this.http.request<WireCheckoutResult>(
+        'GET', `/api/v1/citizen/checkouts/${encodeURIComponent(checkoutId)}`)),
+
+    /**
+     * Resuelve un traspaso eligiendo el desenlace. **Sólo existe en el transporte simulado.**
+     *
+     * <p>Es lo que hace la página del proveedor cuando el proveedor es el simulador. El servidor
+     * real NO tiene este endpoint y responde 404: ningún cliente puede decidir desde afuera cómo
+     * termina un cobro, que es precisamente la propiedad que hace confiable el traspaso alojado.
+     * La única pantalla que lo llama se monta sólo con `VITE_USE_MOCKS=true`.</p>
+     */
+    simularResolucion: async (
+      checkoutId: string,
+      eleccion: { escenario?: string; aprobar?: boolean; cancelar?: boolean },
+    ): Promise<void> => {
+      await this.http.request('POST',
+        `/api/v1/citizen/checkouts/${encodeURIComponent(checkoutId)}/simular`, { body: eleccion });
+    },
+  };
+
   readonly citizenTimeCredits = {
     get: async (): Promise<TimeCreditsResponse> =>
       toTimeCredits(await this.http.request<WireTimeCredits>('GET', '/api/v1/citizen/time-credits')),
@@ -849,6 +933,18 @@ export class ApiClient {
       this.http.request('PUT', `/api/v1/admin/parking/zones/${id}/geometry`, { body: geometry }),
     deleteZoneGeometry: (id: string): Promise<void> =>
       this.http.request('DELETE', `/api/v1/admin/parking/zones/${id}/geometry`),
+    /**
+     * Da por bueno, rechaza o manda a revisión el perímetro de una zona (CONTRACT.md v0.44).
+     *
+     * <p>Mientras un perímetro no esté verificado, el mapa del ciudadano no lo recibe. Y una
+     * geometría cuya procedencia es `DEMO` no se puede aprobar: para volverla oficial hay que
+     * redibujarla o importarla. Redibujar, además, le quita el sello.</p>
+     */
+    reviewZoneGeometry: (
+      id: string,
+      payload: { decision: ZoneGeometryStatus; source?: ZoneGeometrySource; note?: string },
+    ): Promise<{ status: ZoneGeometryStatus; source: ZoneGeometrySource | null }> =>
+      this.http.request('PUT', `/api/v1/admin/parking/zones/${id}/geometry/review`, { body: payload }),
     createZone: (payload: CreateParkingZoneRequest): Promise<AdminParkingZone> =>
       this.http.request('POST', '/api/v1/admin/parking/zones', { body: payload, idempotent: true }),
     updateZone: (id: string, payload: UpdateParkingZoneRequest): Promise<AdminParkingZone> =>
@@ -867,7 +963,8 @@ export class ApiClient {
      */
     holidays: (): Promise<HolidayCatalogEntry[]> =>
       this.http.request('GET', '/api/v1/admin/parking/holidays'),
-    spaces: (query: { zoneId?: string } & PageParams = {}): Promise<PagedResponse<ParkingSpace>> =>
+    /** `code` filtra por el PRINCIPIO del código. Sin `zoneId`, busca en toda la municipalidad. */
+    spaces: (query: { zoneId?: string; code?: string } & PageParams = {}): Promise<PagedResponse<ParkingSpace>> =>
       this.http.request('GET', '/api/v1/admin/parking/spaces', { query }),
     createSpace: (payload: CreateParkingSpaceRequest): Promise<ParkingSpace> =>
       this.http.request('POST', '/api/v1/admin/parking/spaces', { body: payload, idempotent: true }),

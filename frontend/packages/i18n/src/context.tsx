@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { TranslationKey } from './locales/es-CR';
 import { esCR } from './locales/es-CR';
 import { enUS } from './locales/en-US';
@@ -69,6 +69,29 @@ export function I18nProvider({ children, initialLocale, storageScope }: I18nProv
     setLocaleState(next);
     writeStoredLocale(next);
   }, []);
+
+  /*
+    El documento tiene que DECIR el idioma que está mostrando (17-10-2026).
+
+    Los cuatro `index.html` traen `<html lang="es-CR">` escrito a mano y nadie lo movía nunca,
+    mientras el idioma real se resuelve acá en ejecución. Medido en la aplicación corriendo: con
+    `navigator.language` en inglés la pantalla decía «Sign in» y el documento seguía declarando
+    `es-CR` — y lo mismo después de elegir inglés a mano y recargar. La preferencia SÍ persistía
+    (`luparx.locale.citizen=en-US`); lo que no se sincronizaba era el documento.
+
+    No es cosmético. `lang` es lo que usan el lector de pantalla para elegir la voz y la
+    pronunciación, el navegador para ofrecer traducir, `:lang()` en CSS y la separación silábica.
+    Un documento que declara español y muestra inglés hace que un lector de pantalla lea el inglés
+    con fonética española: incumple WCAG 3.1.1 (Idioma de la página).
+
+    Va en el proveedor y no en cada `index.html`: el HTML estático no puede saber qué idioma va a
+    resolverse, y su `es-CR` sigue siendo el valor correcto ANTES de que arranque el JavaScript.
+    Al estar acá, los cuatro portales quedan cubiertos por el mismo camino.
+  */
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    document.documentElement.lang = locale;
+  }, [locale]);
 
   const t = useCallback(
     (key: TranslationKey, params?: TranslationParams): string => {

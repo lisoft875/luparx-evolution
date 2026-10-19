@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useEffect, useMemo, useState } from 'react';
+import { Suspense, lazy, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation, formatCurrencyMinor, formatWeekdayTime } from '@luparx/i18n';
 import type { TranslationKey } from '@luparx/i18n';
@@ -23,6 +23,13 @@ import {
 import { formatDurationLabel } from '../lib/duration';
 import { parkingErrorMessage } from '../lib/apiErrors';
 import { checkSpaceCode } from '../lib/spaceCode';
+
+/*
+  El mapa llega por `lazy`: MapLibre y su lienzo pesan, y la mayoría de las sesiones de
+  estacionamiento se completan sin abrirlo. Así el paquete inicial de esta pantalla queda como
+  estaba, y quien no despliega el mapa no descarga nada de él.
+*/
+const ZoneMap = lazy(() => import('@luparx/ui/map').then((m) => ({ default: m.ZoneMap })));
 import { catalogLabeller, vehicleDescriptor, vehicleOptionDetail } from '../lib/vehiclePresentation';
 import { CitizenShell } from '../components/CitizenShell';
 import { QueryBoundary } from '../components/QueryBoundary';
@@ -39,6 +46,7 @@ import {
   useVehicleColorCatalog,
   useVehicleTypeCatalog,
   useVehicles,
+  useZonesGeoJson,
 } from '../lib/queries';
 
 /**
@@ -66,6 +74,11 @@ export function ParkingPage(): React.JSX.Element {
   // The bay code as it is painted on the ground. Kept as typed-in text rather than derived from
   // the zone: one zone holds hundreds of bays, and only the person standing in one knows which.
   const [spaceCode, setSpaceCode] = useState('');
+  /*
+    Cerrado al principio, a propósito. El mapa es opcional: abrirlo solo lo pide quien lo quiere, y
+    así nadie paga una petición ni la descarga de MapLibre por escribir un código de bahía.
+  */
+  const [mapaAbierto, setMapaAbierto] = useState(false);
   const spaceFormatQuery = useParkingSpaceFormat();
   const spaceFormat = spaceFormatQuery.data;
 
@@ -76,6 +89,12 @@ export function ParkingPage(): React.JSX.Element {
    * code this check likes can still be refused by `POST /sessions`, and that refusal wins.
    */
   const spaceProblem = checkSpaceCode(spaceCode, spaceFormat, zone);
+  /*
+    El mapa aparece cuando la bahía ya validó, y no antes: es una confirmación de dónde queda la
+    zona, no un paso para elegirla. Mientras esa condición no se cumpla la consulta ni se dispara.
+  */
+  const bahiaLista = Boolean(zone) && spaceCode.trim().length > 0 && !spaceProblem;
+  const zonasGeoQuery = useZonesGeoJson(bahiaLista && mapaAbierto);
   const spaceCodeError = spaceProblem
     ? spaceProblem.kind === 'format'
       ? t('citizen.parking.step1.spaceCodeError.format', { example: spaceProblem.example })
@@ -384,6 +403,39 @@ export function ParkingPage(): React.JSX.Element {
                 />
               )}
             </FormField>
+            {/*
+              El mapa, sólo cuando la bahía ya validó. Es informativo y opcional: no pide GPS, no
+              marca la bahía —`parking_spaces` no tiene coordenadas— y si falla, el botón de
+              continuar sigue donde estaba. Por eso vive aquí abajo y no como un paso del asistente.
+            */}
+            {bahiaLista ? (
+              mapaAbierto ? (
+                <Suspense fallback={<p className="lx-text-meta">{t('citizen.parking.map.loading')}</p>}>
+                  <ZoneMap
+                    zonas={zonasGeoQuery.data}
+                    cargando={zonasGeoQuery.isLoading}
+                    error={zonasGeoQuery.isError}
+                    onReintentar={() => void zonasGeoQuery.refetch()}
+                    textos={{
+                      titulo: t('citizen.parking.map.title'),
+                      ampliar: t('citizen.parking.map.expand'),
+                      cerrar: t('citizen.parking.map.collapse'),
+                      cargando: t('citizen.parking.map.loading'),
+                      vacio: t('citizen.parking.map.empty'),
+                      errorTitulo: t('citizen.parking.map.error'),
+                      reintentar: t('common.retry'),
+                      sinProveedor: t('citizen.parking.map.noProvider'),
+                      noOficial: t('citizen.parking.map.notOfficial'),
+                      noOficialDetalle: t('citizen.parking.map.notOfficialDetail'),
+                    }}
+                  />
+                </Suspense>
+              ) : (
+                <Button type="button" variant="secondary" onClick={() => setMapaAbierto(true)}>
+                  {t('citizen.parking.map.open')}
+                </Button>
+              )
+            ) : null}
             {/* The format is a hint, so its failure is reported where the hint would have been —
                 with a way back — instead of blocking a step the citizen could still complete. */}
             {spaceFormatQuery.isError ? (

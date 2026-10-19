@@ -50,6 +50,22 @@ public final class ErrorCode {
     public static final String INVALID_GEOMETRY = "INVALID_GEOMETRY";
     /** Well formed and valid, but larger than this deployment serves (`luparx.geo.max-zone-vertices`). */
     public static final String GEOMETRY_TOO_COMPLEX = "GEOMETRY_TOO_COMPLEX";
+    /**
+     * Se pidió aprobar o rechazar el perímetro de una zona que no tiene perímetro
+     * (CONTRACT.md v0.44). No hay nada que revisar: primero se dibuja.
+     */
+    public static final String ZONE_GEOMETRY_MISSING = "ZONE_GEOMETRY_MISSING";
+    /**
+     * Se pidió dar por buena una geometría de DEMOSTRACIÓN (CONTRACT.md v0.44, ADR 0029).
+     *
+     * <p>Un dato de demostración NO se vuelve oficial cambiándole el estado. Para que lo sea hay
+     * que volver a dibujarlo desde el portal o importarlo de un archivo GIS, y eso cambia su
+     * procedencia antes de que nadie pueda aprobarlo. La base lo sostiene con un CHECK
+     * ({@code ck_parking_zones_geom_demo_never_verified}, el estado) y un disparador
+     * ({@code trg_parking_zones_demo_never_verified}, la transición): este código existe para que
+     * quien lo intente reciba un motivo y no una violación de integridad.</p>
+     */
+    public static final String ZONE_GEOMETRY_DEMO_NOT_VERIFIABLE = "ZONE_GEOMETRY_DEMO_NOT_VERIFIABLE";
 
     // --- users ---------------------------------------------------------------------------------
     public static final String USER_NOT_FOUND = "USER_NOT_FOUND";
@@ -200,6 +216,15 @@ public final class ErrorCode {
     public static final String EARLY_FINISH_DISABLED = "EARLY_FINISH_DISABLED";
     public static final String EXTENSION_EXCEEDS_MAX = "EXTENSION_EXCEEDS_MAX";
     public static final String INSUFFICIENT_BALANCE = "INSUFFICIENT_BALANCE";
+    /**
+     * El servidor se negó a gastar saldo de PRUEBA en una instalación operativa
+     * (CONTRACT.md v0.46, prioridad 0 de la orden del 17-10-2026).
+     *
+     * <p>Código propio y no {@link #INSUFFICIENT_BALANCE}: para quien lea una bitácora, «el
+     * ciudadano no tenía saldo» y «este servidor no gasta dinero que nadie pagó» son incidentes
+     * de naturaleza distinta, y el segundo exige revisar a qué base apunta la instalación.</p>
+     */
+    public static final String TEST_MONEY_SPEND_REFUSED = "TEST_MONEY_SPEND_REFUSED";
     public static final String INVALID_INCREMENT = "INVALID_INCREMENT";
     /**
      * A stay is already running on this plate in this municipality, and one of the two was opened
@@ -319,6 +344,15 @@ public final class ErrorCode {
     public static final String APPEAL_ALREADY_RESOLVED = "APPEAL_ALREADY_RESOLVED";
     /** The citation is settled or past its date: the channel is now the counter, not the app. */
     public static final String APPEAL_WINDOW_CLOSED = "APPEAL_WINDOW_CLOSED";
+    /**
+     * La ventana pedida al resumen del turno es más larga de lo que ese extremo sirve
+     * (17-10-2026).
+     *
+     * <p>Código propio y no un {@code VALIDATION_FAILED} a secas: quien lo reciba tiene que poder
+     * distinguir «mandé la ventana al revés» de «pedí demasiado», que se arreglan distinto. El
+     * límite viaja en el mensaje.</p>
+     */
+    public static final String SHIFT_WINDOW_TOO_WIDE = "SHIFT_WINDOW_TOO_WIDE";
     /** What was typed is not a well-formed top-up code — the check character did not match. */
     public static final String TOPUP_CODE_INVALID = "TOPUP_CODE_INVALID";
     /** A well-formed code that belongs to nobody in this municipality. */

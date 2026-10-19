@@ -4,6 +4,8 @@ import { useVehicleColors, useVehicleTypes } from '@luparx/features';
 import { ApiError } from '@luparx/api-client';
 import type {
   AdministrativeDivision,
+  CardPaymentAvailability,
+  CheckoutResult,
   ChangeEmailRequest,
   ChangePasswordRequest,
   CreateVehicleRequest,
@@ -29,6 +31,7 @@ import type {
   Vehicle,
   VehicleAttributeCatalogEntry,
   WalletResponse,
+  ZoneGeoJsonFeatureCollection,
 } from '@luparx/api-client';
 
 /**
@@ -48,9 +51,12 @@ const KEYS = {
   schedule: ['citizen', 'parking', 'schedule'] as const,
   zones: ['citizen', 'parking', 'zones'] as const,
   spaceFormat: ['citizen', 'parking', 'space-format'] as const,
+  zonesGeoJson: ['citizen', 'parking', 'zones', 'geojson'] as const,
   notifications: (page: number, size: number) => ['citizen', 'notifications', page, size] as const,
   notificationsUnread: ['citizen', 'notifications', 'unread-count'] as const,
   notificationPreferences: ['citizen', 'notifications', 'preferences'] as const,
+  cardPayments: ['citizen', 'card-payments'] as const,
+  checkout: (id: string) => ['citizen', 'checkouts', id] as const,
 };
 
 export function useVehicles(): UseQueryResult<Vehicle[]> {
@@ -519,5 +525,88 @@ export function useUpdateNotificationPreferences() {
       // frame while the round trip lands.
       queryClient.setQueryData(KEYS.notificationPreferences, updated);
     },
+  });
+}
+
+/**
+ * Los perímetros dibujados de la municipalidad activa, para el mapa informativo.
+ *
+ * <p>Sin `bbox`: el mapa del ciudadano muestra las zonas de SU municipalidad, que son decenas, no
+ * un recorte de una ciudad entera. El servidor ya topa la respuesta en
+ * `luparx.geo.max-zones-per-map` (500 por omisión) y el `bbox` existe para un visor que se mueve,
+ * que no es este caso. Cuando lo sea, el parámetro ya está en el cliente.</p>
+ *
+ * <p>`enabled` lo decide quien llama: esto no se pide hasta que hay zona y bahía válida, para no
+ * gastar una petición en una pantalla que el ciudadano quizá no despliegue.</p>
+ *
+ * <p>Qué llega aquí lo decide el SERVIDOR: en producción sólo geometrías verificadas. El cliente no
+ * filtra por estado —un filtro de frontend no es una garantía— y se limita a rotular lo que
+ * recibe.</p>
+ */
+export function useZonesGeoJson(habilitada: boolean): UseQueryResult<ZoneGeoJsonFeatureCollection> {
+  const { apiClient } = useAuth();
+  return useQuery({
+    queryKey: KEYS.zonesGeoJson,
+    queryFn: () => apiClient.citizenParking.zonesGeoJson(),
+    enabled: habilitada,
+    // Un perímetro municipal no cambia mientras alguien estaciona.
+    staleTime: 10 * 60 * 1000,
+    retry: 1,
+  });
+}
+
+
+// ---- Pago con tarjeta ------------------------------------------------------------------------
+//
+// Acá no se toca una tarjeta. `iniciar` devuelve una dirección del proveedor a la que la pantalla
+// NAVEGA; el número se teclea allá. De vuelta, lo único que confirma el pago es `credited`, que lo
+// dice el servidor: nunca se deduce del estado ni de haber vuelto de la página.
+
+export function useCardPaymentAvailability(): UseQueryResult<CardPaymentAvailability> {
+  const { apiClient } = useAuth();
+  return useQuery({
+    queryKey: KEYS.cardPayments,
+    queryFn: () => apiClient.citizenCheckouts.availability(),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+/**
+ * Abre el traspaso.
+ *
+ * <p>La clave de idempotencia la acuña quien llama y se guarda mientras dure el intento, no se
+ * genera por petición: es lo que hace que un doble clic, o un reintento tras una desconexión,
+ * devuelvan el MISMO traspaso en vez de abrir un segundo cobro.</p>
+ */
+export function useStartCheckout() {
+  const { apiClient } = useAuth();
+  return useMutation({
+    mutationFn: ({ amountMinor, idempotencyKey }: { amountMinor: number; idempotencyKey: string }) =>
+      apiClient.citizenCheckouts.start(amountMinor, idempotencyKey),
+  });
+}
+
+/** La vuelta de la página del proveedor. Quema el token y deja el resultado asentado. */
+export function useCheckoutReturn() {
+  const { apiClient } = useAuth();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (token: string) => apiClient.citizenCheckouts.returned(token),
+    onSuccess: (resultado) => {
+      // El saldo sólo pudo cambiar si el servidor dice que acreditó.
+      if (resultado.credited) {
+        void queryClient.invalidateQueries({ queryKey: KEYS.wallet });
+      }
+    },
+  });
+}
+
+/** Dónde va un traspaso. De sólo lectura y seguro de consultar. */
+export function useCheckoutStatus(checkoutId: string | null): UseQueryResult<CheckoutResult> {
+  const { apiClient } = useAuth();
+  return useQuery({
+    queryKey: KEYS.checkout(checkoutId ?? ''),
+    queryFn: () => apiClient.citizenCheckouts.status(checkoutId as string),
+    enabled: Boolean(checkoutId),
   });
 }

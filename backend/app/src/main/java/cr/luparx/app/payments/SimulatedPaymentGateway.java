@@ -112,6 +112,12 @@ public class SimulatedPaymentGateway implements PaymentGateway {
         return PROVIDER_ID;
     }
 
+    /** Acá no se cobra nada. Es lo que hace que el saldo que produce quede marcado como tal. */
+    @Override
+    public boolean isSimulated() {
+        return true;
+    }
+
     @Override
     public Set<CardNetwork> supportedNetworks() {
         return Set.of(CardNetwork.VISA, CardNetwork.MASTERCARD);

@@ -52,7 +52,17 @@ export type Permission =
    * The person who reconciles the money is the person who handles it, so this capability governs
    * both rather than a fourth one being invented for reading what they themselves produce.
    */
-  | 'WALLET_TOPUP';
+  | 'WALLET_TOPUP'
+  /**
+   * Approve the perimeter of a charging zone (v0.44).
+   *
+   * Deliberately not `TENANT_MANAGE`, which is what DRAWS one. Drawing a boundary and declaring it
+   * official are two acts, and the second decides which street is charged for: an unverified
+   * perimeter never reaches the citizen's map. Whether the same person may do both is each
+   * municipality's call — one line in the role table — and that choice only exists because the two
+   * capabilities are separate here.
+   */
+  | 'ZONE_GEOMETRY_VERIFY';
 
 export type MembershipStatus = 'ACTIVE' | 'PENDING_APPROVAL' | 'REJECTED' | 'REVOKED' | 'SUSPENDED';
 
@@ -207,9 +217,36 @@ export interface GeoJsonMultiPolygon {
 /** What the zone-geometry endpoints read and write: the geometry object itself, never a Feature. */
 export type GeoJsonGeometry = GeoJsonPolygon | GeoJsonMultiPolygon;
 
+/**
+ * What travels with each drawn zone (CONTRACT.md v0.44).
+ *
+ * <p>`status` is the one field that decides whether a polygon may be shown as the boundary being
+ * charged for. It is set by a person, never deduced from the shape of the polygon — an earlier
+ * draft of the map guessed "this looks like a rectangle, it must be demo data", and that guess is
+ * exactly what these two fields replace.</p>
+ *
+ * <p>By default an installation only serves `VERIFIED` geometries, so an unverified one is absent
+ * rather than mislabelled. A development installation can widen `luparx.geo.citizen-geometry-statuses`
+ * and then every feature arrives with its own `status` for the client to label.</p>
+ *
+ * <p>Who approved it is deliberately NOT here: a municipal officer's name adds nothing to a citizen
+ * and is personal data. It lives in the admin portal and in the audit trail.</p>
+ */
+/** Where a zone's perimeter came from (CONTRACT.md v0.44). `DEMO` is never an official boundary. */
+export type ZoneGeometrySource = 'MUNICIPAL_OFFICIAL' | 'GIS_IMPORT' | 'ADMIN_DRAWING' | 'DEMO';
+
+/** Whether a person reviewed the perimeter, and with what result. Never deduced from its shape. */
+export type ZoneGeometryStatus = 'UNVERIFIED' | 'PENDING_REVIEW' | 'VERIFIED' | 'REJECTED';
+
 export interface ZoneGeoJsonProperties {
   code: string;
   name: string;
+  /** Where the polygon came from. `DEMO` is never an official boundary. */
+  source: ZoneGeometrySource | null;
+  /** Whether a person reviewed it, and with what result. */
+  status: ZoneGeometryStatus;
+  /** ISO-8601 UTC, or null when it has not been approved. */
+  verifiedAt: string | null;
 }
 
 export interface ZoneGeoJsonFeature {
@@ -1765,6 +1802,12 @@ export interface ChangeEmailRequest {
 /** The server's own ledger vocabulary (`module-parking` WalletTransactionType) — never widened or renamed here. */
 export type WalletTransactionType = 'TOP_UP' | 'SESSION_CHARGE' | 'EXTENSION_CHARGE' | 'ADJUSTMENT';
 
+/**
+ * De dónde salió una recarga (`module-parking` WalletTopupSource). `DEV` es saldo del SIMULADOR:
+ * no lo pagó nadie y la pantalla tiene que decirlo.
+ */
+export type WalletTopupSource = 'CITIZEN' | 'MUNICIPAL_COUNTER' | 'PARTNER' | 'ADJUSTMENT' | 'DEV';
+
 /** One movement of the tenant wallet, already flattened out of the server's `MoneyDto` pairs. */
 export interface WalletTransaction {
   id: string;
@@ -1773,8 +1816,17 @@ export interface WalletTransaction {
   amountMinor: number;
   currencyCode: string;
   balanceAfterMinor: number;
-  reference: string | null;
+  /** La sesión que originó el cargo; nulo en una recarga. */
+  sessionId: string | null;
+  /** Sólo en recargas. `DEV` = saldo simulado. */
+  source: WalletTopupSource | null;
+  sourceLabelKey: string | null;
   createdAt: string;
+}
+
+/** ¿Hay saldo de prueba en esta lista? Es lo que decide si la pantalla se rotula MODO PRUEBA. */
+export function haySaldoSimulado(transactions: readonly WalletTransaction[]): boolean {
+  return transactions.some((tx) => tx.source === 'DEV');
 }
 
 export interface WalletResponse {
@@ -1782,6 +1834,71 @@ export interface WalletResponse {
   currencyCode: string;
   /** First page of movements, newest first — the wallet endpoint returns them alongside the balance. */
   transactions: WalletTransaction[];
+}
+
+// ---- Pago con tarjeta: el traspaso alojado (CONTRACT.md §"Citizen · Card top-up") -------------
+//
+// Lo que LuParX hace acá es abrir un traspaso y leer su resultado. NO toca la tarjeta: el número
+// se teclea en la página del proveedor y nunca pasa por este cliente ni por esta aplicación. Por
+// eso no hay en todo este archivo un campo para PAN, CVV ni fecha de vencimiento, y no debe
+// haberlo nunca: guardarlos cambiaría el alcance de cumplimiento de todo el producto.
+
+/** Las marcas que el servidor sabe nombrar. */
+export type CardNetwork = 'VISA' | 'MASTERCARD' | 'AMERICAN_EXPRESS' | 'DISCOVER' | 'OTHER' | 'UNKNOWN';
+
+/** En qué anda el traspaso: abierto, terminado o caducado. */
+export type CheckoutState = 'OPEN' | 'COMPLETED' | 'EXPIRED';
+
+// `PaymentState` ya existe más abajo en este archivo, con los mismos siete valores y la
+// explicación de por qué `FAILED` es un estado y no una ausencia. No se duplica acá.
+
+/** Si esta municipalidad acepta tarjeta, con qué proveedor y entre qué montos. */
+export interface CardPaymentAvailability {
+  available: boolean;
+  /** El identificador del proveedor. `SIMULATED` significa que NO hay cobro real. */
+  provider: string | null;
+  networks: CardNetwork[];
+  minimumMinor: number;
+  maximumMinor: number;
+  currencyCode: string;
+}
+
+/** Lo que devuelve abrir un traspaso: a dónde hay que ir. */
+export interface CheckoutStarted {
+  id: string;
+  provider: string;
+  /** La página del proveedor. Se NAVEGA; no se pide con fetch. */
+  redirectUrl: string;
+  state: CheckoutState;
+  stateLabelKey: string;
+  amountMinor: number;
+  currencyCode: string;
+  expiresAt: string | null;
+  /**
+   * `false` cuando el servidor devolvió un traspaso que ya existía, por la clave de idempotencia.
+   * Es lo que distingue «se abrió otro cobro» de «es el mismo de antes», y lo que permite que un
+   * doble clic no cobre dos veces.
+   */
+  opened: boolean;
+}
+
+/** Cómo terminó —o en qué va— un traspaso. */
+export interface CheckoutResult {
+  id: string;
+  state: CheckoutState;
+  stateLabelKey: string;
+  paymentState: PaymentState;
+  paymentStateLabelKey: string;
+  amountMinor: number;
+  currencyCode: string;
+  /** `true` sólo cuando el saldo ya quedó acreditado. Es lo único que confirma el pago. */
+  credited: boolean;
+  network: CardNetwork;
+  networkLabelKey: string;
+  cardLast4: string | null;
+  failureCode: string | null;
+  failureReason: string | null;
+  resolvedAt: string | null;
 }
 
 /** Minutes saved from an early finish (CONTRACT.md v0.2 rule 5) — consumed first on this tenant's next session, never money, never portable to another tenant. */

@@ -215,7 +215,7 @@ public class WalletCheckoutService {
 
         switch (snapshot.outcome()) {
             case CAPTURED -> {
-                boolean credited = credit(tenantId, checkout, payment, snapshot);
+                boolean credited = credit(tenantId, checkout, payment, snapshot, gateway);
                 checkouts.complete(checkout.getId(), snapshot);
                 return new Resolution(GatewayOutcome.CAPTURED, credited);
             }
@@ -304,7 +304,7 @@ public class WalletCheckoutService {
      * @return true when this call is what credited it, false when it had already been credited
      */
     private boolean credit(TenantId tenantId, PaymentCheckout checkout, Payment payment,
-                           PaymentGateway.Snapshot snapshot) {
+                           PaymentGateway.Snapshot snapshot, PaymentGateway gateway) {
         if (payment.getStatus().isCaptured()) {
             return false;
         }
@@ -312,9 +312,22 @@ public class WalletCheckoutService {
         // than begin a second one — see the class comment.
         String idempotencyKey = payment.getIdempotencyKey();
         TopupPaymentService.Result result = topups.topUp(tenantId, UserId.of(checkout.getUserId()),
-                payment.getGross(), idempotencyKey, WalletTopupSource.CITIZEN,
+                payment.getGross(), idempotencyKey, origenDe(gateway),
                 checkout.getProviderReference(), UserId.of(checkout.getUserId()), snapshot.fee());
         return !result.alreadyApplied();
+    }
+
+    /**
+     * De dónde salió este saldo, en el MOVIMIENTO y no sólo en el pago.
+     *
+     * <p>Antes toda recarga con tarjeta se asentaba como {@link WalletTopupSource#CITIZEN}, también
+     * la que confirmaba el simulador. El rastro existía —{@code payments.provider} dice
+     * {@code SIMULATED}—, pero a una tabla de distancia: quien mira la billetera ve un saldo que
+     * no se distingue de uno pagado de verdad, y eso es exactamente lo que no puede pasar con
+     * dinero municipal (CONTRACT.md v0.46).</p>
+     */
+    private static WalletTopupSource origenDe(PaymentGateway gateway) {
+        return gateway.isSimulated() ? WalletTopupSource.DEV : WalletTopupSource.CITIZEN;
     }
 
     private Optional<PaymentCheckout> handoffOf(TenantId tenantId, UUID paymentId) {

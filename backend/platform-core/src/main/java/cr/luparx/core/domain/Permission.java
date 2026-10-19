@@ -48,7 +48,24 @@ public enum Permission {
      * cashier's job and the auditor's first question, and a municipality must be able to give it to
      * the person at the window without also giving them user administration.
      */
-    WALLET_TOPUP;
+    WALLET_TOPUP,
+
+    /**
+     * Dar por bueno el perímetro de una zona de cobro (CONTRACT.md v0.44, ADR 0029).
+     *
+     * <p>Separado de {@link #TENANT_MANAGE} —que es el que DIBUJA— porque dibujar un límite y
+     * declararlo oficial son dos actos distintos. El segundo es el que decide por qué calle se
+     * cobra: mientras un perímetro no esté verificado, el mapa del ciudadano no lo recibe. Que la
+     * misma persona pueda hacer los dos es una decisión que cada municipalidad toma; que el sistema
+     * NO PUEDA distinguirlos sería una decisión nuestra, y es la que esta separación evita.</p>
+     *
+     * <p>Hoy la tabla se lo da a {@link Role#TENANT_ADMIN}, porque si no nadie podría verificar
+     * nada y el mapa quedaría vacío para siempre. Una municipalidad que quiera separación de
+     * funciones de verdad se lo quita a ese rol y se lo da a otro: <b>una línea en
+     * {@link RolePermissions}</b>, sin tocar ningún controlador, porque el extremo autoriza sobre
+     * este permiso y nunca sobre un nombre de rol.</p>
+     */
+    ZONE_GEOMETRY_VERIFY;
 
     /** Authority name exposed to Spring Security expressions ({@code hasAuthority('PERM_USER_READ')}). */
     public String authority() {

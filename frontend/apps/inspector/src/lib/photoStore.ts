@@ -67,14 +67,28 @@ export async function getPhoto(key: string): Promise<Blob | null> {
   }
 }
 
-export async function deletePhoto(key: string): Promise<void> {
+/**
+ * `true` cuando los bytes ya no están: borrados ahora, o ausentes desde antes —IndexedDB considera
+ * un éxito borrar una clave que no existe, y lo es—. `false` SÓLO cuando el almacén se negó.
+ *
+ * <p>Devolver el resultado es la corrección del 17-10-2026. Antes se tragaba la excepción y
+ * devolvía `void`: quien llamaba no podía distinguir «se borró» de «el almacén está caído», y una
+ * limpieza que falla entera se informaba como completada. Eso contradice justo lo que este portal
+ * aprendió en la Fase 1A — una escritura que falla en silencio es peor que uno ruidosa—, y acá
+ * además esconde bytes que siguen ocupando un almacenamiento que iPadOS desaloja cuando se llena.</p>
+ */
+export async function deletePhoto(key: string): Promise<boolean> {
   try {
     await run('readwrite', (store) => store.delete(key));
+    return true;
   } catch {
-    // Deleting evidence that is already gone is not a failure worth surfacing.
+    return false;
   }
 }
 
-export async function deletePhotos(keys: readonly string[]): Promise<void> {
-  await Promise.all(keys.map((key) => deletePhoto(key)));
+/** Cuántas se fueron y cuántas no. Quien llama decide si eso merece avisar. */
+export async function deletePhotos(keys: readonly string[]): Promise<{ borradas: number; fallidas: number }> {
+  const resultados = await Promise.all(keys.map((key) => deletePhoto(key)));
+  const borradas = resultados.filter(Boolean).length;
+  return { borradas, fallidas: resultados.length - borradas };
 }

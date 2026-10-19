@@ -22,6 +22,19 @@ luparx:
     ephemeral-keys-when-missing: ${JWT_EPHEMERAL_KEYS:true}
   security:
     ip-hash-pepper: ${IP_HASH_PEPPER:luparx-dev-only-ip-pepper}
+  geo:
+    # En DESARROLLO el mapa del ciudadano sí recibe las geometrías sin verificar y las rechazadas
+    # —entre ellas los ocho rectángulos de demostración de la V41_0— para poder trabajar sobre un
+    # mapa que tiene algo dibujado (CONTRACT.md v0.44).
+    #
+    # No las habilita como oficiales, y no puede: cada polígono llega con su `source` y su `status`
+    # en `properties`, así que una DEMO llega rotulada DEMO/REJECTED, y el CHECK
+    # `ck_parking_zones_geom_demo_never_verified` hace IMPOSIBLE que una DEMO quede VERIFIED en la
+    # base. Lo que esta línea cambia es qué se envía, nunca qué es oficial.
+    #
+    # En producción NO se pone: allí rige el valor por omisión de application.yml, `VERIFIED` a
+    # secas, y el mapa queda vacío hasta que una municipalidad verifique sus zonas.
+    citizen-geometry-statuses: ${GEO_CITIZEN_GEOMETRY_STATUSES:VERIFIED,UNVERIFIED,REJECTED}
   dev:
     # Creates five municipalities (San José, Escazú, Montes de Oca, La Unión and Cartago), their
     # accounts, and the parking each of them operates — zones, tariffs, policy, charging timetable,

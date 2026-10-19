@@ -25,7 +25,7 @@ import { CitizenShell } from '../components/CitizenShell';
 import { QueryBoundary } from '../components/QueryBoundary';
 import { ExtendSessionSheet } from '../components/ExtendSessionSheet';
 import { FinishSessionConfirm } from '../components/FinishSessionConfirm';
-import { MOVEMENT_ICON, MOVEMENT_TITLE_KEY } from '../lib/movementPresentation';
+import { MOVEMENT_ICON, MOVEMENT_TITLE_KEY, esSaldoDePrueba } from '../lib/movementPresentation';
 import { resumenPorPagar } from '../lib/fineStatus';
 import { cardToneFor, urgencyMessageKey, urgencyOf } from '../lib/sessionUrgency';
 import { useAuth } from '@luparx/auth';
@@ -462,8 +462,10 @@ export function HomePage(): React.JSX.Element {
                       <span className="lx-citizen-activity__when">
                         {formatDateTime(movimiento.createdAt, locale, { timeZone })}
                       </span>
-                      {movimiento.reference ? (
-                        <span className="lx-citizen-activity__where">{movimiento.reference}</span>
+                      {esSaldoDePrueba(movimiento) ? (
+                        <span className="lx-citizen-activity__where lx-saldo-prueba">
+                          {t('citizen.movements.testMoney')}
+                        </span>
                       ) : null}
                     </span>
                     <AmountText

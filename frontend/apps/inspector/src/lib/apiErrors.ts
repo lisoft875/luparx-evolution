@@ -47,9 +47,20 @@ export function lookupErrorMessage(error: unknown, t: Translate): string {
  * holds. A code with no copy is named rather than hidden: "no se pudo enviar" tells nobody
  * anything, and the code is at least something a support agent can look up.
  */
+/**
+ * Los códigos que produce la cola misma, no el servidor, y que aún así hay que explicar.
+ *
+ * <p>`EVIDENCE_BYTES_MISSING` es el único hasta hoy y el que más necesita una frase: la fila deja
+ * de reintentar, de modo que si la pantalla sólo nombrara el código el fiscalizador no sabría que
+ * lo que tiene que hacer es volver a fotografiar.</p>
+ */
+const QUEUE_ERROR_KEYS: Record<string, TranslationKey> = {
+  EVIDENCE_BYTES_MISSING: 'inspector.queue.error.EVIDENCE_BYTES_MISSING',
+};
+
 export function codeMessage(code: string | null, t: Translate): string | undefined {
   if (!code) return undefined;
   if (code === 'NETWORK_ERROR') return t('common.error.network');
-  const known = LOOKUP_ERROR_KEYS[code] ?? MEMBERSHIP_ERROR_KEYS[code];
+  const known = LOOKUP_ERROR_KEYS[code] ?? MEMBERSHIP_ERROR_KEYS[code] ?? QUEUE_ERROR_KEYS[code];
   return known ? t(known) : t('common.error.referenceNoTrace', { code });
 }

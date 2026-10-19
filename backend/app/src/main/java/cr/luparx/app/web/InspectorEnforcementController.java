@@ -8,6 +8,7 @@ import cr.luparx.core.audit.AuditAction;
 import cr.luparx.core.domain.Portal;
 import cr.luparx.core.error.ErrorCode;
 import cr.luparx.core.error.ForbiddenException;
+import cr.luparx.core.error.ValidationException;
 import cr.luparx.core.id.TenantId;
 import cr.luparx.core.id.UserId;
 import cr.luparx.core.page.PageRequest;
@@ -324,12 +325,37 @@ public class InspectorEnforcementController {
      * hay forma de pedir el turno de otra persona desde acá. Lo de la municipalidad entera es el
      * panel administrativo, con su propio permiso.</p>
      */
+    /**
+     * Lo más largo que este extremo contesta.
+     *
+     * <p>El Javadoc de abajo dice desde el 12-10 por qué {@code from} y {@code to} son
+     * obligatorios: «todo mi historial» sobre la tabla de consultas se hace más lenta cada día
+     * que la municipalidad opera. Exigirlos no alcanzaba —medido el 17-10-2026:
+     * {@code from=1970&to=2999} contestaba 200 sin chistar—, porque obligar a declarar la
+     * ventana no es lo mismo que acotarla. Treinta y un días es la misma escala que el mes por
+     * omisión del registro de fiscalización del portal administrativo, y mucho más de lo que un
+     * turno necesita.</p>
+     */
+    private static final Duration MAX_SHIFT_WINDOW = Duration.ofDays(31);
+
     @GetMapping("/shift-summary")
     @PreAuthorize("hasAuthority('PERM_CITATION_READ')")
     @Operation(summary = "My checks and citations in a window")
     public EnforcementDtos.ShiftSummaryResponse shiftSummary(
             @RequestParam Instant from,
             @RequestParam Instant to) {
+        // Una ventana al revés o vacía contestaba 200 con ceros, medido el 17-10-2026. Para la
+        // pantalla eso es indistinguible de «hoy no hice nada», que es justo la diferencia que esa
+        // pantalla se tomó el trabajo de preservar. El transporte simulado ya lo rechazaba; el
+        // servidor no, y el que manda es el servidor.
+        if (!from.isBefore(to)) {
+            throw new ValidationException("from", ErrorCode.VALIDATION_FAILED,
+                    "error.enforcement.shift.window.order");
+        }
+        if (Duration.between(from, to).compareTo(MAX_SHIFT_WINDOW) > 0) {
+            throw new ValidationException("to", ErrorCode.SHIFT_WINDOW_TOO_WIDE,
+                    "error.enforcement.shift.window.tooWide");
+        }
         TenantId tenantId = TenantContextHolder.requireTenantId();
         UUID me = TenantContextHolder.requireUserId().value();
         long checks = checkService.countForInspector(tenantId, me, from, to);

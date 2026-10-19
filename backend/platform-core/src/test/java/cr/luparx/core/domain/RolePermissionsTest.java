@@ -69,7 +69,8 @@ class RolePermissionsTest {
                 Permission.CITATION_VOID,
                 Permission.CITATION_INGEST,
                 Permission.ENFORCEMENT_MANAGE,
-                Permission.WALLET_TOPUP);
+                Permission.WALLET_TOPUP,
+                Permission.ZONE_GEOMETRY_VERIFY);
         assertThat(RolePermissions.of(Role.PLATFORM_SUPPORT))
                 .doesNotContain(Permission.USER_WRITE, Permission.USER_BLOCK, Permission.PLATFORM_MANAGE);
     }
@@ -181,5 +182,46 @@ class RolePermissionsTest {
         assertThat(Portal.ADMIN.selfRegistrationAllowed()).isFalse();
         assertThat(Portal.INSPECTOR.selfRegistrationAllowed()).isFalse();
         assertThat(Portal.PLATFORM.selfRegistrationAllowed()).isFalse();
+    }
+    /**
+     * Aprobar un perímetro es un permiso propio, no un efecto de administrar la municipalidad
+     * (CONTRACT.md v0.44, ADR 0029).
+     *
+     * <p>Lo que esta prueba cuida no es quién lo tiene hoy —hoy lo tiene {@code TENANT_ADMIN},
+     * porque si no nadie podría verificar nada y el mapa del ciudadano quedaría vacío para
+     * siempre— sino que el permiso EXISTA aparte. Mientras exista aparte, la municipalidad que
+     * quiera que no apruebe quien dibuja lo consigue moviendo una línea de esta tabla. El día que
+     * alguien «simplifique» esto haciendo que el extremo vuelva a mirar {@code TENANT_MANAGE}, esa
+     * posibilidad desaparece sin que nada se ponga rojo. Esto es lo que se pone rojo.</p>
+     */
+    @Test
+    void approvingAPerimeterIsItsOwnCapability() {
+        // Son dos permisos distintos, y ninguno implica al otro por construcción.
+        assertThat(Permission.ZONE_GEOMETRY_VERIFY).isNotEqualTo(Permission.TENANT_MANAGE);
+
+        // Nadie fuera de la administración de la municipalidad puede aprobar un límite de cobro.
+        for (Role rol : List.of(Role.TENANT_FINANCE, Role.TENANT_SUPPORT, Role.TENANT_INTEGRATION,
+                Role.INSPECTOR, Role.INSPECTOR_LEAD, Role.CITIZEN, Role.PLATFORM_SUPPORT)) {
+            assertThat(RolePermissions.grants(rol, Permission.ZONE_GEOMETRY_VERIFY))
+                    .as("%s aprobando el perímetro de una zona", rol)
+                    .isFalse();
+        }
+
+        // Y quien dibuja hoy también aprueba, que es el estado de partida y hay que decirlo en voz
+        // alta en vez de dejarlo implícito: la separación está DISPONIBLE, no aplicada.
+        assertThat(RolePermissions.of(Role.TENANT_ADMIN))
+                .contains(Permission.TENANT_MANAGE, Permission.ZONE_GEOMETRY_VERIFY);
+    }
+
+    /**
+     * El nombre de autoridad que el extremo escribe en su {@code @PreAuthorize}.
+     *
+     * <p>Una errata ahí no falla al compilar ni al arrancar: falla en tiempo de ejecución negando
+     * el acceso a todo el mundo, o —peor— concediéndolo si alguien escribió el nombre de otro
+     * permiso que sí existe.</p>
+     */
+    @Test
+    void theAuthorityNameTheEndpointUses() {
+        assertThat(Permission.ZONE_GEOMETRY_VERIFY.authority()).isEqualTo("PERM_ZONE_GEOMETRY_VERIFY");
     }
 }

@@ -23,6 +23,11 @@ import type {
   TimeCreditsResponse,
   WalletResponse,
   WalletTransaction,
+  WalletTopupSource,
+  CardNetwork,
+  CheckoutState,
+  PaymentState,
+  CheckoutResult,
 } from './types/domain';
 import type { PagedResponse } from './types/http';
 
@@ -78,7 +83,14 @@ export interface WireWalletTransaction {
   type: WalletTransaction['type'];
   amount: WireMoney;
   balanceAfter: WireMoney;
-  reference?: string | null;
+  /** La sesión que originó un cargo. Nulo en una recarga. */
+  sessionId?: string | null;
+  /**
+   * De dónde salió una recarga. Viaja SÓLO en las recargas y es la única señal de que un saldo lo
+   * creó el simulador (`DEV`) y no lo pagó nadie (CONTRACT.md v0.46).
+   */
+  source?: WalletTopupSource | null;
+  sourceLabelKey?: string | null;
   createdAt: string;
 }
 
@@ -201,7 +213,18 @@ export function toWallet(wire: WireWallet): WalletResponse {
       amountMinor: tx.amount.amountMinor,
       currencyCode: tx.amount.currencyCode,
       balanceAfterMinor: tx.balanceAfter.amountMinor,
-      reference: tx.reference ?? null,
+      /*
+        `sessionId` y `source` son del servidor y hasta hoy se tiraban acá.
+
+        El cliente leía en su lugar un campo `reference` que el servidor NO manda: siempre llegaba
+        `undefined` y la pantalla de movimientos, que lo pintaba, nunca mostró nada. Peor: al
+        descartar `source` se perdía lo único que distingue un saldo creado por el SIMULADOR
+        (`DEV`) de uno que alguien pagó. Un saldo de prueba que en pantalla se ve igual que uno
+        real es exactamente lo que no puede pasar con dinero municipal.
+      */
+      sessionId: tx.sessionId ?? null,
+      source: tx.source ?? null,
+      sourceLabelKey: tx.sourceLabelKey ?? null,
       createdAt: tx.createdAt,
     })),
   };
@@ -219,5 +242,62 @@ export function toTimeCredits(wire: WireTimeCredits): TimeCreditsResponse {
   return {
     minutes: wire.balanceMinutes,
     expiresAt: expiries[0] ?? null,
+  };
+}
+
+// ---- Pago con tarjeta ------------------------------------------------------------------------
+
+export interface WireCardPaymentAvailability {
+  available: boolean;
+  provider?: string | null;
+  networks?: CardNetwork[];
+  minimum: WireMoney;
+  maximum: WireMoney;
+}
+
+export interface WireCheckoutResponse {
+  id: string;
+  provider: string;
+  redirectUrl: string;
+  state: CheckoutState;
+  stateLabelKey: string;
+  amount: WireMoney;
+  expiresAt?: string | null;
+  opened: boolean;
+}
+
+export interface WireCheckoutResult {
+  id: string;
+  state: CheckoutState;
+  stateLabelKey: string;
+  paymentState: PaymentState;
+  paymentStateLabelKey: string;
+  amount: WireMoney;
+  credited: boolean;
+  network: CardNetwork;
+  networkLabelKey: string;
+  cardLast4?: string | null;
+  failureCode?: string | null;
+  failureReason?: string | null;
+  resolvedAt?: string | null;
+}
+
+export function toCheckoutResult(wire: WireCheckoutResult): CheckoutResult {
+  return {
+    id: wire.id,
+    state: wire.state,
+    stateLabelKey: wire.stateLabelKey,
+    paymentState: wire.paymentState,
+    paymentStateLabelKey: wire.paymentStateLabelKey,
+    amountMinor: wire.amount.amountMinor,
+    currencyCode: wire.amount.currencyCode,
+    // Lo único que confirma el pago. No se deduce del estado: lo dice el servidor.
+    credited: wire.credited === true,
+    network: wire.network,
+    networkLabelKey: wire.networkLabelKey,
+    cardLast4: wire.cardLast4 ?? null,
+    failureCode: wire.failureCode ?? null,
+    failureReason: wire.failureReason ?? null,
+    resolvedAt: wire.resolvedAt ?? null,
   };
 }

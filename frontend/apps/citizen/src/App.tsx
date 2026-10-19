@@ -10,6 +10,7 @@ import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
+import { SimulatedCheckoutPage } from './pages/SimulatedCheckoutPage';
 import { TenantSelectPage } from './pages/TenantSelectPage';
 import { HomePage } from './pages/HomePage';
 import { HelpPage } from './pages/HelpPage';
@@ -94,6 +95,24 @@ export function App(): React.JSX.Element {
                   siguen en las bandejas de entrada de la gente (CONTRACT.md v0.27). */}
               <Route path="/password/reset" element={<ResetPasswordPage />} />
               <Route path="/select-tenant" element={<TenantSelectPage />} />
+              {/*
+                La «página del proveedor» del simulador.
+
+                Se monta SÓLO con `VITE_USE_MOCKS=true`. Contra el backend de desarrollo esa página
+                la sirve el propio servidor en `/dev/payments/checkout/**`, y en una compilación de
+                producción esta ruta no existe: el servidor real nunca devuelve una `redirectUrl`
+                que apunte acá, y quien escribiera la dirección a mano cae en el comodín.
+              */}
+              {USE_MOCKS ? (
+                <Route
+                  path="/pay/simulada/:reference"
+                  element={
+                    <RequireAuth loginPath="/login">
+                      <SimulatedCheckoutPage />
+                    </RequireAuth>
+                  }
+                />
+              ) : null}
               <Route
                 path="/"
                 element={

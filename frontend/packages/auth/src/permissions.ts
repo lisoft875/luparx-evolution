@@ -45,6 +45,10 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     // table while the server had granted it since v0.8 — a stale copy costs exactly this: a
     // capability somebody holds and a screen the client will not show them.
     'WALLET_TOPUP',
+    // Dar por bueno el perímetro de una zona (v0.44). Separado de `TENANT_MANAGE`, que es el que
+    // dibuja: la municipalidad que quiera que no apruebe quien dibuja se lo quita de acá y del
+    // servidor, y nada más.
+    'ZONE_GEOMETRY_VERIFY',
   ],
   // Finance reads citations because collecting on them is its job, and cannot annul one — the
   // separation of duties a municipal auditor asks about first (ADR 0014). It credits wallets at the

@@ -87,3 +87,9 @@ frontend/tests/responsive/capturas/
 
 # Las capturas que dejan los arneses de UI: son evidencia de una corrida, no código.
 frontend/tests/responsive/capturas/
+
+# Evidencia de verificación generada por Claude: informes, registros y los ZIP que se entregan.
+# Es prueba de una corrida, no código, y pesa megabytes. Se queda en el disco, no en el historial.
+verificacion/
+LuParX_*.zip
+VERIFICAR_CIUDADANO.sh

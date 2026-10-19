@@ -47,7 +47,13 @@ public final class RolePermissions {
                 // So an administrator can map foreign causals and load a backlog by hand; the
                 // day-to-day pushing is the integration account's job.
                 Permission.CITATION_INGEST,
-                Permission.WALLET_TOPUP));
+                Permission.WALLET_TOPUP,
+                // Dar por bueno el perímetro de una zona (v0.44). Acá y en ningún otro rol: es el
+                // acto que decide por qué calle se cobra. Está junto a TENANT_MANAGE porque si no
+                // nadie podría verificar nada y el mapa del ciudadano quedaría vacío para siempre;
+                // la municipalidad que quiera que no apruebe quien dibuja se lo quita de esta
+                // lista y se lo da a otro rol, y no hay que tocar nada más.
+                Permission.ZONE_GEOMETRY_VERIFY));
         // Finance reads citations because collecting on them is its job; it cannot annul one, which
         // is precisely the separation of duties a municipality's own auditor asks about.
         // Finance is the counter: it credits wallets and reads citations, and it still cannot annul

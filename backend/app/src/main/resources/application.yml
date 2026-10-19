@@ -221,6 +221,15 @@ luparx:
     # accidental de un catastro completo.
     max-zone-vertices: ${GEO_MAX_ZONE_VERTICES:10000}
     max-zones-per-map: ${GEO_MAX_ZONES_PER_MAP:500}
+    # Qué geometrías llega a ver el CIUDADANO, por su estado de verificación (CONTRACT.md v0.44).
+    # Esto no es una baranda de tamaño como las dos de arriba: es la regla que impide publicar como
+    # límite de cobro un polígono que nadie revisó. Por omisión, sólo las verificadas; en desarrollo
+    # se puede ampliar a `VERIFIED,UNVERIFIED` para ver también lo que todavía no se aprobó, y
+    # entonces cada una llega con su `status` para que el cliente la rotule.
+    #
+    # El filtro vive en el SERVIDOR, en el WHERE de la consulta. Dejarlo en manos del cliente sería
+    # confiar en que ningún cliente mal configurado muestre de más.
+    citizen-geometry-statuses: ${GEO_CITIZEN_GEOMETRY_STATUSES:VERIFIED}
   retention:
     # Cuánto se conserva lo que es grande, personal, o las dos cosas (CONTRACT.md v0.29, ADR 0013).
     # Configuración y no constante porque la respuesta legal cambia por país: el plazo en que una

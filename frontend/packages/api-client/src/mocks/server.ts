@@ -262,6 +262,19 @@ const mockAdminSpaces: { id: string; zoneId: string; code: string; status: 'AVAI
   { id: 'space-lup-0001', zoneId: 'zone-centro', code: 'LUP-0001', status: 'AVAILABLE' },
   { id: 'space-lup-0002', zoneId: 'zone-centro', code: 'LUP-0002', status: 'AVAILABLE' },
   { id: 'space-lup-0003', zoneId: 'zone-centro', code: 'LUP-0003', status: 'OUT_OF_SERVICE' },
+  // Nueve bahías en OTRA zona, para que buscar por código tenga algo que buscar fuera de la zona
+  // escogida —que es el caso que la búsqueda existe para resolver— y para que doce bahías con el
+  // mismo prefijo desborden las diez sugerencias y aparezca el «hay más».
+  //
+  // Todas FUERA DE SERVICIO a propósito: el tablero de Inicio divide entre las bahías EN
+  // SERVICIO, así que así Escalante conserva su ocupación nula y ningún arnés del Inicio cambia
+  // de resultado por este fixture.
+  ...Array.from({ length: 9 }, (_unused, i) => ({
+    id: `space-lup-010${i + 1}`,
+    zoneId: 'zone-escalante',
+    code: `LUP-010${i + 1}`,
+    status: 'OUT_OF_SERVICE' as const,
+  })),
 ];
 
 const mockAdminRates: { id: string; zoneId: string; kind: 'BLOCK' | 'EXACT'; amountMinor: number; currencyCode: string; minutes: number; validFrom: string; validTo: string | null }[] = [
@@ -331,6 +344,175 @@ const mockZoneGeometries = new Map<string, GeoJsonGeometry>([
     ]],
   }],
 ]);
+
+/**
+ * Procedencia y estado de revisión de cada perímetro (CONTRACT.md v0.44).
+ *
+ * <p>Deliberadamente DESIGUALES. `zone-centro` está verificada y es la única que el mapa del
+ * ciudadano recibe con la configuración por omisión; `zone-sabana` es un rectángulo de
+ * demostración y queda fuera. Un fixture donde todo estuviera verificado no dejaría ver lo único
+ * que este campo hace, que es excluir.</p>
+ *
+ * <p>Y `zone-sabana` está además como DEMO para que se pueda comprobar lo que el servidor prohíbe:
+ * que aprobarla devuelve `ZONE_GEOMETRY_DEMO_NOT_VERIFIABLE` en vez de ascenderla.</p>
+ */
+type MockZoneGeometryReview = {
+  source: 'MUNICIPAL_OFFICIAL' | 'GIS_IMPORT' | 'ADMIN_DRAWING' | 'DEMO';
+  status: 'UNVERIFIED' | 'PENDING_REVIEW' | 'VERIFIED' | 'REJECTED';
+  verifiedAt: string | null;
+};
+const mockZoneGeometryReviews = new Map<string, MockZoneGeometryReview>([
+  ['zone-centro', {
+    source: 'MUNICIPAL_OFFICIAL',
+    status: 'VERIFIED',
+    verifiedAt: new Date(Date.now() - 20 * 864e5).toISOString(),
+  }],
+  ['zone-sabana', { source: 'DEMO', status: 'REJECTED', verifiedAt: null }],
+]);
+
+/**
+ * Lo que esta instalación simulada publica al ciudadano.
+ *
+ * <p>El transporte simulado ES una instalación de desarrollo, así que espeja
+ * `application-dev.yml` y no el valor por omisión de producción: llegan también las sin verificar
+ * y las rechazadas, para poder trabajar sobre un mapa que tiene algo dibujado. En producción el
+ * valor por omisión es `VERIFIED` a secas.</p>
+ *
+ * <p>Que lleguen no las vuelve oficiales: cada una viaja con su `source` y su `status`, de modo
+ * que la DEMO llega rotulada DEMO/REJECTED. El filtro sigue viviendo acá, en el «servidor», y no
+ * en la pantalla.</p>
+ */
+/* ──────────────────────────── Pago con tarjeta (simulado) ────────────────────────────
+
+   El servidor de verdad abre un traspaso alojado y manda al ciudadano a la página del PROVEEDOR;
+   acá se reproduce esa forma, no un atajo: `start` devuelve una `redirectUrl`, la pantalla navega,
+   y el resultado sólo se conoce al volver. Lo que cambia es que la página del proveedor la sirve
+   la propia aplicación en modo simulado, igual que `DevSimulatedCheckoutController` la sirve en el
+   backend de desarrollo.
+
+   NO se guarda ni se pide número de tarjeta en ninguna parte: el escenario se elige de una lista.
+*/
+
+/** Los mismos seis escenarios que `SimulatedTestCard` en el backend, por el mismo nombre. */
+const MOCK_ESCENARIOS_TARJETA = {
+  VISA_APPROVED: { network: 'VISA', last4: '1111', ok: true, challenge: false, failureCode: null, failureReason: null },
+  MASTERCARD_APPROVED: { network: 'MASTERCARD', last4: '4444', ok: true, challenge: false, failureCode: null, failureReason: null },
+  DECLINED: { network: 'VISA', last4: '0002', ok: false, challenge: false, failureCode: 'DECLINED', failureReason: 'El emisor rechazó la transacción.' },
+  INSUFFICIENT_FUNDS: { network: 'VISA', last4: '9995', ok: false, challenge: false, failureCode: 'INSUFFICIENT_FUNDS', failureReason: 'Fondos insuficientes.' },
+  THREE_DS_CHALLENGE: { network: 'VISA', last4: '3220', ok: true, challenge: true, failureCode: null, failureReason: null },
+  EXPIRED_CARD: { network: 'VISA', last4: '0069', ok: false, challenge: false, failureCode: 'EXPIRED_CARD', failureReason: 'La tarjeta está vencida.' },
+} as const;
+
+type MockEscenarioTarjeta = keyof typeof MOCK_ESCENARIOS_TARJETA;
+
+interface MockCheckout {
+  id: string;
+  userId: string;
+  tenantId: string;
+  amountMinor: number;
+  currencyCode: string;
+  state: 'OPEN' | 'COMPLETED' | 'EXPIRED';
+  paymentState: 'PENDING' | 'AUTHORIZED' | 'CAPTURED' | 'FAILED' | 'CANCELLED';
+  credited: boolean;
+  network: string;
+  cardLast4: string | null;
+  failureCode: string | null;
+  failureReason: string | null;
+  resolvedAt: string | null;
+  returnToken: string;
+  returnTokenUsed: boolean;
+  expiresAt: string;
+}
+
+const mockCheckouts = new Map<string, MockCheckout>();
+/** `Idempotency-Key` → id del traspaso. Es lo que hace que un doble clic NO abra un segundo cobro. */
+const mockCheckoutsPorClave = new Map<string, string>();
+
+interface MockWalletTx {
+  id: string;
+  type: 'TOP_UP' | 'SESSION_CHARGE' | 'EXTENSION_CHARGE' | 'ADJUSTMENT';
+  amountMinor: number;
+  balanceAfterMinor: number;
+  currencyCode: string;
+  sessionId: string | null;
+  source: 'CITIZEN' | 'MUNICIPAL_COUNTER' | 'PARTNER' | 'ADJUSTMENT' | 'DEV' | null;
+  createdAt: string;
+}
+
+/** El libro mayor de la billetera simulada, por usuario y municipalidad. */
+const mockWalletLedger = new Map<string, MockWalletTx[]>();
+
+function mockCheckoutIniciado(c: MockCheckout, abierto: boolean): unknown {
+  return {
+    id: c.id,
+    provider: 'SIMULATED',
+    /*
+      La «página del proveedor». En modo simulado la sirve la propia aplicación bajo una ruta que
+      sólo existe con `VITE_USE_MOCKS=true`; contra el backend de desarrollo, el servidor devuelve
+      su propia página. La pantalla NAVEGA a esta dirección, no la pide con fetch, que es lo mismo
+      que haría con un proveedor real.
+    */
+    redirectUrl: `/pay/simulada/${c.id}?token=${c.returnToken}`,
+    state: c.state,
+    stateLabelKey: `payment.checkout.state.${c.state.toLowerCase()}`,
+    amount: { amountMinor: c.amountMinor, currencyCode: c.currencyCode },
+    expiresAt: c.expiresAt,
+    opened: abierto,
+  };
+}
+
+function mockCheckoutResultado(c: MockCheckout): unknown {
+  return {
+    id: c.id,
+    state: c.state,
+    stateLabelKey: `payment.checkout.state.${c.state.toLowerCase()}`,
+    paymentState: c.paymentState,
+    paymentStateLabelKey: `payment.state.${c.paymentState.toLowerCase()}`,
+    amount: { amountMinor: c.amountMinor, currencyCode: c.currencyCode },
+    credited: c.credited,
+    network: c.network,
+    networkLabelKey: `payment.network.${c.network.toLowerCase()}`,
+    cardLast4: c.cardLast4,
+    failureCode: c.failureCode,
+    failureReason: c.failureReason,
+    resolvedAt: c.resolvedAt,
+  };
+}
+
+/**
+ * Acredita el saldo UNA sola vez, y sólo si el cobro quedó capturado.
+ *
+ * <p>`credited` es lo único que la pantalla puede mirar para decir «pagado». Por eso se pone acá,
+ * junto con el asiento, y no al elegir el escenario: si se separaran, un reintento de la vuelta
+ * podría acreditar dos veces el mismo cobro.</p>
+ */
+function mockAcreditarSiCorresponde(c: MockCheckout): void {
+  if (c.credited || c.paymentState !== 'CAPTURED') return;
+  const clave = walletKey(c.userId, c.tenantId);
+  const billetera = mockWallets.get(clave) ?? { balanceMinor: 0, currencyCode: c.currencyCode };
+  billetera.balanceMinor += c.amountMinor;
+  billetera.currencyCode = c.currencyCode;
+  mockWallets.set(clave, billetera);
+  mockAsentar(clave, {
+    type: 'TOP_UP',
+    amountMinor: c.amountMinor,
+    balanceAfterMinor: billetera.balanceMinor,
+    currencyCode: c.currencyCode,
+    sessionId: null,
+    // DEV: lo creó el simulador y nadie lo pagó. La pantalla tiene que poder decirlo.
+    source: 'DEV',
+  });
+  c.credited = true;
+}
+
+function mockAsentar(clave: string, tx: Omit<MockWalletTx, 'id' | 'createdAt'>): void {
+  const filas = mockWalletLedger.get(clave) ?? [];
+  filas.unshift({ ...tx, id: `wallet-tx-${filas.length + 1}-${Math.random().toString(36).slice(2, 8)}`,
+    createdAt: new Date().toISOString() });
+  mockWalletLedger.set(clave, filas);
+}
+
+const MOCK_CITIZEN_GEOMETRY_STATUSES = new Set(['VERIFIED', 'UNVERIFIED', 'REJECTED']);
 
 function fieldProblem(field: string, messageKey: string): Response {
   return problem(422, 'INVALID_GEOMETRY', messageKey, undefined, [
@@ -1084,13 +1266,52 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
             return outcome;
           }
           mockZoneGeometries.set(zoneId, body as GeoJsonGeometry);
+          // Redibujar DEGRADA el sello, igual que el UPDATE del servidor. Un simulador que
+          // conservara el «verificado» al cambiar el polígono dejaría pasar exactamente el agujero
+          // que esa regla cierra.
+          mockZoneGeometryReviews.set(zoneId, {
+            source: 'ADMIN_DRAWING', status: 'UNVERIFIED', verifiedAt: null,
+          });
           return json(body);
         }
         if (method === 'DELETE') {
           // Borrar lo que no existe es un DELETE exitoso, igual que en el servidor.
           mockZoneGeometries.delete(zoneId);
+          mockZoneGeometryReviews.delete(zoneId);
           return noContent();
         }
+      }
+
+      // .../zones/{id}/geometry/review — aprobar o rechazar un perímetro (CONTRACT.md v0.44).
+      if (segments.length === 8 && segments[6] === 'geometry' && segments[7] === 'review'
+        && method === 'PUT') {
+        const zoneId = segments[5]!;
+        if (!mockAdminZones(tenantId).some((z) => z.id === zoneId)) {
+          return problem(404, 'PARKING_ZONE_NOT_FOUND', 'Zone not found');
+        }
+        const payload = await readBody<{ decision?: string; source?: string }>(init);
+        const actual = mockZoneGeometryReviews.get(zoneId);
+        if (!mockZoneGeometries.has(zoneId)) {
+          return problem(422, 'ZONE_GEOMETRY_MISSING',
+            'This zone has no perimeter to review. Draw it first.');
+        }
+        // Las MISMAS dos negativas que el servidor, en el mismo orden. Un simulador más amable
+        // que producción deja pasar justo lo que este endpoint tiene que impedir.
+        // Decide la procedencia GUARDADA, no la declarada: si bastara con mandar
+        // `source: MUNICIPAL_OFFICIAL`, la regla se esquivaría con un adjetivo.
+        const quedaDemo = actual?.source === 'DEMO' || payload.source === 'DEMO';
+        if (payload.decision === 'VERIFIED' && quedaDemo) {
+          return problem(422, 'ZONE_GEOMETRY_DEMO_NOT_VERIFIABLE',
+            'This perimeter is demonstration data and cannot be approved.');
+        }
+        const source = (payload.source ?? actual?.source ?? 'ADMIN_DRAWING') as MockZoneGeometryReview['source'];
+        const status = (payload.decision ?? 'UNVERIFIED') as MockZoneGeometryReview['status'];
+        mockZoneGeometryReviews.set(zoneId, {
+          source,
+          status,
+          verifiedAt: status === 'VERIFIED' ? new Date().toISOString() : null,
+        });
+        return json({ status, source });
       }
 
       // .../zones/{id}/rules — en qué se aparta una zona (CONTRACT.md v0.31).
@@ -1156,7 +1377,17 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
     if (resource === 'parking' && segments[4] === 'spaces') {
       if (method === 'GET') {
         const zoneFilter = url.searchParams.get('zoneId');
-        const rows = mockAdminSpaces.filter((s) => !zoneFilter || s.zoneId === zoneFilter);
+        // El mismo filtro que el servidor: por el PRINCIPIO del código y sin distinguir
+        // mayúsculas (`findByTenantIdAndCodeStartingWithIgnoreCaseOrderByCodeAsc`). Un simulador
+        // más generoso —uno que aceptara coincidencias en MEDIO del código— dejaría pasar una
+        // pantalla que contra el backend real se queda vacía.
+        const codeFilter = (url.searchParams.get('code') ?? '').trim().toUpperCase();
+        const rows = mockAdminSpaces
+          .filter((s) => !zoneFilter || s.zoneId === zoneFilter)
+          .filter((s) => !codeFilter || s.code.toUpperCase().startsWith(codeFilter))
+          // Ordenado por código, como el servidor. Hasta ahora salía en orden de inserción, que
+          // coincidía por casualidad; con bahías creadas desde la pantalla ya no coincide.
+          .sort((a, b) => a.code.localeCompare(b.code));
         return json(paginate(rows, Number(url.searchParams.get('page') ?? '0'),
           Number(url.searchParams.get('size') ?? '50')));
       }
@@ -2188,6 +2419,11 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
         }
         const features = mockAdminZones(tenantId)
           .filter((zone) => zone.active && mockZoneGeometries.has(zone.id))
+          // El filtro por estado va acá, en el «servidor», como en el backend: una geometría que
+          // esta instalación no publica sencillamente no sale, así que no hay nada que un cliente
+          // pueda rotular mal.
+          .filter((zone) => MOCK_CITIZEN_GEOMETRY_STATUSES.has(
+            mockZoneGeometryReviews.get(zone.id)?.status ?? 'UNVERIFIED'))
           .filter((zone) => {
             if (!box) return true;
             // Solapamiento de cajas envolventes, que es exactamente lo que hace el operador && del
@@ -2200,7 +2436,13 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
             type: 'Feature' as const,
             id: zone.id,
             geometry: mockZoneGeometries.get(zone.id)!,
-            properties: { code: zone.code, name: zone.name },
+            properties: {
+              code: zone.code,
+              name: zone.name,
+              source: mockZoneGeometryReviews.get(zone.id)?.source ?? null,
+              status: mockZoneGeometryReviews.get(zone.id)?.status ?? 'UNVERIFIED',
+              verifiedAt: mockZoneGeometryReviews.get(zone.id)?.verifiedAt ?? null,
+            },
           }));
         return json({ type: 'FeatureCollection', features });
       }
@@ -2294,6 +2536,15 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
         return idempotentResult(idempotencyKey, `session-start:${userId}`, () => {
           wallet.balanceMinor -= quote.payableMinor;
           mockWallets.set(key, wallet);
+          // El cargo se asienta: un libro mayor que sólo registra las recargas deja al ciudadano
+          // sin saber de dónde salió el número que tiene delante.
+          if (quote.payableMinor > 0) {
+            mockAsentar(key, {
+              type: 'SESSION_CHARGE', amountMinor: -quote.payableMinor,
+              balanceAfterMinor: wallet.balanceMinor, currencyCode: wallet.currencyCode,
+              sessionId: null, source: null,
+            });
+          }
           if (quote.creditMinutesApplied > 0) {
             const credit = mockTimeCredits.get(key);
             if (credit) mockTimeCredits.set(key, { ...credit, minutes: Math.max(0, credit.minutes - quote.creditMinutesApplied) });
@@ -2365,6 +2616,13 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
         return idempotentResult(idempotencyKey, `session-extend:${record.id}`, () => {
           wallet.balanceMinor -= amountMinor;
           mockWallets.set(key, wallet);
+          if (amountMinor > 0) {
+            mockAsentar(key, {
+              type: 'EXTENSION_CHARGE', amountMinor: -amountMinor,
+              balanceAfterMinor: wallet.balanceMinor, currencyCode: wallet.currencyCode,
+              sessionId: record.id, source: null,
+            });
+          }
           record.minutes += payload.minutes;
           record.amountMinor += amountMinor;
           record.expiresAt = new Date(new Date(record.expiresAt).getTime() + payload.minutes * 60_000).toISOString();
@@ -2414,25 +2672,166 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
       }
     }
 
+    // ---- Pago con tarjeta: el traspaso alojado --------------------------------------------------
+    if (resource === 'card-payments' && method === 'GET') {
+      const moneda = (mockWallets.get(walletKey(userId, tenantId ?? ''))?.currencyCode) ?? 'CRC';
+      return json({
+        available: true,
+        // SIMULATED, y se dice: no hay proveedor real detrás de esto.
+        provider: 'SIMULATED',
+        networks: ['VISA', 'MASTERCARD'],
+        minimum: { amountMinor: 50000, currencyCode: moneda },
+        maximum: { amountMinor: 20000000, currencyCode: moneda },
+      });
+    }
+
+    if (resource === 'checkouts' && method === 'POST' && segments.length === 4) {
+      const payload = await readBody<{ amountMinor?: number }>(init);
+      const monto = Number(payload?.amountMinor ?? 0);
+      const moneda = (mockWallets.get(walletKey(userId, tenantId ?? ''))?.currencyCode) ?? 'CRC';
+      if (!Number.isFinite(monto) || monto < 50000 || monto > 20000000) {
+        return problem(422, 'VALIDATION_FAILED', 'amountMinor out of range', undefined, [
+          { field: 'amountMinor', code: 'VALIDATION_FAILED', message: 'amountMinor out of range' },
+        ]);
+      }
+      const clave = new Headers(init?.headers).get('Idempotency-Key');
+      /*
+        La idempotencia de verdad: con la misma clave se devuelve el MISMO traspaso y
+        `opened: false`. Es lo que impide que un doble clic o un reintento tras una desconexión
+        abran un segundo cobro.
+      */
+      const yaAbierto = clave ? mockCheckouts.get(mockCheckoutsPorClave.get(clave) ?? '') : undefined;
+      if (yaAbierto && yaAbierto.userId === userId && yaAbierto.tenantId === (tenantId ?? '')) {
+        return json(mockCheckoutIniciado(yaAbierto, false));
+      }
+      const id = crypto.randomUUID();
+      const registro: MockCheckout = {
+        id,
+        userId,
+        tenantId: tenantId ?? '',
+        amountMinor: monto,
+        currencyCode: moneda,
+        state: 'OPEN',
+        paymentState: 'PENDING',
+        credited: false,
+        network: 'UNKNOWN',
+        cardLast4: null,
+        failureCode: null,
+        failureReason: null,
+        resolvedAt: null,
+        returnToken: crypto.randomUUID(),
+        returnTokenUsed: false,
+        expiresAt: new Date(Date.now() + 20 * 60 * 1000).toISOString(),
+      };
+      mockCheckouts.set(id, registro);
+      if (clave) mockCheckoutsPorClave.set(clave, id);
+      return json(mockCheckoutIniciado(registro, true));
+    }
+
+    /*
+      La «página del proveedor». En el backend de desarrollo es HTML servido por
+      `DevSimulatedCheckoutController`; acá la sirve la propia aplicación y este endpoint es el que
+      esa página llama al elegir un escenario. No existe en el servidor real y no se usa desde
+      ninguna pantalla de producción.
+    */
+    if (resource === 'checkouts' && method === 'POST' && segments[5] === 'simular') {
+      const registro = mockCheckouts.get(segments[4] ?? '');
+      if (!registro || registro.userId !== userId) {
+        return problem(404, 'PAYMENT_CHECKOUT_NOT_FOUND', 'error.payment.checkout.notFound');
+      }
+      if (registro.state !== 'OPEN') return json({ ok: true });
+      const cuerpo = await readBody<{ escenario?: string; cancelar?: boolean; aprobar?: boolean }>(init);
+      if (cuerpo?.cancelar) {
+        registro.state = 'COMPLETED';
+        registro.paymentState = 'CANCELLED';
+        registro.resolvedAt = new Date().toISOString();
+        return json({ ok: true });
+      }
+      const nombre = (cuerpo?.escenario ?? 'VISA_APPROVED') as MockEscenarioTarjeta;
+      const esc = MOCK_ESCENARIOS_TARJETA[nombre] ?? MOCK_ESCENARIOS_TARJETA.VISA_APPROVED;
+      registro.network = esc.network;
+      registro.cardLast4 = esc.last4;
+      registro.state = 'COMPLETED';
+      registro.resolvedAt = new Date().toISOString();
+      // La autenticación extra del banco: si no se completa, el cobro falla por eso y no por la
+      // tarjeta. Es un desenlace distinto y se informa distinto.
+      if (esc.challenge && cuerpo?.aprobar === false) {
+        registro.paymentState = 'FAILED';
+        registro.failureCode = 'AUTHENTICATION_FAILED';
+        registro.failureReason = 'No se completó la autenticación del banco emisor.';
+      } else if (esc.ok) {
+        registro.paymentState = 'CAPTURED';
+      } else {
+        registro.paymentState = 'FAILED';
+        registro.failureCode = esc.failureCode;
+        registro.failureReason = esc.failureReason;
+      }
+      return json({ ok: true });
+    }
+
+    if (resource === 'checkouts' && method === 'POST' && segments[4] === 'return') {
+      const token = url.searchParams.get('token') ?? '';
+      const registro = [...mockCheckouts.values()].find(
+        (c) => c.returnToken === token && c.userId === userId && c.tenantId === (tenantId ?? ''));
+      // Un token que no existe y uno ya usado responden IGUAL: si no, este endpoint diría si el
+      // pago de otra persona ocurrió.
+      if (!registro || registro.returnTokenUsed) {
+        return problem(404, 'PAYMENT_RETURN_TOKEN_INVALID', 'error.payment.returnToken.invalid');
+      }
+      registro.returnTokenUsed = true;
+      mockAcreditarSiCorresponde(registro);
+      return json(mockCheckoutResultado(registro));
+    }
+
+    if (resource === 'checkouts' && method === 'GET' && segments.length === 5) {
+      const registro = mockCheckouts.get(segments[4] ?? '');
+      if (!registro || registro.userId !== userId || registro.tenantId !== (tenantId ?? '')) {
+        return problem(404, 'PAYMENT_CHECKOUT_NOT_FOUND', 'error.payment.checkout.notFound');
+      }
+      return json(mockCheckoutResultado(registro));
+    }
+
     // ---- Wallet & time credits (CONTRACT.md v0.2 rules 5/6 — always scoped to the active tenant) --
     if (resource === 'wallet' && method === 'GET' && segments.length === 4) {
       const key = walletKey(userId, tenantId ?? '');
       const wallet = mockWallets.get(key) ?? { balanceMinor: 0, currencyCode: 'CRC' };
+      /*
+        Un libro mayor de verdad, no una fila inventada con el saldo actual.
+
+        La versión anterior devolvía SIEMPRE un único movimiento igual al saldo, así que la
+        pantalla de movimientos no podía equivocarse ni acertar: mostraba el saldo dos veces. Con
+        las recargas y los cargos asentados de verdad, cada fila lleva su `source` —y una recarga
+        del simulador llega rotulada `DEV`, que es lo que la pantalla tiene que delatar.
+      */
+      const filas = mockWalletLedger.get(key);
+      const items = (filas && filas.length > 0 ? filas : [
+        {
+          id: 'wallet-tx-mock-1',
+          type: 'TOP_UP' as const,
+          amountMinor: wallet.balanceMinor,
+          balanceAfterMinor: wallet.balanceMinor,
+          currencyCode: wallet.currencyCode,
+          sessionId: null,
+          source: 'DEV' as const,
+          createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+        },
+      ]).map((tx) => ({
+        id: tx.id,
+        type: tx.type,
+        amount: { amountMinor: tx.amountMinor, currencyCode: tx.currencyCode },
+        balanceAfter: { amountMinor: tx.balanceAfterMinor, currencyCode: tx.currencyCode },
+        sessionId: tx.sessionId,
+        source: tx.source,
+        sourceLabelKey: tx.source ? `wallet.topup.source.${tx.source.toLowerCase()}` : null,
+        createdAt: tx.createdAt,
+      }));
       return json({
         balance: { amountMinor: wallet.balanceMinor, currencyCode: wallet.currencyCode },
         transactions: {
-          items: [
-            {
-              id: 'wallet-tx-mock-1',
-              type: 'TOP_UP' as const,
-              amount: { amountMinor: wallet.balanceMinor, currencyCode: wallet.currencyCode },
-              balanceAfter: { amountMinor: wallet.balanceMinor, currencyCode: wallet.currencyCode },
-              createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
-            },
-          ],
+          items,
           page: 0,
           size: 20,
-          totalElements: 1,
+          totalElements: items.length,
           totalPages: 1,
         },
       });
@@ -2934,6 +3333,82 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
     // GET /api/v1/inspector/zones — el catálogo que el servidor publicaba desde v0.7 y ninguna
     // pantalla llamaba, por lo que un dispositivo recién instalado no conocía ninguna zona y sólo
     // podía obtener AMBIGUOUS (CONTRACT.md v0.28).
+    /*
+      GET /inspector/shift-summary — «¿qué hice yo hoy?».
+
+      El endpoint existe en el servidor desde hace versiones y la pantalla de Inicio ya lo pide
+      (`useShiftSummary`), pero el transporte simulado NO lo publicaba: la consulta fallaba sin
+      reintentos y las dos tarjetas desaparecían en silencio. En toda demostración el fiscalizador
+      veía un Inicio sin su turno y nadie podía distinguir «el servidor no contestó» de «hoy no
+      hice nada» — que es justo la diferencia que esa pantalla se tomó el trabajo de preservar.
+
+      Las dos cifras se CUENTAN de los mismos datos que alimentan las demás pantallas del
+      simulador: las consultas de placa de `mockEnforcementChecks` y las boletas de
+      `mockCitations`, ambas filtradas por municipalidad, por ESTE fiscalizador y por la ventana
+      pedida. Nada inventado: emitir una boleta en la pantalla sube el contador de verdad.
+    */
+    if (segments[2] === 'inspector' && segments[3] === 'shift-summary' && method === 'GET') {
+      /*
+        Las tres respuestas de error son las del SERVIDOR, verificadas contra él el 17-10-2026, y no
+        las que le quedaban cómodas al simulador. Antes las tres colapsaban en un 422: el simulador
+        rechazaba una ventana invertida que el servidor contestaba con 200 y ceros, y contestaba 422
+        donde el servidor contesta 400. Un simulador que no se equivoca igual que el servidor
+        esconde defectos en vez de encontrarlos, que es lo contrario de para lo que existe.
+
+          · falta un parámetro, o no se puede leer  → 400 MALFORMED_REQUEST
+          · la ventana está al revés o es vacía     → 422 VALIDATION_FAILED, campo `from`
+          · la ventana es más larga que el tope     → 422 SHIFT_WINDOW_TOO_WIDE, campo `to`
+      */
+      const crudoDesde = url.searchParams.get('from');
+      const crudoHasta = url.searchParams.get('to');
+      const desde = Date.parse(crudoDesde ?? '');
+      const hasta = Date.parse(crudoHasta ?? '');
+      if (crudoDesde === null || crudoHasta === null || !Number.isFinite(desde) || !Number.isFinite(hasta)) {
+        // Spring no llega al cuerpo del método si no puede convertir el parámetro a Instant.
+        return problem(400, 'MALFORMED_REQUEST', 'Malformed request', 'The request could not be read.');
+      }
+      if (desde >= hasta) {
+        return problem(422, 'VALIDATION_FAILED', 'Validation failed', undefined, [
+          {
+            field: 'from',
+            code: 'VALIDATION_FAILED',
+            message: 'The start of the window must come before its end.',
+          },
+        ]);
+      }
+      // 31 días, el mismo tope que MAX_SHIFT_WINDOW en InspectorEnforcementController.
+      const TOPE_VENTANA_MS = 31 * 24 * 60 * 60 * 1000;
+      if (hasta - desde > TOPE_VENTANA_MS) {
+        // 422 con código VALIDATION_FAILED arriba y el código específico EN EL CAMPO: así lo
+        // contesta el servidor (verificado el 17-10-2026) y así lo expresa ValidationException en
+        // todo el repositorio. El código de arriba dice «no pasó la validación»; el del campo dice
+        // cuál, que es el que un cliente puede usar para decidir qué mostrar.
+        return problem(422, 'VALIDATION_FAILED', 'Validation failed', undefined, [
+          {
+            field: 'to',
+            code: 'SHIFT_WINDOW_TOO_WIDE',
+            message: 'That window is longer than this summary serves. Ask for 31 days or less.',
+          },
+        ]);
+      }
+      const dentro = (cuando: string | null | undefined): boolean => {
+        const t = Date.parse(cuando ?? '');
+        return Number.isFinite(t) && t >= desde && t < hasta;
+      };
+      // Sólo las mías: el identificador sale de la sesión, como en el servidor. No hay forma de
+      // pedir el turno de otra persona desde acá.
+      const checks = mockEnforcementChecks.filter(
+        (c) => c.tenantId === tenantId && c.inspectorUserId === userId && dentro(c.occurredAt)).length;
+      const citations = mockCitations.filter(
+        (c) => c.tenantId === tenantId && c.inspectorUserId === userId && dentro(c.occurredAt)).length;
+      return json({
+        from: new Date(desde).toISOString(),
+        to: new Date(hasta).toISOString(),
+        checks,
+        citations,
+      });
+    }
+
     if (segments[2] === 'inspector' && segments[3] === 'zones' && method === 'GET') {
       return json(
         (mockCitizenZones(tenantId) as { id: string; code: string; name: string }[]).map((zone) => ({

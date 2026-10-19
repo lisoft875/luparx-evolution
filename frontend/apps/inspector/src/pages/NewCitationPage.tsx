@@ -37,6 +37,21 @@ import {
   takePosition,
 } from '../lib/capture';
 import { preparePhoto, type PreparedPhoto } from '../lib/evidencePreparation';
+import {
+  guardarBorrador,
+  fotosPerdidasDe,
+  leerBorrador,
+  limpiarBorrador,
+  limpiarSiCaduco,
+  restaurarFotos,
+  tieneContenido,
+  type BorradorBoleta,
+} from '../lib/citationDraft';
+import {
+  escrituraDegradada,
+  pedirPersistenciaUnaVez,
+  suscribirAlmacenamiento,
+} from '../lib/almacenamiento';
 
 /**
  * Desde cuántos tipos de infracción el catálogo deja de verse entero y conviene poder filtrarlo.
@@ -86,7 +101,7 @@ interface PrefilledLocation {
  * administrative act is the worst thing this screen could do.
  */
 export function NewCitationPage(): React.JSX.Element {
-  const { t, locale } = useTranslation();
+  const { t, tPlural, locale } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
   const { activeTenant } = useAuth();
@@ -126,6 +141,131 @@ export function NewCitationPage(): React.JSX.Element {
   const [submitted, setSubmitted] = useState<{ deviceCitationId: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  /*
+    El borrador de lo que se está escribiendo.
+
+    Se OFRECE, no se restaura solo. Rellenar el formulario de hoy con la placa y las fotos de otro
+    carro, sin decirlo, es un error más caro que perder el borrador: el fiscalizador podría emitir
+    sobre datos que ya no corresponden. Por eso aparece como una pregunta con su hora.
+  */
+  const [borradorPrevio, setBorradorPrevio] = useState<BorradorBoleta | null>(null);
+  const [fotosPerdidas, setFotosPerdidas] = useState(0);
+  const [borradorSinGuardar, setBorradorSinGuardar] = useState(false);
+
+  const almacenamientoRoto = React.useSyncExternalStore(suscribirAlmacenamiento, escrituraDegradada, () => null);
+
+  // Se pide una vez por carga: el navegador decide, y repetirlo no cambia la respuesta.
+  useEffect(() => {
+    void pedirPersistenciaUnaVez();
+  }, []);
+
+  // Al entrar, se mira si quedó algo de la vez pasada. No toca el formulario.
+  useEffect(() => {
+    if (submitted) return;
+    setBorradorPrevio(leerBorrador(activeTenant?.id ?? null));
+    /*
+      Y de paso se retira el que ya no se puede ofrecer. `leerBorrador` devuelve `null` pasadas las
+      12 horas pero no limpia nada, y hasta hoy nadie limpiaba al ENTRAR: el registro caducado y
+      sus hasta seis fotografías se quedaban en el aparato para siempre. Acá es donde se nota que
+      caducó, así que acá es donde corresponde soltarlo.
+
+      No bloquea el renderizado: lo que la pantalla necesita para dibujar ya se decidió en la línea
+      de arriba, y esto se lleva bytes que nadie va a volver a nombrar.
+    */
+    void limpiarSiCaduco(activeTenant?.id ?? null);
+  }, [activeTenant?.id, submitted]);
+
+  /*
+    Autoguardado. Con retardo porque guardar en cada tecla escribe decenas de veces por placa y no
+    compra nada: lo que importa es que sobreviva a un cierre, no a cada pulsación.
+  */
+  useEffect(() => {
+    if (!activeTenant || submitted) return;
+    /*
+      Mientras la oferta está en pantalla sin contestar, NO se guarda.
+
+      Hay una sola ranura de borrador por municipalidad. Llegando desde una consulta de placa, el
+      formulario nace con datos y el autoguardado los escribiría encima del borrador anterior
+      dentro de 800 ms: la oferta seguiría dibujada, pero lo que ofrece ya habría sido destruido, y
+      una segunda recarga antes de contestar lo dejaría perdido sin que nadie lo decidiera. La
+      decisión es del fiscalizador, así que la escritura espera a que la tome.
+    */
+    if (borradorPrevio) return;
+    const enCurso = {
+      plate, typeId, zoneId, spaceCode, addressText, notes, position, fotos: photos,
+    };
+    if (!tieneContenido(enCurso)) return;
+    const id = window.setTimeout(() => {
+      void guardarBorrador(activeTenant.id, enCurso).then((ok) => setBorradorSinGuardar(!ok));
+    }, 800);
+    return () => window.clearTimeout(id);
+  }, [activeTenant, submitted, borradorPrevio, plate, typeId, zoneId, spaceCode, addressText, notes, position, photos]);
+
+  /** Retoma el borrador: campos primero, y las fotos que todavía tengan sus bytes. */
+  async function retomarBorrador(b: BorradorBoleta): Promise<void> {
+    setPlate(b.plate);
+    setTypeId(b.typeId);
+    setZoneId(b.zoneId);
+    setSpaceCode(b.spaceCode);
+    setAddressText(b.addressText);
+    setNotes(b.notes);
+    setPosition(b.position);
+    const fotos = await restaurarFotos(b);
+    setPhotos(fotos);
+    /*
+      Se dice cuántas faltan en vez de dejar que el fiscalizador cuente — y se cuenta contra las
+      que TENÍA, no contra las que quedaron en el registro. `b.fotos` ya es la lista corta cuando
+      alguna no se pudo guardar, así que restar sobre ella daba cero y la pantalla callaba una
+      pérdida real. `fotosPerdidasDe` suma las dos pérdidas posibles: las que nunca se guardaron y
+      las que se guardaron y ya no están.
+    */
+    setFotosPerdidas(fotosPerdidasDe(b, fotos.length));
+    setBorradorPrevio(null);
+  }
+
+  async function descartarBorrador(): Promise<void> {
+    await limpiarBorrador(activeTenant?.id ?? null);
+    setBorradorPrevio(null);
+    setFotosPerdidas(0);
+  }
+
+  /*
+    El conflicto entre el borrador y la consulta de placa.
+
+    A esta pantalla se llega de dos maneras: en blanco, o desde una consulta de placa que trae la
+    placa y la bahía ya puestas en `location.state`. En el segundo caso un borrador de hace diez
+    horas y de OTRO carro no puede entrar solo, y tampoco a medias: retomarlo reemplaza la placa que
+    el fiscalizador acaba de consultar, y mezclar —la placa de hoy con las fotografías de ayer—
+    sería un acto administrativo con evidencia de otro vehículo. Así que se pregunta, se dice qué
+    trae el borrador y de cuándo es, y las dos salidas son explícitas.
+
+    `retomarBorrador` ya reemplaza TODOS los campos, no sólo los vacíos. Eso es deliberado: un
+    borrador a medio aplicar es exactamente la mezcla que esto viene a impedir.
+  */
+  const placaConsultada = (prefilled.plate ?? '').trim().toUpperCase();
+  const vinoDeUnaConsulta = Boolean(placaConsultada || prefilled.zoneId || prefilled.spaceCode);
+  const borradorDeOtroVehiculo =
+    borradorPrevio !== null &&
+    placaConsultada.length > 0 &&
+    borradorPrevio.plate.trim().toUpperCase() !== placaConsultada;
+
+  /**
+   * Sigue con lo que trajo la consulta, y descarta el borrador.
+   *
+   * <p>Descartarlo es necesario, no un atajo: hay una sola ranura por municipalidad y el formulario
+   * que está en pantalla se autoguardará encima en cuanto se deje de preguntar. Conservar los dos
+   * pediría una segunda ranura y dejaría al fiscalizador eligiendo entre dos borradores en una
+   * acera. Lo que sí se hace es decírselo ANTES de que toque el botón.</p>
+   *
+   * <p>El formulario no se toca: lo que está en pantalla es lo que el fiscalizador quiere seguir,
+   * incluido lo que haya escrito desde que llegó.</p>
+   */
+  async function seguirConLaConsulta(): Promise<void> {
+    await limpiarBorrador(activeTenant?.id ?? null);
+    setBorradorPrevio(null);
+    setFotosPerdidas(0);
+  }
 
   const selectedType: InfractionType | undefined = useMemo(
     () => types.data?.find((candidate) => candidate.id === typeId),
@@ -215,11 +355,19 @@ export function NewCitationPage(): React.JSX.Element {
     const primeroPendiente = hechos.findIndex((hecho) => !hecho);
     return { pasos, actual: primeroPendiente === -1 ? pasos.length - 1 : primeroPendiente };
   }, [plate, typeId, photoMissing, t]);
-  const canSubmit = Boolean(typeId) && plate.trim().length > 0 && !photoMissing && !busy;
+  /*
+    The bay and the zone travel together for the citation too: sending one without the other
+    records half a location, which is worse than none because it looks complete.
 
-  // The bay and the zone travel together for the citation too: sending one without the other
-  // records half a location, which is worse than none because it looks complete.
+    Hasta hoy esto sólo PINTABA un aviso, y al enviar se descartaban zona y bahía en silencio
+    (`zoneId: bayIncomplete ? undefined : ...`). La boleta salía sin ubicación y el fiscalizador
+    creía que la llevaba. Ahora bloquea: una boleta a la que le falta media ubicación es una boleta
+    peor de lo que su autor cree, y eso se corrige antes de emitirla, no después.
+  */
   const bayIncomplete = Boolean(zoneId) !== Boolean(spaceCode.trim());
+
+  const canSubmit =
+    Boolean(typeId) && plate.trim().length > 0 && !photoMissing && !bayIncomplete && !busy;
 
   // Nothing is ever pre-selected in the type picker: choosing what somebody is fined for is not a
   // default, and a default here would be the one the officer accidentally leaves in place.
@@ -348,6 +496,12 @@ export function NewCitationPage(): React.JSX.Element {
         infractionName: selectedType.name,
       });
       setSubmitted({ deviceCitationId: row.deviceCitationId });
+      // A partir de aquí manda la cola: conservar el borrador sólo serviría para ofrecer de vuelta
+      // una boleta que ya está en camino.
+      void limpiarBorrador(activeTenant.id);
+      setBorradorPrevio(null);
+      setFotosPerdidas(0);
+      setBorradorSinGuardar(false);
       void queue.flush();
     } catch (error) {
       setSubmitError(apiErrorMessage(error, t));
@@ -357,6 +511,10 @@ export function NewCitationPage(): React.JSX.Element {
   }
 
   function reset(): void {
+    void limpiarBorrador(activeTenant?.id ?? null);
+    setBorradorPrevio(null);
+    setFotosPerdidas(0);
+    setBorradorSinGuardar(false);
     setSubmitted(null);
     setTypeId('');
     setPlate('');
@@ -433,6 +591,64 @@ export function NewCitationPage(): React.JSX.Element {
           total: avance.pasos.length,
         })}
       />
+
+      {/*
+        El almacenamiento roto se dice ANTES del formulario, porque cambia lo que el fiscalizador
+        debería hacer a continuación: si el aparato no guarda, alejarse del carro con la boleta a
+        medias deja de ser seguro.
+      */}
+      {almacenamientoRoto ? (
+        <Alert tone="danger">{t(`inspector.storage.degraded.${almacenamientoRoto}`)}</Alert>
+      ) : null}
+
+      {/*
+        La oferta del borrador. Nunca rellena el formulario por su cuenta: dice de cuándo es, QUÉ
+        trae, y —cuando viene de otra placa— que retomarlo reemplaza lo que hay en pantalla. Las
+        dos salidas están dibujadas; ninguna es la que ocurre si no se toca nada.
+      */}
+      {borradorPrevio ? (
+        <Alert tone={borradorDeOtroVehiculo ? 'warning' : 'info'}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--lx-space-2)', alignItems: 'flex-start' }}>
+            <span>
+              {t('inspector.cite.draftFound', {
+                when: new Date(borradorPrevio.guardadoEn).toLocaleString(),
+              })}
+            </span>
+            <span>
+              {tPlural('inspector.cite.draftCarries', borradorPrevio.fotos.length, {
+                plate: borradorPrevio.plate.trim() || t('inspector.cite.draftNoPlate'),
+              })}
+            </span>
+            {borradorDeOtroVehiculo ? (
+              <span>
+                {t('inspector.cite.draftOtherVehicle', {
+                  draft: borradorPrevio.plate.trim(),
+                  current: placaConsultada,
+                })}
+              </span>
+            ) : null}
+            {vinoDeUnaConsulta ? <span>{t('inspector.cite.draftKeepLookupHint')}</span> : null}
+            <div className="lx-oferta__acciones">
+              <Button type="button" variant="secondary" onClick={() => void retomarBorrador(borradorPrevio)}>
+                {borradorDeOtroVehiculo
+                  ? t('inspector.cite.draftRestoreReplacing')
+                  : t('inspector.cite.draftRestore')}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => void (vinoDeUnaConsulta ? seguirConLaConsulta() : descartarBorrador())}
+              >
+                {vinoDeUnaConsulta ? t('inspector.cite.draftKeepLookup') : t('inspector.cite.draftDiscard')}
+              </Button>
+            </div>
+          </div>
+        </Alert>
+      ) : null}
+
+      {fotosPerdidas > 0 ? (
+        <Alert tone="warning">{tPlural('inspector.cite.draftPhotosLost', fotosPerdidas)}</Alert>
+      ) : null}
 
       <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--lx-card-gap)' }}>
         <Card>
@@ -676,6 +892,8 @@ export function NewCitationPage(): React.JSX.Element {
         </Card>
 
         {submitError ? <Alert tone="danger">{submitError}</Alert> : null}
+        {bayIncomplete ? <Alert tone="warning">{t('inspector.cite.bayBlocked')}</Alert> : null}
+        {borradorSinGuardar ? <Alert tone="warning">{t('inspector.cite.draftNotSaved')}</Alert> : null}
 
         <Button type="submit" fullWidth disabled={!canSubmit} loading={busy}>
           {t('inspector.cite.submit')}

@@ -51,6 +51,23 @@ public interface PaymentGateway {
      */
     String providerId();
 
+    /**
+     * Si esta pasarela <b>no cobra nada</b>: un simulador, un sandbox, un modo de prueba.
+     *
+     * <p>Lo declara la pasarela y no una lista de nombres en otro archivo, que es lo que haría que
+     * el día que entre un segundo sandbox nadie se acuerde de añadirlo. Por omisión {@code false}:
+     * una pasarela nueva se considera real mientras no diga lo contrario, que es el lado seguro del
+     * error — marcar de prueba un cobro real lo escondería, y marcar de real uno de prueba lo deja
+     * a la vista.</p>
+     *
+     * <p>De esto cuelgan dos cosas: el saldo que acredita queda marcado como de desarrollo, y una
+     * instalación operativa se niega a arrancar contra una base que tenga ese saldo
+     * (CONTRACT.md v0.46).</p>
+     */
+    default boolean isSimulated() {
+        return false;
+    }
+
     /** The card schemes this provider accepts, for the interface that has to say so before charging. */
     Set<CardNetwork> supportedNetworks();
 

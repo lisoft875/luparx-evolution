@@ -22,6 +22,27 @@ public interface WalletTransactionRepository extends JpaRepository<WalletTransac
     List<WalletTransaction> findBySessionIdOrderByCreatedAtAsc(UUID sessionId);
 
     /**
+     * Cuántos movimientos tienen ese origen, en TODA la instalación.
+     *
+     * <p>La única consulta de este repositorio que no se acota por municipalidad, y por eso lleva
+     * esta nota: no responde una pregunta de negocio sino de integridad de la instalación —si hay
+     * saldo de prueba en alguna parte, esta instalación no debe operar (CONTRACT.md v0.46)—, y
+     * acotarla por municipalidad respondería la pregunta equivocada. La usa
+     * {@code TestMoneyStartupCheck} al arrancar y nadie más.</p>
+     */
+    long countBySource(WalletTopupSource source);
+
+    /**
+     * Cuántos movimientos de UNA billetera tienen ese origen.
+     *
+     * <p>Lo lee {@code WalletService.charge} dentro de la transacción que descuenta y después de
+     * tomar el bloqueo de la cuenta, que es lo que hace que la respuesta siga siendo cierta
+     * cuando el débito se aplica. {@link #countBySource} contesta la pregunta de la instalación
+     * entera y se usa al arrancar; ésta contesta la del gasto que está por ocurrir.</p>
+     */
+    long countByAccountIdAndSource(UUID accountId, WalletTopupSource source);
+
+    /**
      * A movement already credited under this reference, if any.
      *
      * <p>The second idempotency layer for money coming from outside: an {@code Idempotency-Key}

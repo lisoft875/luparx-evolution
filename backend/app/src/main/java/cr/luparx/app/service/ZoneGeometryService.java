@@ -11,7 +11,10 @@ import cr.luparx.core.error.ConflictException;
 import cr.luparx.core.error.ErrorCode;
 import cr.luparx.core.error.UnprocessableEntityException;
 import cr.luparx.core.id.TenantId;
+import cr.luparx.parking.model.ZoneGeometrySource;
+import cr.luparx.parking.model.ZoneGeometryStatus;
 import cr.luparx.parking.repository.ParkingZoneRepository;
+import cr.luparx.parking.repository.ZoneGeometryReviewRow;
 import cr.luparx.parking.repository.ZoneGeometryRow;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -22,6 +25,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -108,18 +112,104 @@ public class ZoneGeometryService {
      */
     public GeoJson.FeatureCollection featureCollection(TenantId tenantId, BoundingBox box) {
         int max = properties.effectiveMaxZonesPerMap();
+        // El filtro por estado va en el WHERE y no acá: una geometría que esta instalación no
+        // publica sencillamente no se trae, así que no hay nada que un cliente pueda rotular mal
+        // ni mostrar de más. Por omisión eso significa que sólo salen las verificadas.
+        Set<String> estados = properties.effectiveCitizenGeometryStatuses();
         List<ZoneGeometryRow> rows = box == null
-                ? zoneRepository.findGeometries(tenantId.value(), max)
-                : zoneRepository.findGeometriesInBbox(tenantId.value(), box.minLon(), box.minLat(),
-                        box.maxLon(), box.maxLat(), max);
+                ? zoneRepository.findGeometries(tenantId.value(), estados, max)
+                : zoneRepository.findGeometriesInBbox(tenantId.value(), estados, box.minLon(),
+                        box.minLat(), box.maxLon(), box.maxLat(), max);
         List<GeoJson.Feature> features = new ArrayList<>(rows.size());
         for (ZoneGeometryRow row : rows) {
             Map<String, Object> attributes = new LinkedHashMap<>();
             attributes.put("code", row.getCode());
             attributes.put("name", row.getName());
+            // La procedencia y el estado viajan SIEMPRE, también cuando la instalación sólo
+            // publica verificadas: un consumidor que guarda el GeoJSON —QGIS, un respaldo— se
+            // queda con el dato que dice qué es ese polígono, en vez de con un perímetro mudo.
+            attributes.put("source", row.getSource());
+            attributes.put("status", row.getStatus());
+            attributes.put("verifiedAt", row.getVerifiedAt());
+            // `verifiedBy` NO sale: el nombre de un funcionario municipal no le aporta nada a un
+            // ciudadano y es dato personal. Vive en el portal de administración y en la bitácora.
             features.add(new GeoJson.Feature(row.getId(), parse(row.getGeometry()), attributes));
         }
         return new GeoJson.FeatureCollection(features);
+    }
+
+    /**
+     * Asienta la decisión de una persona sobre el perímetro de una zona (CONTRACT.md v0.44).
+     *
+     * <h2>Lo que esto NO hace</h2>
+     *
+     * <p>No mira el polígono. Ni sus vértices, ni su área, ni si parece un rectángulo. Que una
+     * geometría sea el límite oficial de una zona de cobro es un hecho administrativo, y ningún
+     * cálculo sobre coordenadas puede establecerlo; por eso el estado lo pone alguien que responde
+     * por él y queda asentado en la bitácora sellada.</p>
+     *
+     * <h2>La demostración no asciende</h2>
+     *
+     * <p>Un perímetro cuya procedencia es {@link ZoneGeometrySource#DEMO} no se puede aprobar. Para
+     * volverlo oficial hay que dibujarlo de nuevo o importarlo, lo que cambia la procedencia antes
+     * de que nadie lo apruebe. Acá se rechaza con un motivo que se entiende.</p>
+     *
+     * <p>Debajo hay dos defensas más, y son distintas a propósito: el CHECK
+     * {@code ck_parking_zones_geom_demo_never_verified} prohíbe el ESTADO «DEMO y aprobada», y el
+     * disparador {@code trg_parking_zones_demo_never_verified} prohíbe la TRANSICIÓN —aprobar una
+     * DEMO sin que el polígono haya cambiado en esa misma sentencia—, que es lo que un CHECK no
+     * puede ver y que, medido contra PostGIS, se le colaba.</p>
+     *
+     * @param decision {@code VERIFIED} o {@code REJECTED}. Una revisión termina en una de las dos
+     * @param source   la procedencia que declara quien revisa, o null para dejar la que había
+     * @param actor    quién decide. Se guarda en la zona sólo cuando aprueba
+     * @return el estado y la procedencia de antes y de después, para la bitácora
+     */
+    public ReviewOutcome review(TenantId tenantId,
+                                UUID zoneId,
+                                long expectedVersion,
+                                ZoneGeometryStatus decision,
+                                ZoneGeometrySource source,
+                                UUID actor) {
+        ZoneGeometryReviewRow antes = zoneRepository.findGeometryReview(tenantId.value(), zoneId)
+                // La existencia de la zona ya la comprobó quien llama; llegar acá sin fila
+                // significaría que desapareció entre una lectura y la otra.
+                .orElseThrow(() -> ConflictException.of(
+                        ErrorCode.OPTIMISTIC_LOCK_CONFLICT, "error.conflict.optimisticLock"));
+
+        if (!Boolean.TRUE.equals(antes.getDrawn())) {
+            throw UnprocessableEntityException.of(
+                    ErrorCode.ZONE_GEOMETRY_MISSING, "error.geo.geometry.notDrawn");
+        }
+        // Lo que decide es la procedencia que la fila TIENE, no la que la petición declara. Si
+        // bastara con declarar otra, «no asciende cambiándole el estado» se esquivaría mandando
+        // `source: MUNICIPAL_OFFICIAL` en la misma llamada, que es cambiarle el estado con un
+        // adjetivo al lado. Cambiar la procedencia de verdad exige volver a dibujar o importar, y
+        // eso es otro extremo —el que escribe el polígono— que además deja el sello en cero.
+        boolean esDemo = ZoneGeometrySource.DEMO.name().equals(antes.getSource());
+        boolean declaraDemo = source == ZoneGeometrySource.DEMO;
+        if (decision == ZoneGeometryStatus.VERIFIED && (esDemo || declaraDemo)) {
+            throw UnprocessableEntityException.of(
+                    ErrorCode.ZONE_GEOMETRY_DEMO_NOT_VERIFIABLE, "error.geo.geometry.demoNotVerifiable");
+        }
+
+        requireUpdated(zoneRepository.reviewGeometry(
+                tenantId.value(), zoneId, decision.name(),
+                source == null ? null : source.name(),
+                actor, clock.instant(), expectedVersion));
+
+        return new ReviewOutcome(antes.getStatus(), antes.getSource(), decision.name(),
+                source == null ? antes.getSource() : source.name());
+    }
+
+    /**
+     * Lo que cambió al revisar, para que la bitácora pueda decir de dónde a dónde.
+     *
+     * <p>Un evento que dijera sólo «verificada» obliga a reconstruir el antes recorriendo la
+     * historia. Dos pares de valores cuestan nada y contestan la pregunta de una vez.</p>
+     */
+    public record ReviewOutcome(String previousStatus, String previousSource,
+                                String status, String source) {
     }
 
     // --- internals -------------------------------------------------------------------------------

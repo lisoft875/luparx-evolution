@@ -199,11 +199,39 @@ public class ParkingCatalogService {
      */
     @Transactional(readOnly = true)
     public PageResponse<ParkingSpace> listSpaces(TenantId tenantId, UUID zoneId, PageRequest request) {
+        return listSpaces(tenantId, zoneId, null, request);
+    }
+
+    /**
+     * Las bahías, por página, opcionalmente de una zona y opcionalmente filtradas por el principio
+     * del código.
+     *
+     * <p>El filtro por código existe porque una municipalidad tiene miles de bahías y la semilla de
+     * desarrollo ya crea diez mil: sin él, encontrar la 0289 es pasar doscientas páginas. Se busca
+     * en toda la municipalidad cuando no se pide zona — el código es único dentro de una
+     * municipalidad ({@code uq_parking_spaces_code}), así que se puede encontrar una bahía sin
+     * saber en qué zona está.</p>
+     *
+     * <p>Un código en blanco es lo mismo que no filtrar: así quien llama no tiene que distinguir
+     * entre «no busqué» y «busqué nada».</p>
+     */
+    @Transactional(readOnly = true)
+    public PageResponse<ParkingSpace> listSpaces(TenantId tenantId, UUID zoneId, String code, PageRequest request) {
         org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(
                 request.page(), request.size());
-        org.springframework.data.domain.Page<ParkingSpace> page = zoneId == null
-                ? spaceRepository.findByTenantIdOrderByCodeAsc(tenantId.value(), pageable)
-                : spaceRepository.findByTenantIdAndZoneIdOrderByCodeAsc(tenantId.value(), zoneId, pageable);
+        String prefijo = code == null ? "" : code.trim();
+        org.springframework.data.domain.Page<ParkingSpace> page;
+        if (prefijo.isEmpty()) {
+            page = zoneId == null
+                    ? spaceRepository.findByTenantIdOrderByCodeAsc(tenantId.value(), pageable)
+                    : spaceRepository.findByTenantIdAndZoneIdOrderByCodeAsc(tenantId.value(), zoneId, pageable);
+        } else {
+            page = zoneId == null
+                    ? spaceRepository.findByTenantIdAndCodeStartingWithIgnoreCaseOrderByCodeAsc(
+                            tenantId.value(), prefijo, pageable)
+                    : spaceRepository.findByTenantIdAndZoneIdAndCodeStartingWithIgnoreCaseOrderByCodeAsc(
+                            tenantId.value(), zoneId, prefijo, pageable);
+        }
         return PageResponse.of(page.getContent(), request.page(), request.size(), page.getTotalElements());
     }
 

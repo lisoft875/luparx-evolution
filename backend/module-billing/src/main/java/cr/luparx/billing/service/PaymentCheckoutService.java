@@ -228,8 +228,12 @@ public class PaymentCheckoutService {
             return Optional.empty();
         }
         GatewayOutcome claimed = parsed == null ? null : parsed.outcome();
+        // El cuerpo se guarda LIMPIO: lo que manda un proveedor lo decide el proveedor, y esta tabla
+        // no se reescribe. La huella de arriba es del cuerpo ORIGINAL —es lo que descarta reenvíos y
+        // lo que permitiría recomprobar una firma—, así que limpiar la copia no le quita nada.
         GatewayNotification notification = new GatewayNotification(Uuid7.generate(), provider, eventId,
-                parsed == null ? null : parsed.providerReference(), bodyHash, raw.bodyAsText(), verified,
+                parsed == null ? null : parsed.providerReference(), bodyHash,
+                SensitivePayloadRedactor.redact(raw.bodyAsText()), verified,
                 claimed, clock.instant());
         try {
             return Optional.of(notifications.save(notification));

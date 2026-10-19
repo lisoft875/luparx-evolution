@@ -30,6 +30,26 @@ public interface ParkingSpaceRepository extends JpaRepository<ParkingSpace, UUID
 
     Page<ParkingSpace> findByTenantIdOrderByCodeAsc(UUID tenantId, Pageable pageable);
 
+    /**
+     * Las bahías cuyo código EMPIEZA por lo que el operador escribió.
+     *
+     * <p>Por prefijo y no por coincidencia en cualquier posición, porque así se busca un número
+     * pintado: «las que empiezan por 02». Una búsqueda por el medio obligaría a recorrer la tabla y
+     * devolvería la 0289 cuando se escribe 28, que no es lo que nadie quiere.</p>
+     *
+     * <p>Sin distinguir mayúsculas porque un código puede ser {@code A-12} y nadie recuerda si lo
+     * escribió en mayúscula. Con {@code tenant_id} ya acotando y unos miles de filas por
+     * municipalidad esto se resuelve en milisegundos; si alguna llegara a las centenas de miles,
+     * un índice {@code (tenant_id, code text_pattern_ops)} lo haría estrictamente mejor, y no hace
+     * falta antes.</p>
+     */
+    Page<ParkingSpace> findByTenantIdAndCodeStartingWithIgnoreCaseOrderByCodeAsc(
+            UUID tenantId, String code, Pageable pageable);
+
+    /** La misma, dentro de una zona. */
+    Page<ParkingSpace> findByTenantIdAndZoneIdAndCodeStartingWithIgnoreCaseOrderByCodeAsc(
+            UUID tenantId, UUID zoneId, String code, Pageable pageable);
+
     long countByTenantId(UUID tenantId);
 
     long countByTenantIdAndZoneId(UUID tenantId, UUID zoneId);

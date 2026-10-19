@@ -2,15 +2,14 @@ import * as React from 'react';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { formatCurrencyMinor, formatDateTime, useTranslation } from '@luparx/i18n';
-import { AmountText, Card, ChipGroup, EmptyState, IconTopUp, ListRow } from '@luparx/ui';
+import { Alert, AmountText, Card, ChipGroup, EmptyState, IconTopUp, ListRow } from '@luparx/ui';
 import { CitizenShell } from '../components/CitizenShell';
 import {
   MOVEMENT_ICON,
   MOVEMENT_ICON_TONE,
   MOVEMENT_TITLE_KEY,
   filterMovements,
-  type MovementFilter,
-} from '../lib/movementPresentation';
+  type MovementFilter, esSaldoDePrueba, hayMovimientosDePrueba } from '../lib/movementPresentation';
 import { useTenantTimeZone, useWallet } from '../lib/queries';
 
 export function MovementsPage(): React.JSX.Element {
@@ -37,6 +36,11 @@ export function MovementsPage(): React.JSX.Element {
           { value: 'fines', label: t('citizen.movements.filter.fines') },
         ]}
       />
+      {hayMovimientosDePrueba(wallet?.transactions ?? []) ? (
+        <Alert tone="warning">
+          <strong>{t('citizen.wallet.testMoney.badge')}</strong> {t('citizen.wallet.testMoney.notice')}
+        </Alert>
+      ) : null}
       {movements.length === 0 ? (
         <Card>
           <EmptyState icon={<IconTopUp size={28} />} title={t('citizen.movements.empty.title')} description={t('citizen.movements.empty.description')} />
@@ -54,8 +58,16 @@ export function MovementsPage(): React.JSX.Element {
                   <span className="lx-list-row__meta-line">
                     {formatDateTime(movement.createdAt, locale, { timeZone })}
                   </span>
-                  {movement.reference ? (
-                    <span className="lx-list-row__meta-line">{movement.reference}</span>
+                  {/*
+                    El origen de una recarga, cuando el servidor lo manda. Antes acá se pintaba un
+                    campo `reference` que el servidor NO envía: la línea nunca apareció. Lo que sí
+                    envía —y lo que de verdad importa— es de dónde salió el saldo: una recarga
+                    `DEV` la creó el simulador y nadie la pagó.
+                  */}
+                  {esSaldoDePrueba(movement) ? (
+                    <span className="lx-list-row__meta-line lx-saldo-prueba">
+                      {t('citizen.movements.testMoney')}
+                    </span>
                   ) : null}
                   {/*
                     El saldo que quedó DESPUÉS de este movimiento. Es el dato que se busca al

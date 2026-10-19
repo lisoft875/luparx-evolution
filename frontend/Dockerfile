@@ -36,6 +36,20 @@ ARG PUBLIC_BASE_URL=http://localhost
 ARG LUPARX_BUILD=
 ARG LUPARX_ENVIRONMENT=
 
+# El estilo de teselas del mapa del ciudadano (OpenFreeMap «liberty», 17-10-2026).
+#
+# Entra como argumento de build porque Vite lo resuelve al compilar, igual que todo lo de arriba.
+# Importa que esté ACÁ y no sólo en `apps/citizen/.env.development`: `.dockerignore` deja afuera
+# CUALQUIER .env, así que esta imagen nunca vio esa variable, y `estiloOscuro.ts` —que
+# deliberadamente no tiene valor por omisión— se queda sin estilo. Lo medido: el mapa del ciudadano
+# no carga en una instancia desplegada aunque funcione con `npm run dev`, y el síntoma no apunta a
+# la causa.
+#
+# Vacío por omisión a propósito. Qué servidor sirve las teselas, bajo qué licencia y con qué
+# atribución es una decisión de despliegue, no algo que esta imagen deba elegir sola. Sin valor el
+# mapa no carga y el resto del portal funciona igual, que es el comportamiento que ya tenía.
+ARG MAP_STYLE_URL=
+
 # Prefijo de cada portal. El ciudadano en la raíz porque es el único de cara al público.
 ARG BASE_PATH_CITIZEN=/
 ARG BASE_PATH_ADMIN=/admin/
@@ -74,6 +88,7 @@ RUN set -eu; \
       echo "== build $app en $prefix =="; \
       VITE_API_BASE_URL="$PUBLIC_BASE_URL" VITE_BASE_PATH="$prefix" \
         LUPARX_BUILD="$LUPARX_BUILD" LUPARX_ENVIRONMENT="$LUPARX_ENVIRONMENT" \
+        VITE_MAP_STYLE_URL="$MAP_STYLE_URL" \
         npx vite build --config "apps/$app/vite.config.ts" "apps/$app"; \
     done
 

@@ -22,4 +22,24 @@ public interface ZoneGeometryRow {
 
     /** RFC 7946 geometry object, as produced by {@code ST_AsGeoJSON}. Never a Feature. */
     String getGeometry();
+
+    /**
+     * De dónde salió el polígono (CONTRACT.md v0.44): {@code MUNICIPAL_OFFICIAL}, {@code GIS_IMPORT},
+     * {@code ADMIN_DRAWING} o {@code DEMO}.
+     */
+    String getSource();
+
+    /** Estado de revisión: {@code UNVERIFIED}, {@code PENDING_REVIEW}, {@code VERIFIED}, {@code REJECTED}. */
+    String getStatus();
+
+    /**
+     * Cuándo se aprobó, en ISO-8601 UTC, o nulo si no está aprobada.
+     *
+     * <p>Lo arma PostgreSQL con {@code to_char} y viaja como texto a propósito. Un
+     * {@code timestamptz} en una proyección de consulta nativa depende de cómo el controlador JDBC
+     * y Hibernate acuerden el tipo, y el modo de falla es una excepción de conversión en tiempo de
+     * ejecución sobre un extremo que compiló perfecto. El formato que sale es exactamente el que el
+     * contrato publica.</p>
+     */
+    String getVerifiedAt();
 }

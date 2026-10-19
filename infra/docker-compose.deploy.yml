@@ -129,6 +129,9 @@ services:
         # pantalla lo dice en vez de inventarlo.
         LUPARX_BUILD: ${LUPARX_VERSION:-}
         LUPARX_ENVIRONMENT: ${LUPARX_ENVIRONMENT:-staging}
+        # Estilo de teselas del mapa del ciudadano. Vacío = sin mapa, y el portal sigue
+        # funcionando; se pone en infra/.env cuando se decide quién sirve las teselas.
+        MAP_STYLE_URL: ${MAP_STYLE_URL:-}
     image: luparx/web:${LUPARX_VERSION:-local}
     restart: unless-stopped
     depends_on:

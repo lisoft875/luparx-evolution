@@ -50,15 +50,18 @@ public class WalletService {
     private final WalletTransactionRepository transactionRepository;
     private final TenantService tenantService;
     private final Clock clock;
+    private final TestMoneySpendPolicy politicaDeSaldoDePrueba;
 
     public WalletService(WalletAccountRepository accountRepository,
                          WalletTransactionRepository transactionRepository,
                          TenantService tenantService,
-                         Clock clock) {
+                         Clock clock,
+                         TestMoneySpendPolicy politicaDeSaldoDePrueba) {
         this.accountRepository = accountRepository;
         this.transactionRepository = transactionRepository;
         this.tenantService = tenantService;
         this.clock = clock;
+        this.politicaDeSaldoDePrueba = politicaDeSaldoDePrueba;
     }
 
     /** The citizen's wallet in this municipality, opened empty in its currency the first time. */
@@ -104,6 +107,25 @@ public class WalletService {
         requireSameCurrency(account, amount);
         if (!account.canAfford(amount)) {
             throw ConflictException.of(ErrorCode.INSUFFICIENT_BALANCE, "error.parking.wallet.insufficient");
+        }
+        // El saldo de PRUEBA no se gasta en una instalación operativa (prioridad 0, 17-10-2026).
+        //
+        // Acá y no al arrancar: la comprobación de arranque mira una foto, y un movimiento de
+        // origen DEV que aparece después —una copia restaurada en caliente, una réplica que se
+        // promueve, un extremo de desarrollo que quedó abierto— no se vuelve a mirar nunca.
+        //
+        // Después de `lock` y antes de `apply`, dentro de esta transacción, a propósito: el
+        // bloqueo serializa los débitos de esta billetera, así que el conteo que se lee acá sigue
+        // siendo cierto cuando el débito se escribe. Leerlo antes del bloqueo dejaría una ventana
+        // entre la comprobación y el descuento, que es exactamente el defecto que esto cierra.
+        long deDesarrollo = transactionRepository.countByAccountIdAndSource(account.getId(),
+                WalletTopupSource.DEV);
+        Optional<String> motivo = politicaDeSaldoDePrueba.motivoParaRechazarGasto(deDesarrollo);
+        if (motivo.isPresent()) {
+            // Aborta la transacción entera, como INSUFFICIENT_BALANCE: no queda una sesión sin su
+            // cobro ni un cobro sin su sesión.
+            throw ConflictException.of(ErrorCode.TEST_MONEY_SPEND_REFUSED,
+                    "error.parking.wallet.testMoney");
         }
         Instant now = clock.instant();
         account.apply(amount.negated(), now);

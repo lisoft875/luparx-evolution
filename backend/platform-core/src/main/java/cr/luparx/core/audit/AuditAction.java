@@ -91,6 +91,20 @@ public final class AuditAction {
      */
     public static final String PARKING_ZONE_GEOMETRY_UPDATED = "PARKING_ZONE_GEOMETRY_UPDATED";
     public static final String PARKING_ZONE_GEOMETRY_CLEARED = "PARKING_ZONE_GEOMETRY_CLEARED";
+    /**
+     * Alguien dio por bueno —o rechazó— el perímetro de una zona (CONTRACT.md v0.44, ADR 0029).
+     *
+     * <p><b>Acá vive la evidencia de la decisión</b>, no en las columnas de la zona. `audit_events`
+     * es append-only y su cadena de sellos la vuelve inalterable, así que «¿quién aprobó este
+     * límite de cobro, cuándo, viniendo de dónde?» se contesta con una fila que nadie puede
+     * reescribir. La zona guarda sólo autor y fecha, para no tener que recorrer la bitácora cada
+     * vez que se dibuja la pantalla.</p>
+     *
+     * <p>Separadas de {@link #PARKING_ZONE_GEOMETRY_UPDATED} porque dibujar y DAR POR BUENO son dos
+     * responsabilidades distintas, y la pregunta del auditor es distinta en cada caso.</p>
+     */
+    public static final String PARKING_ZONE_GEOMETRY_VERIFIED = "PARKING_ZONE_GEOMETRY_VERIFIED";
+    public static final String PARKING_ZONE_GEOMETRY_REJECTED = "PARKING_ZONE_GEOMETRY_REJECTED";
     public static final String PARKING_RATE_UPDATED = "PARKING_RATE_UPDATED";
     public static final String PARKING_SPACE_CREATED = "PARKING_SPACE_CREATED";
     /** A bay taken out of service, put back, or moved to another zone (CONTRACT.md v0.16). */

@@ -24,6 +24,8 @@ import cr.luparx.parking.entity.ParkingZonePolicy;
 import cr.luparx.parking.entity.ParkingZoneSchedule;
 import cr.luparx.parking.entity.ParkingZoneScheduleSlot;
 import cr.luparx.parking.model.ExceptionRecurrence;
+import cr.luparx.parking.model.ZoneGeometrySource;
+import cr.luparx.parking.model.ZoneGeometryStatus;
 import cr.luparx.parking.model.ZoneRules;
 import cr.luparx.parking.service.ParkingCatalogService;
 import cr.luparx.parking.service.ParkingPolicyService;
@@ -54,6 +56,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -296,6 +299,63 @@ public class AdminParkingController {
         return ResponseEntity.noContent().build();
     }
 
+    /**
+     * Da por bueno, rechaza o manda a revisión el perímetro de una zona (CONTRACT.md v0.44).
+     *
+     * <p>Separado del {@code PUT} que dibuja, y con <b>permiso propio</b>: dibujar exige
+     * {@code TENANT_MANAGE} y aprobar exige {@code ZONE_GEOMETRY_VERIFY}. Son dos actos distintos
+     * y el segundo es el que decide por qué calle se cobra, porque mientras un perímetro no esté
+     * verificado el mapa del ciudadano no lo recibe.</p>
+     *
+     * <p>Hoy la tabla de roles le da los dos permisos a {@code TENANT_ADMIN} —si no, nadie podría
+     * verificar nada—. Lo que la separación compra es que la municipalidad que quiera que no
+     * apruebe quien dibuja lo consiga moviendo una línea de {@code RolePermissions}, sin tocar
+     * este controlador: el extremo autoriza sobre el permiso y nunca sobre un nombre de rol.</p>
+     *
+     * <p>Quien redibuja después pierde el sello: {@code replaceGeometry} degrada el estado en el
+     * mismo UPDATE. Es lo que impide que un polígono aprobado se cambie por otro conservando la
+     * aprobación.</p>
+     */
+    @PutMapping("/zones/{id}/geometry/review")
+    @PreAuthorize("hasAuthority('PERM_ZONE_GEOMETRY_VERIFY')")
+    @Operation(summary = "Approve, reject or send to review the perimeter of a zone")
+    public ParkingDtos.ZoneGeometryReviewResponse reviewZoneGeometry(
+            @PathVariable UUID id,
+            @Valid @RequestBody ParkingDtos.ZoneGeometryReviewRequest request) {
+        TenantId tenantId = TenantContextHolder.requireTenantId();
+        ParkingZone zone = catalogService.requireZone(tenantId, id);
+        UUID actor = TenantContextHolder.requireUserId().value();
+        ZoneGeometryService.ReviewOutcome outcome = zoneGeometryService.review(
+                tenantId, id, zone.getVersion(), request.decision(), request.source(), actor);
+
+        // El evento lleva el antes y el después, la procedencia declarada y la nota de quien
+        // revisó — nunca el polígono. Un antes y un después de dos mil coordenadas en una tabla
+        // que no se puede reescribir entierra el rastro que viene a hacer legible.
+        Map<String, Object> metadata = new LinkedHashMap<>();
+        metadata.put("code", zone.getCode());
+        metadata.put("previousStatus", outcome.previousStatus());
+        metadata.put("status", outcome.status());
+        // Sin procedencia no se escribe la clave. Un «null» de texto en la bitácora se lee como
+        // un valor, y no lo es.
+        if (outcome.previousSource() != null) {
+            metadata.put("previousSource", outcome.previousSource());
+        }
+        if (outcome.source() != null) {
+            metadata.put("source", outcome.source());
+        }
+        if (request.note() != null && !request.note().isBlank()) {
+            metadata.put("note", request.note().trim());
+        }
+        auditRecorder.record(
+                request.decision() == ZoneGeometryStatus.VERIFIED
+                        ? AuditAction.PARKING_ZONE_GEOMETRY_VERIFIED
+                        : AuditAction.PARKING_ZONE_GEOMETRY_REJECTED,
+                "parking-zone", id.toString(), metadata);
+        return new ParkingDtos.ZoneGeometryReviewResponse(
+                request.decision(),
+                outcome.source() == null ? null : ZoneGeometrySource.valueOf(outcome.source()));
+    }
+
     // --- rates -----------------------------------------------------------------------------------
 
     @GetMapping("/rates")
@@ -472,11 +532,14 @@ public class AdminParkingController {
     @Operation(summary = "Bays of this municipality, optionally of one zone (paginated)")
     public PageResponse<ParkingDtos.ParkingSpaceResponse> spaces(
             @RequestParam(required = false) UUID zoneId,
+            // El principio del código. Sin zona, busca en toda la municipalidad: el código es único
+            // dentro de ella, así que se puede encontrar una bahía sin saber dónde está.
+            @RequestParam(required = false) String code,
             @RequestParam(required = false) Integer page,
             @RequestParam(required = false) Integer size) {
         TenantId tenantId = TenantContextHolder.requireTenantId();
         PageRequest request = PageRequest.parse(page, size, null);
-        PageResponse<ParkingSpace> spaces = catalogService.listSpaces(tenantId, zoneId, request);
+        PageResponse<ParkingSpace> spaces = catalogService.listSpaces(tenantId, zoneId, code, request);
         return PageResponse.of(spaces.items().stream().map(mapper::toSpace).toList(),
                 request.page(), request.size(), spaces.totalElements());
     }

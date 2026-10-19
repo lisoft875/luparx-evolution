@@ -36,6 +36,13 @@ interface MinuteListProps {
   label: string;
   addLabel: string;
   removeLabel: (minutes: string) => string;
+  /** El título del diálogo: «¿Quitar 45 minutos?». */
+  confirmTitle: (minutes: string) => string;
+  /** Qué significa quitarla, en una frase. */
+  confirmBody: string;
+  confirmLabel: string;
+  cancelLabel: string;
+  closeLabel: string;
   emptyLabel: string;
   disabled?: boolean;
   format: (minutes: number) => string;
@@ -55,11 +62,27 @@ function MinuteList({
   label,
   addLabel,
   removeLabel,
+  confirmTitle,
+  confirmBody,
+  confirmLabel,
+  cancelLabel,
+  closeLabel,
   emptyLabel,
   disabled,
   format,
 }: MinuteListProps): React.JSX.Element {
   const [draft, setDraft] = useState('');
+  /*
+    La duración que se va a quitar, mientras se pregunta.
+
+    El defecto original era que tocar la × la borraba en silencio: el dedo rozaba una ficha y la
+    lista cambiaba sin que nadie lo dijera. Acá se pregunta antes, nombrando la duración, porque
+    es lo que el usuario pidió el 19-10-2026 tras probar la versión con «Deshacer».
+
+    Quitar una ficha NO guarda nada: la lista se guarda con el botón Guardar, que tiene su propia
+    confirmación. El texto del diálogo lo dice, para que nadie crea que ya se publicó el cambio.
+  */
+  const [porQuitar, setPorQuitar] = useState<number | null>(null);
   const parsed = Number(draft);
   const canAdd = Number.isInteger(parsed) && parsed > 0 && !values.includes(parsed);
 
@@ -76,13 +99,28 @@ function MinuteList({
               className="lx-chip"
               disabled={disabled}
               aria-label={removeLabel(format(value))}
-              onClick={() => onChange(values.filter((candidate) => candidate !== value))}
+              onClick={() => setPorQuitar(value)}
             >
               {format(value)} ×
             </button>
           ))
         )}
       </div>
+      <ConfirmDialog
+        open={porQuitar !== null}
+        onClose={() => setPorQuitar(null)}
+        title={porQuitar === null ? '' : confirmTitle(format(porQuitar))}
+        message={confirmBody}
+        confirmLabel={confirmLabel}
+        cancelLabel={cancelLabel}
+        closeLabel={closeLabel}
+        tone="danger"
+        onConfirm={() => {
+          if (porQuitar === null) return;
+          onChange(values.filter((candidate) => candidate !== porQuitar));
+          setPorQuitar(null);
+        }}
+      />
       <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
         <div style={{ width: 140 }}>
           <FormField label={label}>
@@ -398,6 +436,11 @@ export function ParkingPolicyPage(): React.JSX.Element {
             label={t('admin.policy.minuteField')}
             addLabel={t('admin.policy.addOption')}
             removeLabel={(minutes) => t('admin.policy.removeOption', { option: minutes })}
+            confirmTitle={(minutes) => t('admin.policy.removeConfirm.title', { option: minutes })}
+            confirmBody={t('admin.policy.removeConfirm.body')}
+            confirmLabel={t('admin.policy.removeConfirm.confirm')}
+            cancelLabel={t('common.cancel')}
+            closeLabel={t('common.close')}
             emptyLabel={t('admin.policy.session.empty')}
             format={format}
           />
@@ -431,6 +474,11 @@ export function ParkingPolicyPage(): React.JSX.Element {
               label={t('admin.policy.minuteField')}
               addLabel={t('admin.policy.addOption')}
               removeLabel={(minutes) => t('admin.policy.removeOption', { option: minutes })}
+              confirmTitle={(minutes) => t('admin.policy.removeConfirm.title', { option: minutes })}
+              confirmBody={t('admin.policy.removeConfirm.body')}
+              confirmLabel={t('admin.policy.removeConfirm.confirm')}
+              cancelLabel={t('common.cancel')}
+              closeLabel={t('common.close')}
               emptyLabel={t('admin.policy.extension.empty')}
               disabled={!form.extensionEnabled}
               format={format}

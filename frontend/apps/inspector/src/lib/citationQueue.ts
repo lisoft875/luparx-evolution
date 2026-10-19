@@ -1,6 +1,7 @@
 import type { ApiClient, CitationStatus, CreateCitationRequest } from '@luparx/api-client';
 import { ApiError, NetworkError } from '@luparx/api-client';
 import { deletePhotos, getPhoto, putPhoto } from './photoStore';
+import { marcarEscrituraCorrecta, marcarEscrituraFallida } from './almacenamiento';
 
 /**
  * The queue that makes this app usable in a street with no signal.
@@ -162,9 +163,18 @@ function read(tenantId: string): QueuedCitation[] {
 function write(tenantId: string, rows: QueuedCitation[]): void {
   try {
     window.localStorage.setItem(storageKey(tenantId), JSON.stringify(rows));
+    marcarEscrituraCorrecta('cola');
   } catch {
-    // Storage refused (private window, quota). The in-memory copy still drives this session, and
-    // the officer is told about pending work by the same badge either way.
+    /*
+      El almacenamiento rechazó la escritura (ventana privada, cuota llena). La copia en memoria
+      mantiene ESTA sesión, así que la pantalla sigue funcionando — pero a la siguiente recarga la
+      fila no existe.
+
+      Antes esto se atrapaba y no se decía. El resultado era el peor de los dos mundos: la pantalla
+      afirmaba que la boleta estaba guardada y no lo estaba. Ahora se reporta, y quien dibuja la
+      cola lo pone en pantalla.
+    */
+    marcarEscrituraFallida('cola');
   }
 }
 
@@ -299,9 +309,24 @@ function backoffMs(attempts: number): number {
   return base * (0.75 + Math.random() * 0.5);
 }
 
+/**
+ * Los códigos que esta cola se lanza a SÍ MISMA.
+ *
+ * <p>No vienen del servidor, y son igual de definitivos: si los bytes de la fotografía ya no están
+ * en el aparato, ningún reintento los trae de vuelta. Sin esta lista, `describe` los aplanaba a
+ * `UNKNOWN_ERROR` —que no es terminal— y la fila reintentaba contra una pared para siempre.
+ * Añadir el código a {@link TERMINAL_CODES} no bastaba por sí solo: el código no llegaba nunca a
+ * compararse, porque `throw new Error('EVIDENCE_BYTES_MISSING')` no es un `ApiError` y perdía su
+ * nombre en el camino.</p>
+ */
+const CODIGOS_PROPIOS = new Set(['EVIDENCE_BYTES_MISSING']);
+
 function describe(error: unknown): { code: string; message: string } {
   if (error instanceof ApiError) return { code: error.code, message: error.message };
   if (error instanceof NetworkError) return { code: 'NETWORK_ERROR', message: error.message };
+  if (error instanceof Error && CODIGOS_PROPIOS.has(error.message)) {
+    return { code: error.message, message: error.message };
+  }
   return { code: 'UNKNOWN_ERROR', message: error instanceof Error ? error.message : String(error) };
 }
 
@@ -319,6 +344,10 @@ const TERMINAL_CODES = new Set([
   'EVIDENCE_TOO_LARGE',
   'ACCESS_DENIED',
   'IDEMPOTENCY_KEY_CONFLICT',
+  // Los bytes de la foto ya no están en este aparato —almacenamiento desalojado, otra
+  // ventana, modo privado— y ningún reintento los va a traer de vuelta. Antes no estaba
+  // en esta lista y la fila reintentaba en bucle contra un fallo permanente.
+  'EVIDENCE_BYTES_MISSING',
 ]);
 
 let flushing = false;

@@ -289,7 +289,9 @@ public class ParkingMapper {
                 toMoney(transaction.getAmount()),
                 toMoney(transaction.getBalanceAfter()),
                 transaction.getSessionId(),
-                transaction.getCreatedAt());
+                transaction.getCreatedAt(),
+                transaction.getSource(),
+                transaction.getSource() == null ? null : transaction.getSource().labelKey());
     }
 
     public ParkingDtos.TimeCreditLotResponse toCreditLot(ParkingTimeCreditEntry entry) {
