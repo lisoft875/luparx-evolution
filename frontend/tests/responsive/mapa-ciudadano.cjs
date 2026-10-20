@@ -395,7 +395,7 @@ async function pasadaSinProveedor(browser) {
   ok(estado.terceros.length === 0, 'no hubo peticiones a terceros', estado.terceros.join('\n'));
   ok((await page.evaluate(() => window.__gps.length)) === 0, 'no se pidió la ubicación');
 
-  const continuar = page.getByRole('button', { name: /iniciar estacionamiento|start parking/i }).first();
+  const continuar = page.getByRole('button', { name: /^Continuar$|^Continue$/i }).first();
   ok(await continuar.count() > 0 && await continuar.isEnabled(),
     'el flujo manual sigue disponible sin mapa');
 
@@ -576,7 +576,7 @@ async function pasadaFuncional(browser) {
 
     // ---- El flujo manual no se toca -----------------------------------------------------------
     console.log('\n── El flujo manual de estacionamiento ──');
-    const continuar = page.getByRole('button', { name: /iniciar estacionamiento|start parking/i }).first();
+    const continuar = page.getByRole('button', { name: /^Continuar$|^Continue$/i }).first();
     ok(await continuar.count() > 0, 'el botón de continuar sigue en su sitio');
     ok(await continuar.isEnabled(), 'y sigue habilitado con el mapa abierto');
 
@@ -627,7 +627,7 @@ async function pasadaFuncional(browser) {
     const reintentar = avisoError.getByRole('button', { name: /reintentar|retry/i });
     ok(await reintentar.count() === 1, 'ofrece reintentar');
 
-    const continuarConError = page.getByRole('button', { name: /iniciar estacionamiento|start parking/i }).first();
+    const continuarConError = page.getByRole('button', { name: /^Continuar$|^Continue$/i }).first();
     ok(await continuarConError.isEnabled(), 'el flujo manual sigue habilitado con el mapa caído');
     console.log(`  ··  captura: ${await capturar(page, 'error-de-red-390x844')}`);
 
@@ -716,11 +716,20 @@ async function pasadaFuncional(browser) {
     if (await botonAbrir(page).count()) { await botonAbrir(page).click(); await page.waitForTimeout(2500); }
     ok(await page.locator('.lx-zonemap__aviso').count() === 1, 'el mapa está caído, como se quería');
 
-    const iniciar = page.getByRole('button', { name: /iniciar estacionamiento|start parking/i }).first();
-    await iniciar.scrollIntoViewIfNeeded().catch(() => {});
-    ok(await iniciar.isEnabled(), 'el botón de iniciar sigue habilitado con el mapa caído');
+    // Cuatro pasos desde el 19-10-2026: zona y espacio, vehículo y tiempo, confirmar, resultado.
+    const seguir = page.getByRole('button', { name: /^Continuar$|^Continue$/i }).first();
+    await seguir.scrollIntoViewIfNeeded().catch(() => {});
+    ok(await seguir.isEnabled(), 'se puede continuar con el mapa caído');
+    await seguir.click();                                            // 1 → 2
+    await page.waitForTimeout(1200);
+    await page.getByRole('button', { name: /^Continuar$|^Continue$/i }).first().click();   // 2 → 3
+    await page.waitForTimeout(1600);
+    const iniciar = page
+      .getByRole('button', { name: /confirmar y pagar|confirm and pay|iniciar estacionamiento|start parking/i })
+      .first();
+    ok(await iniciar.isEnabled(), 'y el paso 3 deja confirmar');
     await iniciar.click();
-    await page.waitForTimeout(3000);
+    await page.waitForTimeout(3500);
 
     const despues = await page.evaluate(() => ({
       ruta: location.pathname,

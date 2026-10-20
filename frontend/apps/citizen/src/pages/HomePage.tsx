@@ -27,7 +27,7 @@ import { ExtendSessionSheet } from '../components/ExtendSessionSheet';
 import { FinishSessionConfirm } from '../components/FinishSessionConfirm';
 import { MOVEMENT_ICON, MOVEMENT_TITLE_KEY, esSaldoDePrueba } from '../lib/movementPresentation';
 import { resumenPorPagar } from '../lib/fineStatus';
-import { cardToneFor, urgencyMessageKey, urgencyOf } from '../lib/sessionUrgency';
+import { homeSessionState, urgencyMessageKey, type HomeSessionState } from '../lib/sessionUrgency';
 import { useAuth } from '@luparx/auth';
 import {
   useActiveParkingSessions,
@@ -39,18 +39,34 @@ import {
 } from '../lib/queries';
 
 
-function useRemainingSeconds(expiresAt: string): number {
+/**
+ * Cuánto falta, y —una vez vencida— cuánto hace que venció.
+ *
+ * <p>Lo segundo hace falta porque {@code remainingSeconds} está acotado en cero: una vez vencida la
+ * estadía, el contador no distingue «venció hace diez segundos» de «venció hace media hora», y ésa
+ * es justamente la diferencia entre estar dentro de la tolerancia de la municipalidad y estar
+ * fuera. Se calculan juntos y con el mismo tic para que no puedan discrepar entre sí.</p>
+ */
+function useCountdown(expiresAt: string | undefined): { remainingSeconds: number; secondsPastExpiry: number } {
   // Floored, like every other countdown in the app: the number on screen must never be ahead of
   // the time the server will actually honour (see ActiveSessionsBar).
-  const compute = (): number => Math.max(0, Math.floor((new Date(expiresAt).getTime() - Date.now()) / 1000));
-  const [remaining, setRemaining] = useState(compute);
+  const compute = (): { remainingSeconds: number; secondsPastExpiry: number } => {
+    const vence = expiresAt ? new Date(expiresAt).getTime() : Number.NaN;
+    if (!Number.isFinite(vence)) return { remainingSeconds: 0, secondsPastExpiry: 0 };
+    const delta = Math.floor((vence - Date.now()) / 1000);
+    return { remainingSeconds: Math.max(0, delta), secondsPastExpiry: Math.max(0, -delta) };
+  };
+  const [estado, setEstado] = useState(compute);
   useEffect(() => {
-    setRemaining(compute());
-    const id = setInterval(() => setRemaining(compute()), 1000);
+    setEstado(compute());
+    // Sin estadía no hay nada que contar: no se abre un intervalo que despierte la pantalla cada
+    // segundo para recalcular dos ceros.
+    if (!expiresAt || !Number.isFinite(new Date(expiresAt).getTime())) return undefined;
+    const id = setInterval(() => setEstado(compute()), 1000);
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [expiresAt]);
-  return remaining;
+  return estado;
 }
 
 /**
@@ -61,38 +77,77 @@ function useRemainingSeconds(expiresAt: string): number {
  * currently selected is a rare edge case this demo doesn't special-case (the server itself always
  * validates against the session's own tenant regardless of what the UI shows).
  */
-function ActiveSessionCard({ session, policy }: { session: ParkingSession; policy: ParkingPolicy | undefined }): React.JSX.Element {
-  const { t, locale } = useTranslation();
+function ActiveSessionCard({
+  session,
+  policy,
+  remainingSeconds,
+  estado,
+}: {
+  session: ParkingSession;
+  policy: ParkingPolicy | undefined;
+  /*
+    Ni el contador ni el estado se deciden acá dentro: los decide la pantalla y bajan por
+    propiedades. Es lo que impide que el P0 del 19-10-2026 vuelva. Mientras cada bloque resolvía lo
+    suyo, el saludo y esta tarjeta miraban relojes distintos —y lo hacían: el saludo sólo se
+    recalculaba cuando alguna consulta se refrescaba, así que al cruzar la hora de vencimiento la
+    tarjeta pasaba a «vencido» y el saludo seguía diciendo «activo»—. Un solo intervalo, un solo
+    estado, imposible que discrepen.
+  */
+  remainingSeconds: number;
+  estado: HomeSessionState;
+}): React.JSX.Element {
+  const { t, tPlural, locale } = useTranslation();
   const timeZone = useTenantTimeZone();
-  const remainingSeconds = useRemainingSeconds(session.expiresAt);
   const [extendOpen, setExtendOpen] = useState(false);
   const [finishOpen, setFinishOpen] = useState(false);
 
-  const urgency = urgencyOf(remainingSeconds);
+  const urgency = estado.urgency;
   const urgencyKey = urgencyMessageKey(urgency);
+
+  /*
+    La tolerancia se nombra con el número que manda el servidor (`policy.graceMinutes`), no con uno
+    escrito acá: una municipalidad con cero tolerancia no debe ver ninguna promesa de tolerancia.
+    La redacción es la misma que el portal administrativo usa para ese campo —«todavía no se puede
+    levantar una boleta»—, porque es la misma regla y decirla de dos maneras sería inventar una.
+  */
+  const mensajeDeVencida =
+    estado.expiredMessage === 'withinGrace'
+      ? t('citizen.home.activeSession.expired.withinGrace', {
+          minutes: tPlural('citizen.parking.durationMinutes', policy?.graceMinutes ?? 0),
+        })
+      : estado.expiredMessage === 'graceOver'
+        ? t('citizen.home.activeSession.expired.graceOver')
+        : null;
 
   return (
     // El nivel y su tono salen de `sessionUrgency`, no de un literal acá: el umbral estaba
     // duplicado en tres archivos y una discrepancia dejaba la barra en advertencia con la tarjeta
     // en verde, sin que nadie lo notara.
-    <Card tone={cardToneFor(urgency)}>
+    <Card tone={estado.tone}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--lx-space-4)' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--lx-space-3)' }}>
-            <span className="lx-list-row__icon lx-list-row__icon--success" aria-hidden="true">
+            {/* El icono iba en verde para siempre, también con la estadía vencida y la tarjeta en
+                rojo: un verde dentro de una tarjeta roja no es un detalle, es la pantalla
+                contradiciéndose otra vez. Sigue al mismo nivel que el tono de la tarjeta. */}
+            <span
+              className={`lx-list-row__icon lx-list-row__icon--${estado.tone === 'default' ? 'success' : estado.tone}`}
+              aria-hidden="true"
+            >
               <IconCar size={20} />
             </span>
             <p className="lx-text-card-title" style={{ margin: 0 }}>
-              {t('citizen.home.activeSession.title')}
+              {t(estado.titleKey)}
             </p>
           </div>
           <span
-            className="lx-status-dot"
+            className={`lx-status-dot${estado.tone === 'danger' ? ' lx-status-dot--danger' : estado.tone === 'warning' ? ' lx-status-dot--warning' : ''}`}
             role="status"
             // Decía «Activo» para siempre, incluso con el contador en cero: a un lector de
-            // pantalla le estaba afirmando lo contrario de lo que pasaba.
+            // pantalla le estaba afirmando lo contrario de lo que pasaba. Desde el 19-10 lee del
+            // mismo estado que el título y el saludo, no de su propia cuenta del contador.
             aria-label={t(
-              remainingSeconds <= 0
+              estado.urgency === 'expired'
                 ? 'citizen.home.activeSession.statusExpired'
                 : 'citizen.home.activeSession.statusActive',
             )}
@@ -108,9 +163,23 @@ function ActiveSessionCard({ session, policy }: { session: ParkingSession; polic
           <Timer
             remainingSeconds={remainingSeconds}
             expiredLabel={t('citizen.timer.expired')}
-            aria-label={t('citizen.home.activeSession.title')}
+            aria-label={t(estado.titleKey)}
           />
-          <span className="lx-text-meta">{t('citizen.home.activeSession.remainingLabel')}</span>
+          {/* «Expirado» con «tiempo restante» debajo se lee como si el tiempo restante fuera
+              «Expirado». Vencida, el rótulo que corresponde no es cuánto queda sino desde cuándo
+              no queda nada, y eso ya lo dice la línea de «Venció a las …» de más abajo. */}
+          {estado.showRemainingLabel ? (
+            <span className="lx-text-meta">{t('citizen.home.activeSession.remainingLabel')}</span>
+          ) : null}
+          {mensajeDeVencida ? (
+            <span
+              className="lx-text-meta"
+              style={{ color: 'var(--lx-danger-text)', textAlign: 'center' }}
+              aria-live="polite"
+            >
+              {mensajeDeVencida}
+            </span>
+          ) : null}
           {/*
             El aviso en PALABRAS. Un color más intenso no dice qué hacer, y quien no distingue bien
             los colores —o mira la pantalla al sol— no ve ningún cambio. `aria-live` para que un
@@ -126,8 +195,10 @@ function ActiveSessionCard({ session, policy }: { session: ParkingSession; polic
             </span>
           ) : null}
         </div>
+        {/* «Vence hoy a las 15:35» en pasado una vez pasada la hora: a las 15:40 esa frase afirma
+            un futuro que ya ocurrió. Mismo dato, mismo formato, el verbo que corresponde. */}
         <p className="lx-text-meta" style={{ margin: 0, textAlign: 'center' }}>
-          {t('citizen.home.activeSession.expiresAt', {
+          {t(estado.expiresAtKey, {
             time: formatTime(session.expiresAt, locale, { timeZone }),
           })}
         </p>
@@ -201,6 +272,24 @@ export function HomePage(): React.JSX.Element {
     (a, b) => new Date(a.expiresAt).getTime() - new Date(b.expiresAt).getTime(),
   )[0];
 
+  /*
+    La otra mitad del P0 del 19-10-2026. El subtítulo afirmaba «Tu estacionamiento está activo» por
+    el solo hecho de que exista una estadía, mientras la tarjeta de abajo decía «Expirado». Tener
+    estadía y tenerla vigente no son lo mismo: entre una cosa y otra está justamente el rato en que
+    la persona necesita que la pantalla no la tranquilice.
+
+    El contador vive acá, en la pantalla, y baja a la tarjeta por propiedades: el saludo y la
+    tarjeta leen EL MISMO número en el MISMO render. Mientras cada uno contaba por su lado podían
+    discrepar, y discrepaban.
+  */
+  const { remainingSeconds, secondsPastExpiry } = useCountdown(session?.expiresAt);
+  const estado = homeSessionState({
+    hasSession: Boolean(session),
+    remainingSeconds,
+    secondsPastExpiry,
+    graceMinutes: policy?.graceMinutes ?? 0,
+  });
+
   return (
     <CitizenShell>
       {/*
@@ -231,12 +320,17 @@ export function HomePage(): React.JSX.Element {
           {t('citizen.home.greeting', { name: me?.user.givenName ?? '' })}
         </h1>
         <p className="lx-citizen-hero__lead">
-          {session ? t('citizen.home.subtitle.activeSession') : t('citizen.home.subtitle.noSession')}
+          {t(estado.subtitleKey)}
         </p>
       </header>
 
       {session ? (
-        <ActiveSessionCard session={session} policy={policy} />
+        <ActiveSessionCard
+          session={session}
+          policy={policy}
+          remainingSeconds={remainingSeconds}
+          estado={estado}
+        />
       ) : (
         <HeroCard
           className="lx-hero-card--citizen"

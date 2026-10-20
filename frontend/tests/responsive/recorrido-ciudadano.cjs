@@ -302,13 +302,45 @@ async function recorrido(browser) {
     ok((await page.evaluate(() => window.__gps.length)) === 0, 'no se pidió la ubicación');
     console.log(`  ··  captura: ${await capturar(page, 'estacionar-mapa-390x844')}`);
 
-    const iniciar = page.getByRole('button', { name: /iniciar estacionamiento|start parking/i }).first();
-    ok(await iniciar.isEnabled(), 'el flujo manual sigue habilitado con el mapa abierto');
+    /*
+      Desde el 19-10-2026 esto es un asistente de cuatro pasos y no un formulario de cinco bloques:
+      en un teléfono no caben a la vez el formulario entero, el aviso de validación, el botón y la
+      navegación inferior. Zona y espacio es el paso 1; vehículo y tiempo el 2; confirmar el 3.
+    */
+    const continuar = page.getByRole('button', { name: /^Continuar$|^Continue$/i }).first();
+    ok(await continuar.isEnabled(), 'con zona y bahía válidas se puede continuar, con el mapa abierto');
+    await continuar.click();                       // paso 1 → 2
+    await page.waitForTimeout(1200);
+    ok(/Veh[ií]culo|Vehicle/i.test(await page.evaluate(() => document.body.innerText)),
+      'el paso 2 pide vehículo y tiempo');
+    /*
+      Se estaciona «otro vehículo» con una placa libre, no el vehículo principal: el perfil
+      sembrado YA tiene una estadía activa con ese carro —se ve en la barra superior— y el
+      servidor la rechaza, con razón, con VEHICLE_ALREADY_PARKED. Hasta hoy esta comprobación
+      aceptaba «activ» como prueba de éxito y por eso pasaba en VERDE contra ese mensaje de error:
+      «sesión de estacionamiento activa» contiene «activ». Ahora se exige el rótulo del paso 4.
+    */
+    const selVehiculo = page.getByRole('combobox').first();
+    await selVehiculo.click();
+    await page.waitForTimeout(400);
+    await page.locator('[role=listbox] [role=option]').filter({ hasText: /Otro veh|Another vehicle/i }).first().click();
+    await page.waitForTimeout(600);
+    await page.locator('input[maxlength="16"]').first().fill('PRU001');
+    await page.waitForTimeout(700);
+
+    await page.getByRole('button', { name: /^Continuar$|^Continue$/i }).first().click();  // 2 → 3
+    await page.waitForTimeout(1800);
+
+    const iniciar = page
+      .getByRole('button', { name: /confirmar y pagar|confirm and pay|iniciar estacionamiento|start parking/i })
+      .first();
+    ok(await iniciar.isEnabled(), 'el paso 3 ofrece confirmar');
     await iniciar.click();
-    await page.waitForTimeout(3000);
+    await page.waitForTimeout(3500);
     const tras = await page.evaluate(() => document.body.innerText);
-    ok(/activ|sesión|session/i.test(tras), 'el estacionamiento se inicia',
-      tras.slice(0, 140).replace(/\n+/g, ' / '));
+    ok(/¡Listo!|All set/.test(tras), 'el estacionamiento se inicia y el paso 4 lo confirma',
+      tras.slice(0, 160).replace(/\n+/g, ' / '));
+    ok(/PRU001/.test(tras), 'y el resultado nombra la placa que se estacionó');
 
     ok(estado.terceros.length === 0, 'no se contactó a ningún tercero',
       estado.terceros.slice(0, 3).join('\n'));

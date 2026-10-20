@@ -3,7 +3,20 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { citationStatusKey, citationStatusTone } from '@luparx/features';
 import { formatDate, useTranslation } from '@luparx/i18n';
-import { AmountText, Badge, Card, ChipGroup, EmptyState, IconCheck, IconFine, ListRow, Pagination } from '@luparx/ui';
+import {
+  Alert,
+  AmountText,
+  Badge,
+  Card,
+  ChipGroup,
+  EmptyState,
+  IconCheck,
+  IconChevronRight,
+  IconFine,
+  IconHelp,
+  ListRow,
+  Pagination,
+} from '@luparx/ui';
 import { CitizenShell } from '../components/CitizenShell';
 import { QueryBoundary } from '../components/QueryBoundary';
 import { useFines } from '../lib/queries';
@@ -53,6 +66,19 @@ export function FinesPage(): React.JSX.Element {
           { value: 'history', label: t('citizen.fines.tab.history') },
         ]}
       />
+      {/*
+        El aviso del boceto: cuántas multas hay sin pagar y por qué conviene no dejarlas.
+
+        Es sólo lo que la lista de abajo ya dice, dicho antes y con el tono que corresponde —una
+        multa vencida cuesta más—. No agrega ninguna acción nueva: pagar sigue estando donde
+        estaba, en el detalle de cada multa, y un botón de pago acá tendría que elegir cuál pagar
+        cuando hay varias. En el historial no sale: ahí no hay nada pendiente que avisar.
+      */}
+      {tab === 'pending' && rows.length > 0 ? (
+        <Alert tone="warning">
+          {tPlural('citizen.fines.pendingWarning', rows.length)}
+        </Alert>
+      ) : null}
       <QueryBoundary query={query} errorTitle={t('citizen.fines.title')}>
         {() =>
           rows.length === 0 ? (
@@ -81,7 +107,19 @@ export function FinesPage(): React.JSX.Element {
                         <Badge tone={citationStatusTone(fine.status)}>{t(citationStatusKey(fine.status))}</Badge>
                       </span>
                     }
+                    /*
+                      El número de boleta va primero, como en el boceto: es lo que una persona
+                      dicta por teléfono, escribe en un reclamo o busca en un correo. Viene del
+                      servidor (`number`) y puede faltar —una boleta sin emitir todavía no lo
+                      tiene—, así que se omite en vez de inventar uno.
+
+                      La miniatura de la foto que muestra el boceto NO se puede poner acá: el
+                      listado trae `evidenceCount: 0` a propósito (está escrito en el contrato) y
+                      las pruebas se leen en el detalle. Pedir la evidencia de cada fila serían N
+                      peticiones para una lista, y poner una imagen cualquiera sería fabricarla.
+                    */
                     meta={[
+                      fine.number ? `#${fine.number}` : null,
                       fine.plate,
                       fine.zoneName,
                       fine.spaceCode,
@@ -129,6 +167,23 @@ export function FinesPage(): React.JSX.Element {
           )
         }
       </QueryBoundary>
+      {/*
+        «¿Tenés una duda? Revisá cómo funcionan las multas», la última fila del boceto.
+
+        No estrena pantalla ni inventa contenido: lleva a la categoría «Multas y boletas» del
+        centro de ayuda, que ya existe (`/help/fines`, `citizen.help.cat.fines.*`) con sus cuatro
+        temas —me llegó una boleta, quiero apelar, no la entiendo, ya la pagué—. El mismo icono y
+        la misma forma de fila que el acceso a la ayuda desde «Más», porque es la misma puerta.
+      */}
+      <Card>
+        <ListRow
+          icon={<IconHelp size={18} />}
+          title={t('citizen.fines.help.title')}
+          meta={t('citizen.fines.help.meta')}
+          value={<IconChevronRight size={16} />}
+          onClick={() => navigate('/help/fines')}
+        />
+      </Card>
     </CitizenShell>
   );
 }

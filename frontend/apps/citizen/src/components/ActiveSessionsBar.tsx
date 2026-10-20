@@ -29,16 +29,28 @@ function remainingSecondsOf(session: ParkingSession): number {
 function SessionCountdown({
   session,
   onWarningChange,
+  onExpired,
 }: {
   session: ParkingSession;
   onWarningChange?: (isWarning: boolean) => void;
+  /**
+   * Se avisa UNA vez, al cruzar el cero.
+   *
+   * <p>Faltaba, y se notó el 19-10-2026 al corregir el P0 del Inicio: el último anuncio que oía un
+   * lector de pantalla era «quedan menos de 10 minutos» y ahí se quedaba, mientras la barra ya
+   * mostraba «Expirado». La clave del anuncio de vencimiento existía en los dos idiomas desde
+   * hacía semanas y no la usaba nadie.</p>
+   */
+  onExpired?: () => void;
 }): React.JSX.Element {
   const { t } = useTranslation();
   const [remaining, setRemaining] = useState(() => remainingSecondsOf(session));
   const wasWarningRef = useRef<boolean | null>(null);
+  const yaVencidaRef = useRef<boolean | null>(null);
 
   useEffect(() => {
     wasWarningRef.current = null;
+    yaVencidaRef.current = null;
     function tick(): void {
       const next = remainingSecondsOf(session);
       setRemaining(next);
@@ -46,6 +58,11 @@ function SessionCountdown({
       if (wasWarningRef.current !== isWarning) {
         wasWarningRef.current = isWarning;
         onWarningChange?.(isWarning);
+      }
+      const vencida = next <= 0;
+      if (yaVencidaRef.current !== vencida) {
+        yaVencidaRef.current = vencida;
+        if (vencida) onExpired?.();
       }
     }
     tick();
@@ -111,6 +128,12 @@ export function ActiveSessionsBar(): React.JSX.Element | null {
     if (isWarning) setAnnouncement(t('citizen.timerBar.announce.warning', { plate: primary!.plateSnapshot }));
   }
 
+  // El anuncio de vencimiento REEMPLAZA al de los diez minutos: dejar el viejo puesto es decirle a
+  // quien no ve la pantalla lo contrario de lo que la pantalla muestra.
+  function handlePrimaryExpired(): void {
+    setAnnouncement(t('citizen.timerBar.announce.expired', { plate: primary!.plateSnapshot }));
+  }
+
   return (
     <>
       <div
@@ -130,7 +153,11 @@ export function ActiveSessionsBar(): React.JSX.Element | null {
             {primary.zoneName} · {primary.spaceCode}
           </span>
         </span>
-        <SessionCountdown session={primary} onWarningChange={handlePrimaryWarningChange} />
+        <SessionCountdown
+          session={primary}
+          onWarningChange={handlePrimaryWarningChange}
+          onExpired={handlePrimaryExpired}
+        />
         {extraCount > 0 ? (
           <button
             type="button"

@@ -3,6 +3,7 @@ import { Suspense, lazy, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation, formatCurrencyMinor, formatWeekdayTime } from '@luparx/i18n';
 import type { TranslationKey } from '@luparx/i18n';
+import type { ParkingSession } from '@luparx/api-client';
 import { TenantSwitchControl } from '@luparx/features';
 import {
   Alert,
@@ -269,6 +270,40 @@ export function ParkingPage(): React.JSX.Element {
   const startSession = useStartParkingSession();
   const [error, setError] = useState<string | null>(null);
 
+  /*
+    El asistente, en cuatro pasos.
+
+    Hasta el 19-10-2026 esta pantalla mostraba los cinco bloques del formulario a la vez y dejaba
+    el botón pegado abajo. En un teléfono eso significaba que la barra de validación, el botón y la
+    navegación inferior se repartían un tercio de la pantalla y tapaban las opciones de tiempo:
+    está fotografiado en staging a 393×852. El arreglo no es margen ni relleno — es que en un
+    teléfono sólo cabe UNA decisión a la vez.
+
+      1  Zona y espacio      2  Vehículo y tiempo      3  Confirmar y pagar      4  Resultado
+
+    El estado del formulario NO se toca: sigue siendo el mismo, vive en esta función y sobrevive al
+    ir y venir entre pasos. Lo único que cambia es cuánto se muestra de él a la vez.
+  */
+  const PASOS_TOTALES = 4;
+  const [paso, setPaso] = useState(1);
+  /*
+    Si ya se intentó avanzar con algo incompleto. Antes de intentarlo no se regaña a nadie: el
+    aviso «Escribí el código del espacio» ocupaba una barra fija desde que se abría la pantalla,
+    tapando el formulario que pedía completar.
+  */
+  const [intentoAvanzar, setIntentoAvanzar] = useState(false);
+  /** La estadía que el servidor creó. Es lo que el paso 4 cuenta; no se inventa ningún dato. */
+  const [sesionIniciada, setSesionIniciada] = useState<ParkingSession | null>(null);
+
+  /*
+    Cada paso empieza arriba. Sin esto, pasar del paso 1 al 2 deja la ventana donde estaba —a media
+    altura del paso anterior— y el paso nuevo parece empezar por la mitad. `auto` y no `smooth`
+    porque el contenido ya cambió: animar el recorrido de algo que no está es mareo, no contexto.
+  */
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'auto' });
+  }, [paso]);
+
   // "Right now the municipality is not charging." Said before the citizen picks anything, because
   // it changes what the whole screen means (CONTRACT.md v0.3 §"Horario de cobro"): starting a stay
   // outside the charging bands is refused with OUTSIDE_CHARGING_HOURS, and a citizen who was not
@@ -288,12 +323,19 @@ export function ParkingPage(): React.JSX.Element {
     try {
       const where = { zoneId, spaceCode: spaceCode.trim().toUpperCase(), minutes };
       // One of the two, never both: the request type says so and the server refuses the pair.
-      await startSession.mutateAsync(
+      const sesion = await startSession.mutateAsync(
         isGuest
           ? { ...where, plate: guestPlateNormalized, vehicleType: guestType }
           : { ...where, vehicleId: vehicleId! },
       );
-      navigate('/');
+      /*
+        Se muestra el resultado acá y no se salta a Inicio. Volver a la portada dejaba a la persona
+        buscando entre tarjetas la confirmación de lo que acababa de hacer; el paso 4 lo dice con
+        los datos que devolvió el servidor —hasta cuándo vale, en qué espacio— y ofrece lo que de
+        verdad se puede hacer a continuación.
+      */
+      setSesionIniciada(sesion);
+      setPaso(4);
     } catch (err) {
       setError(parkingErrorMessage(err, t));
     }
@@ -568,7 +610,13 @@ export function ParkingPage(): React.JSX.Element {
                 ) : null}
                 <RadioCardGroup
                   name="parking-minutes"
+                  /*
+                    La leyenda queda sólo para quien lee con lector de pantalla: el título del
+                    bloque, justo encima, ya dice «Tiempo», y pintarlo dos veces era repetir la
+                    misma palabra con dos tipografías distintas a cuatro píxeles de distancia.
+                  */
                   legend={t('citizen.parking.step3.title')}
+                  hideLegend
                   value={minutes !== null ? String(minutes) : ''}
                   onChange={(value) => setMinutes(Number(value))}
                   options={offeredMinutes.map((option) => {
@@ -587,11 +635,30 @@ export function ParkingPage(): React.JSX.Element {
                       // El monto del servidor, tal cual. Nunca minutos × tarifa, ni de vista previa.
                       // Ausente mientras su cotización está en vuelo: una duración sin precio se
                       // puede elegir igual y el resumen dice el monto antes de cobrar nada.
+                      /*
+                        Un «₡0» a secas en la lista de duraciones se lee como «estacionar es
+                        gratis», y no lo es: puede ser que la municipalidad no esté cobrando a esta
+                        hora. Es un estado legítimo —el servidor devuelve `chargeableMinutes: 0`
+                        porque ningún minuto de la estadía cae dentro de una banda de cobro— pero
+                        decirlo con un número es decirlo mal. Las otras dos razones de un cero ya
+                        se nombraban: la cortesía de la zona («GRATIS») y los minutos a favor
+                        («incluye N minutos a favor»); faltaba ésta.
+
+                        Por eso se excluyen los minutos a favor de la condición: una opción pagada
+                        con crédito también da cero, y ahí el cero ya está explicado en su propia
+                        línea. Este rótulo significa UNA cosa —la municipalidad no está cobrando a
+                        esta hora— y no debe significar dos.
+                      */
                       trailing: porBeneficio
                         ? t('citizen.parking.step3.freeBadge')
                         : optionQuote
-                          ? formatCurrencyMinor(optionQuote.payableMinor, optionQuote.currencyCode, locale)
-                          : undefined,
+                          && optionQuote.chargeableMinutes === 0
+                          && optionQuote.payableMinor === 0
+                          && optionQuote.creditMinutesApplied === 0
+                          ? t('citizen.parking.step3.noChargeBadge')
+                          : optionQuote
+                            ? formatCurrencyMinor(optionQuote.payableMinor, optionQuote.currencyCode, locale)
+                            : undefined,
                       detail:
                         [
                           option === savedMinutesOption ? t('citizen.parking.step3.savedMinutes') : undefined,
@@ -780,10 +847,85 @@ export function ParkingPage(): React.JSX.Element {
     ],
   );
 
+  /*
+    Qué hace falta EN ESTE PASO, no en todo el formulario. El aviso de un campo que vive dos pasos
+    más adelante no ayuda a nadie: nombra lo que la persona tiene delante.
+  */
+  const faltaEnEstePaso: TranslationKey | null =
+    paso === 1
+      ? !zoneId
+        ? 'citizen.parking.falta.zona'
+        : spaceCode.trim().length === 0
+          ? 'citizen.parking.falta.espacio'
+          : null
+      : paso === 2
+        ? !vehicleChosen
+          ? 'citizen.parking.falta.vehiculo'
+          : !minutes
+            ? 'citizen.parking.falta.duracion'
+            : null
+        : faltaParaContinuar;
+  const pasoCompleto = faltaEnEstePaso === null && !(paso === 1 && spaceProblem);
+
+  function avanzar(): void {
+    if (!pasoCompleto) {
+      setIntentoAvanzar(true);
+      return;
+    }
+    setIntentoAvanzar(false);
+    setPaso((actual) => Math.min(actual + 1, 3));
+  }
+  function retroceder(): void {
+    setIntentoAvanzar(false);
+    if (paso > 1 && paso < 4) setPaso(paso - 1);
+    else navigate('/');
+  }
+
+  const pasosRotulos: TranslationKey[] = [
+    'citizen.parking.wizard.step1',
+    'citizen.parking.wizard.step2',
+    'citizen.parking.wizard.step3',
+    'citizen.parking.wizard.step4',
+  ];
+
   return (
-    <CitizenShell title={t('citizen.parking.title')} subtitle={t('citizen.parking.subtitle')} onBack={() => navigate('/')}>
-      {notChargingNotice ? <Alert tone="info">{notChargingNotice}</Alert> : null}
-      <StepList steps={steps} />
+    <CitizenShell title={t('citizen.parking.title')} subtitle={t('citizen.parking.subtitle')} onBack={retroceder}>
+      {notChargingNotice && paso < 4 ? <Alert tone="info">{notChargingNotice}</Alert> : null}
+      {/*
+        El indicador compacto del boceto: cuatro números en una fila, el actual marcado. Dice dónde
+        está la persona y cuánto falta sin gastar la altura que gastaba la lista completa de pasos.
+      */}
+      <ol className="lx-pasos" aria-label={t('citizen.parking.wizard.progress', { current: String(paso), total: String(PASOS_TOTALES) })}>
+        {pasosRotulos.map((clave, indice) => {
+          const numero = indice + 1;
+          const estado = numero < paso ? 'hecho' : numero === paso ? 'actual' : 'pendiente';
+          return (
+            <li key={clave} className={`lx-pasos__paso lx-pasos__paso--${estado}`} aria-current={estado === 'actual' ? 'step' : undefined}>
+              <span className="lx-pasos__numero" aria-hidden="true">{estado === 'hecho' ? '✓' : numero}</span>
+              <span className="lx-pasos__rotulo">{t(clave)}</span>
+            </li>
+          );
+        })}
+      </ol>
+      {paso === 1 ? <StepList className="lx-step-list--sin-numero" steps={steps.slice(0, 2)} /> : null}
+      {paso === 2 ? <StepList className="lx-step-list--sin-numero" steps={steps.slice(2, 4)} /> : null}
+      {paso === 3 ? <StepList className="lx-step-list--sin-numero" steps={steps.slice(4, 5)} /> : null}
+      {paso === 4 && sesionIniciada ? (
+        <Card>
+          <h2 className="lx-text-screen-title" style={{ margin: 0 }}>{t('citizen.parking.result.title')}</h2>
+          <p className="lx-text-meta" style={{ margin: '4px 0 var(--lx-space-3) 0' }}>
+            {t('citizen.parking.result.subtitle')}
+          </p>
+          <Card nested>
+            <ListRow title={t('citizen.parking.step4.zoneLabel')} value={`${sesionIniciada.zoneName} (${sesionIniciada.spaceCode})`} />
+            <ListRow title={t('citizen.parking.step4.vehicleLabel')} value={sesionIniciada.plateSnapshot} />
+            <ListRow
+              title={t('citizen.parking.result.validUntil')}
+              value={formatWeekdayTime(sesionIniciada.expiresAt, locale, { timeZone: schedule?.timeZone })}
+            />
+          </Card>
+        </Card>
+      ) : null}
       {/*
         CTA fijo sobre la barra de pestañas. Antes era un hijo inline de `main` después de cinco
         pasos de formulario: en un teléfono quedaba fuera de pantalla justo cuando hacía falta, y la
@@ -795,8 +937,21 @@ export function ParkingPage(): React.JSX.Element {
         —esta pantalla mantiene su estado y se vuelve con «atrás»—, así que recargar no obliga a
         rehacer zona, espacio, vehículo y duración.
       */}
+      {/*
+        UN patrón de llamada a la acción por paso, y sólo uno.
+
+        El aviso de lo que falta aparece acá únicamente DESPUÉS de intentar avanzar. Antes vivía
+        fijo en esta barra desde que se abría la pantalla: dos renglones permanentes que, sumados
+        al botón y a la navegación inferior, tapaban el formulario en un teléfono.
+      */}
       <div className="lx-sticky-cta">
-        {saldoCorto ? (
+        {paso === 4 ? (
+          <>
+            <Button type="button" variant="primary" fullWidth onClick={() => navigate('/')}>
+              {t('citizen.parking.result.seeMine')}
+            </Button>
+          </>
+        ) : paso === 3 && saldoCorto ? (
           <>
             <p className="lx-sticky-cta__notice">
               {t('citizen.parking.step4.shortBy', {
@@ -811,22 +966,30 @@ export function ParkingPage(): React.JSX.Element {
               {t('citizen.parking.step4.topUpCta')}
             </Button>
           </>
+        ) : paso === 3 ? (
+          <Button
+            type="button"
+            variant="primary"
+            fullWidth
+            loading={startSession.isPending}
+            disabled={!vehicleChosen || !minutes || !quote || !zoneId || spaceCode.trim().length === 0 || Boolean(spaceProblem)}
+            onClick={handleSubmit}
+          >
+            {quote && quote.payableMinor > 0
+              ? t('citizen.parking.step4.confirmAndPay', {
+                  amount: formatCurrencyMinor(quote.payableMinor, quote.currencyCode, locale),
+                })
+              : t('citizen.parking.submit')}
+          </Button>
         ) : (
           <>
-            {faltaParaContinuar ? (
+            {intentoAvanzar && faltaEnEstePaso ? (
               <p className="lx-sticky-cta__notice" aria-live="polite">
-                {t(faltaParaContinuar)}
+                {t(faltaEnEstePaso)}
               </p>
             ) : null}
-            <Button
-              type="button"
-              variant="primary"
-              fullWidth
-              loading={startSession.isPending}
-              disabled={!vehicleChosen || !minutes || !quote || !zoneId || spaceCode.trim().length === 0 || Boolean(spaceProblem)}
-              onClick={handleSubmit}
-            >
-              {t('citizen.parking.submit')}
+            <Button type="button" variant="primary" fullWidth onClick={avanzar}>
+              {t('citizen.parking.wizard.continue')}
             </Button>
           </>
         )}

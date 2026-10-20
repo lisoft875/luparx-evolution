@@ -93,3 +93,6 @@ frontend/tests/responsive/capturas/
 verificacion/
 LuParX_*.zip
 VERIFICAR_CIUDADANO.sh
+
+# Archivos temporales que Vite deja junto a vite.config.ts cuando una compilación se interrumpe.
+*.timestamp-*.mjs

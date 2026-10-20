@@ -2242,6 +2242,23 @@ a.lx-list-row {
   outline: 2px solid var(--lx-focus-ring);
   outline-offset: 2px;
 }
+
+/*
+  36 px no es un blanco táctil (19-10-2026).
+
+  Medido a 320×568 contra el backend real: las pestañas «Pendientes»/«Historial» de Multas y los
+  filtros de Movimientos miden 36 px de alto. La guía del proyecto pide 44 como mínimo, y el arnés
+  del Ciudadano afirma «todos los controles llegan a 44px» — pero esa sección mide la Billetera y
+  su hoja de recarga, así que estas pestañas no las miraba nadie.
+
+  El cambio va acotado al portal del Ciudadano, que es el alcance de esta orden: `.lx-chip` es
+  compartido con Administración y Fiscalización, y subirle el alto a todos movería pantallas que no
+  me toca mover. Cuando alguien quiera revisarlas, el gancho ya está y la regla se vuelve global
+  borrando el selector de arriba.
+*/
+:root[data-portal='citizen'] .lx-chip {
+  min-height: 44px;
+}
 .lx-chip[aria-pressed='true'] {
   background: var(--lx-primary-soft);
   border-color: var(--lx-primary);
@@ -2372,6 +2389,19 @@ a.lx-list-row {
   font-size: var(--lx-text-card-title-size);
   font-weight: 600;
   margin: 0 0 var(--lx-space-2) 0;
+}
+
+/* Dentro del asistente de Estacionar, los bloques NO llevan su propio número.
+
+   El asistente ya numera arriba —1 Zona, 2 Vehículo, 3 Confirmar, 4 Listo— y dentro del paso 2
+   caben dos bloques, «Vehículo» y «Tiempo». Con los círculos puestos, la pantalla mostraba un «2»
+   arriba y un «1» y un «2» más abajo, numerando dos cosas distintas con los mismos dígitos.
+   Aquí el título basta: los bloques de un mismo paso no son una secuencia, están los dos a la vez. */
+.lx-step-list--sin-numero .lx-step__index {
+  display: none;
+}
+.lx-step-list--sin-numero .lx-step {
+  gap: 0;
 }
 
 /* ---- EmptyState ------------------------------------------------------------ */
@@ -2542,6 +2572,64 @@ a.lx-list-row {
   background: var(--lx-bg);
   border-top: 1px solid var(--lx-border);
 }
+/* Indicador compacto de paso del asistente de estacionamiento (19-10-2026).
+
+   Cuatro números en una fila en vez de la lista vertical de pasos. La lista decía lo mismo y
+   gastaba un tercio de la altura de un teléfono; en un formulario donde cada paso ya ocupa toda la
+   pantalla, lo único que hace falta saber es en cuál se está y cuántos quedan.
+
+   Sin `position: sticky`: el encabezado de la pantalla ya es fijo, y una segunda franja pegada
+   arriba es exactamente el problema que esto viene a resolver, sólo que por el otro borde. */
+.lx-pasos {
+  display: flex;
+  gap: var(--lx-space-2);
+  margin: 0 0 var(--lx-space-4) 0;
+  padding: 0;
+  list-style: none;
+}
+.lx-pasos__paso {
+  display: flex;
+  flex: 1 1 0;
+  min-width: 0;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  color: var(--lx-text-muted);
+  font-size: var(--lx-text-meta-size);
+  text-align: center;
+}
+.lx-pasos__numero {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--lx-border);
+  border-radius: 999px;
+  background: var(--lx-surface);
+  font-weight: 700;
+  line-height: 1;
+}
+.lx-pasos__rotulo {
+  overflow: hidden;
+  width: 100%;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lx-pasos__paso--actual {
+  color: var(--lx-text);
+  font-weight: 600;
+}
+.lx-pasos__paso--actual .lx-pasos__numero {
+  border-color: transparent;
+  background: var(--lx-primary);
+  color: var(--lx-on-primary, #fff);
+}
+.lx-pasos__paso--hecho .lx-pasos__numero {
+  border-color: var(--lx-success);
+  color: var(--lx-success);
+}
+
 .lx-sticky-cta__notice {
   margin: 0;
   font-size: var(--lx-text-meta-size);
@@ -2914,6 +3002,21 @@ a.lx-list-row {
   outline-offset: 2px;
 }
 
+/*
+  «Ver todas» medía 19 px de alto (19-10-2026, medido a 320×568 contra el backend real). Es un
+  enlace de verdad y se toca con el pulgar como cualquier otra cosa.
+
+  El alto se consigue sin mover el texto ni el encabezado que lo contiene: `inline-flex` centrado
+  más `min-height`, sin padding vertical, así que la línea de base sigue donde estaba y el
+  encabezado no crece. Acotado al Ciudadano por la misma razón que los chips: `.lx-link-button` es
+  compartido y no me toca mover Administración ni Fiscalización.
+*/
+:root[data-portal='citizen'] .lx-link-button {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+
 /* ---- Small status dot (e.g. active-session indicator) ------------------- */
 
 .lx-status-dot {
@@ -2923,6 +3026,18 @@ a.lx-list-row {
   border-radius: 50%;
   background: var(--lx-success);
   flex-shrink: 0;
+}
+
+/* El punto era verde para siempre. Su `aria-label` sí cambiaba a «Expirado» —se corrigió en su
+   momento— pero el color no, así que a quien ve la pantalla le quedaba un punto verde en la esquina
+   de una tarjeta roja que dice «Estacionamiento vencido». La misma contradicción del P0 del
+   19-10-2026, dicha en color en vez de en palabras. */
+.lx-status-dot--warning {
+  background: var(--lx-warning);
+}
+
+.lx-status-dot--danger {
+  background: var(--lx-danger);
 }
 
 /* ---- Auth screen (login) -------------------------------------------------
