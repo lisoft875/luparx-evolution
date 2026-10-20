@@ -100,6 +100,28 @@
       <artifactId>spring-security-test</artifactId>
       <scope>test</scope>
     </dependency>
+
+    <!--
+      Testcontainers, para probar contra PostgreSQL de verdad (19-10-2026).
+
+      Sin version: spring-boot-starter-parent 3.3.4 ya importa el BOM de Testcontainers, asi que la
+      version la decide Spring Boot y no hay dos criterios que mantener sincronizados.
+
+      Solo en `app`: es el unico modulo que tiene las migraciones de Flyway y el contexto completo.
+      Los modulos de dominio siguen probandose sin Docker, y la unica clase que lo necesita se salta
+      sola cuando Docker no esta (`@Testcontainers(disabledWithoutDocker = true)`), para que el
+      backend se siga compilando y probando en una maquina sin demonio de contenedores.
+    -->
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>postgresql</artifactId>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 
   <build>
