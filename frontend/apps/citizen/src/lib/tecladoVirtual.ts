@@ -86,10 +86,35 @@ function estaEscribiendo(): boolean {
   return tipo !== 'checkbox' && tipo !== 'radio' && tipo !== 'button' && tipo !== 'submit';
 }
 
+/**
+ * ¿Es un aparato de dedo? Teléfono o tablet, no un portátil con pantalla táctil.
+ *
+ * <p>De esto depende ocultar las barras de abajo mientras se escribe, y por una razón concreta: el
+ * 21-10-2026 la usuaria probó en su iPhone la versión desplegada y el defecto seguía igual. En
+ * Chromium la detección por medida funciona en los diez tamaños; en su teléfono, no. En vez de
+ * adivinar por qué, se deja de depender de la medida para lo que ella reportó: en un aparato de
+ * dedo, un campo de texto enfocado significa teclado, punto.</p>
+ *
+ * <p>`hover: none` descarta el portátil táctil, donde esconder la navegación al escribir sería un
+ * defecto nuevo. Se consulta en cada evento y no una vez al montar, porque un iPad con teclado
+ * acoplado cambia de categoría sin recargar.</p>
+ */
+function enAparatoDeDedo(): boolean {
+  if (typeof window.matchMedia !== 'function') return false;
+  return window.matchMedia('(pointer: coarse) and (hover: none)').matches;
+}
+
 export function useTecladoVirtual(): void {
   useEffect(() => {
-    const vv = window.visualViewport;
-    if (!vv) return undefined;
+    /*
+      Sin `visualViewport` ya NO se abandona.
+
+      Antes este efecto empezaba con `if (!vv) return`, y eso ataba todo —incluido ocultar las
+      barras— a una API que puede no estar o no comportarse como se espera. Lo que la persona ve
+      tapado no puede depender de eso: sin medida se hace lo que no la necesita, y con medida se
+      hace además lo que sí.
+    */
+    const vv = window.visualViewport ?? null;
 
     const raiz = document.documentElement;
     let puesto = false;
@@ -110,6 +135,10 @@ export function useTecladoVirtual(): void {
       desplazamiento gratuito es el «salto» que la orden pide evitar.
     */
     const acomodar = (): void => {
+      // Acomodar exige saber dónde termina lo visible, y eso sólo lo dice `visualViewport`. Sin
+      // ella no se inventa una posición: se deja el desplazamiento al navegador, que al menos
+      // ahora tiene sitio porque las barras de abajo están ocultas.
+      if (!vv) return;
       const activo = document.activeElement as HTMLElement | null;
       if (!activo) return;
       const r = activo.getBoundingClientRect();
@@ -142,6 +171,7 @@ export function useTecladoVirtual(): void {
       en el teléfono siguiente.
     */
     const marcarApretado = (): void => {
+      if (!vv) return;
       const activo = document.activeElement as HTMLElement | null;
       const alturaCampo = activo ? activo.getBoundingClientRect().height : 44;
       const libre = vv.height - altoDelCromoSuperior();
@@ -156,8 +186,30 @@ export function useTecladoVirtual(): void {
     };
 
     const evaluar = (): void => {
-      const alto = Math.round(window.innerHeight - vv.height);
-      const abierto = alto > UMBRAL_PX && estaEscribiendo();
+      /*
+        DOS CAMINOS, y el que la persona ve no depende del otro (21-10-2026).
+
+        Hasta hoy esto era una sola condición: «el viewport visual encogió más de 150 px Y hay un
+        campo enfocado». En Chromium se cumple en los diez tamaños probados. En el iPhone de la
+        usuaria, con la versión ya desplegada, el botón y la barra seguían tapando el formulario —
+        o sea que esa condición allí no se cumplió, y lo único que colgaba de ella era justamente
+        lo que ella necesita.
+
+        Ahora:
+
+        · OCULTAR las barras cuelga del hecho simple: campo de texto enfocado en un aparato de
+          dedo. No hace falta medir nada, así que no hay nada que pueda fallar al medir.
+
+        · DAR SITIO y ACOMODAR siguen colgando de la medida, porque sin saber cuánto ocupa el
+          teclado no se puede reservar su alto sin inventárselo. Si la medida llega —y en iOS suele
+          llegar un instante después, cuando el teclado termina de subir— se hacen las dos cosas.
+
+        Con medida el comportamiento es el mismo de antes. Sin medida, al menos nada tapa el campo.
+      */
+      const alto = vv ? Math.round(window.innerHeight - vv.height) : 0;
+      const medido = alto > UMBRAL_PX;
+      const escribiendo = estaEscribiendo();
+      const abierto = escribiendo && (medido || enAparatoDeDedo());
 
       if (!abierto) {
         if (!puesto) return;
@@ -177,7 +229,7 @@ export function useTecladoVirtual(): void {
         const campo = ultimoCampo;
         ultimoCampo = null;
         limpiar();
-        if (soltado && campo && campo.isConnected) {
+        if (vv && soltado && campo && campo.isConnected) {
           window.requestAnimationFrame(() => {
             const r = campo.getBoundingClientRect();
             const techo = bordeDelCromoSuperior(vv.offsetTop || 0) + MARGEN_PX;
@@ -207,7 +259,10 @@ export function useTecladoVirtual(): void {
         sólo 268 px visibles. `scrollBy` no movía nada porque NO HABÍA a dónde moverse. El
         problema no era el desplazamiento sino que faltaba página debajo.
       */
-      raiz.style.setProperty('--lx-teclado-alto', `${alto}px`);
+      if (medido) raiz.style.setProperty('--lx-teclado-alto', `${alto}px`);
+      // Sin medida no se reserva sitio: un alto inventado deja un hueco en blanco del tamaño del
+      // error. Ocultar las barras ya libera lo suyo, y eso no hace falta medirlo.
+      else raiz.style.removeProperty('--lx-teclado-alto');
       raiz.setAttribute('data-teclado', 'abierto');
       marcarApretado();
 
@@ -225,16 +280,31 @@ export function useTecladoVirtual(): void {
       window.setTimeout(evaluar, 0);
     };
 
-    vv.addEventListener('resize', evaluar);
-    vv.addEventListener('scroll', evaluar);
-    document.addEventListener('focusin', evaluar);
+    /*
+      Al enfocar se evalúa tres veces: ahora, y otra vez cuando el teclado ya terminó de subir.
+
+      Lo primero esconde las barras de inmediato —no hace falta esperar a nadie para eso—. Lo
+      segundo es para la medida: el teclado de iOS tarda unos 250-300 ms en llegar arriba, y si por
+      lo que sea no llega un `resize` que lo cuente, estas dos vueltas lo recogen igual. Son dos
+      lecturas baratas y no mueven nada si no hay cambio.
+    */
+    const temporizadores: number[] = [];
+    const alEntrar = (): void => {
+      evaluar();
+      temporizadores.push(window.setTimeout(evaluar, 350), window.setTimeout(evaluar, 750));
+    };
+
+    vv?.addEventListener('resize', evaluar);
+    vv?.addEventListener('scroll', evaluar);
+    document.addEventListener('focusin', alEntrar);
     document.addEventListener('focusout', alSalir);
     evaluar();
 
     return () => {
-      vv.removeEventListener('resize', evaluar);
-      vv.removeEventListener('scroll', evaluar);
-      document.removeEventListener('focusin', evaluar);
+      temporizadores.forEach((t) => window.clearTimeout(t));
+      vv?.removeEventListener('resize', evaluar);
+      vv?.removeEventListener('scroll', evaluar);
+      document.removeEventListener('focusin', alEntrar);
       document.removeEventListener('focusout', alSalir);
       limpiar();
     };

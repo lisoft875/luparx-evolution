@@ -369,10 +369,86 @@ const MIRAR = (sel) => {
     await ctx.close();
   }
 
+  /*
+    El caso que el iPhone de la usuaria demostró el 21-10-2026: teclado abierto y NINGUNA señal del
+    viewport.
+
+    En Chromium la detección por medida pasa en los diez tamaños de arriba. En su teléfono, con esta
+    misma versión ya desplegada, el botón y la barra seguían tapando el formulario — así que allí
+    esa medida no llegó, o no como se esperaba. Esta prueba reproduce ese escenario de la única
+    forma honesta: enfocando el campo y NO tocando el viewport. Si ocultar las barras siguiera
+    colgando de la medida, acá se vería en rojo.
+
+    Y la cara opuesta: en un escritorio, enfocar un campo NO debe esconder nada, porque ahí no sube
+    ningún teclado.
+  */
+  console.log('\n══ sin señal del viewport: el foco solo debe bastar en un aparato de dedo ══');
+  for (const caso of [
+    { nombre: 'teléfono 390x844', width: 390, height: 844, movil: true, esperaOculto: true },
+    { nombre: 'escritorio 1280x800', width: 1280, height: 800, movil: false, esperaOculto: false },
+  ]) {
+    const ctx = await browser.newContext({
+      viewport: { width: caso.width, height: caso.height }, locale: 'es-CR',
+      hasTouch: caso.movil, isMobile: caso.movil,
+    });
+    const page = await ctx.newPage();
+    await page.route('**/*', (r) => {
+      const u = r.request().url();
+      return (u.startsWith(BASE) || u.startsWith('data:') || u.startsWith('blob:')) ? r.continue() : r.abort();
+    });
+
+    await page.goto(`${BASE}/login`, { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(1200);
+    await page.fill('input[type=email]', 'citizen@example.com');
+    await page.fill('input[type=password]', 'Password123!');
+    await page.click('button[type=submit]');
+    await page.waitForTimeout(2600);
+    if (/select-tenant/.test(page.url())) {
+      const f = page.locator('button, a').filter({ hasText: /San José/ }).first();
+      if (await f.count()) { await f.click(); await page.waitForTimeout(1600); }
+    }
+    await page.goto(`${BASE}/park`, { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(1800);
+
+    const dedo = await page.evaluate(() => window.matchMedia('(pointer: coarse) and (hover: none)').matches);
+    ok(dedo === caso.movil, `${caso.nombre}: el navegador se presenta como aparato de dedo = ${caso.movil}`,
+      `matchMedia dice ${dedo}`);
+
+    await page.locator(SEL_CAMPO).first().click();
+    // A propósito: NO se encoge el viewport. Ésta es la condición que faltaba.
+    await page.waitForTimeout(1100);
+
+    const v = await page.evaluate(MIRAR);
+    ok(v.atributo === (caso.esperaOculto ? 'abierto' : null),
+      `${caso.nombre}: ${caso.esperaOculto ? 'se trata como teclado abierto sin medirlo' : 'no se trata como teclado'}`,
+      JSON.stringify(v));
+    ok(v.navOculta === caso.esperaOculto,
+      `${caso.nombre}: la navegación inferior ${caso.esperaOculto ? 'se va' : 'se queda'}`,
+      `oculta=${v.navOculta}`);
+    ok(v.ctaOculto === caso.esperaOculto,
+      `${caso.nombre}: el botón fijo ${caso.esperaOculto ? 'se va' : 'se queda'}`,
+      `oculto=${v.ctaOculto}`);
+    // Sin medida no se reserva alto: un número inventado deja un hueco del tamaño del error.
+    const reservado = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--lx-teclado-alto').trim());
+    ok(reservado === '', `${caso.nombre}: sin medida no se reserva alto inventado`, `--lx-teclado-alto='${reservado}'`);
+
+    // Y al salir del campo, todo vuelve.
+    await page.evaluate(() => document.activeElement && document.activeElement.blur());
+    await page.waitForTimeout(700);
+    const w = await page.evaluate(MIRAR, SEL_CAMPO);
+    ok(w.navOculta === false && w.ctaOculto === false,
+      `${caso.nombre}: al salir del campo vuelven las dos`, JSON.stringify(w));
+
+    await ctx.close();
+  }
+
   await browser.close();
   await apagar();
   console.log(`\n${pasadas + fallos} comprobaciones · ${fallos} fallos`);
-  console.log('·· SIN PROBAR: un teclado de iPhone de verdad. Acá se reproduce su EFECTO —el');
-  console.log('   viewport visual encogido— que es la condición a la que el código reacciona.');
+  console.log('·· SIN PROBAR: un teclado de iPhone de verdad. Acá se reproducen las DOS');
+  console.log('   situaciones: con el viewport visual encogido —que es lo que iOS debería hacer—');
+  console.log('   y sin ninguna señal, que es lo que pasó en el teléfono de la usuaria el 21-10.');
+  console.log('   Ocultar las barras ya no depende de esa señal; dar sitio y acomodar sí, porque');
+  console.log('   sin medir el teclado no se puede reservar su alto sin inventárselo.');
   process.exit(fallos === 0 ? 0 : 1);
 })().catch((e) => { console.error('ERR', e.message); process.exit(1); });

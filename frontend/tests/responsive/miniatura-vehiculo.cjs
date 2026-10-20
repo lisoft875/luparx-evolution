@@ -179,6 +179,16 @@ function revisar(etiqueta, datos, minimo) {
       await page.waitForTimeout(400);
       await page.locator('input[inputmode=numeric], input[inputmode=text]').first().fill(BAHIA_OK);
       await page.waitForTimeout(700);
+      /*
+        Soltar el campo antes de buscar «Continuar», y esto NO es un apaño para que pase la prueba:
+        es la secuencia real desde el 21-10-2026. Con un campo de texto enfocado en un aparato de
+        dedo, el botón fijo se esconde a propósito —es justamente lo que la usuaria pidió, que no le
+        tape el formulario—, así que en un teléfono se escribe el código, se baja el teclado y
+        recién entonces se continúa. Antes de este cambio la prueba llegaba al paso 2 con el campo
+        todavía enfocado porque Playwright no levanta ningún teclado; eso era lo irreal.
+      */
+      await page.evaluate(() => document.activeElement && document.activeElement.blur());
+      await page.waitForTimeout(600);
       const continuar = page.getByRole('button', { name: /^Continuar$|^Continue$/i }).first();
       if (await continuar.count() && await continuar.isEnabled()) {
         await continuar.click();
