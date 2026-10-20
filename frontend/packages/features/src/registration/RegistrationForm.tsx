@@ -182,21 +182,34 @@ export function RegistrationForm({
       </FormField>
 
       <div className="lx-field">
-        <label>
+        {/*
+          Las clases del sistema de diseño, que ya existían y esta casilla se estaba saltando
+          (20-10-2026).
+
+          Medida a 390×844: 13×13 px, el tamaño por omisión del navegador, dentro de una etiqueta
+          sin alto mínimo. `.lx-checkbox` da una fila de 44 px y `.lx-checkbox__input` una casilla
+          de 20, que es lo que el resto de la aplicación usa. Era la única casilla del portal
+          escrita a mano, y se notaba: aceptar los términos es obligatorio para registrarse y era
+          el control más difícil de acertar con el pulgar de toda la aplicación.
+        */}
+        <label className="lx-checkbox">
           <input
             type="checkbox"
+            className="lx-checkbox__input"
             {...register('acceptedTerms')}
             aria-invalid={!!formState.errors.acceptedTerms || undefined}
-          />{' '}
-          {t('terms.accept')}
-          {termsUrl ? (
-            <>
-              {' '}
-              <a href={termsUrl} target="_blank" rel="noreferrer">
-                {t('terms.viewLink')}
-              </a>
-            </>
-          ) : null}
+          />
+          <span className="lx-checkbox__label">
+            {t('terms.accept')}
+            {termsUrl ? (
+              <>
+                {' '}
+                <a href={termsUrl} target="_blank" rel="noreferrer">
+                  {t('terms.viewLink')}
+                </a>
+              </>
+            ) : null}
+          </span>
         </label>
         {formState.errors.acceptedTerms ? (
           <p role="alert" className="lx-field__error">

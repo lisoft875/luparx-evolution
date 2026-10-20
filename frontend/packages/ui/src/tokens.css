@@ -623,6 +623,38 @@ body {
   box-shadow: none;
 }
 
+/*
+  Los 16 px de los campos NO son una decisión de diseño: son una constante de Safari en iOS
+  (20-10-2026).
+
+  Safari amplía la página al ENFOCAR cualquier <input>, <select> o <textarea> cuyo tamaño de letra
+  sea menor a 16 px, y —esto es lo que convierte un detalle en un defecto— no deshace ese zoom al
+  salir del campo. La persona toca un campo, la aplicación queda ampliada, y todo lo que navegue
+  después se ve grande y descuadrado hasta que achica con los dedos. Es exactamente lo que reportó
+  la usuaria desde su iPhone: «la interfaz cambia de escala, tengo que hacer zoom out a mano».
+
+  Medido el 20-10-2026 a 390×844 recorriendo las trece rutas del Ciudadano: **29 de 29 campos
+  visibles estaban en 15 px**. Ingreso, registro, recuperación, el código de bahía, el buscador de
+  la ayuda y los quince campos del perfil: todos. No había uno solo a salvo.
+
+  Por qué 16 y no `--lx-text-body-size`: el token vale 15 px y subirlo cambiaría todo el texto del
+  portal, que no es lo que está mal. Lo que está mal es que un control de formulario por debajo del
+  umbral de Safari dispara una ampliación que el usuario no pidió y no puede deshacer solo.
+
+  Por qué acotado al Ciudadano: `.lx-input` es compartido. El Fiscalizador ya está a 17 px por su
+  densidad `outdoor`, así que no le cambia nada; Administración es de escritorio y no me toca
+  moverla en esta orden.
+
+  La alternativa que NO se usó, y queda dicho: `user-scalable=no` o `maximum-scale=1` apagan el
+  zoom del usuario. Eso no arregla el defecto, lo esconde, y le quita el zoom a quien lo necesita
+  para leer. La orden lo prohíbe y con razón.
+*/
+:root[data-portal='citizen'] .lx-input,
+:root[data-portal='citizen'] .lx-select,
+:root[data-portal='citizen'] .lx-textarea {
+  font-size: 16px;
+}
+
 .lx-input,
 .lx-select {
   width: 100%;
@@ -2484,6 +2516,12 @@ a.lx-list-row {
   justify-content: center;
   width: var(--lx-touch-target-min);
   height: var(--lx-touch-target-min);
+  /*
+    Medido a 390×844 el 20-10-2026: 44×36. El ancho estaba declarado en 44 y la flecha igual
+    encogía, porque es un hijo flexible y lo que cede cuando la fila aprieta es el elemento con
+    `flex-shrink` por omisión. Lo que tiene que ceder es el título, que para eso lleva elipsis.
+  */
+  flex-shrink: 0;
   margin: calc(var(--lx-touch-target-min) / -2) 0;
   background: none;
   border: none;
@@ -2856,7 +2894,13 @@ a.lx-list-row {
 .lx-sticky-timer-bar__more {
   flex-shrink: 0;
   min-width: var(--lx-touch-target-min);
-  min-height: 32px;
+  /*
+    44 y no 32 (20-10-2026). El «+1» que abre la lista de estadías medía 32 px de alto y aparecía
+    en CINCUENTA de las cincuenta y cinco medidas por debajo del mínimo táctil: va en la barra
+    pegada arriba, así que estaba en todas las pantallas y en los cinco tamaños a la vez. Es el
+    control que se toca con el carro andando, y era el más chico de la aplicación.
+  */
+  min-height: var(--lx-touch-target-min);
   padding: 0 var(--lx-space-3);
   border-radius: var(--lx-radius-pill);
   background: var(--lx-surface-2);
@@ -3745,6 +3789,42 @@ a.lx-list-row {
   font-family: inherit;
   text-decoration: none;
 }
+/*
+  La municipalidad de la barra superior es un botón: abre el selector. Medía 32 px de alto
+  (20-10-2026) y es de las cosas que más se tocan, porque es la única puerta de vuelta al
+  selector. Acotado al Ciudadano: en Fiscalización la densidad `outdoor` ya sube el mínimo táctil
+  a 52, y Administración es de escritorio y no entra en esta orden.
+
+  Sólo la variante `--interactive`: la insignia que no se pulsa no es un blanco táctil y darle
+  44 px de alto le robaría sitio a una fila que a 320 px ya va justa.
+*/
+/*
+  El área de toque de la municipalidad, SIN cambiar el alto de la barra (20-10-2026).
+
+  La insignia es un botón de 32 px de alto y es la única puerta de vuelta al selector, así que
+  tiene que poderse acertar con el pulgar. El intento obvio —`min-height: 44px`— rompe el mapa:
+  la insignia vive en la barra superior pegada, subirla agranda esa barra, el mapa observa el
+  tamaño de su contenedor y los dos se realimentan hasta colgar la página. No es teoría: con esa
+  regla el arnés del mapa se cae a las 80 comprobaciones, y sin ella pasa las 171. Lo bisequé.
+
+  Así que el alto visible se queda donde está y lo que crece es la zona que recibe el toque: una
+  banda invisible de 44 px centrada en la insignia. El dedo acierta, la barra no se mueve y el
+  mapa no se entera. Se comprueba por comportamiento —`elementFromPoint` en el borde de la banda—
+  y no midiendo la caja, que es lo que haría parecer que no se arregló nada.
+*/
+:root[data-portal='citizen'] .lx-tenant-badge--interactive {
+  position: relative;
+}
+:root[data-portal='citizen'] .lx-tenant-badge--interactive::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  height: var(--lx-touch-target-min);
+}
+
 .lx-tenant-badge--interactive {
   cursor: pointer;
   /* Comfortably tappable without inflating the 56 px app bar. */

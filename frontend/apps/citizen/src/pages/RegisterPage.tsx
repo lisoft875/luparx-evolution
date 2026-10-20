@@ -16,7 +16,7 @@ export function RegisterPage(): React.JSX.Element {
         <Alert tone="success">
           {result.requiresApproval ? t('auth.register.success.pendingApproval') : t('auth.register.success.active')}
         </Alert>
-        <p>
+        <p className="lx-auth-card__footer-line">
           <Link to="/login">{t('auth.register.loginLink')}</Link>
         </p>
       </CenteredLayout>
@@ -31,7 +31,9 @@ export function RegisterPage(): React.JSX.Element {
         termsVersion="2026-01"
         onSuccess={(response) => setResult({ requiresApproval: response.requiresApproval })}
       />
-      <p>
+      {/* La misma clase que el pie de la pantalla de ingreso: ya lleva la regla de 44 px de alto
+          para el enlace. Sin ella medía 19 px, que es la altura de la línea de texto y nada más. */}
+      <p className="lx-auth-card__footer-line">
         <Link to="/login">{t('auth.register.loginLink')}</Link>
       </p>
     </CenteredLayout>
