@@ -43,6 +43,15 @@ const UMBRAL_PX = 150;
 /** Aire que se le deja al campo contra cualquiera de los dos bordes útiles. */
 const MARGEN_PX = 12;
 
+/**
+ * Lo que se espera, al salir de un campo, antes de devolver las barras.
+ *
+ * Lo justo para que un toque que empezó con el teclado abierto termine sobre el control que la
+ * persona tocó, y no sobre la barra que acaba de reaparecer encima. Menos de lo que tarda en bajar
+ * el teclado de un teléfono.
+ */
+const ESPERA_AL_SALIR_MS = 250;
+
 const ESCRIBIBLES = /^(INPUT|TEXTAREA)$/;
 
 /**
@@ -185,6 +194,14 @@ export function useTecladoVirtual(): void {
       raiz.style.removeProperty('--lx-teclado-alto');
     };
 
+    /** Cierre en curso, si lo hay: se cancela cuando otro campo toma el foco. */
+    let cierrePendiente = 0;
+    const cancelarCierre = (): void => {
+      if (!cierrePendiente) return;
+      window.clearTimeout(cierrePendiente);
+      cierrePendiente = 0;
+    };
+
     const evaluar = (): void => {
       /*
         DOS CAMINOS, y el que la persona ve no depende del otro (21-10-2026).
@@ -212,7 +229,36 @@ export function useTecladoVirtual(): void {
       const abierto = escribiendo && (medido || enAparatoDeDedo());
 
       if (!abierto) {
-        if (!puesto) return;
+        if (!puesto || cierrePendiente) return;
+        /*
+          Cerrar NUNCA es inmediato, venga de donde venga el aviso.
+
+          Esto estaba primero sólo en el manejador de `focusout`, y no alcanzaba: al quitar el foco,
+          el viewport visual también avisa, y ese aviso entraba por acá y devolvía las barras en el
+          mismo instante. Se vio en la traza de eventos del 21-10-2026 a 320×568:
+
+              pointerdown → BUTTON       (el dedo baja sobre el botón)
+              focusout    → INPUT
+              pointerup   → DIV.lx-sticky-cta   ← la barra ya volvió y se queda el toque
+              click       → MAIN                ← el botón nunca se enteró
+
+          Con la espera acá, el toque termina sobre lo que la persona tocó. Si vuelve a haber un
+          campo enfocado antes de que venza, el cierre se cancela y no hay parpadeo entre campos.
+        */
+        cierrePendiente = window.setTimeout(() => {
+          cierrePendiente = 0;
+          cerrar();
+        }, ESPERA_AL_SALIR_MS);
+        return;
+      }
+
+      cancelarCierre();
+      abrir();
+    };
+
+    /** Lo que se deshace al bajar el teclado. */
+    function cerrar(): void {
+      {
         puesto = false;
         altoPuesto = 0;
         /*
@@ -236,9 +282,13 @@ export function useTecladoVirtual(): void {
             if (r.top < techo) window.scrollBy({ top: r.top - techo, behavior: 'auto' });
           });
         }
-        return;
       }
+    }
 
+    /** Lo que se hace mientras el teclado está arriba. */
+    function abrir(): void {
+      const alto = vv ? Math.round(window.innerHeight - vv.height) : 0;
+      const medido = alto > UMBRAL_PX;
       /*
         Que el alto cambie con el teclado ya abierto no es un caso raro: es girar el teléfono. De
         844 de alto con 300 de teclado se pasa a 390 con 210, y lo que antes sobraba ya no cabe.
@@ -270,13 +320,28 @@ export function useTecladoVirtual(): void {
       // falta—: el hueco que liberan cambia dónde termina el campo, y medir antes sería medir la
       // pantalla anterior.
       if (cambio) window.requestAnimationFrame(acomodar);
-    };
+    }
 
-    // `focusout` se adelanta al cambio de tamaño: al cerrar el teclado, el viewport tarda unos
-    // cuadros en volver y mientras tanto la barra inferior ya tiene que estar de vuelta.
+    /*
+      Al salir del campo las barras vuelven, pero NO en el mismo instante — y esto arregla un
+      defecto que se habría sentido como «la aplicación se come el primer toque».
+
+      Medido el 21-10-2026 a 320×568: con el campo enfocado, el botón «Ver la zona en el mapa»
+      quedaba despejado porque el botón fijo estaba oculto. Al tocarlo, el `mousedown` quita el
+      foco; si las barras vuelven en ese mismo turno, para cuando llega el `mouseup` el botón fijo
+      ya está otra vez encima de ese punto y se lleva el toque: el `click` nunca ocurre sobre lo
+      que la persona tocó. Comprobado: el mismo botón, pulsado por código, abre el mapa sin
+      problema; pulsado con el dedo, no hacía nada.
+
+      Esperar un cuarto de segundo deja que el toque termine sobre su destino. No es un número
+      mágico ni un parche por dispositivo: es menos de lo que tarda el teclado de un teléfono en
+      bajar, así que las barras siguen apareciendo cuando la pantalla ya está quieta.
+
+      El hueco también cubre lo de antes: entre un campo y el siguiente hay un instante sin foco, y
+      la navegación no debe parpadear ahí.
+    */
     const alSalir = (): void => {
-      // En el siguiente turno, porque entre un campo y el siguiente hay un instante sin foco y no
-      // hay que parpadear la navegación en ese hueco.
+      // La espera vive dentro de `evaluar`, para que valga venga el aviso de donde venga.
       window.setTimeout(evaluar, 0);
     };
 
@@ -302,6 +367,7 @@ export function useTecladoVirtual(): void {
 
     return () => {
       temporizadores.forEach((t) => window.clearTimeout(t));
+      cancelarCierre();
       vv?.removeEventListener('resize', evaluar);
       vv?.removeEventListener('scroll', evaluar);
       document.removeEventListener('focusin', alEntrar);
