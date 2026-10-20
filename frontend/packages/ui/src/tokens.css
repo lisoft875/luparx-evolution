@@ -3818,11 +3818,18 @@ a.lx-list-row {
 :root[data-portal='citizen'] .lx-tenant-badge--interactive::after {
   content: '';
   position: absolute;
-  left: 0;
-  right: 0;
   top: 50%;
-  transform: translateY(-50%);
+  left: 50%;
+  transform: translate(-50%, -50%);
   height: var(--lx-touch-target-min);
+  /*
+    A 320 px la insignia esconde el nombre y se queda en el avatar de dos letras: 30 px de ancho,
+    medido. La banda se centra y nunca baja de 44 en ninguna de las dos dimensiones; donde la
+    insignia es más ancha, la banda la sigue. Entre la insignia y el grupo de la derecha hay unos
+    sesenta píxeles libres a ese ancho, así que crecer catorce no le pisa el toque a nadie.
+  */
+  width: 100%;
+  min-width: var(--lx-touch-target-min);
 }
 
 .lx-tenant-badge--interactive {
@@ -8869,6 +8876,101 @@ a.lx-list-row {
 /* MapLibre inyecta su propia hoja; esto sólo ajusta lo que choca con el lienzo oscuro. */
 .lx-zonemap .maplibregl-ctrl-attrib {
   font-size: 0.7rem;
+}
+
+/*
+  Lo del Ciudadano va ANTES del bloque del Inicio del administrador, y no por orden estético.
+
+  Ese bloque es lo último del archivo a propósito y `ambitoInicio.check.mjs` lo vigila: lee desde
+  su comentario de cabecera hasta el final y exige que cada selector cuelgue de
+  `:root[data-portal='admin']:has(.lx-home)`. Existe justamente para esto —«alguien va a añadir una
+  regla al final del archivo y va a quedar global sin que nadie lo note»— y es lo que pasó: estas
+  reglas se escribieron al final y cayeron dentro de su ámbito. La comprobación las encontró.
+*/
+
+/*
+  La miniatura del vehículo (20-10-2026).
+
+  El hueco se reserva con la proporción puesta en el propio elemento, así que la fila no se mueve
+  bajo el dedo: el dibujo es SVG en línea y está pintado cuando la fila aparece, sin petición de
+  red que esperar. El fondo y el borde son los de las demás superficies para que se lea como parte
+  de la tarjeta y no como una foto pegada encima.
+*/
+.lx-vehicle-thumb {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: var(--lx-radius-sm);
+  background: var(--lx-surface-2);
+  border: 1px solid var(--lx-border);
+  overflow: hidden;
+}
+
+/*
+  Mientras el teclado está abierto (20-10-2026).
+
+  El viewport visual se encoge y lo que está pegado abajo no se entera: la navegación inferior y el
+  botón principal quedan dibujados debajo del teclado o flotando encima, y el campo que se está
+  escribiendo pierde sitio. La orden del 20-10 autoriza en letra ocultarlos durante la edición y
+  devolverlos al cerrar, y es lo que se hace.
+
+  `visibility` y no `display`: el hueco se conserva, así que al cerrar el teclado nada se recoloca
+  y la página no da el salto que se quiere evitar. `pointer-events: none` para que, invisible, la
+  barra tampoco se coma un toque destinado al contenido que hay detrás.
+
+  El atributo lo pone `useTecladoVirtual`, que exige además que el foco esté en un campo de texto:
+  sin eso, la barra de direcciones de Safari al hacer scroll escondería la navegación sola.
+*/
+:root[data-teclado='abierto'] .lx-bottom-tab-bar,
+:root[data-teclado='abierto'] .lx-sticky-cta {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/*
+  Apaisado: cuando el cromo de arriba y el campo no caben los dos (20-10-2026).
+
+  En horizontal el teclado deja unos 120 px útiles. La barra de la estadía en curso se lleva casi
+  cien y el campo necesita sus 44 más aire: no hay colocación posible: acomodar el campo sólo
+  consigue meterlo DEBAJO de la barra. Medido a 568×320: el campo quedaba a 64–108, dentro del
+  viewport visual, y lo que había en su centro era `.lx-sticky-timer-bar`.
+
+  Así que mientras se escribe —y sólo cuando de verdad no caben, condición que mide
+  `useTecladoVirtual` comparando el alto útil con el del cromo más el campo— esa barra deja de
+  estar pegada y se va con el scroll.
+
+  No se oculta ni se recorta nada: la barra sigue en la página, en su sitio y completa, y vuelve a
+  verse subiendo. Y no hay un valor por dispositivo en ninguna parte: la condición es geométrica, así
+  que un teléfono con otra pantalla se resuelve solo.
+*/
+:root[data-teclado-apretado] .lx-top-chrome {
+  position: static;
+}
+
+/*
+  Pantalla baja —teléfono en horizontal— y esto no tiene nada que ver con el teclado (20-10-2026).
+
+  Hallazgo medido a 568×320 con el teclado CERRADO: el cromo de arriba ocupaba 0–137, el botón fijo
+  165–234 y la navegación 234–308. De 320 px de alto, 280 eran cromo pegado: a la banda de
+  contenido le quedaban 40 px y un campo mide 44. No es que el campo quedara mal colocado — es que
+  NO CABÍA, con teclado o sin él, y ningún desplazamiento lo arregla.
+
+  En una pantalla así, mantener pegada la barra de la estadía es insostenible: 137 de 320 es casi la
+  mitad. Deja de estar pegada y se va con el scroll, igual que en el caso apretado de arriba, y los
+  143 px de abajo —navegación y acción principal, que son los controles con los que se interactúa—
+  se quedan. La banda de contenido pasa de 40 px a 177.
+
+  No se oculta ni se recorta información: la barra sigue completa al principio de la página.
+
+  La condición es el ALTO DEL VIEWPORT, no un dispositivo ni un ancho: cualquier pantalla baja se
+  resuelve sola, y la misma pantalla en vertical no se ve afectada. Y va limitada al Ciudadano
+  porque esta hoja la comparten los tres portales y Fiscalización no entra en esta orden.
+*/
+@media (max-height: 450px) {
+  :root[data-portal='citizen'] .lx-top-chrome {
+    position: static;
+  }
 }
 
 /* =================================================================================================

@@ -18,6 +18,7 @@ import {
   ListRow,
   RadioCardGroup,
   Select,
+  VehicleThumb,
   StepList,
   type Step,
 } from '@luparx/ui';
@@ -515,7 +516,11 @@ export function ParkingPage(): React.JSX.Element {
                       value: v.id,
                       label: v.plate,
                       detail: vehicleOptionDetail(v, list, colorOf),
-                      icon: <IconCar size={16} />,
+                      // La miniatura del boceto en vez del icono genérico: en una lista de tres
+                      // carros, la silueta y el color distinguen de un vistazo cuál es cuál mucho
+                      // antes que leer la placa. Dibujo por categoría teñido del color declarado;
+                      // nada de marca ni modelo, que el dominio no tiene foto.
+                      icon: <VehicleThumb type={v.type} color={v.color} size={26} />,
                     })),
                     // Last, because it is the exception: the everyday case is one of your own cars.
                     {

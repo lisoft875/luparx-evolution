@@ -106,17 +106,17 @@ const AUDITAR = () => {
     // que hace la insignia de municipalidad, porque agrandar la barra superior rompe el mapa—.
     // La caja no lo refleja, el comportamiento sí: se pregunta quién recibe el toque 21 px por
     // encima y por debajo del centro, que es el borde de una banda de 44.
-    if (base.height >= 44) return base;
-    const x = Math.round(base.left + base.width / 2);
-    const medio = base.top + base.height / 2;
-    const recibe = (y) => {
-      const bajo = document.elementFromPoint(x, Math.round(y));
+    if (base.height >= 44 && base.width >= 44) return base;
+    const cx = base.left + base.width / 2;
+    const cy = base.top + base.height / 2;
+    const recibe = (x, y) => {
+      const bajo = document.elementFromPoint(Math.round(x), Math.round(y));
       return Boolean(bajo) && (bajo === el || el.contains(bajo) || bajo.contains(el));
     };
-    if (recibe(medio - 21) && recibe(medio + 21)) {
-      return { ...base.toJSON(), height: 44, top: medio - 22, bottom: medio + 22 };
-    }
-    return base;
+    // Se sondean los dos ejes por separado: una banda puede ensanchar sin alargar, o al revés.
+    const alto = base.height >= 44 || (recibe(cx, cy - 21) && recibe(cx, cy + 21)) ? 44 : base.height;
+    const ancho = base.width >= 44 || (recibe(cx - 21, cy) && recibe(cx + 21, cy)) ? 44 : base.width;
+    return { ...base.toJSON(), height: Math.max(base.height, alto), width: Math.max(base.width, ancho) };
   };
   const chicos = [...document.querySelectorAll('button, a[href], [role=button], input, select')]
     .filter((el) => {

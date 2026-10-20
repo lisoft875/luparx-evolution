@@ -18,6 +18,7 @@ import {
 import type { BottomTab } from '@luparx/ui';
 import { ActiveSessionsBar } from './ActiveSessionsBar';
 import { useUnreadNotificationCount } from '../lib/queries';
+import { useTecladoVirtual } from '../lib/tecladoVirtual';
 
 export interface CitizenShellProps {
   children: React.ReactNode;
@@ -64,6 +65,13 @@ export function CitizenShell({
 }: CitizenShellProps): React.JSX.Element {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  /*
+    El teclado del teléfono, en el armazón y no en una pantalla suelta: todos los formularios del
+    portal viven dentro de este contenedor, y el problema —la navegación inferior y el botón fijo
+    tapando el campo que se está escribiendo— es el mismo en el código de bahía, en el registro y
+    en el perfil. Un solo sitio que lo detecte, una sola regla de estilos que reaccione.
+  */
+  useTecladoVirtual();
   // Only for the root screens that show the bell: a detail screen renders a back arrow instead, and
   // polling a count nobody can see would be a request per minute per open screen for nothing.
   const unreadQuery = useUnreadNotificationCount();
@@ -316,7 +324,21 @@ export function CitizenShell({
             manda; sin ella, manda el piso. No se sustituye una medida real por una constante, se
             le pone suelo. Es el mismo arreglo que el fiscalizador lleva desde ayer.
           */
-          paddingBottom: `max(100px, calc(var(--lx-space-4) + ${footerHeight}px))`,
+          /*
+            Y el teclado, cuando está arriba (20-10-2026).
+
+            Va SUMADO acá y no en una regla de la hoja de estilos porque este relleno es un estilo
+            EN LÍNEA, y un estilo en línea le gana a cualquier selector: la regla que escribí
+            primero en `tokens.css` no pintaba nada y el campo seguía sin caber. Dos sitios
+            decidiendo el mismo relleno es el error; éste es el sitio.
+
+            Sin teclado, `--lx-teclado-alto` no existe, el sumando vale 0 y el relleno es
+            exactamente el de antes. Con teclado, la página crece lo que el teclado ocupa, que es
+            lo que permite que el último campo del formulario suba hasta quedar a la vista: medido
+            el 20-10 a 320×568, sin esto la página ya estaba en su tope de scroll con el campo por
+            debajo del borde, y ningún desplazamiento podía arreglarlo porque no había a dónde ir.
+          */
+          paddingBottom: `calc(max(100px, calc(var(--lx-space-4) + ${footerHeight}px)) + var(--lx-teclado-alto, 0px))`,
           display: 'flex',
           flexDirection: 'column',
           gap: 'var(--lx-card-gap)',

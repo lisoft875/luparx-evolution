@@ -8,6 +8,7 @@ import {
   Card,
   HeroCard,
   IconCar,
+  VehicleThumb,
   IconChevronRight,
   IconCheck,
   IconFine,
@@ -424,7 +425,11 @@ export function HomePage(): React.JSX.Element {
               return (
                 <StatCard
                   className="lx-stat-card--compact"
-                  icon={<IconCar size={20} />}
+                  /* La miniatura del boceto cuando hay vehículo; el icono genérico cuando todavía
+                     no hay ninguno, que es cuando no hay nada que dibujar. */
+                  icon={vehicle
+                    ? <VehicleThumb type={vehicle.type} color={vehicle.color} size={24} />
+                    : <IconCar size={20} />}
                   label={t('citizen.home.vehicleCard.label')}
                   value={vehicle?.plate ?? t('citizen.home.vehicleCard.empty')}
                   hint={vehicle ? [vehicle.brand, vehicle.model].filter(Boolean).join(' ') || undefined : undefined}

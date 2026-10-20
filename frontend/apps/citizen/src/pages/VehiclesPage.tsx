@@ -11,6 +11,7 @@ import {
   EmptyState,
   FormField,
   IconCar,
+  VehicleThumb,
   IconMore,
   IconPlus,
   Input,
@@ -229,10 +230,28 @@ export function VehiclesPage(): React.JSX.Element {
         <CardStack>
           {vehicles.map((vehicle) => (
             <Card key={vehicle.id}>
-              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 'var(--lx-space-3)' }}>
-                <p className="lx-text-amount-lg" style={{ margin: 0 }}>
-                  {vehicle.plate}
-                </p>
+              {/*
+                `flexWrap` es lo que impide que la miniatura le robe el sitio a la placa: cuando la
+                fila no da, las insignias bajan a la línea siguiente en vez de aplastar el dato que
+                todo el mundo viene a leer. Medido a 393 px antes de ponerlo: la placa salía
+                recortada a media letra.
+              */}
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 'var(--lx-space-3)', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--lx-space-3)', minWidth: 0, flex: '1 1 auto' }}>
+                  {/*
+                    La miniatura del boceto (20-10-2026). Dibujo por categoría teñido del color
+                    declarado; ni marca ni modelo entran en la elección, porque el dominio no tiene
+                    foto y inventarla era lo único que la haría parecerse a la del boceto.
+
+                    Matiza —no contradice— la nota de abajo sobre no pintar la tarjeta con el color
+                    del carro: lo que lleva color es el DIBUJO DEL VEHÍCULO, que es el objeto que el
+                    color describe. La tarjeta, sus bordes y sus insignias siguen sin teñirse.
+                  */}
+                  <VehicleThumb type={vehicle.type} color={vehicle.color} size={40} />
+                  <p className="lx-text-amount-lg" style={{ margin: 0, minWidth: 0, overflowWrap: 'anywhere' }}>
+                    {vehicle.plate}
+                  </p>
+                </div>
                 <div style={{ display: 'flex', gap: 'var(--lx-space-2)', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                   {/* What kind of vehicle it is, in words. A motorcycle and a car are charged and
                       enforced differently, so it belongs where the plate is, not buried in a form. */}

@@ -117,6 +117,8 @@ export type { PlatformBannerProps } from './components/PlatformBanner';
 export { HeroCard } from './components/HeroCard';
 export type { HeroCardProps } from './components/HeroCard';
 export { SectionHeader } from './components/SectionHeader';
+export { VehicleThumb } from './VehicleThumb';
+export type { VehicleThumbProps } from './VehicleThumb';
 export type { SectionHeaderProps } from './components/SectionHeader';
 export type { IconProps } from './icons';
 export {
