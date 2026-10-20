@@ -247,7 +247,10 @@ export function VehiclesPage(): React.JSX.Element {
                     del carro: lo que lleva color es el DIBUJO DEL VEHÍCULO, que es el objeto que el
                     color describe. La tarjeta, sus bordes y sus insignias siguen sin teñirse.
                   */}
-                  <VehicleThumb type={vehicle.type} color={vehicle.color} size={40} />
+                  {/* 56 y no 40: en el boceto la imagen del vehículo es lo primero que se ve de la
+                      fila, del tamaño de la placa. A 40 competía con las insignias y parecía un
+                      icono más. */}
+                  <VehicleThumb type={vehicle.type} color={vehicle.color} size={56} />
                   <p className="lx-text-amount-lg" style={{ margin: 0, minWidth: 0, overflowWrap: 'anywhere' }}>
                     {vehicle.plate}
                   </p>

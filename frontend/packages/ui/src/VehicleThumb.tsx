@@ -1,50 +1,70 @@
 import * as React from 'react';
 
 /**
- * La miniatura del vehículo del boceto, dibujada con lo que el dominio sabe (20-10-2026).
+ * La miniatura del vehículo del boceto, dibujada con lo que el dominio sabe.
  *
  * <h2>Por qué es un dibujo y no una fotografía</h2>
  *
  * <p>El boceto muestra fotos de carros concretos —un Toyota RAV4 blanco, un Hyundai Tucson gris—.
- * El dominio no tiene foto: un {@code Vehicle} trae placa, nombre, marca, modelo, año, tipo y
- * color, y nada más. Poner una fotografía exigiría una de dos cosas, y las dos están prohibidas por
- * la orden: inventar marca y modelo para elegir la imagen, o traer imágenes de un tercero sin
- * derechos claros.</p>
+ * El dominio tiene marca, modelo, año, tipo y color; lo que no tiene es <b>imagen</b>. Para poner
+ * una fotografía harían falta archivos con licencia comercial por marca y modelo, y no los hay: la
+ * propia orden del 21-10-2026 pide «recursos licenciados/autorizados» y, cuando no los haya,
+ * «miniatura genérica realista por categoría, sin fingir marca/modelo». Esto es eso.</p>
  *
- * <p>Lo que sí hay es <b>tipo</b> y <b>color</b>, y los dos son datos reales del servidor. Con eso
- * se dibuja una silueta por categoría teñida del color declarado: no afirma nada que el servidor no
- * haya dicho. Un carro gris se ve como un carro gris; una moto roja, como una moto roja. Si el
- * dueño no declaró color, la silueta va en el gris neutro de la interfaz en lugar de elegir uno.</p>
+ * <p>Lo que cambió el 21-10-2026 es el dibujo. Antes era una silueta lateral plana —la usuaria la
+ * describió como «carrito plano genérico tipo emoji»— y ahora es una vista en tres cuartos con
+ * volumen: capó, parabrisas, hombro iluminado, sombra en el suelo y ruedas con llanta. No es una
+ * foto y no lo finge; es un vehículo dibujado de la categoría y el color que el servidor dijo.</p>
+ *
+ * <h2>Lo que afirma y lo que no</h2>
+ *
+ * <p>Afirma <b>tipo</b> y <b>color</b>, los dos del servidor. No afirma marca ni modelo: un RAV4 y
+ * un Tucson se dibujan igual si los dos son automóviles blancos, porque de la forma real de cada
+ * uno no se sabe nada. Sin color declarado va en el gris neutro de la interfaz en lugar de elegir
+ * uno.</p>
  *
  * <h2>Por qué SVG en línea</h2>
  *
- * <p>Sin petición de red, así que no hay salto de maquetación ni espera: la miniatura está dibujada
- * cuando la fila aparece. El contenedor fija su proporción de todas formas —4:3— porque una lista
- * que reserva el hueco no se mueve bajo el dedo mientras carga el resto.</p>
+ * <p>Sin petición de red —ni a nuestro servidor ni, sobre todo, a terceros: la orden lo prohíbe en
+ * letra—, así que no hay salto de maquetación ni espera. El contenedor fija su proporción 4:3 de
+ * todas formas, porque una lista que reserva el hueco no se mueve bajo el dedo mientras carga el
+ * resto.</p>
  *
  * <p>Decorativa: {@code aria-hidden}. La fila ya dice la placa y la descripción, y un lector de
- * pantalla no gana nada con «silueta de automóvil gris» repitiendo lo que el texto dirá mejor.</p>
+ * pantalla no gana nada con «dibujo de automóvil gris» repitiendo lo que el texto dirá mejor.</p>
  */
 
 /** Los colores del catálogo `GET /catalog/vehicle-colors`, como se ven en un vehículo. */
-const PINTURA: Record<string, { cuerpo: string; sombra: string }> = {
-  WHITE: { cuerpo: '#E8EDF5', sombra: '#B9C4D4' },
-  BLACK: { cuerpo: '#2B3340', sombra: '#171C25' },
-  GRAY: { cuerpo: '#8A95A5', sombra: '#5E6878' },
-  GREY: { cuerpo: '#8A95A5', sombra: '#5E6878' },
-  SILVER: { cuerpo: '#C3CCDA', sombra: '#949EAE' },
-  RED: { cuerpo: '#D4505F', sombra: '#9B3340' },
-  BLUE: { cuerpo: '#4A7FD4', sombra: '#2F569B' },
-  GREEN: { cuerpo: '#4FA97B', sombra: '#2F7854' },
-  YELLOW: { cuerpo: '#D8B341', sombra: '#A2831F' },
+const PINTURA: Record<string, Pintura> = {
+  WHITE: { claro: '#FBFCFE', medio: '#E4EAF2', sombra: '#AEB9C8' },
+  BLACK: { claro: '#434E5E', medio: '#2A313C', sombra: '#161B22' },
+  GRAY: { claro: '#A7B2C0', medio: '#8A95A5', sombra: '#5C6676' },
+  GREY: { claro: '#A7B2C0', medio: '#8A95A5', sombra: '#5C6676' },
+  SILVER: { claro: '#DCE3EC', medio: '#C3CCDA', sombra: '#8F9AA9' },
+  RED: { claro: '#E8697A', medio: '#D4505F', sombra: '#8E2E3A' },
+  BLUE: { claro: '#6C9BE6', medio: '#4A7FD4', sombra: '#2B4F8E' },
+  GREEN: { claro: '#6FC296', medio: '#4FA97B', sombra: '#2B6B4B' },
+  YELLOW: { claro: '#EBCB63', medio: '#D8B341', sombra: '#95761C' },
 };
 
 /** Sin color declarado no se elige uno: gris de interfaz, que no afirma nada sobre el vehículo. */
-const SIN_COLOR = { cuerpo: '#6C7889', sombra: '#49525F' };
+const SIN_COLOR: Pintura = { claro: '#8792A3', medio: '#6C7889', sombra: '#424B57' };
 
-const VIDRIO = '#0E1B2C';
-const RUEDA = '#1A2230';
-const LLANTA = '#49525F';
+interface Pintura {
+  /** Donde pega la luz: capó y hombro. */
+  claro: string;
+  /** El color del vehículo, el que lee la persona. */
+  medio: string;
+  /** Los planos que no ven la luz: faldón y bajos. */
+  sombra: string;
+}
+
+const VIDRIO_ALTO = '#1C3047';
+const VIDRIO_BAJO = '#0C1828';
+const GOMA = '#161C26';
+const LLANTA = '#7D8899';
+const FARO = '#F4F7D8';
+const PISO = '#000000';
 
 export interface VehicleThumbProps {
   /** Clave del catálogo de tipos: CAR, MOTORCYCLE, PICKUP, VAN, OTHER… */
@@ -56,90 +76,142 @@ export interface VehicleThumbProps {
   className?: string;
 }
 
-function Carro({ cuerpo, sombra }: { cuerpo: string; sombra: string }): React.JSX.Element {
+/** La sombra del suelo: lo que hace que el vehículo esté apoyado y no flotando. */
+function Piso(): React.JSX.Element {
+  return <ellipse cx="60" cy="74" rx="46" ry="6" fill={PISO} opacity="0.28" />;
+}
+
+/**
+ * Una rueda en tres cuartos: elipse, no círculo.
+ *
+ * El eje delantero se ve de frente y el trasero de lado, así que la de atrás va más estrecha. Es
+ * lo que da la sensación de profundidad; dos círculos iguales devuelven el dibujo a plano.
+ */
+function Rueda({ cx, cy, rx, ry }: { cx: number; cy: number; rx: number; ry: number }): React.JSX.Element {
   return (
-    <>
-      <path d="M10 42 L18 28 Q20 24 25 24 L55 24 Q60 24 63 28 L72 42 Z" fill={cuerpo} />
-      <path d="M22 29 L27 40 L44 40 L44 29 Z M46 29 L46 40 L62 40 L57 29 Z" fill={VIDRIO} />
-      <rect x="6" y="40" width="68" height="10" rx="5" fill={cuerpo} />
-      <rect x="6" y="46" width="68" height="4" rx="2" fill={sombra} />
-      <circle cx="22" cy="51" r="7" fill={RUEDA} />
-      <circle cx="22" cy="51" r="3" fill={LLANTA} />
-      <circle cx="58" cy="51" r="7" fill={RUEDA} />
-      <circle cx="58" cy="51" r="3" fill={LLANTA} />
-    </>
+    <g>
+      <ellipse cx={cx} cy={cy} rx={rx} ry={ry} fill={GOMA} />
+      <ellipse cx={cx} cy={cy} rx={rx * 0.52} ry={ry * 0.52} fill={LLANTA} opacity="0.85" />
+      <ellipse cx={cx} cy={cy} rx={rx * 0.2} ry={ry * 0.2} fill={GOMA} opacity="0.7" />
+    </g>
   );
 }
 
-function Pickup({ cuerpo, sombra }: { cuerpo: string; sombra: string }): React.JSX.Element {
+function Automovil({ p }: { p: Pintura }): React.JSX.Element {
   return (
-    <>
-      <path d="M8 42 L14 27 Q16 23 21 23 L40 23 L42 42 Z" fill={cuerpo} />
-      <path d="M18 28 L23 39 L38 39 L37 28 Z" fill={VIDRIO} />
-      <rect x="40" y="31" width="34" height="11" fill={cuerpo} />
-      <rect x="40" y="31" width="34" height="3" fill={sombra} />
-      <rect x="6" y="40" width="68" height="10" rx="4" fill={cuerpo} />
-      <rect x="6" y="46" width="68" height="4" rx="2" fill={sombra} />
-      <circle cx="22" cy="51" r="7.5" fill={RUEDA} />
-      <circle cx="22" cy="51" r="3" fill={LLANTA} />
-      <circle cx="60" cy="51" r="7.5" fill={RUEDA} />
-      <circle cx="60" cy="51" r="3" fill={LLANTA} />
-    </>
+    <g>
+      <Piso />
+      {/* Costado: del faro trasero al morro, con la caída del techo. */}
+      <path
+        d="M14 62 L14 50 Q14 45 19 43 L30 40 Q38 28 50 26 L70 26 Q80 27 86 34 L98 40 Q106 43 108 50 L108 62 Q108 66 103 66 L19 66 Q14 66 14 62 Z"
+        fill={p.medio}
+      />
+      {/* Capó y techo: el plano que mira al cielo. */}
+      <path d="M30 40 Q38 28 50 26 L70 26 Q80 27 86 34 L84 40 Q74 33 66 32 L48 32 Q38 33 30 40 Z" fill={p.claro} />
+      {/* Luna y ventanilla, separadas por el montante. */}
+      <path d="M34 40 Q41 32 50 31 L62 31 L62 41 Z" fill={VIDRIO_ALTO} />
+      <path d="M65 31 L70 31 Q78 32 83 38 L83 41 L65 41 Z" fill={VIDRIO_BAJO} />
+      {/* Faldón: el plano bajo, siempre en sombra. */}
+      <path d="M14 58 L108 58 L108 62 Q108 66 103 66 L19 66 Q14 66 14 62 Z" fill={p.sombra} />
+      {/* Hombro: la línea de luz que recorre el costado. */}
+      <path d="M16 48 Q58 44 106 49" stroke={p.claro} strokeWidth="1.6" fill="none" opacity="0.75" />
+      <ellipse cx="104" cy="50" rx="4" ry="3" fill={FARO} opacity="0.9" />
+      <Rueda cx={33} cy={64} rx={11} ry={9} />
+      <Rueda cx={92} cy={64} rx={12} ry={10} />
+    </g>
   );
 }
 
-function Furgoneta({ cuerpo, sombra }: { cuerpo: string; sombra: string }): React.JSX.Element {
+function Pickup({ p }: { p: Pintura }): React.JSX.Element {
   return (
-    <>
-      <path d="M8 44 L8 26 Q8 21 14 21 L58 21 Q64 21 68 26 L74 36 L74 44 Z" fill={cuerpo} />
-      <path d="M14 26 L14 36 L34 36 L34 26 Z M38 26 L38 36 L60 36 L54 26 Z" fill={VIDRIO} />
-      <rect x="8" y="40" width="66" height="5" fill={sombra} />
-      <circle cx="23" cy="48" r="7.5" fill={RUEDA} />
-      <circle cx="23" cy="48" r="3" fill={LLANTA} />
-      <circle cx="60" cy="48" r="7.5" fill={RUEDA} />
-      <circle cx="60" cy="48" r="3" fill={LLANTA} />
-    </>
+    <g>
+      <Piso />
+      {/* Cabina corta adelante y cajón atrás: el perfil que distingue la categoría. */}
+      <path
+        d="M12 62 L12 46 L46 46 Q50 30 60 28 L76 28 Q84 29 90 36 L100 42 Q108 45 108 52 L108 62 Q108 66 103 66 L17 66 Q12 66 12 62 Z"
+        fill={p.medio}
+      />
+      {/* El cajón, un plano más oscuro porque mira hacia arriba y hacia atrás. */}
+      <path d="M12 46 L46 46 L46 58 L12 58 Z" fill={p.sombra} opacity="0.85" />
+      <path d="M46 46 L46 30 Q50 30 60 28 L76 28 Q84 29 90 36 L88 42 Q78 34 70 33 L58 33 Q50 35 46 46 Z" fill={p.claro} />
+      <path d="M50 44 Q55 34 62 33 L72 33 L72 44 Z" fill={VIDRIO_ALTO} />
+      <path d="M75 33 L78 33 Q84 35 88 40 L88 44 L75 44 Z" fill={VIDRIO_BAJO} />
+      <path d="M12 58 L108 58 L108 62 Q108 66 103 66 L17 66 Q12 66 12 62 Z" fill={p.sombra} />
+      <path d="M14 50 Q58 47 106 51" stroke={p.claro} strokeWidth="1.6" fill="none" opacity="0.7" />
+      <ellipse cx="104" cy="51" rx="4" ry="3" fill={FARO} opacity="0.9" />
+      <Rueda cx={30} cy={64} rx={11} ry={9} />
+      <Rueda cx={92} cy={64} rx={12} ry={10} />
+    </g>
   );
 }
 
-function Moto({ cuerpo, sombra }: { cuerpo: string; sombra: string }): React.JSX.Element {
+function Furgoneta({ p }: { p: Pintura }): React.JSX.Element {
   return (
-    <>
-      <circle cx="20" cy="46" r="11" fill="none" stroke={RUEDA} strokeWidth="4" />
-      <circle cx="60" cy="46" r="11" fill="none" stroke={RUEDA} strokeWidth="4" />
-      <path d="M20 46 L34 32 L48 32 L60 46" fill="none" stroke={cuerpo} strokeWidth="5"
-        strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M34 32 L44 44 L60 46" fill="none" stroke={sombra} strokeWidth="4"
-        strokeLinecap="round" />
-      <path d="M30 28 L40 28 L44 33 L32 33 Z" fill={cuerpo} />
-      <path d="M48 30 L56 26" stroke={LLANTA} strokeWidth="3" strokeLinecap="round" />
-    </>
+    <g>
+      <Piso />
+      {/* Una caja alta con el morro corto: nada de caída de techo. */}
+      <path
+        d="M12 62 L12 30 Q12 25 18 25 L74 25 Q84 26 92 34 L102 42 Q108 45 108 52 L108 62 Q108 66 103 66 L17 66 Q12 66 12 62 Z"
+        fill={p.medio}
+      />
+      <path d="M12 30 Q12 25 18 25 L74 25 Q84 26 92 34 L90 38 Q80 31 72 31 L12 31 Z" fill={p.claro} />
+      <path d="M18 34 L52 34 L52 46 L18 46 Z" fill={VIDRIO_BAJO} opacity="0.75" />
+      <path d="M56 34 L74 34 Q82 35 88 41 L88 46 L56 46 Z" fill={VIDRIO_ALTO} />
+      <path d="M12 58 L108 58 L108 62 Q108 66 103 66 L17 66 Q12 66 12 62 Z" fill={p.sombra} />
+      <path d="M14 50 Q58 47 106 51" stroke={p.claro} strokeWidth="1.6" fill="none" opacity="0.65" />
+      <ellipse cx="104" cy="51" rx="4" ry="3" fill={FARO} opacity="0.9" />
+      <Rueda cx={30} cy={64} rx={11} ry={9} />
+      <Rueda cx={92} cy={64} rx={12} ry={10} />
+    </g>
   );
 }
 
-/** Lo que no es ninguno de los anteriores: una silueta neutra, sin fingir que se sabe cuál es. */
-function Generico({ cuerpo, sombra }: { cuerpo: string; sombra: string }): React.JSX.Element {
+function Motocicleta({ p }: { p: Pintura }): React.JSX.Element {
   return (
-    <>
-      <rect x="12" y="26" width="56" height="20" rx="6" fill={cuerpo} />
-      <rect x="12" y="40" width="56" height="6" rx="3" fill={sombra} />
-      <circle cx="26" cy="49" r="6.5" fill={RUEDA} />
-      <circle cx="54" cy="49" r="6.5" fill={RUEDA} />
-    </>
+    <g>
+      <ellipse cx="60" cy="72" rx="34" ry="5" fill={PISO} opacity="0.28" />
+      {/* Las dos ruedas y, entre ellas, el cuadro: en una moto el dibujo es la estructura. */}
+      <ellipse cx="30" cy="58" rx="13" ry="12" fill={GOMA} />
+      <ellipse cx="30" cy="58" rx="6" ry="5.5" fill={LLANTA} opacity="0.8" />
+      <ellipse cx="92" cy="58" rx="14" ry="13" fill={GOMA} />
+      <ellipse cx="92" cy="58" rx="6.5" ry="6" fill={LLANTA} opacity="0.8" />
+      <path d="M30 58 L48 42 L70 40 L92 58" fill="none" stroke={p.medio} strokeWidth="7" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M48 42 L62 56 L92 58" fill="none" stroke={p.sombra} strokeWidth="5" strokeLinecap="round" />
+      {/* Depósito y asiento. */}
+      <path d="M44 38 L62 36 Q70 36 72 40 L52 44 Q45 44 44 38 Z" fill={p.claro} />
+      <path d="M70 40 L86 38 Q90 38 90 41 L72 44 Z" fill={p.sombra} />
+      {/* Manillar y faro. */}
+      <path d="M84 36 L96 30" stroke={LLANTA} strokeWidth="3" strokeLinecap="round" />
+      <ellipse cx="97" cy="42" rx="4" ry="3.4" fill={FARO} opacity="0.9" />
+    </g>
   );
 }
 
-const DIBUJOS: Record<string, (p: { cuerpo: string; sombra: string }) => React.JSX.Element> = {
-  CAR: Carro,
+/** Lo que no es ninguno de los anteriores: un volumen neutro, sin fingir que se sabe cuál es. */
+function Generico({ p }: { p: Pintura }): React.JSX.Element {
+  return (
+    <g>
+      <Piso />
+      <path d="M16 62 L16 42 Q16 36 23 36 L92 36 Q104 38 106 46 L106 62 Q106 66 101 66 L21 66 Q16 66 16 62 Z" fill={p.medio} />
+      <path d="M16 42 Q16 36 23 36 L92 36 Q100 37 104 42 L16 42 Z" fill={p.claro} />
+      <path d="M16 58 L106 58 L106 62 Q106 66 101 66 L21 66 Q16 66 16 62 Z" fill={p.sombra} />
+      <Rueda cx={34} cy={64} rx={10} ry={8} />
+      <Rueda cx={90} cy={64} rx={11} ry={9} />
+    </g>
+  );
+}
+
+const DIBUJOS: Record<string, (p: { p: Pintura }) => React.JSX.Element> = {
+  CAR: Automovil,
   PICKUP: Pickup,
   VAN: Furgoneta,
-  MOTORCYCLE: Moto,
+  MOTORCYCLE: Motocicleta,
 };
 
 export function VehicleThumb({ type, color, size = 44, className }: VehicleThumbProps): React.JSX.Element {
   const pintura = (color && PINTURA[color.toUpperCase()]) || SIN_COLOR;
-  // Un tipo que el catálogo crezca y esta tabla no conozca cae en la silueta neutra, que es mejor
-  // que dibujar un carro para algo que el servidor llamó de otra manera.
+  // Un tipo que el catálogo crezca y esta tabla no conozca cae en el volumen neutro, que es mejor
+  // que dibujar un automóvil para algo que el servidor llamó de otra manera.
   const Dibujo = DIBUJOS[(type || '').toUpperCase()] ?? Generico;
   return (
     <span
@@ -147,8 +219,8 @@ export function VehicleThumb({ type, color, size = 44, className }: VehicleThumb
       style={{ height: size, width: Math.round((size * 4) / 3) }}
       aria-hidden="true"
     >
-      <svg viewBox="0 0 80 60" width="100%" height="100%" focusable="false">
-        <Dibujo {...pintura} />
+      <svg viewBox="0 0 120 90" width="100%" height="100%" focusable="false" preserveAspectRatio="xMidYMid meet">
+        <Dibujo p={pintura} />
       </svg>
     </span>
   );

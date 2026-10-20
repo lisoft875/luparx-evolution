@@ -677,16 +677,30 @@ async function pasadaFuncional(browser) {
         await page.waitForTimeout(3000);
 
         const deEscazu = ((estado.ultimasZonas && estado.ultimasZonas.features) || []).map((f) => f.id);
-        const aviso = page.locator('.lx-zonemap__aviso');
-        const textoAviso = (await aviso.count()) ? (await aviso.first().innerText()).trim() : '';
+        const nota = page.locator('.lx-zonemap__nota');
+        const textoNota = (await nota.count()) ? (await nota.first().innerText()).trim() : '';
         ok(!deEscazu.some((id) => deSanJose.includes(id)),
           'ninguna geometría de San José aparece bajo Escazú',
           `San José ${JSON.stringify(deSanJose)} · Escazú ${JSON.stringify(deEscazu)}`);
         if (deEscazu.length === 0) {
-          ok(/todavía no tiene zonas verificadas/i.test(textoAviso),
-            'la municipalidad sin geometrías muestra el estado vacío', textoAviso || '(sin aviso)');
-          ok(await page.locator('.lx-zonemap__lienzo').count() === 0,
-            'y no se dibuja ningún lienzo vacío');
+          /*
+            Hasta el 21-10-2026 esto exigía lo contrario: que NO se dibujara ningún lienzo y que el
+            texto ocupara el hueco del mapa. Así estaba implementado y así lo fotografió la usuaria
+            en staging —una caja gris de 200 px donde debían verse calles—, y la orden del 21-10
+            pide exactamente lo otro: que la falta de polígonos verificados no impida ver el mapa
+            base, con el aviso en una línea.
+
+            Lo que sigue intacto es lo que de verdad protege: sin geometrías no puede dibujarse
+            ningún límite, porque los polígonos salen únicamente de esos datos y no llegó ninguno.
+          */
+          ok(/todavía no tiene zonas verificadas/i.test(textoNota),
+            'sin geometrías, el aviso aparece como nota de una línea', textoNota || '(sin nota)');
+          ok(await page.locator('.lx-zonemap__lienzo canvas').count() === 1,
+            'y el mapa base se dibuja igual');
+          ok(await page.locator('.lx-zonemap__aviso').count() === 0,
+            'ya no queda la caja gris en lugar del mapa');
+          ok(deEscazu.length === 0,
+            'no llegó ninguna geometría, así que no hay ningún límite que dibujar');
           console.log(`  ··  captura: ${await capturar(page, 'vacio-escazu-390x844')}`);
         }
       }

@@ -83,10 +83,41 @@ export function ZoneMap({
   const rasgos = zonas?.features ?? [];
   const noOficiales = rasgos.filter((f) => f.properties.status !== VERIFICADA).length;
   const hayQueDibujar = rasgos.length > 0;
+  /*
+    El mapa base NO depende de que haya polígonos (21-10-2026).
+
+    Hasta hoy, sin geometrías verificadas no se dibujaba nada: en su lugar salía una caja gris con
+    un texto, que es lo que la usuaria fotografió en staging ocupando media pantalla. El motivo
+    estaba escrito acá abajo —«sin posición inicial inventada: el encuadre lo da la geometría»— y
+    seguía siendo cierto, pero la conclusión era desproporcionada: que no sepamos dónde cae una zona
+    no quita que las calles existan y sirvan para orientarse.
+
+    Ahora el mapa base se dibuja siempre que haya proveedor, y los polígonos se añaden sólo si
+    llegaron. Nada se inventa: sin geometrías no se pinta ningún límite municipal ni ninguna bahía,
+    y el aviso lo dice en una línea en vez de en una caja vacía.
+  */
+  const puedeDibujarse = Boolean(estilo) && !error && !cargando;
+
+  /*
+    El mapa se crea UNA vez y después se le cambian los datos.
+
+    Antes el efecto que lo crea dependía de `zonas`, y mientras el mapa sólo existía con geometrías
+    eso no se notaba: llegaban los datos y recién entonces se creaba, una sola vez. Al dibujar
+    también sin ellas, esa dependencia pasó a significar dos mapas por pantalla —uno sin datos y
+    otro al llegar—, y el navegador limita los lienzos WebGL: medido el 21-10-2026, a partir del
+    octavo el mapa deja de aparecer, sin error. Se vio como «el mapa no se dibuja» en el tamaño
+    más chico, que es el último del barrido.
+
+    Así que ahora son dos efectos: uno crea y destruye el mapa, el otro le pone o le quita la capa
+    de zonas cuando el dato cambia.
+  */
+  const zonasRef = useRef(zonas);
+  zonasRef.current = zonas;
+  const [generacion, setGeneracion] = useState(0);
 
   // --- ciclo de vida del mapa ------------------------------------------------------------------
   useEffect(() => {
-    if (!estilo || !contenedor.current || !hayQueDibujar) return undefined;
+    if (!estilo || !contenedor.current || !puedeDibujarse) return undefined;
     let vivo = true;
     let instancia: { remove: () => void } | null = null;
 
@@ -107,8 +138,13 @@ export function ZoneMap({
         const m = new maplibre.Map({
           container: contenedor.current,
           style: estiloFinal as never,
-          // Sin posición inicial inventada: el encuadre lo da la geometría que llegó.
-          bounds: encuadreAMaplibre(zonas),
+          /*
+            El encuadre lo da la geometría que llegó. Si no llegó ninguna, el país — y es lo
+            único honesto que se puede poner: el nombre de la municipalidad no es una
+            coordenada, y convertirlo en una sería inventarle una ubicación a un dato que el
+            servidor no mandó. Desde el país, la persona acerca hasta su calle.
+          */
+          bounds: encuadreAMaplibre(zonasRef.current) ?? COSTA_RICA,
           fitBoundsOptions: { padding: 24, maxZoom: 15 },
           attributionControl: { compact: true },
           // En móvil el mapa vive dentro de un formulario que se desplaza: sin esto, el dedo que
@@ -125,13 +161,8 @@ export function ZoneMap({
         m.addControl(new maplibre.NavigationControl({ showCompass: false }), 'top-right');
 
         m.on('error', () => setFalloMapa(true));
-        m.on('load', () => {
-          if (!vivo) return;
-          m.addSource(FUENTE, { type: 'geojson', data: zonas as never });
-          for (const capa of capasDeZonas(PALETA_MAPA.zona, PALETA_MAPA.zonaNoOficial)) {
-            m.addLayer(capa as never);
-          }
-        });
+        // Las capas las pone el efecto de datos, que se entera por este contador.
+        m.on('load', () => { if (vivo) setGeneracion((n) => n + 1); });
       } catch {
         if (vivo) setFalloMapa(true);
       }
@@ -146,8 +177,51 @@ export function ZoneMap({
       try { instancia?.remove(); } catch { /* ya se fue */ }
       mapa.current = null;
     };
-    // `zonas` entra por identidad: react-query devuelve el mismo objeto mientras no cambie el dato.
-  }, [estilo, recolorear, zonas, hayQueDibujar]);
+  }, [estilo, recolorear, puedeDibujarse]);
+
+  /*
+    Los polígonos, cuando los hay.
+
+    Se añaden y se quitan sobre el mapa que ya existe. Sin geometrías no se añade ninguna capa y,
+    si había, se retira: así no queda dibujado en pantalla un límite que el servidor dejó de
+    mandar. `zonas` entra por identidad —react-query devuelve el mismo objeto mientras no cambie
+    el dato—, así que esto no corre en cada redibujado.
+  */
+  useEffect(() => {
+    const m = mapa.current as {
+      getSource?: (id: string) => { setData?: (d: unknown) => void } | undefined;
+      addSource?: (id: string, s: unknown) => void;
+      removeSource?: (id: string) => void;
+      addLayer?: (c: unknown) => void;
+      removeLayer?: (id: string) => void;
+      getLayer?: (id: string) => unknown;
+      fitBounds?: (b: unknown, o: unknown) => void;
+    } | null;
+    if (!m || generacion === 0) return;
+
+    const capas = capasDeZonas(PALETA_MAPA.zona, PALETA_MAPA.zonaNoOficial);
+    const hay = Boolean(zonas && zonas.features.length > 0);
+
+    try {
+      if (hay) {
+        const fuente = m.getSource?.(FUENTE);
+        if (fuente?.setData) fuente.setData(zonas as never);
+        else m.addSource?.(FUENTE, { type: 'geojson', data: zonas as never });
+        for (const capa of capas) {
+          if (!m.getLayer?.((capa as { id: string }).id)) m.addLayer?.(capa as never);
+        }
+        const encuadre = encuadreAMaplibre(zonas);
+        if (encuadre) m.fitBounds?.(encuadre, { padding: 24, maxZoom: 15, animate: false });
+      } else {
+        for (const capa of capas) {
+          if (m.getLayer?.((capa as { id: string }).id)) m.removeLayer?.((capa as { id: string }).id);
+        }
+        if (m.getSource?.(FUENTE)) m.removeSource?.(FUENTE);
+      }
+    } catch {
+      // El mapa puede estar yéndose mientras esto corre; no es un fallo que deba ver nadie.
+    }
+  }, [zonas, generacion]);
 
   // Al ampliar y al cerrar cambia el tamaño del contenedor, y MapLibre no se entera solo.
   useEffect(() => {
@@ -178,8 +252,6 @@ export function ZoneMap({
     );
   } else if (cargando) {
     cuerpo = aviso(textos.cargando);
-  } else if (!hayQueDibujar) {
-    cuerpo = aviso(textos.vacio);
   } else if (falloMapa) {
     cuerpo = aviso(textos.errorTitulo);
   } else {
@@ -194,7 +266,7 @@ export function ZoneMap({
     >
       <div className="lx-zonemap__barra">
         <h3 id={`${id}-titulo`} className="lx-zonemap__titulo">{textos.titulo}</h3>
-        {hayQueDibujar && estilo && !falloMapa ? (
+        {puedeDibujarse && !falloMapa ? (
           <Button
             type="button"
             variant="secondary"
@@ -214,9 +286,27 @@ export function ZoneMap({
       ) : null}
 
       {cuerpo}
+
+      {/* Una línea, DEBAJO del mapa: primero se ven las calles y después se lee por qué no hay
+          límites dibujados. Al revés, el texto volvía a ser lo primero y lo único. */}
+      {!hayQueDibujar && puedeDibujarse && !falloMapa ? (
+        <p className="lx-zonemap__nota" role="note">{textos.vacio}</p>
+      ) : null}
     </section>
   );
 }
+
+/**
+ * Costa Rica entera, para cuando no hay ninguna geometría que encuadre el mapa.
+ *
+ * <p>Es el único encuadre que no afirma nada: el país donde opera el producto. No se deduce del
+ * nombre de la municipalidad —un nombre no es una coordenada— ni se pide la ubicación del
+ * teléfono, que exige consentimiento y que esta pantalla no necesita.</p>
+ *
+ * <p>Son los límites continentales; la Isla del Coco queda fuera a propósito, porque incluirla
+ * alejaría el encuadre unos 500 km al suroeste por una isla sin estacionamiento municipal.</p>
+ */
+const COSTA_RICA: [[number, number], [number, number]] = [[-85.95, 8.03], [-82.55, 11.22]];
 
 /** El encuadre en la forma que espera MapLibre: `[[oeste, sur], [este, norte]]`. */
 function encuadreAMaplibre(

@@ -8873,6 +8873,21 @@ a.lx-list-row {
   line-height: 1.4;
 }
 
+/*
+  «Todavía no hay límites verificados», en una línea (21-10-2026).
+
+  Antes este mismo texto ocupaba el hueco entero del mapa: una caja gris de 200 px donde debía
+  haber calles. Ahora el mapa se dibuja igual y esto es una nota debajo, sin recuadro ni color de
+  alerta, porque no es un error: es el estado de los datos de esa municipalidad.
+*/
+.lx-zonemap__nota {
+  margin: 0;
+  padding: var(--lx-space-1) 0 0;
+  color: var(--lx-text-muted);
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
 /* MapLibre inyecta su propia hoja; esto sólo ajusta lo que choca con el lienzo oscuro. */
 .lx-zonemap .maplibregl-ctrl-attrib {
   font-size: 0.7rem;
@@ -8896,14 +8911,21 @@ a.lx-list-row {
   red que esperar. El fondo y el borde son los de las demás superficies para que se lea como parte
   de la tarjeta y no como una foto pegada encima.
 */
+/*
+  La miniatura del vehículo. Sin marco (21-10-2026).
+
+  Tenía recuadro y fondo propio, y eso la convertía en un ICONO dentro de una casilla — que es
+  justo como la describió la usuaria: «carrito plano genérico». En el boceto la imagen del vehículo
+  se apoya sobre la tarjeta, sin caja alrededor. Quitado el borde y el fondo, el dibujo se lee como
+  la imagen del carro y no como un botón.
+
+  El hueco se sigue reservando por el tamaño que fija el componente, así que la fila no se mueve.
+*/
 .lx-vehicle-thumb {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  border-radius: var(--lx-radius-sm);
-  background: var(--lx-surface-2);
-  border: 1px solid var(--lx-border);
   overflow: hidden;
 }
 
