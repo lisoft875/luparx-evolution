@@ -72,6 +72,16 @@ services:
       # se encienda a mano para comparar la pantalla contra su referencia. Ver DevDashboardSeeder,
       # que documenta cómo se borra lo que escribe.
       LUPARX_DEV_SEED_DASHBOARD_DEMO: ${LUPARX_DEV_SEED_DASHBOARD_DEMO:-false}
+      # Qué geometrías de zona ve el ciudadano en el mapa. Por omisión, SÓLO las verificadas: un
+      # polígono que nadie revisó no puede salir como si fuera el límite de cobro de una
+      # municipalidad. En staging se abre a UNVERIFIED para ver el acabado del mapa con los
+      # rectángulos de demostración que siembra la V41_0 sobre San José — que el portal pinta en
+      # violeta, con borde punteado y la palabra DEMO encima, nunca como límites oficiales.
+      #
+      # Declarada acá a propósito: Compose sólo le pasa al contenedor lo que nombra, así que
+      # ponerla únicamente en `.env` no haría nada. Es el mismo tropiezo que documentan las dos
+      # variables de arriba.
+      GEO_CITIZEN_GEOMETRY_STATUSES: ${GEO_CITIZEN_GEOMETRY_STATUSES:-VERIFIED}
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
