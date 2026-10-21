@@ -24,6 +24,32 @@ export interface Encuadre {
   maxLat: number;
 }
 
+/** Lo que el servidor considera un límite oficial. */
+const VERIFICADA = 'VERIFIED';
+
+/**
+ * El rótulo que va encima de la zona en el mapa: nombre, tarifa y, cuando toca, el aviso.
+ *
+ * <p>El boceto escribe «Zona Centro» y debajo «₡450/h». El nombre viene en el GeoJSON; la tarifa
+ * NO —el servidor manda código, nombre, procedencia y estado, y ningún precio—, así que la pone
+ * quien la tiene a mano. Si no la tiene, el rótulo es sólo el nombre: media verdad es peor que
+ * una línea menos.</p>
+ *
+ * <p>Y si la geometría no está verificada, el rótulo lo dice con palabras. El contorno punteado y
+ * el color ya lo señalan, pero ninguno de los dos se lee en una captura de pantalla reenviada por
+ * WhatsApp, que es como viajan estas imágenes.</p>
+ */
+export function etiquetaDeZona(
+  nombre: string,
+  tarifa: string | undefined,
+  estado: string,
+): string {
+  const lineas = [nombre];
+  if (tarifa) lineas.push(tarifa);
+  if (estado !== VERIFICADA) lineas.push('DEMO · no oficial');
+  return lineas.join('\n');
+}
+
 /** Todas las coordenadas de una geometría, sin importar si es Polygon o MultiPolygon. */
 function coordenadas(geom: GeoJsonGeometry): [number, number][] {
   if (geom.type === 'Polygon') {

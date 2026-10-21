@@ -9,9 +9,9 @@ import * as React from 'react';
 import { useEffect, useId, useRef, useState } from 'react';
 import type { ZoneGeoJsonFeatureCollection } from '@luparx/api-client';
 import { Button } from '../components/Button';
-import { encuadreDe } from './zoneGeometry';
+import { encuadreDe, etiquetaDeZona } from './zoneGeometry';
 import { PALETA_MAPA, oscurecer, urlDelEstilo } from './estiloOscuro';
-import { FUENTE, VERIFICADA, capasDeZonas } from './capas';
+import { FUENTE, PROP_ETIQUETA, VERIFICADA, capasDeZonas } from './capas';
 
 export interface ZoneMapTextos {
   /** Nombre accesible del mapa. */
@@ -42,6 +42,16 @@ export interface ZoneMapProps {
   altoCompacto?: number;
   /** Desactiva el recoloreado cuando el proveedor ya sirve un estilo oscuro. */
   recolorear?: boolean;
+  /**
+   * La tarifa de cada zona, ya escrita —«₡450/h»—, por código de zona.
+   *
+   * El GeoJSON del servidor no trae precios: trae código, nombre, procedencia y estado. La tarifa
+   * la tiene la pantalla que ya pidió las zonas, y entra por acá tal como el servidor la dio. Una
+   * zona ausente de este mapa se rotula sólo con su nombre; nunca se calcula un precio por hora a
+   * partir de otra duración, que es la clase de cuenta que sale mal en cuanto la escalera de
+   * precios no es lineal — y casi nunca lo es.
+   */
+  etiquetas?: Record<string, string>;
 }
 
 /**
@@ -72,6 +82,7 @@ export function ZoneMap({
   textos,
   altoCompacto = 200,
   recolorear = true,
+  etiquetas,
 }: ZoneMapProps): React.JSX.Element {
   const id = useId();
   const contenedor = useRef<HTMLDivElement>(null);
@@ -196,17 +207,25 @@ export function ZoneMap({
       removeLayer?: (id: string) => void;
       getLayer?: (id: string) => unknown;
       fitBounds?: (b: unknown, o: unknown) => void;
+      getStyle?: () => EstiloCargado | undefined;
     } | null;
     if (!m || generacion === 0) return;
 
-    const capas = capasDeZonas(PALETA_MAPA.zona, PALETA_MAPA.zonaNoOficial);
+    const capas = capasDeZonas({
+      colorOficial: PALETA_MAPA.zona,
+      colorNoOficial: PALETA_MAPA.zonaNoOficial,
+      colorTexto: PALETA_MAPA.texto,
+      colorBordeTexto: PALETA_MAPA.textoBorde,
+      fuenteTexto: fuenteDelEstilo(m),
+    });
     const hay = Boolean(zonas && zonas.features.length > 0);
+    const datos = hay ? conEtiquetas(zonas as ZoneGeoJsonFeatureCollection, etiquetas) : zonas;
 
     try {
       if (hay) {
         const fuente = m.getSource?.(FUENTE);
-        if (fuente?.setData) fuente.setData(zonas as never);
-        else m.addSource?.(FUENTE, { type: 'geojson', data: zonas as never });
+        if (fuente?.setData) fuente.setData(datos as never);
+        else m.addSource?.(FUENTE, { type: 'geojson', data: datos as never });
         for (const capa of capas) {
           if (!m.getLayer?.((capa as { id: string }).id)) m.addLayer?.(capa as never);
         }
@@ -221,7 +240,7 @@ export function ZoneMap({
     } catch {
       // El mapa puede estar yéndose mientras esto corre; no es un fallo que deba ver nadie.
     }
-  }, [zonas, generacion]);
+  }, [zonas, generacion, etiquetas]);
 
   // Al ampliar y al cerrar cambia el tamaño del contenedor, y MapLibre no se entera solo.
   useEffect(() => {
@@ -294,6 +313,64 @@ export function ZoneMap({
       ) : null}
     </section>
   );
+}
+
+interface EstiloCargado {
+  glyphs?: string;
+  layers?: { type?: string; layout?: { 'text-font'?: string[] } }[];
+}
+
+/**
+ * La familia tipográfica que ya usa el estilo del proveedor, o nada.
+ *
+ * <p>No se escribe un nombre de fuente a mano. Si la familia no está en el juego de glifos del
+ * proveedor, MapLibre lanza un error, el componente lo recoge y la pantalla entera cae al aviso de
+ * fallo: un rótulo decorativo tumbaría el mapa. Así que se lee la que el propio estilo ya está
+ * usando para sus etiquetas de calle —que por definición existe— y se reutiliza.</p>
+ *
+ * <p>Sin `glyphs` en el estilo no hay rótulos posibles: devuelve `undefined` y la capa de texto
+ * sencillamente no se añade. Es lo que pasa con el estilo de prueba de los arneses, que no sirve
+ * ni teselas ni tipografías.</p>
+ */
+function fuenteDelEstilo(m: { getStyle?: () => EstiloCargado | undefined } | null): string[] | undefined {
+  try {
+    const estilo = m?.getStyle?.();
+    if (!estilo || !estilo.glyphs) return undefined;
+    for (const capa of estilo.layers ?? []) {
+      const familia = capa.layout?.['text-font'];
+      if (capa.type === 'symbol' && Array.isArray(familia) && familia.length > 0) return familia;
+    }
+    return undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * La misma colección, con el rótulo ya compuesto en cada rasgo.
+ *
+ * <p>Se copia en vez de tocar lo que llegó: el objeto del servidor lo comparte react-query con
+ * quien más lo pida, y escribirle propiedades encima es la clase de efecto que después nadie
+ * encuentra.</p>
+ */
+function conEtiquetas(
+  zonas: ZoneGeoJsonFeatureCollection,
+  tarifas: Record<string, string> | undefined,
+): ZoneGeoJsonFeatureCollection {
+  return {
+    ...zonas,
+    features: zonas.features.map((f) => ({
+      ...f,
+      properties: {
+        ...f.properties,
+        [PROP_ETIQUETA]: etiquetaDeZona(
+          f.properties.name,
+          tarifas?.[f.properties.code],
+          f.properties.status,
+        ),
+      },
+    })),
+  };
 }
 
 /**

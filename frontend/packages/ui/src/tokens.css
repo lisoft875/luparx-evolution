@@ -8912,6 +8912,90 @@ a.lx-list-row {
   de la tarjeta y no como una foto pegada encima.
 */
 /*
+  La pantalla «¡Listo!» del boceto (21-10-2026).
+
+  Antes era una tarjeta grande con el título a la izquierda, otra tarjeta anidada dentro y media
+  pantalla vacía debajo. El boceto es otra cosa: una composición centrada, con el símbolo de éxito
+  como protagonista y el resumen compacto debajo. Lo que cambia no es el dato —es el mismo— sino
+  el peso que se le da a cada parte.
+
+  Centrado y sin tarjeta exterior: el fondo de la pantalla hace de lienzo, como en el boceto.
+*/
+.lx-resultado {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--lx-space-2);
+  padding-top: var(--lx-space-4);
+}
+
+/* El recuadro donde viven el halo y el confeti. Alto fijo para que el título no baile. */
+.lx-resultado__celebracion {
+  position: relative;
+  width: 100%;
+  height: 150px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/*
+  El halo: dos anillos concéntricos alrededor del disco. No es una sombra difusa —sobre un fondo
+  tan oscuro una sombra no se ve— sino luz dibujada: el disco, un anillo nítido y un segundo
+  anillo muy tenue más afuera.
+*/
+.lx-resultado__disco {
+  position: relative;
+  width: 92px;
+  height: 92px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #67e8f9;
+  background: radial-gradient(circle at 50% 45%, rgba(34, 211, 238, 0.22), rgba(12, 74, 110, 0.28) 70%);
+  border: 2px solid #22d3ee;
+  box-shadow: 0 0 0 10px rgba(34, 211, 238, 0.1), 0 0 28px rgba(34, 211, 238, 0.35);
+}
+
+/*
+  El confeti: ocho piezas quietas, colocadas a mano alrededor del disco.
+
+  Quietas a propósito. Una animación de celebración en una pantalla que la persona abre con el
+  carro ya estacionado y el teléfono en la mano no aporta nada, y se repetiría cada vez que vuelva.
+  El boceto tampoco la pide: muestra las piezas puestas.
+*/
+.lx-resultado__confeti {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.lx-resultado__confeti i {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  opacity: 0.9;
+}
+
+.lx-resultado__titulo {
+  margin: 0;
+  font-size: 1.6rem;
+  font-weight: 700;
+  line-height: 1.15;
+}
+.lx-resultado__subtitulo {
+  margin: 0 0 var(--lx-space-2);
+  color: var(--lx-text-muted);
+}
+/* El resumen: ancho completo, compacto, sin tarjeta dentro de otra tarjeta. */
+.lx-resultado__resumen {
+  width: 100%;
+  text-align: start;
+}
+
+/*
   La miniatura del vehículo. Sin marco (21-10-2026).
 
   Tenía recuadro y fondo propio, y eso la convertía en un ICONO dentro de una casilla — que es

@@ -12,6 +12,7 @@ import {
   ErrorDialog,
   FormField,
   IconCar,
+  IconCheck,
   IconPin,
   IconPlus,
   Input,
@@ -25,6 +26,8 @@ import {
 import { formatDurationLabel } from '../lib/duration';
 import { parkingErrorMessage } from '../lib/apiErrors';
 import { checkSpaceCode } from '../lib/spaceCode';
+import { tarifasPorCodigo } from '../lib/tarifaDeZona';
+import { ExtendSessionSheet } from '../components/ExtendSessionSheet';
 
 /*
   El mapa llega por `lazy`: MapLibre y su lienzo pesan, y la mayoría de las sesiones de
@@ -32,6 +35,24 @@ import { checkSpaceCode } from '../lib/spaceCode';
   estaba, y quien no despliega el mapa no descarga nada de él.
 */
 const ZoneMap = lazy(() => import('@luparx/ui/map').then((m) => ({ default: m.ZoneMap })));
+
+/*
+  Los papelitos de la pantalla «¡Listo!», colocados a mano.
+
+  Ocho piezas y sus posiciones fijas: el boceto las tiene repartidas alrededor del disco y no
+  cayendo, así que no hay animación ni azar. Al azar, además, la composición salía distinta en cada
+  captura y no se podía comparar con el boceto, que es lo que pidió la orden.
+*/
+const CONFETI = [
+  { x: '14%', y: '18%', color: '#38bdf8', giro: 18 },
+  { x: '30%', y: '8%', color: '#f472b6', giro: -24 },
+  { x: '68%', y: '10%', color: '#fbbf24', giro: 32 },
+  { x: '84%', y: '22%', color: '#8b5cf6', giro: -12 },
+  { x: '10%', y: '58%', color: '#34d399', giro: 40 },
+  { x: '26%', y: '74%', color: '#60a5fa', giro: -34 },
+  { x: '72%', y: '70%', color: '#fbbf24', giro: 22 },
+  { x: '88%', y: '56%', color: '#f472b6', giro: -18 },
+];
 import { catalogLabeller, vehicleDescriptor, vehicleOptionDetail } from '../lib/vehiclePresentation';
 import { CitizenShell } from '../components/CitizenShell';
 import { QueryBoundary } from '../components/QueryBoundary';
@@ -81,6 +102,10 @@ export function ParkingPage(): React.JSX.Element {
     así nadie paga una petición ni la descarga de MapLibre por escribir un código de bahía.
   */
   const [mapaAbierto, setMapaAbierto] = useState(false);
+  /** El mapa de la pantalla «¡Listo!», que se abre desde «Ver en el mapa». */
+  const [mapaResultado, setMapaResultado] = useState(false);
+  /** La hoja de ampliar tiempo, la misma que usa el Inicio. */
+  const [ampliarAbierto, setAmpliarAbierto] = useState(false);
   const spaceFormatQuery = useParkingSpaceFormat();
   const spaceFormat = spaceFormatQuery.data;
 
@@ -459,6 +484,11 @@ export function ParkingPage(): React.JSX.Element {
                     cargando={zonasGeoQuery.isLoading}
                     error={zonasGeoQuery.isError}
                     onReintentar={() => void zonasGeoQuery.refetch()}
+                    /* La tarifa que el boceto escribe debajo del nombre de cada zona. Sale de las
+                       zonas que esta pantalla ya pidió —el GeoJSON no trae precios— y va tal cual
+                       la dio el servidor. */
+                    etiquetas={tarifasPorCodigo(zones, (minor, moneda) =>
+                      formatCurrencyMinor(minor, moneda, locale))}
                     textos={{
                       titulo: t('citizen.parking.map.title'),
                       ampliar: t('citizen.parking.map.expand'),
@@ -899,7 +929,12 @@ export function ParkingPage(): React.JSX.Element {
       {/*
         El indicador compacto del boceto: cuatro números en una fila, el actual marcado. Dice dónde
         está la persona y cuánto falta sin gastar la altura que gastaba la lista completa de pasos.
+
+        En el paso 4 NO se dibuja: la pantalla 5 del boceto es una celebración a pantalla completa,
+        sin rastro del asistente. Ya no queda nada que recorrer, y el indicador le robaba al símbolo
+        de éxito el sitio que el boceto le da.
       */}
+      {paso < 4 ? (
       <ol className="lx-pasos" aria-label={t('citizen.parking.wizard.progress', { current: String(paso), total: String(PASOS_TOTALES) })}>
         {pasosRotulos.map((clave, indice) => {
           const numero = indice + 1;
@@ -912,16 +947,33 @@ export function ParkingPage(): React.JSX.Element {
           );
         })}
       </ol>
+      ) : null}
       {paso === 1 ? <StepList className="lx-step-list--sin-numero" steps={steps.slice(0, 2)} /> : null}
       {paso === 2 ? <StepList className="lx-step-list--sin-numero" steps={steps.slice(2, 4)} /> : null}
       {paso === 3 ? <StepList className="lx-step-list--sin-numero" steps={steps.slice(4, 5)} /> : null}
+      {/*
+        La pantalla 5 del boceto: el símbolo de éxito manda, el resumen va compacto debajo.
+
+        El dato es el mismo que antes —zona, vehículo y vencimiento, los tres de la sesión que el
+        servidor acaba de crear—; lo que cambia es la composición. Se quitó la tarjeta exterior,
+        que convertía la celebración en un formulario más, y la tarjeta anidada dentro de otra.
+      */}
       {paso === 4 && sesionIniciada ? (
-        <Card>
-          <h2 className="lx-text-screen-title" style={{ margin: 0 }}>{t('citizen.parking.result.title')}</h2>
-          <p className="lx-text-meta" style={{ margin: '4px 0 var(--lx-space-3) 0' }}>
-            {t('citizen.parking.result.subtitle')}
-          </p>
-          <Card nested>
+        <section className="lx-resultado">
+          <div className="lx-resultado__celebracion">
+            {/* Decorativo y nada más: el lector de pantalla anuncia el título, no los papelitos. */}
+            <span className="lx-resultado__confeti" aria-hidden="true">
+              {CONFETI.map((p, i) => (
+                <i key={i} style={{ left: p.x, top: p.y, background: p.color, transform: `rotate(${p.giro}deg)` }} />
+              ))}
+            </span>
+            <span className="lx-resultado__disco" aria-hidden="true">
+              <IconCheck size={44} />
+            </span>
+          </div>
+          <h2 className="lx-resultado__titulo">{t('citizen.parking.result.title')}</h2>
+          <p className="lx-resultado__subtitulo">{t('citizen.parking.result.subtitle')}</p>
+          <Card className="lx-resultado__resumen">
             <ListRow title={t('citizen.parking.step4.zoneLabel')} value={`${sesionIniciada.zoneName} (${sesionIniciada.spaceCode})`} />
             <ListRow title={t('citizen.parking.step4.vehicleLabel')} value={sesionIniciada.plateSnapshot} />
             <ListRow
@@ -929,7 +981,36 @@ export function ParkingPage(): React.JSX.Element {
               value={formatWeekdayTime(sesionIniciada.expiresAt, locale, { timeZone: schedule?.timeZone })}
             />
           </Card>
-        </Card>
+          {/*
+            «Ver en el mapa» del boceto, y es el mismo mapa del paso 1: la zona de la estadía que
+            se acaba de iniciar. No marca la bahía —`parking_spaces` no tiene coordenadas— ni pide
+            ubicación. Si la municipalidad no tiene geometrías, el mapa base igual se ve.
+          */}
+          {mapaResultado ? (
+            <Suspense fallback={<p className="lx-text-meta">{t('citizen.parking.map.loading')}</p>}>
+              <ZoneMap
+                zonas={zonasGeoQuery.data}
+                cargando={zonasGeoQuery.isLoading}
+                error={zonasGeoQuery.isError}
+                onReintentar={() => void zonasGeoQuery.refetch()}
+                etiquetas={tarifasPorCodigo(zones, (minor, moneda) =>
+                  formatCurrencyMinor(minor, moneda, locale))}
+                textos={{
+                  titulo: t('citizen.parking.map.title'),
+                  ampliar: t('citizen.parking.map.expand'),
+                  cerrar: t('citizen.parking.map.collapse'),
+                  cargando: t('citizen.parking.map.loading'),
+                  vacio: t('citizen.parking.map.empty'),
+                  errorTitulo: t('citizen.parking.map.error'),
+                  reintentar: t('common.retry'),
+                  sinProveedor: t('citizen.parking.map.noProvider'),
+                  noOficial: t('citizen.parking.map.notOfficial'),
+                  noOficialDetalle: t('citizen.parking.map.notOfficialDetail'),
+                }}
+              />
+            </Suspense>
+          ) : null}
+        </section>
       ) : null}
       {/*
         CTA fijo sobre la barra de pestañas. Antes era un hijo inline de `main` después de cinco
@@ -952,7 +1033,31 @@ export function ParkingPage(): React.JSX.Element {
       <div className="lx-sticky-cta">
         {paso === 4 ? (
           <>
-            <Button type="button" variant="primary" fullWidth onClick={() => navigate('/')}>
+            {/*
+              El boceto pone «Ampliar tiempo» como acción principal, y existe: es la misma hoja que
+              usa el Inicio. Va sólo si la municipalidad permite extender —`policy.extensionEnabled`,
+              la misma condición que el Inicio—, porque un botón que el servidor va a rechazar es
+              peor que ningún botón.
+
+              «Compartir comprobante», la tercera acción del boceto, NO está: no existe comprobante
+              que compartir en ninguna parte de la aplicación, y el boceto no autoriza inventarlo.
+            */}
+            {policy?.extensionEnabled ? (
+              <Button type="button" variant="primary" fullWidth onClick={() => setAmpliarAbierto(true)}>
+                <IconPlus size={16} /> {t('citizen.parking.result.extendCta')}
+              </Button>
+            ) : null}
+            <Button
+              type="button"
+              variant={policy?.extensionEnabled ? 'outline' : 'primary'}
+              fullWidth
+              aria-expanded={mapaResultado}
+              onClick={() => setMapaResultado((v) => !v)}
+            >
+              <IconPin size={16} />{' '}
+              {mapaResultado ? t('citizen.parking.result.hideMap') : t('citizen.parking.result.seeOnMap')}
+            </Button>
+            <Button type="button" variant="outline" fullWidth onClick={() => navigate('/')}>
               {t('citizen.parking.result.seeMine')}
             </Button>
           </>
@@ -1009,6 +1114,15 @@ export function ParkingPage(): React.JSX.Element {
         closeLabel={t('common.close')}
         dismissLabel={t('common.understood')}
       />
+      {/* La misma hoja que el Inicio: una sola implementación de ampliar, con los precios que el
+          servidor da para ESTA estadía. */}
+      {sesionIniciada ? (
+        <ExtendSessionSheet
+          open={ampliarAbierto}
+          onClose={() => setAmpliarAbierto(false)}
+          session={sesionIniciada}
+        />
+      ) : null}
     </CitizenShell>
   );
 }

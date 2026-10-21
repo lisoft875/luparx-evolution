@@ -32,7 +32,7 @@ try {
   }
 }
 
-const { centroide, puntosDeZonas, encuadreDe } = await import(join(dir, 'zoneGeometry.js'));
+const { centroide, puntosDeZonas, encuadreDe, etiquetaDeZona } = await import(join(dir, 'zoneGeometry.js'));
 
 let fallos = 0;
 const check = (nombre, cond, detalle = '') => {
@@ -93,6 +93,28 @@ check(
   ep && ep.maxLon - ep.minLon > 0.0039 && ep.maxLat - ep.minLat > 0.0039,
   JSON.stringify(ep),
 );
+
+
+// --- el rótulo del mapa -------------------------------------------------------------------------
+/*
+  Lo que el boceto escribe encima de cada zona: el nombre y, debajo, la tarifa. La tarifa NO viene
+  en el GeoJSON —el servidor manda código, nombre, procedencia y estado—, así que si no la pasan no
+  se inventa: queda el nombre solo.
+*/
+check('con tarifa, el rótulo son dos líneas: nombre y precio',
+  etiquetaDeZona('Zona Centro', '₡450/h', 'VERIFIED') === 'Zona Centro\n₡450/h',
+  JSON.stringify(etiquetaDeZona('Zona Centro', '₡450/h', 'VERIFIED')));
+check('sin tarifa, el rótulo es sólo el nombre: no se inventa un precio',
+  etiquetaDeZona('Zona Centro', undefined, 'VERIFIED') === 'Zona Centro',
+  JSON.stringify(etiquetaDeZona('Zona Centro', undefined, 'VERIFIED')));
+check('una geometría que no está verificada lo dice con palabras',
+  etiquetaDeZona('Zona Este', '₡300/h', 'UNVERIFIED').endsWith('DEMO · no oficial'),
+  JSON.stringify(etiquetaDeZona('Zona Este', '₡300/h', 'UNVERIFIED')));
+check('y una rechazada también: cualquier estado que no sea VERIFIED se rotula',
+  etiquetaDeZona('Zona Oeste', undefined, 'REJECTED').endsWith('DEMO · no oficial'),
+  JSON.stringify(etiquetaDeZona('Zona Oeste', undefined, 'REJECTED')));
+check('lo verificado NO lleva el aviso de demostración',
+  !etiquetaDeZona('Zona Centro', '₡450/h', 'VERIFIED').includes('DEMO'));
 
 rmSync(dir, { recursive: true, force: true });
 console.log(`\n${fallos === 0 ? 'todas las comprobaciones pasaron' : fallos + ' fallo(s)'}`);
