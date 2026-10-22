@@ -52,20 +52,43 @@ Lo que se hizo en cambio fue **restar el fondo**, no separarlo:
    cosas son suaves.
 2. **Calcular una opacidad continua** por píxel según cuánto se aparta del campo. El plató se
    aparta poco; la moto, mucho.
-3. **Restar el campo sólo donde la opacidad es baja**: `salida = original − (1−α)·(campo − fondo
-   de la biblioteca)`. En el plató queda el azul de la biblioteca plano; en la moto no se toca ni
-   un píxel.
-4. **Rellenar a la proporción 560:266** con ese mismo azul y reescalar. Sin el relleno,
-   `object-fit: contain` dejaba la imagen al 75% del ancho con dos bandas del marco a los lados.
+3. **Restar el campo donde esa opacidad es CERO**, que es todo lo que la inundación marcó como
+   fondo: `salida = original − campo + fondo de la biblioteca`. Dentro de la moto la opacidad sigue
+   siendo continua y no se toca ni un píxel.
+4. **Fundir la fotografía en el lienzo** con una caída elíptica, en vez de pegarla con cantos.
+5. **Rellenar a la proporción 560:266** con la **viñeta real** de los automóviles —medida tapando
+   un coche y extendiendo lo que queda— y reescalar.
 
-La moto ocupa entre el 89% y el 96% del alto de la casilla, igual que los automóviles. A lo ancho
-ocupa un 40% y no un 90%, y es correcto: está fotografiada de tres cuartos frontal y es estrecha.
-Lo que iguala el tamaño percibido en una lista es el alto, no el ancho.
+### La corrección del 22-10-2026 por la tarde, y qué estaba mal
 
-**Lo que queda sin resolver:** un halo tenue pegado al contorno de la moto, donde el campo no puede
-distinguir el reflejo del plató del reflejo en la moto. Se deja ahí a propósito. Lo que lo
-arreglaría de verdad es que los activos vinieran **con fondo transparente**; mientras no sea así,
-esto es lo máximo que se puede hacer sin inventar un contorno.
+La primera versión de esto llegó a staging con un defecto que se vio en cuanto estuvo publicado:
+**un rectángulo vertical más oscuro alrededor de la moto**. La causa, medida sobre el archivo que
+servía staging, en las 18 filas de arriba —donde no hay moto—: el relleno estaba en `(18,33,48)` y
+el fondo de la fotografía bajaba hasta `(10.6,28.1,43.6)`. Siete niveles de diferencia en rojo, en
+un bloque de 224 px de ancho y de arriba abajo.
+
+El error era del **paso 3**: la opacidad salía sólo del apartamiento contra el campo, y en el plató
+ese apartamiento no es cero —tiene grano y viñeta—, así que a los píxeles de fondo se les aplicaba
+nada más que PARTE de la corrección y quedaban a medio camino. Ahora la opacidad se multiplica por
+la máscara binaria del sujeto: fuera de la moto es cero y la corrección entra entera.
+
+Los pasos 4 y 5 son nuevos por lo mismo: aunque el tono quede bien, el borde de la fotografía
+sigue siendo un borde, y el plató tiene luz propia detrás de la moto que ninguna resta aplana
+—no es un campo suave, es la iluminación de un estudio—. Fundiéndola, no hay borde que delatar.
+
+Medido antes y después, comparando el perfil horizontal del fondo contra el de un automóvil de la
+misma biblioteca: la correlación pasa de **−0,73** (invertida: oscuro donde el coche es claro, que
+es el rectángulo) a **+0,92 … +0,95**, con un rango de 10,7–15,0 niveles contra los 14,4–14,5 de
+los coches.
+
+### Lo que sigue sin resolverse
+
+La moto ocupa entre el 88% y el 96% del **alto** de la casilla, igual que los automóviles. A lo
+**ancho** ocupa un 40% y no un 90%: está fotografiada de tres cuartos frontal y es estrecha. Eso no
+es un defecto del procesado y no tiene arreglo por software — con ese encuadre, llenar el ancho
+exigiría recortarle las ruedas o los espejos. Se arregla con **otra fotografía**: de perfil, o
+—mejor— **con fondo transparente**, que además eliminaría el halo tenue que queda pegado al
+contorno. Es la petición concreta para el paquete definitivo.
 
 **El color de la moto no se tocó.** Y conviene decirlo: su `rojo` sale a 359° de tono y su `verde`
 a 111°, es decir, rojo y verde de verdad, mientras que los automóviles de la biblioteca tienen el
