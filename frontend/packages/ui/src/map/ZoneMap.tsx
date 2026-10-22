@@ -52,6 +52,14 @@ export interface ZoneMapProps {
    * precios no es lineal — y casi nunca lo es.
    */
   etiquetas?: Record<string, string>;
+  /**
+   * El código de la zona que la persona eligió, si ya eligió una.
+   *
+   * Con esto el mapa abre encuadrado en SU zona y no sobre toda la municipalidad: elegir «Barrio
+   * Amón» y ver el conjunto —o, peor, el país— es exactamente lo que se reportó desde staging. Si
+   * esa zona aún no tiene geometría dibujada, el encuadre se cae al de las que sí la tienen.
+   */
+  zonaDestacada?: string;
 }
 
 /**
@@ -83,6 +91,7 @@ export function ZoneMap({
   altoCompacto = 200,
   recolorear = true,
   etiquetas,
+  zonaDestacada,
 }: ZoneMapProps): React.JSX.Element {
   const id = useId();
   const contenedor = useRef<HTMLDivElement>(null);
@@ -95,19 +104,20 @@ export function ZoneMap({
   const noOficiales = rasgos.filter((f) => f.properties.status !== VERIFICADA).length;
   const hayQueDibujar = rasgos.length > 0;
   /*
-    El mapa base NO depende de que haya polígonos (21-10-2026).
+    SIN GEOMETRÍA NO HAY MAPA — y esto corrige lo que la usuaria fotografió el 20-10 (22-10-2026).
 
-    Hasta hoy, sin geometrías verificadas no se dibujaba nada: en su lugar salía una caja gris con
-    un texto, que es lo que la usuaria fotografió en staging ocupando media pantalla. El motivo
-    estaba escrito acá abajo —«sin posición inicial inventada: el encuadre lo da la geometría»— y
-    seguía siendo cierto, pero la conclusión era desproporcionada: que no sepamos dónde cae una zona
-    no quita que las calles existan y sirvan para orientarse.
+    El 21-10 se cambió para que el mapa base se dibujara aunque no llegaran polígonos: la idea era
+    que, aunque no sepamos dónde cae la zona, las calles sirven para orientarse. Lo que se vio en
+    staging fue otra cosa: sin una sola geometría, el único encuadre honesto era el país, y el
+    resultado es un mapa de Costa Rica y Panamá debajo de «Barrio Amón». Eso no orienta a nadie; es
+    peor que no tener mapa, y la orden del 22-10 lo dice con todas las letras: «nunca en vista
+    nacional».
 
-    Ahora el mapa base se dibuja siempre que haya proveedor, y los polígonos se añaden sólo si
-    llegaron. Nada se inventa: sin geometrías no se pinta ningún límite municipal ni ninguna bahía,
-    y el aviso lo dice en una línea en vez de en una caja vacía.
+    Así que el mapa vuelve a depender de que haya algo que encuadrar, con la diferencia que sí valía
+    la pena conservar: cuando no lo hay, lo que queda es UNA LÍNEA de aviso y no la caja gris de
+    200 px que había antes. Y el encuadre nunca se inventa: sale de la geometría que llegó.
   */
-  const puedeDibujarse = Boolean(estilo) && !error && !cargando;
+  const puedeDibujarse = Boolean(estilo) && !error && !cargando && hayQueDibujar;
 
   /*
     El mapa se crea UNA vez y después se le cambian los datos.
@@ -124,6 +134,8 @@ export function ZoneMap({
   */
   const zonasRef = useRef(zonas);
   zonasRef.current = zonas;
+  const destacadaRef = useRef(zonaDestacada);
+  destacadaRef.current = zonaDestacada;
   const [generacion, setGeneracion] = useState(0);
 
   // --- ciclo de vida del mapa ------------------------------------------------------------------
@@ -150,12 +162,14 @@ export function ZoneMap({
           container: contenedor.current,
           style: estiloFinal as never,
           /*
-            El encuadre lo da la geometría que llegó. Si no llegó ninguna, el país — y es lo
-            único honesto que se puede poner: el nombre de la municipalidad no es una
-            coordenada, y convertirlo en una sería inventarle una ubicación a un dato que el
-            servidor no mandó. Desde el país, la persona acerca hasta su calle.
+            El encuadre sale de la geometría, y si hay una zona elegida, de ESA zona.
+
+            Elegir «Barrio Amón» y ver el país entero es lo que reportó la usuaria. El mapa se crea
+            ya encuadrado donde la persona dijo que está: su zona si tiene geometría, y el conjunto
+            de las que haya si todavía no eligió ninguna. Nunca un encuadre inventado: este efecto
+            sólo corre cuando hay al menos un polígono.
           */
-          bounds: encuadreAMaplibre(zonasRef.current) ?? COSTA_RICA,
+          bounds: encuadreAMaplibre(zonasRef.current, destacadaRef.current),
           fitBoundsOptions: { padding: 24, maxZoom: 15 },
           attributionControl: { compact: true },
           // En móvil el mapa vive dentro de un formulario que se desplaza: sin esto, el dedo que
@@ -229,8 +243,8 @@ export function ZoneMap({
         for (const capa of capas) {
           if (!m.getLayer?.((capa as { id: string }).id)) m.addLayer?.(capa as never);
         }
-        const encuadre = encuadreAMaplibre(zonas);
-        if (encuadre) m.fitBounds?.(encuadre, { padding: 24, maxZoom: 15, animate: false });
+        const encuadre = encuadreAMaplibre(zonas, zonaDestacada);
+        if (encuadre) m.fitBounds?.(encuadre, { padding: 24, maxZoom: 16, animate: false });
       } else {
         for (const capa of capas) {
           if (m.getLayer?.((capa as { id: string }).id)) m.removeLayer?.((capa as { id: string }).id);
@@ -240,7 +254,7 @@ export function ZoneMap({
     } catch {
       // El mapa puede estar yéndose mientras esto corre; no es un fallo que deba ver nadie.
     }
-  }, [zonas, generacion, etiquetas]);
+  }, [zonas, generacion, etiquetas, zonaDestacada]);
 
   // Al ampliar y al cerrar cambia el tamaño del contenedor, y MapLibre no se entera solo.
   useEffect(() => {
@@ -257,8 +271,15 @@ export function ZoneMap({
     </div>
   );
 
-  let cuerpo: React.JSX.Element;
-  if (!estilo) {
+  let cuerpo: React.JSX.Element | null;
+  if (!hayQueDibujar && !cargando && !error) {
+    /*
+      Sin geometría no se reserva hueco: ni lienzo, ni caja. Queda el título y la nota de una línea
+      que explica por qué. Dejar el contenedor vacío de 200 px era el defecto original; dibujar el
+      país dentro fue el intento siguiente, y también estaba mal.
+    */
+    cuerpo = null;
+  } else if (!estilo) {
     cuerpo = aviso(textos.sinProveedor);
   } else if (error) {
     cuerpo = aviso(
@@ -308,7 +329,7 @@ export function ZoneMap({
 
       {/* Una línea, DEBAJO del mapa: primero se ven las calles y después se lee por qué no hay
           límites dibujados. Al revés, el texto volvía a ser lo primero y lo único. */}
-      {!hayQueDibujar && puedeDibujarse && !falloMapa ? (
+      {!hayQueDibujar && !cargando && !error ? (
         <p className="lx-zonemap__nota" role="note">{textos.vacio}</p>
       ) : null}
     </section>
@@ -373,22 +394,22 @@ function conEtiquetas(
   };
 }
 
-/**
- * Costa Rica entera, para cuando no hay ninguna geometría que encuadre el mapa.
- *
- * <p>Es el único encuadre que no afirma nada: el país donde opera el producto. No se deduce del
- * nombre de la municipalidad —un nombre no es una coordenada— ni se pide la ubicación del
- * teléfono, que exige consentimiento y que esta pantalla no necesita.</p>
- *
- * <p>Son los límites continentales; la Isla del Coco queda fuera a propósito, porque incluirla
- * alejaría el encuadre unos 500 km al suroeste por una isla sin estacionamiento municipal.</p>
- */
-const COSTA_RICA: [[number, number], [number, number]] = [[-85.95, 8.03], [-82.55, 11.22]];
 
-/** El encuadre en la forma que espera MapLibre: `[[oeste, sur], [este, norte]]`. */
+/**
+ * El encuadre en la forma que espera MapLibre: `[[oeste, sur], [este, norte]]`.
+ *
+ * <p>Con una zona elegida, el encuadre es el de ESA zona: el mapa abre donde la persona dijo que
+ * está, no sobre el conjunto de la municipalidad. Si esa zona todavía no tiene geometría dibujada,
+ * se cae al conjunto de las que sí la tienen, que sigue siendo información verdadera.</p>
+ */
 function encuadreAMaplibre(
   zonas: ZoneGeoJsonFeatureCollection | undefined,
+  destacada?: string,
 ): [[number, number], [number, number]] | undefined {
-  const e = encuadreDe(zonas);
+  const sola = destacada
+    ? zonas?.features.filter((f) => f.properties.code === destacada)
+    : undefined;
+  const fuente = sola && sola.length > 0 ? { ...zonas!, features: sola } : zonas;
+  const e = encuadreDe(fuente);
   return e ? [[e.minLon, e.minLat], [e.maxLon, e.maxLat]] : undefined;
 }

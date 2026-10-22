@@ -684,21 +684,25 @@ async function pasadaFuncional(browser) {
           `San José ${JSON.stringify(deSanJose)} · Escazú ${JSON.stringify(deEscazu)}`);
         if (deEscazu.length === 0) {
           /*
-            Hasta el 21-10-2026 esto exigía lo contrario: que NO se dibujara ningún lienzo y que el
-            texto ocupara el hueco del mapa. Así estaba implementado y así lo fotografió la usuaria
-            en staging —una caja gris de 200 px donde debían verse calles—, y la orden del 21-10
-            pide exactamente lo otro: que la falta de polígonos verificados no impida ver el mapa
-            base, con el aviso en una línea.
+            ESTA COMPROBACIÓN CAMBIÓ DOS VECES, y conviene que quede el rastro completo.
 
-            Lo que sigue intacto es lo que de verdad protege: sin geometrías no puede dibujarse
-            ningún límite, porque los polígonos salen únicamente de esos datos y no llegó ninguno.
+            Al principio exigía que no se dibujara lienzo y que el texto ocupara el hueco del mapa:
+            eso era una caja gris de 200 px donde debían verse calles, y la usuaria la fotografió.
+            El 21-10 se invirtió —mapa base siempre, aviso en una línea— y en staging salió algo
+            peor: sin una sola geometría, el único encuadre honesto era el país, y debajo de
+            «Barrio Amón» apareció un mapa de Costa Rica y Panamá. La orden del 22-10 lo zanja:
+            «nunca en vista nacional».
+
+            Conclusión, que es la tercera y la que resiste las dos evidencias: sin geometría no hay
+            mapa que valga la pena, porque no hay dónde centrarlo. Queda la nota de UNA LÍNEA —no la
+            caja— y ni lienzo ni hueco reservado.
           */
           ok(/todavía no tiene zonas verificadas/i.test(textoNota),
             'sin geometrías, el aviso aparece como nota de una línea', textoNota || '(sin nota)');
-          ok(await page.locator('.lx-zonemap__lienzo canvas').count() === 1,
-            'y el mapa base se dibuja igual');
+          ok(await page.locator('.lx-zonemap__lienzo').count() === 0,
+            'y no se dibuja ningún mapa: no hay dónde centrarlo');
           ok(await page.locator('.lx-zonemap__aviso').count() === 0,
-            'ya no queda la caja gris en lugar del mapa');
+            'tampoco queda la caja gris de 200 px');
           ok(deEscazu.length === 0,
             'no llegó ninguna geometría, así que no hay ningún límite que dibujar');
           console.log(`  ··  captura: ${await capturar(page, 'vacio-escazu-390x844')}`);
