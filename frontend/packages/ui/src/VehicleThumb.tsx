@@ -45,6 +45,15 @@ const PINTURA: Record<string, Pintura> = {
   BLUE: { claro: '#6C9BE6', medio: '#4A7FD4', sombra: '#2B4F8E' },
   GREEN: { claro: '#6FC296', medio: '#4FA97B', sombra: '#2B6B4B' },
   YELLOW: { claro: '#EBCB63', medio: '#D8B341', sombra: '#95761C' },
+  /*
+    Los tres que faltaban (22-10-2026). El catálogo del servidor publica DOCE colores y esta tabla
+    tenía nueve: un carro café, beige o naranja se dibujaba en el gris de «no lo dijo», que es una
+    respuesta distinta —y equivocada— para alguien que sí lo dijo. Se encontró al comparar esta
+    tabla con el enum `VehicleColor` del backend en vez de con el transporte simulado.
+  */
+  ORANGE: { claro: '#F0A05A', medio: '#E07A28', sombra: '#94480F' },
+  BROWN: { claro: '#A3785A', medio: '#7A5537', sombra: '#4A3220' },
+  BEIGE: { claro: '#E8DCC4', medio: '#D4C3A3', sombra: '#9A8B6E' },
 };
 
 /** Sin color declarado no se elige uno: gris de interfaz, que no afirma nada sobre el vehículo. */
@@ -66,12 +75,37 @@ const LLANTA = '#7D8899';
 const FARO = '#F4F7D8';
 
 export interface VehicleThumbProps {
-  /** Clave del catálogo de tipos: CAR, MOTORCYCLE, PICKUP, VAN, OTHER… */
+  /**
+   * Clave del catálogo `GET /catalog/vehicle-types`, que hoy tiene **dos** valores: `CAR` y
+   * `MOTORCYCLE`.
+   *
+   * <p>Los dibujos de `PICKUP` y `VAN` se conservan aunque el contrato ya no emita esas claves
+   * —`V16_0` las retiró— porque el enum del backend está escrito para poder crecer: «un valor, una
+   * clave de traducción y un CHECK más ancho». El día que vuelva una, el dibujo ya está. Un tipo
+   * que esta tabla no conozca cae en el volumen neutro.</p>
+   */
   type?: string;
   /** Clave del catálogo de colores. Ausente cuando el dueño no lo declaró. */
   color?: string;
-  /** Alto en píxeles; el ancho sale de la proporción 4:3. */
+  /** Alto en píxeles; el ancho sale de la proporción 4:3 salvo que se pase {@link ancho}. */
   size?: number;
+  /**
+   * Ancho del hueco, para cuando lo manda quien llama.
+   *
+   * <p>Existe por `VehicleImage`: allí el hueco es 2:1 —el de las imágenes de prototipo— y el
+   * dibujo tiene que ocupar EXACTAMENTE el mismo, o en una lista donde unos vehículos tienen
+   * imagen y otros no las filas quedarían de anchos distintos. El dibujo se centra dentro con
+   * `preserveAspectRatio` en vez de estirarse.</p>
+   */
+  ancho?: number;
+  /**
+   * Llena el hueco que le dé el contenedor en vez de medir en píxeles.
+   *
+   * <p>Para una tarjeta que cambia de ancho con la pantalla: medir en píxeles obligaría a elegir
+   * un número para el teléfono y otro para la laptop, que es exactamente lo que la guía del
+   * proyecto prohíbe. Quien lo use tiene que darle al contenedor su proporción.</p>
+   */
+  relleno?: boolean;
   className?: string;
 }
 
@@ -207,7 +241,7 @@ const DIBUJOS: Record<string, (p: { p: Pintura; id: string }) => React.JSX.Eleme
   MOTORCYCLE: Motocicleta,
 };
 
-export function VehicleThumb({ type, color, size = 44, className }: VehicleThumbProps): React.JSX.Element {
+export function VehicleThumb({ type, color, size = 44, ancho, relleno, className }: VehicleThumbProps): React.JSX.Element {
   // Un identificador por instancia: dos miniaturas en la misma lista no pueden compartir el
   // nombre de un degradado, o la segunda se pinta con la pintura de la primera.
   const id = React.useId().replace(/:/g, '');
@@ -217,8 +251,9 @@ export function VehicleThumb({ type, color, size = 44, className }: VehicleThumb
   const Dibujo = DIBUJOS[(type || '').toUpperCase()] ?? Generico;
   return (
     <span
-      className={['lx-vehicle-thumb', className].filter(Boolean).join(' ')}
-      style={{ height: size, width: Math.round((size * 4) / 3) }}
+      className={['lx-vehicle-thumb', relleno ? 'lx-vehicle-thumb--relleno' : '', className]
+        .filter(Boolean).join(' ')}
+      style={relleno ? undefined : { height: size, width: ancho ?? Math.round((size * 4) / 3) }}
       aria-hidden="true"
     >
       <svg viewBox="0 0 120 90" width="100%" height="100%" focusable="false" preserveAspectRatio="xMidYMid meet">

@@ -529,20 +529,61 @@ export const mockVehicles: MockVehicleRecord[] = [
     isOwner: false,
     isPrimary: false,
   },
+  {
+    /*
+      Una pick-up, y registrada como CAR, que es lo ÚNICO que el contrato permite desde `V16_0`:
+      no existe un tipo PICKUP. O sea que la única forma de saber que es una pick-up es la marca y
+      el modelo, y por eso está sembrada: sin ella, ninguna prueba recorre ese camino.
+    */
+    id: 'vehicle-cl1234',
+    userId: 'user-citizen-1',
+    plate: 'CL1234',
+    brand: 'Toyota',
+    model: 'Hilux',
+    year: 2021,
+    type: 'CAR',
+    color: 'SILVER',
+    isOwner: true,
+    isPrimary: false,
+  },
 ];
 
 /**
  * The platform's vehicle enumerations (`GET /catalog/vehicle-types`, `/catalog/vehicle-colors`).
  * Keys only — the label text lives in the client dictionaries, one entry per `labelKey`.
+ *
+ * <h2>These two lists are COPIES, and the originals live in the backend</h2>
+ *
+ * <p>`VehicleType` and `VehicleColor` in `module-parking` are the real catalogues; the server
+ * publishes them verbatim from `CatalogController`. Everything here is a transcription for the
+ * simulated transport, and a transcription that drifts is worse than no transcription at all.</p>
+ *
+ * <p>It drifted, and it cost a release (22-10-2026). These lists still said five types —CAR,
+ * MOTORCYCLE, PICKUP, VAN, OTHER— eighteen versions after `V16_0__vehicle_type_car_or_motorcycle`
+ * withdrew three of them, and eight colours when the enum had twelve. The vehicle image matching
+ * was written against THIS file instead of the enums, so it keyed on types the server can no
+ * longer emit and ignored two colours it does. Every test passed, because every test ran against
+ * this same transcription.</p>
+ *
+ * <p><b>If a value changes in the backend enum, it changes here in the same commit.</b> The
+ * i18n dictionary already carries more keys than either list; that is fine — a dictionary with a
+ * spare key is harmless, a catalogue with a wrong value is not.</p>
+ */
+
+/**
+ * `VehicleType`: a car or a motorcycle, and nothing else.
+ *
+ * <p>PICKUP, VAN and OTHER were withdrawn in `V16_0` because no tariff, no report and no
+ * enforcement rule ever distinguished them — they were three ways to make the form longer. The
+ * motorcycle earns its place: it occupies a fraction of a bay and is what a municipality prices
+ * differently first.</p>
  */
 export const MOCK_VEHICLE_TYPES: VehicleAttributeCatalogEntry[] = [
   { value: 'CAR', labelKey: 'vehicle.type.car' },
   { value: 'MOTORCYCLE', labelKey: 'vehicle.type.motorcycle' },
-  { value: 'PICKUP', labelKey: 'vehicle.type.pickup' },
-  { value: 'VAN', labelKey: 'vehicle.type.van' },
-  { value: 'OTHER', labelKey: 'vehicle.type.other' },
 ];
 
+/** `VehicleColor`: the twelve the backend publishes, in the order the enum declares them. */
 export const MOCK_VEHICLE_COLORS: VehicleAttributeCatalogEntry[] = [
   { value: 'WHITE', labelKey: 'vehicle.color.white' },
   { value: 'BLACK', labelKey: 'vehicle.color.black' },
@@ -551,6 +592,10 @@ export const MOCK_VEHICLE_COLORS: VehicleAttributeCatalogEntry[] = [
   { value: 'RED', labelKey: 'vehicle.color.red' },
   { value: 'BLUE', labelKey: 'vehicle.color.blue' },
   { value: 'GREEN', labelKey: 'vehicle.color.green' },
+  { value: 'YELLOW', labelKey: 'vehicle.color.yellow' },
+  { value: 'ORANGE', labelKey: 'vehicle.color.orange' },
+  { value: 'BROWN', labelKey: 'vehicle.color.brown' },
+  { value: 'BEIGE', labelKey: 'vehicle.color.beige' },
   { value: 'OTHER', labelKey: 'vehicle.color.other' },
 ];
 

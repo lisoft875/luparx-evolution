@@ -79,12 +79,30 @@ async function levantar() {
 const AUDITAR = () => {
   const miniaturas = [...document.querySelectorAll('.lx-vehicle-thumb')].map((m) => {
     const caja = m.getBoundingClientRect();
-    const svg = m.querySelector('svg');
+    /*
+      El hueco lo llena un dibujo SVG o una fotografía del catálogo: `VehicleImage` elige uno u
+      otro según haya o no imagen para ESE vehículo, y las dos son respuestas correctas. Lo que se
+      mide acá es que lo que haya adentro quepa, no cuál de los dos es.
+    */
+    const svg = m.querySelector('svg, img');
     const cajaSvg = svg ? svg.getBoundingClientRect() : null;
-    // La placa es el hermano siguiente en la fila de «Mis vehículos»; en las otras pantallas la
-    // miniatura es el icono de una opción y no hay placa al lado.
-    const hermano = m.nextElementSibling;
-    const placa = hermano && /lx-text-amount/.test(hermano.className || '') ? hermano : null;
+    /*
+      La placa. Desde el 22-10-2026 la tarjeta de «Mis vehículos» es una rejilla y la placa ya NO
+      es el hermano siguiente de la imagen: vive en la columna de datos. Se busca primero dentro de
+      la fila y sólo después por la regla vieja, que es la que sigue valiendo en las otras pantallas
+      —el selector de estacionar y la tarjeta de Inicio—, donde la miniatura es el icono de una
+      opción y no hay placa al lado.
+
+      Esto importa más de lo que parece: con la regla vieja sola, tras el rediseño la placa dejaba
+      de encontrarse y las comprobaciones de recorte y solape desaparecían EN SILENCIO. El arnés
+      pasaba de 328 a 264 comprobaciones sin un solo fallo.
+    */
+    const fila = m.closest ? m.closest('.lx-vehiculo-fila') : null;
+    const enLaFila = fila ? fila.querySelector('.lx-vehiculo-fila__placa') : null;
+    const hermanoCrudo = m.nextElementSibling;
+    const hermano = enLaFila
+      || (hermanoCrudo && /lx-text-amount/.test(hermanoCrudo.className || '') ? hermanoCrudo : null);
+    const placa = hermano;
     const cajaPlaca = placa ? placa.getBoundingClientRect() : null;
     return {
       alto: Math.round(caja.height * 10) / 10,
@@ -124,9 +142,16 @@ function revisar(etiqueta, datos, minimo) {
   ok(datos.miniaturas.length >= minimo, `${etiqueta}: aparece la miniatura`,
     `${datos.miniaturas.length} encontradas, se esperaba al menos ${minimo}`);
   datos.miniaturas.forEach((m, i) => {
-    // 4:3, como el componente declara. Se admite 1 px de redondeo, no más.
-    const esperado = Math.round((m.alto * 4) / 3);
-    ok(Math.abs(m.ancho - esperado) <= 1, `${etiqueta}: miniatura ${i + 1} mantiene 4:3`,
+    /*
+      2:1 desde el 22-10-2026, y el MISMO hueco lleve foto o dibujo.
+
+      Era 4:3 mientras lo único que había era la silueta. Con las imágenes de la biblioteca —que
+      son 2:1— el hueco pasó a 2:1 y el dibujo se centra dentro con `preserveAspectRatio`: si cada
+      fuente midiera lo suyo, una lista con unos vehículos con imagen y otros sin ella tendría las
+      filas de anchos distintos. Se admite 1 px de redondeo, no más.
+    */
+    const esperado = Math.round(m.alto * 2);
+    ok(Math.abs(m.ancho - esperado) <= 1, `${etiqueta}: miniatura ${i + 1} mantiene 2:1`,
       `${m.ancho}×${m.alto}, se esperaba ancho ${esperado}`);
     ok(m.alto > 0 && m.ancho > 0, `${etiqueta}: miniatura ${i + 1} tiene tamaño`,
       `${m.ancho}×${m.alto}`);

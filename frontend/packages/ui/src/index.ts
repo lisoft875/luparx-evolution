@@ -93,6 +93,8 @@ export { BottomTabBar } from './components/BottomTabBar';
 export type { BottomTabBarProps, BottomTab } from './components/BottomTabBar';
 export { Timer } from './components/Timer';
 export type { TimerProps } from './components/Timer';
+export { TimerRing } from './components/TimerRing';
+export type { TimerRingProps } from './components/TimerRing';
 export { Brand, Logo } from './components/Brand';
 export type { BrandProps, LogoProps } from './components/Brand';
 export { TenantMark } from './components/TenantMark';
