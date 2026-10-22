@@ -82,8 +82,8 @@ check('los tipos que V16_0 retiró ya NO se emparejan por tipo',
   motociclista de la aplicación. Acá no hay imagen y manda el dibujo, que sí tiene silueta de moto.
 */
 /*
-  La moto apunta a su propia carrocería, `moto`, que está DECLARADA y sin archivos. Lo que importa
-  comprobar no es que devuelva null —ya no lo hace— sino que la clave que produce sólo la puede
+  La moto apunta a su propia carrocería, `moto`, que desde la noche del 22-10-2026 tiene nueve
+  archivos. Lo que importa comprobar sigue siendo lo mismo: que la clave que produce sólo la puede
   satisfacer un archivo `moto-…`: una moto nunca puede terminar con la foto de un automóvil.
 */
 check('una MOTOCICLETA pide la carrocería «moto» y ninguna otra',
@@ -164,6 +164,88 @@ const POSITIVOS = [
 for (const [marca, modelo, esperado, porque] of POSITIVOS) {
   const real = carroceriaDe({ type: 'CAR', brand: marca, model: modelo });
   check(`«${marca} ${modelo}» → ${esperado} (${porque})`, real === esperado, String(real));
+}
+
+console.log('\n-- la tabla entera, entrada por entrada --');
+
+/*
+  Se lee la tabla del propio archivo y se comprueba CADA entrada a través de la función pública.
+  Dos cosas que una lista escrita a mano se gana sola con el tiempo: una clave con un error de
+  dedo que no coincide con nada, y una carrocería mal escrita. Ninguna de las dos se nota mirando.
+*/
+const fuente = readFileSync(
+  join(raiz, 'apps/citizen/src/vehicleImages/prototipo/catalogoPrototipo.ts'), 'utf8');
+const bloque = fuente.slice(
+  fuente.indexOf('const POR_MODELO'), fuente.indexOf('\n};', fuente.indexOf('const POR_MODELO')));
+const TABLA = [...bloque.matchAll(/(\w+):\s*'([a-z-]+)'/g)].map(([, k, v]) => [k, v]);
+
+const porCarroceria = {};
+for (const [, v] of TABLA) porCarroceria[v] = (porCarroceria[v] ?? 0) + 1;
+console.log(`  ··  ${TABLA.length} modelos: `
+  + Object.entries(porCarroceria).sort((a, b) => b[1] - a[1])
+    .map(([c, n]) => `${c} ${n}`).join(' · '));
+
+check('no hay claves repetidas', new Set(TABLA.map(([k]) => k)).size === TABLA.length);
+check('todas las carrocerías de la tabla existen',
+  TABLA.every(([, v]) => CARROCERIAS.includes(v)),
+  TABLA.filter(([, v]) => !CARROCERIAS.includes(v)).map(([k, v]) => `${k}:${v}`).join(', '));
+
+const fallidas = TABLA.filter(([clave, carroceria]) => {
+  const esperada = EQUIVALENCIAS[carroceria] ?? carroceria;
+  return carroceriaDe({ type: 'CAR', model: clave }) !== esperada;
+});
+check(`las ${TABLA.length} entradas se resuelven a su carrocería`,
+  fallidas.length === 0, fallidas.map(([k, v]) => `${k}→${v}`).join(', '));
+
+/*
+  Las entradas que son prefijo de otra. No son un error —«toyotacorolla» tiene que convivir con
+  «toyotacorollacross»— pero SÍ lo sería que ganara la corta: un Corolla Cross es una SUV y un
+  Corolla es un sedán. Se listan y se comprueba que gane siempre la más específica.
+*/
+const solapes = [];
+for (const [corta, cCorta] of TABLA) {
+  for (const [larga, cLarga] of TABLA) {
+    if (larga !== corta && larga.startsWith(corta) && cCorta !== cLarga) {
+      solapes.push([corta, cCorta, larga, cLarga]);
+    }
+  }
+}
+console.log(`  ··  ${solapes.length} pares donde una entrada es prefijo de otra con carrocería distinta`);
+for (const [corta, cCorta, larga, cLarga] of solapes) {
+  console.log(`      ${corta} (${cCorta})  ⊂  ${larga} (${cLarga})`);
+}
+const ganaLaCorta = solapes.filter(([, , larga, cLarga]) =>
+  carroceriaDe({ type: 'CAR', model: larga }) !== (EQUIVALENCIAS[cLarga] ?? cLarga));
+check('en todos esos pares gana la entrada MÁS específica',
+  ganaLaCorta.length === 0, ganaLaCorta.map(([, , l]) => l).join(', '));
+
+console.log('\n-- un modelo de cada carrocería, escrito como lo escribiría una persona --');
+
+const MUESTRA = [
+  ['Ford', 'F-150 Lariat', 'pickup'],
+  ['RAM', '1500 Laramie', 'pickup'],
+  ['Hyundai', 'H-100 caja seca', 'van-comercial'],
+  ['Iveco', 'Daily 35S14', 'van-comercial'],
+  ['Toyota', 'Innova 2.8 GX', 'minivan'],
+  ['Suzuki', 'Ertiga GLX', 'minivan'],
+  ['Toyota', 'C-HR Hybrid', 'suv-compacta'],
+  ['Renault', 'Duster Intens', 'suv-compacta'],
+  ['Haval', 'Jolion Pro', 'suv-compacta'],
+  ['Jeep', 'Grand Cherokee Limited', 'suv-compacta'],
+  ['Mazda', 'CX-90 Signature', 'suv-compacta'],
+  ['Suzuki', 'Baleno GLX', 'hatchback'],
+  ['Renault', 'Kwid Iconic', 'hatchback'],
+  ['Peugeot', '208 Allure', 'hatchback'],
+  ['BYD', 'Seagull', 'hatchback'],
+  ['Honda', 'City EX', 'sedan'],
+  ['BYD', 'Song Plus Champion', 'electrico'],
+  ['Hyundai', 'Ioniq 5 Long Range', 'electrico'],
+  ['BYD', 'Sealion 6', 'electrico'],
+  ['BYD', 'Seal Design', 'sedan'],
+];
+for (const [marca, modelo, esperada] of MUESTRA) {
+  const real = carroceriaDe({ type: 'CAR', brand: marca, model: modelo });
+  check(`«${marca} ${modelo}» → ${esperada}`, real === esperada, String(real));
 }
 
 console.log('\n-- y lo que NO debe coincidir, que es la mitad que importa --');
@@ -302,9 +384,10 @@ const MODELOS_REPRESENTATIVOS = [
 ];
 /*
   «Tiene imagen» se mide contra los ARCHIVOS que existen, no contra la clave que la regla produce.
-  Desde que `moto` está declarada sin activos, una moto devuelve `moto-rojo` y eso NO es una
-  imagen: es una promesa. Contarlo como cobertura sería el mismo autoengaño que una prueba que se
-  salta sola y termina en verde.
+  Cuando `moto` estaba declarada sin activos, una moto devolvía `moto-rojo` y eso NO era una
+  imagen: era una promesa. Contarlo como cobertura habría sido el mismo autoengaño que una prueba
+  que se salta sola y termina en verde. La medición se queda tal cual ahora que los archivos
+  llegaron, porque es justo lo que distingue nueve motos con foto de diez prometidas.
 */
 const hayArchivo = (clave) => existsSync(join(
   raiz, 'apps/citizen/src/vehicleImages/prototipo/assets', `${clave}.webp`));
@@ -327,10 +410,19 @@ console.log(`  ··  ${conImagen} de ${total} combinaciones tipo×color muestran
 console.log(`  ··  sin imagen (${sinImagenTotal}): ${huecos.join(', ')}`);
 
 check('todo automóvil de un color con imagen recibe imagen',
-  conImagen === 9, `${conImagen}, se esperaban 9 (CAR × los 9 colores con imagen)`);
-check('ninguna MOTOCICLETA recibe imagen todavía: no hay ni un archivo moto-*',
-  huecos.filter((h) => h.startsWith('MOTORCYCLE')).length === 12,
-  huecos.filter((h) => h.startsWith('MOTORCYCLE')).join(', '));
+  conImagen === 18, `${conImagen}, se esperaban 18 (CAR y MOTORCYCLE × los 9 colores con imagen)`);
+/*
+  Lo que queda sin foto, dicho por su nombre y no como un número.
+
+  Hasta el 22-10-2026 esta comprobación decía «ninguna MOTOCICLETA recibe imagen todavía» y exigía
+  doce huecos. Llegaron nueve motos esa noche, así que la afirmación cambió: ahora exige que los
+  huecos de moto sean EXACTAMENTE los tres colores que ninguna carrocería tiene —amarillo, café y
+  «otro»—. Escrita así, falla tanto si alguien borra un archivo como si alguien declara cubierto
+  un color que no lo está.
+*/
+const huecosMoto = huecos.filter((h) => h.startsWith('MOTORCYCLE')).map((h) => h.split('/')[1]).sort();
+check('las motos sin foto son sólo los tres colores sin imagen en toda la biblioteca',
+  huecosMoto.join(',') === 'BROWN,OTHER,YELLOW', huecosMoto.join(', '));
 /*
   La otra mitad de la misma garantía, y la que de verdad importa: pase lo que pase con las tablas,
   una moto NUNCA puede terminar pidiendo la imagen de un automóvil.
@@ -382,7 +474,8 @@ const archivos = existsSync(carpeta)
   ? readdirSync(carpeta).filter((f) => /\.webp$/i.test(f)) : [];
 const malos = archivos.filter((f) => claveDeArchivo(f) === null);
 check(`los ${archivos.length} archivos siguen la convención`, malos.length === 0, malos.join(', '));
-check('están las 100 combinaciones entregadas', archivos.length === 100, `hay ${archivos.length}`);
+check('están las 100 combinaciones del paquete de automóviles más las 9 motos',
+  archivos.length === 109, `hay ${archivos.length}`);
 
 const faltan = [];
 for (const c of CARROCERIAS_ENTREGADAS) {
@@ -395,14 +488,22 @@ check('no falta ninguna de las carrocerías ENTREGADAS', faltan.length === 0, fa
 /*
   Y lo que falta, dicho como lista y no como silencio. Esta comprobación NO falla: su trabajo es
   que el hueco esté escrito en la salida de cada corrida, para que nadie dé por entregado lo que
-  no llegó. El día que los archivos estén, la lista queda vacía sola.
+  no llegó. De los diez nombres, moto tiene nueve.
 */
 const motoFaltantes = COLORES_PROTOTIPO
   .filter((col) => !archivos.includes(`moto-${col}.webp`))
   .map((col) => `moto-${col}.webp`);
 console.log(motoFaltantes.length === 0
   ? '  ok  la carrocería «moto» ya tiene sus diez archivos'
-  : `  ··  PENDIENTE · faltan ${motoFaltantes.length} activos de moto: ${motoFaltantes.join(', ')}`);
+  : `  ··  faltan ${motoFaltantes.length} de moto: ${motoFaltantes.join(', ')}`
+    + ' (ningún color del servidor los alcanza, así que no deja a nadie sin imagen)');
+/*
+  Y que lo que falta sea SÓLO eso. Si mañana desaparece `moto-rojo.webp`, la línea de arriba lo
+  imprimiría sin que nada fallara; esta línea sí falla.
+*/
+check('las nueve motos alcanzables están en la carpeta',
+  motoFaltantes.length === 1 && motoFaltantes[0] === 'moto-azul-oscuro.webp',
+  motoFaltantes.join(', '));
 
 // Una imagen de prototipo sin su procedencia escrita es una imagen que no se puede publicar.
 const licencias = readFileSync(

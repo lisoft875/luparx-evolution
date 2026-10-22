@@ -69,15 +69,23 @@ const SEMBRADOS = [
 const CON_FOTO_LICENCIADA = 'BNY963';
 
 /**
- * El vehículo sembrado que NO debe recibir imagen, y por qué es el mejor caso de prueba que hay.
+ * El vehículo sembrado donde el tipo del servidor y la tabla de modelos se contradicen.
  *
  * <p>`TEST01` está sembrado como marca Toyota, modelo Corolla y tipo **MOTORCYCLE**. O sea que su
  * modelo está en la tabla de carrocerías —como sedán— pero el servidor dijo que es una moto. Es
- * exactamente el caso en que una tabla escrita a mano podría contradecir al servidor, y el
- * resultado correcto es el dibujo: entre las diez carrocerías de la biblioteca no hay moto, y
- * ponerle un automóvil sería mostrarle a alguien un vehículo que no es el suyo.</p>
+ * exactamente el caso en que una tabla escrita a mano podría contradecir al servidor.</p>
+ *
+ * <p>Hasta el 22-10-2026 esta prueba exigía el <b>dibujo</b>, porque entre las carrocerías de la
+ * biblioteca no había moto. Esa noche llegaron nueve fotos de motocicleta y la exigencia dejó de
+ * ser cierta: TEST01 es negro, y `moto-negro.webp` existe. <b>La prueba falló, que es exactamente
+ * lo que tenía que hacer</b>, y por eso se reescribe en lugar de borrarse.</p>
+ *
+ * <p>Lo que se exige ahora es lo que nunca cambia y es lo que de verdad protege al usuario: una
+ * motocicleta recibe el dibujo o un archivo `moto-…`, <b>nunca</b> la foto de un automóvil.
+ * Ponerle un sedán a un motociclista sería mostrarle un vehículo que no es el suyo, y eso sigue
+ * prohibido tenga la biblioteca los archivos que tenga.</p>
  */
-const SIN_IMAGEN = { placa: 'TEST01', descripcion: 'sembrado MOTORCYCLE con modelo de automóvil' };
+const MOTO_SEMBRADA = { placa: 'TEST01', descripcion: 'sembrado MOTORCYCLE con modelo de automóvil' };
 
 const TAMANOS = [
   { nombre: 'móvil estándar', width: 390, height: 844, movil: true },
@@ -305,21 +313,22 @@ async function irAVehiculos(page) {
         }
 
         /*
-          3b · El escalón 3 sobre datos sembrados: el tipo del servidor gana sobre la tabla de
-          modelos. `TEST01` dice Toyota Corolla —que la tabla conoce como sedán— pero el servidor
-          lo declaró MOTORCYCLE. Tiene que salir el dibujo.
+          3b · El tipo del servidor gana sobre la tabla de modelos. `TEST01` dice Toyota Corolla
+          —que la tabla conoce como sedán— pero el servidor lo declaró MOTORCYCLE, así que no
+          puede terminar con la foto de un sedán ni con ninguna otra de automóvil.
         */
-        const sinImagen = porPlaca(SIN_IMAGEN.placa);
-        ok(Boolean(sinImagen), `${tam.nombre}: aparece la fila de ${SIN_IMAGEN.placa}`);
-        if (sinImagen) {
-          ok(sinImagen.tiene === 'dibujo',
-            `${tam.nombre}: ${SIN_IMAGEN.placa} (${SIN_IMAGEN.descripcion}) cae al dibujo`,
-            `muestra «${sinImagen.tiene}»${sinImagen.src ? ' → ' + sinImagen.src : ''}`);
-          ok(sinImagen.cabe, `${tam.nombre}: el dibujo de ${SIN_IMAGEN.placa} entra en su hueco`);
-          const esperado = Math.round(sinImagen.alto * 2);
-          ok(Math.abs(sinImagen.ancho - esperado) <= 1,
-            `${tam.nombre}: el dibujo ocupa el MISMO hueco 2:1 que una foto`,
-            `${sinImagen.ancho}×${sinImagen.alto}, se esperaba ancho ${esperado}`);
+        const moto = porPlaca(MOTO_SEMBRADA.placa);
+        ok(Boolean(moto), `${tam.nombre}: aparece la fila de ${MOTO_SEMBRADA.placa}`);
+        if (moto) {
+          const nombreArchivo = (moto.src || '').split('/').pop() || '';
+          ok(moto.tiene === 'dibujo' || /^moto-/.test(nombreArchivo),
+            `${tam.nombre}: ${MOTO_SEMBRADA.placa} (${MOTO_SEMBRADA.descripcion}) recibe dibujo o un archivo «moto-», nunca un automóvil`,
+            `muestra «${moto.tiene}»${moto.src ? ' → ' + moto.src : ''}`);
+          ok(moto.cabe, `${tam.nombre}: la imagen de ${MOTO_SEMBRADA.placa} entra en su hueco`);
+          const esperado = Math.round(moto.alto * 2);
+          ok(Math.abs(moto.ancho - esperado) <= 1,
+            `${tam.nombre}: ocupa el MISMO hueco 2:1 que cualquier otra fila`,
+            `${moto.ancho}×${moto.alto}, se esperaba ancho ${esperado}`);
         }
 
         // 4 · Lo que vale para todas las fotos de la pantalla.

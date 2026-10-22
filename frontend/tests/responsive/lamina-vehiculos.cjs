@@ -51,9 +51,19 @@ const CASOS = [
   { placa: 'NAR005', marca: 'Kia', modelo: 'Picanto', anio: '2021', tipo: /Automóvil/, color: /^Naranja$/,
     archivo: 'hatchback-naranja.webp', demuestra: 'ORANGE, el otro color recuperado' },
   { placa: 'MOT006', marca: 'Honda', modelo: 'CB190', anio: '2021', tipo: /Motocicleta/, color: /^Verde$/,
-    archivo: null, demuestra: 'RESPALDO · sin activos de moto, se dibuja' },
+    archivo: 'moto-verde.webp', demuestra: 'motocicleta con su propia foto, desde el 22-10-2026' },
+  /*
+    Una moto de un color que la biblioteca NO tiene. Es la otra mitad de la garantía: cuando no hay
+    archivo de moto, cae al dibujo —que tiene silueta de moto— y nunca a la foto de un automóvil.
+  */
+  { placa: 'MOT011', marca: 'Honda', modelo: 'CB190', anio: '2021', tipo: /Motocicleta/,
+    color: /^Amarillo$/, archivo: null, demuestra: 'moto AMARILLA: sin archivo, cae al dibujo' },
   { placa: 'SIN007', marca: '', modelo: '', anio: '', tipo: /Automóvil/, color: /^Café$/,
     archivo: null, demuestra: 'sin marca ni modelo + CAFÉ, color sin imagen: dibujo' },
+  { placa: 'MIN009', marca: 'Toyota', modelo: 'Innova 2.8 GX', anio: '2020', tipo: /Automóvil/,
+    color: /^Plateado$/, archivo: 'minivan-plata.webp', demuestra: 'monovolumen' },
+  { placa: 'VAN010', marca: 'Hyundai', modelo: 'H-100 caja seca', anio: '2019', tipo: /Automóvil/,
+    color: /^Blanco$/, archivo: 'van-comercial-blanco.webp', demuestra: 'furgoneta de carga' },
   /* Textos largos, que es donde una rejilla se rompe: apodo, marca y modelo al límite del campo. */
   { placa: 'LARGO08', nombre: 'El carro de mamá para los mandados', marca: 'Mercedes-Benz',
     modelo: 'Sprinter 519 CDI Furgón Largo', anio: '2018', tipo: /Automóvil/, color: /^Blanco$/,
@@ -243,9 +253,20 @@ const AUDITAR = () => {
         console.log(`      ✗ esperaba ${caso.archivo} y muestra ${f.archivo}`); fallos += 1;
       }
     }
-    const moto = filas.find((x) => x.placa === 'MOT006');
-    if (moto && moto.muestra !== 'dibujo') {
-      console.log(`  ✗   la MOTOCICLETA recibió «${moto.muestra}» (${moto.archivo})`); fallos += 1;
+    /*
+      La garantía que de verdad importa y que sobrevive a que lleguen o no los activos: una
+      motocicleta jamás puede mostrar la foto de un automóvil. Antes se comprobaba exigiendo que
+      cayera al dibujo; eso dejó de ser cierto el 22-10-2026 por la noche, cuando llegaron las
+      nueve fotos de moto, así que la comprobación pasó a lo que nunca cambia: o dibujo, o un
+      archivo cuyo nombre empieza por «moto-».
+    */
+    for (const moto of filas.filter((x) => /^MOT/.test(x.placa))) {
+      const correcto = moto.muestra === 'dibujo'
+        || (moto.muestra === 'foto' && /^moto-/.test(moto.archivo || ''));
+      if (!correcto) {
+        console.log(`  ✗   la MOTOCICLETA ${moto.placa} recibió «${moto.muestra}» (${moto.archivo})`);
+        fallos += 1;
+      }
     }
     const menu = filas[0]?.menu;
     if (!menu || menu.alto < 44 || menu.ancho < 44) {

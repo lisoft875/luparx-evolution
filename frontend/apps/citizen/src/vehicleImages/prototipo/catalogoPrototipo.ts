@@ -56,12 +56,15 @@
 /**
  * Las carrocerías de la biblioteca, tal y como se llaman los archivos.
  *
- * <p>Las diez primeras son las que el paquete del 22-10-2026 entregó. <b>`moto` está declarada y
- * no tiene ni un archivo todavía</b>, y es deliberado: así el día que lleguen los activos basta
- * con dejarlos en la carpeta con su nombre —`moto-rojo.webp`— y empiezan a verse sin tocar una
- * línea. Mientras no estén, la búsqueda no encuentra archivo y manda el dibujo, que es lo correcto.
- * Lo que NO puede pasar nunca es que una moto reciba la foto de un automóvil: la clave que se
- * busca es `moto-…`, y sólo un archivo `moto-…` puede responder a ella.</p>
+ * <p>Las diez primeras son las que el paquete del 22-10-2026 entregó. `moto` se declaró ese mismo
+ * día <b>sin un solo archivo</b>, a propósito: así, el día que llegaran los activos, bastaría con
+ * dejarlos en la carpeta con su nombre —`moto-rojo.webp`— para que empezaran a verse sin tocar una
+ * línea. Ese día fue el mismo 22-10-2026, por la noche: Javier entregó nueve motos y la previsión
+ * funcionó tal cual, sin cambiar la regla de búsqueda.</p>
+ *
+ * <p>Lo que NO puede pasar nunca es que una moto reciba la foto de un automóvil: la clave que se
+ * busca es `moto-…`, y sólo un archivo `moto-…` puede responder a ella. Cuando no hay archivo
+ * —una moto amarilla, café o «otro»— manda el dibujo, que sí tiene silueta de moto.</p>
  */
 export const CARROCERIAS = [
   'sedan', 'suv-compacta', 'pickup', 'hatchback', 'suv-grande',
@@ -69,7 +72,17 @@ export const CARROCERIAS = [
   'moto',
 ] as const;
 
-/** Las carrocerías que el paquete entregó con archivos. `moto` no está. */
+/**
+ * Las carrocerías entregadas con los DIEZ colores completos.
+ *
+ * <p>`moto` sigue fuera y no es un descuido: su paquete trajo nueve de los diez nombres de color
+ * —falta `moto-azul-oscuro`— así que no puede pasar por la comprobación de «están los diez». No
+ * cuesta nada de verdad: `azul-oscuro` es un nombre de archivo que <b>ningún color del servidor
+ * alcanza</b> (`POR_COLOR` no lo produce), de modo que ninguna moto de un color real se queda sin
+ * imagen por eso. El paquete también traía `moto-amarillo.webp`, que no se incorporó: `amarillo`
+ * no es un color de esta biblioteca y un archivo con un nombre fuera de la convención se perdería
+ * en silencio.</p>
+ */
 export const CARROCERIAS_ENTREGADAS = CARROCERIAS.filter((c) => c !== 'moto');
 export type Carroceria = (typeof CARROCERIAS)[number];
 
@@ -133,85 +146,166 @@ const POR_TIPO: Record<string, Carroceria | null> = {
  * <p>Las claves van normalizadas (minúscula, sin tildes ni separadores), así que «RAV4», «Rav-4» y
  * «rav 4» caen todas en `toyotarav4`. Un modelo que no esté se queda en sedán; agregar uno es una
  * línea acá y nada más.</p>
+ *
+ * <h2>Cómo está ordenada, y por qué conviene no romperlo</h2>
+ *
+ * <p>Por <b>carrocería</b> y no alfabéticamente. Agrupada así se ve de un vistazo qué falta —si un
+ * grupo tiene tres entradas, es que nadie lo pensó— y se agrega en el sitio correcto sin buscar.
+ * Alfabética se leería mejor para encontrar una marca y peor para todo lo demás.</p>
+ *
+ * <p>La comprobación `prototipo.check.mjs` lee esta tabla del archivo y recorre <b>todas</b> las
+ * entradas: comprueba que ninguna clave esté repetida, que toda carrocería exista, que cada
+ * entrada se resuelva a lo que dice, y —lo que de verdad importa— que cuando una entrada es
+ * prefijo de otra con carrocería distinta, gane siempre la más específica. Hoy hay cuatro pares
+ * así, y uno es el que lo justifica todo: un <b>Corolla</b> es un sedán y un <b>Corolla Cross</b>
+ * es una SUV.</p>
  */
 const POR_MODELO: Record<string, Carroceria> = {
-  // --- pick-ups. Llegan como CAR, así que ésta es la única vía para reconocerlas. ---
-  toyotahilux: 'pickup', toyotatacoma: 'pickup',
-  nissanfrontier: 'pickup', nissannp300: 'pickup',
-  fordranger: 'pickup', mitsubishil200: 'pickup',
-  isuzudmax: 'pickup', chevroletdmax: 'pickup', mazdabt50: 'pickup',
-  greatwallpoer: 'pickup', greatwallwingle: 'pickup', jact8: 'pickup',
-  volkswagenamarok: 'pickup',
+  // ---- PICK-UPS -----------------------------------------------------------------------------
+  // Llegan como CAR, así que ésta es la ÚNICA vía para reconocerlas.
+  toyotahilux: 'pickup', toyotatacoma: 'pickup', toyotatundra: 'pickup',
+  nissanfrontier: 'pickup', nissannp300: 'pickup', nissannavara: 'pickup',
+  fordranger: 'pickup', fordf150: 'pickup', fordmaverick: 'pickup',
+  mitsubishil200: 'pickup', mitsubishitriton: 'pickup',
+  isuzudmax: 'pickup', chevroletdmax: 'pickup', chevroletcolorado: 'pickup',
+  chevroletsilverado: 'pickup', chevroletluv: 'pickup',
+  mazdabt50: 'pickup', volkswagenamarok: 'pickup', ram1500: 'pickup',
+  hyundaisantacruz: 'pickup', jeepgladiator: 'pickup',
+  greatwallpoer: 'pickup', greatwallwingle: 'pickup', greatwallcannon: 'pickup',
+  jact8: 'pickup', jmcvigus: 'pickup', maxust60: 'pickup',
+  changanhunter: 'pickup', fotontunland: 'pickup',
 
-  // --- furgonetas de carga y pasajeros ---
-  toyotahiace: 'van-comercial', nissanurvan: 'van-comercial',
-  hyundaih1: 'van-comercial', hyundaistarex: 'van-comercial',
-  fordtransit: 'van-comercial', mercedesbenzsprinter: 'van-comercial',
-  renaultkangoo: 'van-comercial', chevroletn300: 'van-comercial',
+  // ---- FURGONETAS DE CARGA Y PASAJEROS ------------------------------------------------------
+  toyotahiace: 'van-comercial', toyotaproace: 'van-comercial',
+  nissanurvan: 'van-comercial',
+  hyundaih1: 'van-comercial', hyundaih100: 'van-comercial', hyundaistarex: 'van-comercial',
+  kiak2500: 'van-comercial',
+  fordtransit: 'van-comercial', fordtourneo: 'van-comercial',
+  mercedesbenzsprinter: 'van-comercial', mercedesbenzvito: 'van-comercial',
+  volkswagentransporter: 'van-comercial', volkswagencaddy: 'van-comercial',
+  renaultkangoo: 'van-comercial', renaultmaster: 'van-comercial', renaulttrafic: 'van-comercial',
+  peugeotpartner: 'van-comercial', peugeotexpert: 'van-comercial',
+  citroenberlingo: 'van-comercial',
+  fiatducato: 'van-comercial', fiatfiorino: 'van-comercial',
+  ivecodaily: 'van-comercial',
+  chevroletn300: 'van-comercial', changanstar: 'van-comercial', jacsunray: 'van-comercial',
 
-  // --- monovolúmenes ---
-  toyotasienna: 'minivan', hondaodyssey: 'minivan', kiacarnival: 'minivan',
-  chryslerpacifica: 'minivan', toyotaavanza: 'minivan',
+  // ---- MONOVOLÚMENES ------------------------------------------------------------------------
+  toyotasienna: 'minivan', toyotaprevia: 'minivan', toyotainnova: 'minivan',
+  toyotaavanza: 'minivan',
+  hondaodyssey: 'minivan',
+  kiacarnival: 'minivan', kiasedona: 'minivan',
+  chryslerpacifica: 'minivan', chryslervoyager: 'minivan', dodgegrandcaravan: 'minivan',
+  hyundaistaria: 'minivan', mitsubishiexpander: 'minivan',
+  suzukiertiga: 'minivan', chevroletspin: 'minivan',
 
-  // --- SUV compactas y crossovers, el grupo más numeroso en Costa Rica ---
+  // ---- SUV COMPACTAS Y CROSSOVERS -----------------------------------------------------------
+  // El grupo más numeroso en Costa Rica.
   toyotarav4: 'suv-compacta', toyotacorollacross: 'suv-compacta',
   toyotayariscross: 'suv-compacta', toyotarush: 'suv-compacta',
+  toyotachr: 'suv-compacta', toyotaurbancruiser: 'suv-compacta',
   suzukivitara: 'suv-compacta', suzukigrandvitara: 'suv-compacta',
-  suzukijimny: 'suv-compacta', suzukisx4: 'suv-compacta',
+  suzukijimny: 'suv-compacta', suzukisx4: 'suv-compacta', suzukifronx: 'suv-compacta',
   hondacrv: 'suv-compacta', hondahrv: 'suv-compacta',
+  hondawrv: 'suv-compacta', hondabrv: 'suv-compacta',
   hyundaitucson: 'suv-compacta', hyundaicreta: 'suv-compacta',
-  hyundaikona: 'suv-compacta', hyundaivenue: 'suv-compacta',
+  hyundaikona: 'suv-compacta', hyundaivenue: 'suv-compacta', hyundaibayon: 'suv-compacta',
   kiasportage: 'suv-compacta', kiaseltos: 'suv-compacta', kiasonet: 'suv-compacta',
+  kiasoul: 'suv-compacta',
   nissankicks: 'suv-compacta', nissanxtrail: 'suv-compacta', nissanqashqai: 'suv-compacta',
+  nissanjuke: 'suv-compacta',
   mazdacx5: 'suv-compacta', mazdacx30: 'suv-compacta', mazdacx3: 'suv-compacta',
+  mazdacx50: 'suv-compacta',
   mitsubishioutlander: 'suv-compacta', mitsubishiasx: 'suv-compacta',
+  mitsubishieclipsecross: 'suv-compacta',
   fordescape: 'suv-compacta', fordecosport: 'suv-compacta',
+  fordterritory: 'suv-compacta', fordbroncosport: 'suv-compacta',
   volkswagentcross: 'suv-compacta', volkswagentiguan: 'suv-compacta',
+  volkswagentaos: 'suv-compacta', volkswagennivus: 'suv-compacta',
   chevrolettracker: 'suv-compacta', chevroletcaptiva: 'suv-compacta',
-  cherytiggo2: 'suv-compacta', cherytiggo4: 'suv-compacta',
-  havaljolion: 'suv-compacta', havalh6: 'suv-compacta',
+  chevroletgroove: 'suv-compacta', chevroletseeker: 'suv-compacta',
+  chevroletequinox: 'suv-compacta',
+  renaultduster: 'suv-compacta', renaultcaptur: 'suv-compacta', renaultkardian: 'suv-compacta',
+  cherytiggo2: 'suv-compacta', cherytiggo4: 'suv-compacta', cherytiggo7: 'suv-compacta',
+  havaljolion: 'suv-compacta', havalh6: 'suv-compacta', havalh2: 'suv-compacta',
+  havaldargo: 'suv-compacta',
+  mgzs: 'suv-compacta', mghs: 'suv-compacta',
+  geelycoolray: 'suv-compacta', geelyazkarra: 'suv-compacta',
+  jacjs4: 'suv-compacta', jacs3: 'suv-compacta',
   subaruforester: 'suv-compacta', subaruxv: 'suv-compacta',
+  subaruoutback: 'suv-compacta', subarucrosstrek: 'suv-compacta',
   jeeprenegade: 'suv-compacta', jeepcompass: 'suv-compacta',
+  daihatsuterios: 'suv-compacta', ssangyongtivoli: 'suv-compacta',
 
-  // --- SUV grandes. Se sustituyen por la compacta: ver EQUIVALENCIAS. ---
+  // ---- SUV GRANDES. Se sustituyen por la compacta: ver EQUIVALENCIAS. ------------------------
   toyotaprado: 'suv-grande', toyotalandcruiser: 'suv-grande',
-  toyotafortuner: 'suv-grande', toyota4runner: 'suv-grande',
-  cherytiggo8: 'suv-grande',
-  mitsubishimontero: 'suv-grande', fordexplorer: 'suv-grande',
-  chevrolettahoe: 'suv-grande', cherytiggo8pro: 'suv-grande',
-  kiasorento: 'suv-grande', hyundaisantafe: 'suv-grande', nissanpathfinder: 'suv-grande',
+  toyotafortuner: 'suv-grande', toyota4runner: 'suv-grande', toyotasequoia: 'suv-grande',
+  mitsubishimontero: 'suv-grande',
+  fordexplorer: 'suv-grande', fordexpedition: 'suv-grande',
+  chevrolettahoe: 'suv-grande', chevrolettrailblazer: 'suv-grande',
+  chevrolettraverse: 'suv-grande',
+  nissanpathfinder: 'suv-grande', nissanarmada: 'suv-grande',
+  jeepgrandcherokee: 'suv-grande', jeepwrangler: 'suv-grande',
+  hyundaisantafe: 'suv-grande', hyundaipalisade: 'suv-grande',
+  kiasorento: 'suv-grande', kiatelluride: 'suv-grande',
+  mazdacx9: 'suv-grande', mazdacx90: 'suv-grande',
+  volkswagenteramont: 'suv-grande',
+  cherytiggo8pro: 'suv-grande', cherytiggo8: 'suv-grande',
+  havalh9: 'suv-grande', bydtang: 'suv-grande',
+  gmcyukon: 'suv-grande', landroverdiscovery: 'suv-grande', teslamodelx: 'suv-grande',
 
-  // --- hatchbacks ---
+  // ---- HATCHBACKS ---------------------------------------------------------------------------
   suzukiswift: 'hatchback', suzukicelerio: 'hatchback', suzukialto: 'hatchback',
+  suzukibaleno: 'hatchback', suzukiignis: 'hatchback',
   kiapicanto: 'hatchback', kiario: 'hatchback',
-  hyundaii10: 'hatchback', hyundaii20: 'hatchback', hyundaigrandi10: 'hatchback',
-  nissanmarch: 'hatchback', nissannote: 'hatchback',
-  hondafit: 'hatchback', mazda2: 'hatchback', chevroletspark: 'hatchback',
-  toyotaaygo: 'hatchback', volkswagengol: 'hatchback', volkswagenpolo: 'hatchback',
-  byddolphin: 'hatchback',
-
-  // --- sedanes. Están para que una marca conocida no dependa del respaldo. ---
-  toyotacorolla: 'sedan', toyotayaris: 'sedan', toyotacamry: 'sedan',
-  hondacivic: 'sedan', hondaaccord: 'sedan',
-  hyundaielantra: 'sedan', hyundaiaccent: 'sedan',
-  kiaforte: 'sedan', kiacerato: 'sedan',
-  nissansentra: 'sedan', nissanversa: 'sedan', nissanaltima: 'sedan',
-  mazda3: 'sedan', mazda6: 'sedan',
-  mitsubishilancer: 'sedan', volkswagenjetta: 'sedan', volkswagenvirtus: 'sedan',
-  chevroletonix: 'sedan', bydseal: 'sedan', teslamodel3: 'sedan',
+  hyundaii10: 'hatchback', hyundaii20: 'hatchback', hyundaii30: 'hatchback',
+  hyundaigrandi10: 'hatchback',
+  nissanmarch: 'hatchback', nissannote: 'hatchback', nissanmicra: 'hatchback',
+  hondafit: 'hatchback', mazda2: 'hatchback',
+  chevroletspark: 'hatchback', chevroletbeat: 'hatchback',
+  toyotaaygo: 'hatchback',
+  volkswagengol: 'hatchback', volkswagenpolo: 'hatchback', volkswagenup: 'hatchback',
+  renaultclio: 'hatchback', renaultsandero: 'hatchback', renaultkwid: 'hatchback',
+  fiatargo: 'hatchback', fiatmobi: 'hatchback', fiatpalio: 'hatchback', fiatuno: 'hatchback',
+  peugeot208: 'hatchback', citroenc3: 'hatchback', mg3: 'hatchback',
+  byddolphin: 'hatchback', bydseagull: 'hatchback', nissanleaf: 'hatchback',
 
   /*
-    Eléctricos con forma de crossover.
-
-    La carrocería `electrico` de la biblioteca NO es «un eléctrico»: es una forma, la de un
-    crossover moderno. Se usa modelo por modelo y nunca por la propulsión —la propia orden del
-    paquete lo prohíbe: «no inferir carrocería por propulsión eléctrica»—. Un Leaf es un hatchback
-    y está arriba; un Model 3 es un sedán y está arriba.
+    ---- SEDANES ------------------------------------------------------------------------------
+    Casi todos son redundantes: el sedán YA es el respaldo de cualquier automóvil que esta tabla
+    no reconozca, así que estas entradas no cambian ningún resultado hoy. Se conservan a
+    propósito, por dos razones: dejan dicho que el modelo fue considerado y no olvidado, y
+    protegen de una entrada futura más larga que los capture por error.
   */
-  teslamodely: 'electrico', bydyuanplus: 'electrico', bydatto3: 'electrico',
+  toyotacorolla: 'sedan', toyotayaris: 'sedan', toyotacamry: 'sedan',
+  hondacivic: 'sedan', hondaaccord: 'sedan', hondacity: 'sedan',
+  hyundaielantra: 'sedan', hyundaiaccent: 'sedan', hyundaisonata: 'sedan',
+  kiaforte: 'sedan', kiacerato: 'sedan', kiak5: 'sedan', kiaoptima: 'sedan',
+  nissansentra: 'sedan', nissanversa: 'sedan', nissanaltima: 'sedan', nissanalmera: 'sedan',
+  mazda3: 'sedan', mazda6: 'sedan',
+  mitsubishilancer: 'sedan',
+  volkswagenjetta: 'sedan', volkswagenvirtus: 'sedan', volkswagenvento: 'sedan',
+  volkswagenpassat: 'sedan',
+  chevroletonix: 'sedan', chevroletaveo: 'sedan', chevroletcruze: 'sedan',
+  fordfocus: 'sedan', renaultlogan: 'sedan', fiatcronos: 'sedan', peugeot301: 'sedan',
+  suzukiciaz: 'sedan', suzukidzire: 'sedan',
+  bydseal: 'sedan', bydqin: 'sedan', teslamodel3: 'sedan',
+
+  /*
+    ---- ELÉCTRICOS CON FORMA DE CROSSOVER ------------------------------------------------------
+    La carrocería `electrico` de la biblioteca NO es «un eléctrico»: es una FORMA, la de un
+    crossover moderno. Se usa modelo por modelo y nunca por la propulsión —la propia orden del
+    paquete lo prohíbe: «no inferir carrocería por propulsión eléctrica»—. Por eso un Leaf está
+    entre los hatchbacks, un Model 3 entre los sedanes y un Model X entre las SUV grandes.
+  */
+  teslamodely: 'electrico',
+  bydyuanplus: 'electrico', bydatto3: 'electrico', bydyuanpro: 'electrico',
+  bydsongplus: 'electrico', bydsealion: 'electrico',
   geelyex5: 'electrico', volvoex30: 'electrico', mgzsev: 'electrico',
-  nissanleaf: 'hatchback',
+  nissanariya: 'electrico', hyundaiioniq5: 'electrico',
+  kiaev6: 'electrico', kiaev5: 'electrico',
 };
+
 
 /**
  * `GET /catalog/vehicle-colors` → color de la biblioteca. **Son doce valores, no ocho.**
