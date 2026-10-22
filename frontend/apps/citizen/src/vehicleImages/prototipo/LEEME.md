@@ -3,9 +3,10 @@
 10 carrocerías × 10 colores, entregadas por Javier el **22-10-2026** en el paquete
 `LuParX_100_Vehiculos_Matching_Claude_COMPLETO.zip`.
 
-Las **9 motocicletas** de `LuParX_Motocicletas_10_Colores_Propuesta.zip` entraron esa noche y se
-retiraron a la tarde siguiente; la sección «Las motocicletas» explica por qué y qué haría volver a
-incorporarlas. Una motocicleta se dibuja.
+Las **9 motocicletas** de `LuParX_Motocicletas_10_Colores_Propuesta.zip` entraron esa noche, se
+retiraron a la tarde siguiente y volvieron reprocesadas el mismo día. La sección «Las motocicletas»
+cuenta la vuelta entera, incluido el defecto que no se había visto: **el 41% del ancho de cada
+archivo entregado era relleno azul incrustado.**
 
 ## Qué son, con las palabras del propio paquete
 
@@ -28,7 +29,7 @@ y **color**, que es exactamente lo que ya afirmaba el dibujo `VehicleThumb`.
 
 No se retocó ningún color: lo que se ve es lo que vino.
 
-## Las motocicletas: entregadas, incorporadas y retiradas el mismo día
+## Las motocicletas: entregadas, retiradas y devueltas reprocesadas
 
 Llegaron en su propio paquete, con sus propias palabras:
 
@@ -36,42 +37,60 @@ Llegaron en su propio paquete, con sus propias palabras:
 > individuales transparentes ni activos finales aprobados para producción.»
 > — `LEEME.md` del paquete de motocicletas
 
-Se incorporaron por la noche y **se retiraron a la tarde siguiente**. Las tres cosas están escritas
-acá porque la razón de retirarlas es la que hay que leer antes de volver a intentarlo.
+### Lo que traía cada archivo entregado, medido sobre los diez
+
+| | |
+|---|---|
+| Lienzo | 480 × 320 px |
+| Fotografía de verdad | **~282 × 311 px**, centrada |
+| El resto | **41% del ancho es relleno azul `rgb(19,27,36)` incrustado en el archivo** |
+| Fondo de la fotografía | plató gris con viñeta, no el azul `rgb(17,34,48)` de los automóviles |
+| Bordes | asoman trozos de las motos vecinas de la lámina, y a las dos ruedas les falta la parte baja del neumático |
+
+**El relleno es el hallazgo que faltaba.** Durante un día entero se dio por sentado que la moto se
+veía pequeña por su encuadre de tres cuartos. Lo era en parte, pero antes de eso **más de la cuarta
+parte de cada archivo no era fotografía**: era una banda azul que el navegador escala como si fuera
+contenido. Quitarla es lo que había que hacer, y es lo que se hizo.
 
 ### Lo que se intentó, en orden, y qué midió cada intento
 
-1. **Tal cual.** 480×320 es 3:2 y la casilla es 2,105:1, así que `object-fit: contain` dejaba la
-   imagen al 75% del ancho con dos bandas del marco a los lados. El fondo entregado, medido, era
-   `rgb(19,27,36)` contra `rgb(17,34,48)` de los automóviles: un parche gris entre coches.
-2. **Recortar la moto del plató.** Por umbral, el halo entraba en el recorte y dejaba un rectángulo
-   de luz. Por relleno por inundación, quedaba un canto. Con **GrabCut**, la moto se destroza: se
-   come ruedas y motor, porque sus partes oscuras y el plató oscuro son el mismo color.
+1. **Tal cual.** 480×320 es 3:2 y la casilla es 2,105:1. El fondo entregado era `rgb(19,27,36)`
+   contra `rgb(17,34,48)` de los automóviles: un parche gris entre coches.
+2. **Recortar la moto del plató.** Por umbral, el halo entraba en el recorte. Por inundación,
+   quedaba un canto. Con **GrabCut** —por rectángulo y por máscara— la moto se destroza: se come
+   ruedas, espejos y manillar, porque sus partes negras y el plató oscuro son el mismo color.
+   Lo mismo con un fondo ajustado por polinomio y con un fondo interpolado desde los bordes.
+   **Un recorte con alfa de esta moto no es alcanzable**: está fotografiada en negro sobre oscuro.
 3. **Restar el fondo y rellenar.** Es lo que llegó a staging. Dejó un **rectángulo vertical más
    oscuro**: en las 18 filas de arriba, el relleno estaba en `(18,33,48)` y el fondo de la
    fotografía bajaba a `(10.6,28.1,43.6)`.
-4. **Restar el fondo con la opacidad en cero fuera del sujeto, fundir la fotografía con caída
-   elíptica y usar la viñeta real de los coches.** Esto sí arregló el fondo: la correlación del
-   perfil del fondo contra el de un automóvil pasó de **−0,73** a **+0,92 … +0,95**.
+4. **Restar con máscara de sujeto y viñeta real.** Arregló el fondo —la correlación del perfil
+   contra el de un automóvil pasó de **−0,73** a **+0,92 … +0,95**— pero dejaba un recuadro tenue
+   y la cola desvanecida. Es la versión que se retiró sin desplegar.
+5. **La de hoy, y la que está en la carpeta.** Se recorta el lienzo a la fotografía —fuera el 41%
+   de relleno—, se estima el plató gris, se estima el plató azul **promediando cuatro archivos de
+   automóvil** y se **suma la diferencia** sólo donde el píxel se parece al plató, con transición
+   suave. Lo que queda a los lados hasta 560 px no es un color inventado: es ese mismo campo azul,
+   así que no hay costura ni recuadro. Los trozos de las motos vecinas se reconocen como manchas
+   que no tocan a esta moto y vuelven a plató.
 
-### Por qué aun así se retiraron
+### Lo que esto NO arregla, y hay que decirlo
 
-Porque el fondo no era el único problema, y el que quedaba no tiene arreglo por software: **la moto
-ocupa el 40% del ancho de la casilla**. Está fotografiada de tres cuartos frontal y es estrecha;
-llenar el ancho exigiría recortarle las ruedas o los espejos. A tamaño real —98 px de casilla en un
-teléfono de 390— eso se ve como una moto diminuta dentro de un recuadro, al lado de automóviles que
-llenan el suyo.
+**La moto ocupa el 40% del ancho de la casilla, y ahí se queda.** Medido sobre el archivo
+terminado: el vehículo mide 226 × 252 px dentro de un lienzo de 560 × 266. Es una moto de tres
+cuartos frontal, casi cuadrada (0,90:1), y la casilla es 2:1, así que `object-fit: contain` la
+limita por el alto. **El tope geométrico es el 45% del ancho**, y no depende del procesado: con un
+recorte perfecto con alfa sería el mismo número.
 
-El **dibujo** `VehicleThumb` no tiene ese problema: es un SVG sin fondo, así que no hay recuadro
-posible, y con su ventana propia ocupa el 72% del ancho. Es mejor activo que la fotografía para
-esta casilla, y es el que manda desde el 22-10-2026 por la tarde.
+Lo único que cierra ese hueco es **una moto de perfil**: 1,85:1 llena un hueco 2:1 al 93%. Con
+fondo transparente, mejor todavía, porque entonces sobra el traslado de plató entero.
 
-### Qué haría volver a las fotografías
+### Qué pedir para cerrarlo del todo
 
-Un paquete con la moto **de perfil** —una moto de perfil es 1,85:1 y sí llena un hueco 2:1— o, aún
-mejor, **con fondo transparente**. Con cualquiera de las dos, volver es dejar los archivos en esta
-carpeta: la regla de búsqueda no cambió y los nueve nombres siguen siendo los correctos. El
-procesado que se usó está en el historial, en el commit que los incorporó.
+Un archivo por color, **de perfil**, **con fondo transparente**, la moto **entera** (ruedas
+completas, sin trozos de otras motos), de al menos 560 px de ancho y proporción cercana a 2:1.
+Volver a incorporarlo es dejar los archivos en esta carpeta con los nombres de siempre: la regla de
+búsqueda no cambia.
 
 ## Cómo se nombra un archivo
 
@@ -124,15 +143,16 @@ que si alguien agrega o quita, el número de acá se nota desactualizado.
 
 ### Cobertura, contada por `prototipo.check.mjs` y no afirmada de memoria
 
-**9 de las 24 combinaciones** tipo×color que el servidor puede producir muestran fotografía:
+**18 de las 24 combinaciones** tipo×color que el servidor puede producir muestran fotografía:
 
 - **`CAR`** × los 9 colores que la biblioteca tiene → imagen, con la forma que dé su modelo o con
   la carrocería que haya elegido su dueño;
-- **`CAR`** × `YELLOW`, `BROWN`, `OTHER` → dibujo: la biblioteca no trae esos colores;
-- **`MOTORCYCLE`** × los 12 → **dibujo siempre**, por la decisión de la tarde del 22-10-2026.
+- **`MOTORCYCLE`** × esos mismos 9 colores → su fotografía de moto, nunca la de un automóvil;
+- **`CAR`** y **`MOTORCYCLE`** × `YELLOW`, `BROWN`, `OTHER` → dibujo: la biblioteca no trae esos
+  colores.
 
-Que la moto vaya dibujada no es un hueco que haya que tapar: para esta casilla el dibujo es el
-mejor activo que hay, y la sección «Las motocicletas» dice con qué se reemplazaría.
+Los seis huecos son de color, no de carrocería, y el dibujo que sale en ellos sí tiene silueta de
+moto cuando el vehículo es una moto.
 
 Las 7 carrocerías utilizables se alcanzan todas: `sedan`, `suv-compacta`, `pickup`,
 `van-comercial`, `minivan`, `hatchback`, `electrico`.

@@ -51,12 +51,12 @@ const CASOS = [
   { placa: 'NAR005', marca: 'Kia', modelo: 'Picanto', anio: '2021', tipo: /Automóvil/, color: /^Naranja$/,
     archivo: 'hatchback-naranja.webp', demuestra: 'ORANGE, el otro color recuperado' },
   /*
-    Las fotografías de moto se retiraron la tarde del 22-10-2026: en un hueco 2:1, un recorte de
-    tres cuartos frontal deja la moto en el 40% del ancho, dentro de un recuadro visible. Manda el
-    dibujo, que llena su casilla y no tiene fondo. La razón larga está en el LEEME de prototipo.
+    Las fotografías de moto se reprocesaron la tarde del 22-10-2026: el archivo entregado traía un
+    41% de relleno azul incrustado, y la moto se veía diminuta por eso y no por su encuadre. La
+    medición y lo que queda pendiente están en el LEEME de prototipo.
   */
   { placa: 'MOT006', marca: 'Honda', modelo: 'CB190', anio: '2021', tipo: /Motocicleta/, color: /^Verde$/,
-    archivo: null, demuestra: 'motocicleta: dibujo, que llena la casilla sin fondo' },
+    archivo: 'moto-verde.webp', demuestra: 'motocicleta: su propia fotografía' },
   /*
     Una moto de un color que la biblioteca NO tiene. Es la otra mitad de la garantía: cuando no hay
     archivo de moto, cae al dibujo —que tiene silueta de moto— y nunca a la foto de un automóvil.
