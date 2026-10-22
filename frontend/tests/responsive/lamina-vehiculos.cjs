@@ -50,8 +50,13 @@ const CASOS = [
     archivo: 'hatchback-beige.webp', demuestra: 'hatchback con acabado + BEIGE' },
   { placa: 'NAR005', marca: 'Kia', modelo: 'Picanto', anio: '2021', tipo: /Automóvil/, color: /^Naranja$/,
     archivo: 'hatchback-naranja.webp', demuestra: 'ORANGE, el otro color recuperado' },
+  /*
+    Las fotografías de moto se retiraron la tarde del 22-10-2026: en un hueco 2:1, un recorte de
+    tres cuartos frontal deja la moto en el 40% del ancho, dentro de un recuadro visible. Manda el
+    dibujo, que llena su casilla y no tiene fondo. La razón larga está en el LEEME de prototipo.
+  */
   { placa: 'MOT006', marca: 'Honda', modelo: 'CB190', anio: '2021', tipo: /Motocicleta/, color: /^Verde$/,
-    archivo: 'moto-verde.webp', demuestra: 'motocicleta con su propia foto, desde el 22-10-2026' },
+    archivo: null, demuestra: 'motocicleta: dibujo, que llena la casilla sin fondo' },
   /*
     Una moto de un color que la biblioteca NO tiene. Es la otra mitad de la garantía: cuando no hay
     archivo de moto, cae al dibujo —que tiene silueta de moto— y nunca a la foto de un automóvil.
@@ -124,6 +129,23 @@ async function irAVehiculos(page) {
 async function elegir(page, campo, opcion) {
   const caja = page.getByRole('combobox', { name: campo }).first();
   await caja.waitFor({ state: 'visible', timeout: 10000 });
+  /*
+    Dos controles posibles, y hay que servir a los dos.
+
+    Este arnés corre con `hasTouch`, y desde el 22-10-2026 un aparato de dedo recibe el `<select>`
+    del sistema en vez de la lista propia —porque la lista propia no se dejaba recorrer en un
+    iPhone—. Un `<select>` no abre ningún `[role=listbox]`: se elige con `selectOption`. El arnés
+    detecta cuál le tocó en vez de asumir, así que sigue sirviendo si mañana el formulario vuelve
+    a la lista propia o se prueba en escritorio.
+  */
+  if (await caja.evaluate((n) => n.tagName === 'SELECT')) {
+    const rotulos = await caja.locator('option').allTextContents();
+    const elegido = rotulos.map((s) => s.trim()).find((s) => opcion.test(s));
+    if (!elegido) throw new Error(`«${opcion}» no está entre las opciones: ${rotulos.join(' · ')}`);
+    await caja.selectOption({ label: elegido });
+    await page.waitForTimeout(250);
+    return;
+  }
   await caja.click();
   await page.waitForTimeout(350);
   await page.locator('[role=listbox] [role=option]').filter({ hasText: opcion }).first().click();

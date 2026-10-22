@@ -1,5 +1,7 @@
 import * as React from 'react';
-import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import {
+  useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore,
+} from 'react';
 import { createPortal } from 'react-dom';
 
 export interface SelectOption {
@@ -48,6 +50,57 @@ export interface SelectProps {
   onBlur?: () => void;
   'aria-label'?: string;
   'aria-describedby'?: string;
+  /**
+   * En un aparato de dedo, usar el `<select>` del sistema en vez de esta lista (22-10-2026).
+   *
+   * <h2>Por qué existe, con el fallo que lo provocó</h2>
+   *
+   * <p>En un iPhone, esta lista se abre y no se deja recorrer: al arrastrar el dedo para bajar, el
+   * menú se cierra. Son dos cosas del componente sumándose. La lista vive en un portal con
+   * `position: fixed`, y en iOS un arrastre que empieza dentro de una capa fija que no puede
+   * desplazarse se lo lleva la página: el `scroll` de la página dispara la remedición y el
+   * `pointerdown` que lo inició —que el navegador entrega fuera de la lista— cae en el cierre por
+   * toque afuera. Con dos opciones no se notaba nunca; con ocho, que es lo que tiene «Tipo de
+   * vehículo» desde la clasificación de carrocerías, la última opción —«Motocicleta»— queda fuera
+   * de pantalla y es inalcanzable.</p>
+   *
+   * <h2>Por qué un `<select>` nativo y no otro intento de arreglar el desplazamiento</h2>
+   *
+   * <p>Porque en un teléfono el control del sistema es mejor que cualquier cosa que escribamos: lo
+   * dibuja el sistema operativo, se desplaza con inercia, tiene su propia rueda en iOS, lo conoce
+   * VoiceOver y no hay manera de que se cierre a destiempo. Lo que se pierde es lo que el
+   * comentario de abajo defiende —la tipografía y los iconos del sistema de diseño—, y ese es un
+   * precio pequeño al lado de un formulario que no se puede usar. En escritorio, donde el fallo no
+   * existe y la lista propia sí aporta, no cambia nada.</p>
+   *
+   * <p>Va como propiedad y no como comportamiento de todos: este componente lo usan los cuatro
+   * portales, y cambiarlo para todos tocaría Fiscalización y Administración, que no son de este
+   * encargo. Quien lo necesite, lo pide.</p>
+   */
+  nativoEnMovil?: boolean;
+}
+
+/**
+ * `true` cuando el aparato apunta con el dedo.
+ *
+ * <p>`pointer: coarse` y no el ancho de la ventana: lo que decide no es el tamaño de la pantalla
+ * sino cómo se toca. Una tableta de 1024 px tiene el mismo problema que un teléfono de 320, y una
+ * laptop estrecha no lo tiene. Se suscribe al cambio porque un convertible pasa de uno a otro al
+ * girar el teclado.</p>
+ */
+function useDedo(): boolean {
+  const suscribir = useCallback((avisar: () => void) => {
+    const mq = typeof window !== 'undefined' && window.matchMedia
+      ? window.matchMedia('(pointer: coarse)') : null;
+    mq?.addEventListener('change', avisar);
+    return () => mq?.removeEventListener('change', avisar);
+  }, []);
+  const leer = useCallback(
+    () => (typeof window !== 'undefined' && window.matchMedia
+      ? window.matchMedia('(pointer: coarse)').matches : false),
+    [],
+  );
+  return useSyncExternalStore(suscribir, leer, () => false);
 }
 
 /** How far the list may grow before it scrolls inside itself. */
@@ -112,9 +165,11 @@ export function Select({
   required,
   className,
   onBlur,
+  nativoEnMovil,
   ...aria
 }: SelectProps): React.JSX.Element {
   const generatedId = useId();
+  const conDedo = useDedo();
   const triggerId = id ?? `${generatedId}-trigger`;
   const listId = `${generatedId}-list`;
   const optionId = (index: number): string => `${generatedId}-opt-${index}`;
@@ -346,6 +401,81 @@ export function Select({
   const classes = ['lx-select', invalid ? 'lx-select--invalid' : '', open ? 'lx-select--open' : '', className]
     .filter(Boolean)
     .join(' ');
+
+  /*
+    El camino nativo. Va DESPUÉS de todos los hooks —se ejecutan igual, que es lo que React exige—
+    y antes de dibujar nada, porque de acá en adelante no se usa ninguno.
+
+    El campo cerrado se ve idéntico: el `<select>` lleva las mismas clases que el botón, así que
+    hereda superficie, borde, radio y escala tipográfica, y la flecha se dibuja encima. Lo único
+    que cambia es quién pinta la lista al abrirla, y ahí gana el sistema operativo.
+  */
+  if (nativoEnMovil && conDedo) {
+    const sinElegir = selectedIndex < 0;
+    const grupos: { group?: string; opciones: { option: SelectOption; index: number }[] }[] = [];
+    options.forEach((option, index) => {
+      const ultimo = grupos[grupos.length - 1];
+      if (ultimo && ultimo.group === option.group) ultimo.opciones.push({ option, index });
+      else grupos.push({ group: option.group, opciones: [{ option, index }] });
+    });
+    // Un `<option>` no admite dos líneas ni un icono, así que el detalle se pega al rótulo en vez
+    // de perderse. Es lo único que el control del sistema no puede dibujar.
+    const rotulo = (option: SelectOption): string =>
+      option.detail ? `${option.label} · ${option.detail}` : option.label;
+
+    return (
+      <span className={`lx-select-wrap${icon ? ' lx-select-wrap--with-icon' : ''}`}>
+        {icon ? (
+          <span className="lx-select-wrap__icon" aria-hidden="true">
+            {icon}
+          </span>
+        ) : null}
+        <select
+          id={triggerId}
+          name={name}
+          className={`${classes} lx-select--nativo`}
+          value={sinElegir ? '' : value}
+          disabled={disabled}
+          required={required}
+          aria-invalid={invalid || undefined}
+          aria-label={aria['aria-label']}
+          aria-describedby={aria['aria-describedby']}
+          onChange={(event) => onChange(event.target.value)}
+          onBlur={onBlur}
+        >
+          {sinElegir ? (
+            // Deshabilitada para que no se pueda «elegir» el hueco, y presente para que el campo
+            // no arranque mostrando la primera opción como si ya estuviera elegida.
+            <option value="" disabled hidden>
+              {placeholder ?? ''}
+            </option>
+          ) : null}
+          {grupos.map((tramo) =>
+            tramo.group ? (
+              <optgroup key={tramo.group} label={tramo.group}>
+                {tramo.opciones.map(({ option }) => (
+                  <option key={option.value} value={option.value} disabled={option.disabled}>
+                    {rotulo(option)}
+                  </option>
+                ))}
+              </optgroup>
+            ) : (
+              tramo.opciones.map(({ option }) => (
+                <option key={option.value} value={option.value} disabled={option.disabled}>
+                  {rotulo(option)}
+                </option>
+              ))
+            ),
+          )}
+        </select>
+        <span className="lx-select-wrap__caret" aria-hidden="true">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" focusable="false">
+            <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </span>
+      </span>
+    );
+  }
 
   const list =
     open && box

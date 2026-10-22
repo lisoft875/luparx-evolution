@@ -430,6 +430,16 @@ export function VehiclesPage(): React.JSX.Element {
                     value={valorDeSelector(form)}
                     onChange={(value) => setForm((f) => ({ ...f, ...desdeValorDeSelector(value) }))}
                     options={opcionesDeTipo(types)}
+                    /*
+                      El `<select>` del sistema en el teléfono (22-10-2026, urgente).
+
+                      Con dos opciones la lista propia funcionaba; con ocho, en un iPhone, se abre y
+                      no se deja bajar —al arrastrar el dedo se cierra— y «Motocicleta», que es la
+                      última, queda inalcanzable. El formulario quedaba inutilizable para registrar
+                      una moto. El porqué del fallo está en `Select.tsx`; acá basta saber que en un
+                      aparato de dedo manda el control del sistema y en escritorio no cambia nada.
+                    */
+                    nativoEnMovil
                   />
                 )}
               </FormField>
@@ -448,6 +458,8 @@ export function VehiclesPage(): React.JSX.Element {
                       { value: '', label: t('citizen.vehicles.form.colorUnset') },
                       ...colors.map((entry) => ({ value: entry.value, label: tKey(entry.labelKey) })),
                     ]}
+                    /* El color tiene TRECE opciones: el mismo fallo, y peor. Va nativo igual. */
+                    nativoEnMovil
                   />
                 )}
               </FormField>

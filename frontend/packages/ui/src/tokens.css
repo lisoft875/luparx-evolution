@@ -835,6 +835,42 @@ body {
   pointer-events: none;
   z-index: 1;
 }
+/*
+  El `<select>` del sistema, para `Select nativoEnMovil` en un aparato de dedo (22-10-2026).
+
+  Hereda `.lx-select`, así que superficie, borde, radio y tipografía son los mismos que los del
+  campo propio: cerrado, no se distingue. Lo que cambia acá es lo poco que un `<select>` necesita
+  aparte — sitio para la flecha, que va dibujada encima porque un `<select>` no admite hijos, y el
+  recorte del texto cuando la opción elegida es más larga que el campo.
+
+  `padding-right` deja ese sitio; sin él, «Motocicleta» pasaría por debajo de la flecha.
+*/
+.lx-select--nativo {
+  padding-right: calc(var(--lx-space-3) + 16px + var(--lx-space-2));
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.lx-select-wrap__caret {
+  position: absolute;
+  right: var(--lx-space-3);
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  color: var(--lx-text-muted);
+  pointer-events: none;
+}
+/*
+  La lista desplegada la dibuja el sistema operativo y no la podemos tematizar, pero SÍ podemos
+  decirle de qué color es la superficie sobre la que decide. En iOS y en Android eso hace que la
+  rueda y el menú salgan oscuros en vez de una hoja blanca sobre una aplicación oscura.
+*/
+.lx-select--nativo option,
+.lx-select--nativo optgroup {
+  background: var(--lx-surface-2);
+  color: var(--lx-text);
+}
 
 /* Level 2 — a floating surface, like the modal, and above it: a field inside a dialog has to be
    able to open its list over that dialog's own edge. */
