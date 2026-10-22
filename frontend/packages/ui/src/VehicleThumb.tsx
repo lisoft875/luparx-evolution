@@ -73,6 +73,8 @@ const VIDRIO_BAJO = '#0C1828';
 const GOMA = '#161C26';
 const LLANTA = '#7D8899';
 const FARO = '#F4F7D8';
+/** Metal sin pintar: motor, escape y horquilla de la motocicleta. No es el color del vehículo. */
+const MOTOR = '#39414E';
 
 export interface VehicleThumbProps {
   /**
@@ -199,23 +201,131 @@ function Furgoneta({ p, id }: { p: Pintura; id: string }): React.JSX.Element {
   );
 }
 
+/** Los cinco radios de la llanta, en grados. Fijos: el mismo dibujo en las dos ruedas. */
+const RADIOS_LLANTA = [18, 90, 162, 234, 306];
+
+/**
+ * Una rueda de motocicleta: calada, no un disco.
+ *
+ * <p>En un automóvil la rueda es un detalle oscuro; en una moto ocupa un tercio del alto y es, en
+ * buena medida, lo que la identifica. Dos cosas la hacen leer: el <b>grosor del neumático</b>, que
+ * aquí es un anillo de goma y no un relleno, y el <b>hueco</b> —entre los radios se ve el fondo de
+ * la tarjeta, como en una moto de verdad—. Una rueda rellena convierte la moto en un juguete.</p>
+ */
+function RuedaMoto({ cx, cy, r }: { cx: number; cy: number; r: number }): React.JSX.Element {
+  return (
+    <g>
+      {/* Neumático: anillo, con el hueco interior transparente. */}
+      <circle cx={cx} cy={cy} r={r - r * 0.17} fill="none" stroke={GOMA} strokeWidth={r * 0.34} />
+      {/* Aro. */}
+      <circle cx={cx} cy={cy} r={r * 0.61} fill="none" stroke={LLANTA} strokeWidth={r * 0.11} opacity="0.92" />
+      {/* Disco de freno. */}
+      <circle cx={cx} cy={cy} r={r * 0.38} fill="none" stroke={LLANTA} strokeWidth={r * 0.06} opacity="0.5" />
+      {RADIOS_LLANTA.map((grados) => {
+        const a = (grados * Math.PI) / 180;
+        return (
+          <line
+            key={grados}
+            x1={cx + Math.cos(a) * r * 0.17}
+            y1={cy + Math.sin(a) * r * 0.17}
+            x2={cx + Math.cos(a) * r * 0.58}
+            y2={cy + Math.sin(a) * r * 0.58}
+            stroke={LLANTA}
+            strokeWidth={r * 0.09}
+            opacity="0.8"
+          />
+        );
+      })}
+      <circle cx={cx} cy={cy} r={r * 0.17} fill={LLANTA} />
+    </g>
+  );
+}
+
+/**
+ * La motocicleta. Tercera versión, 22-10-2026.
+ *
+ * <h2>Las dos que no funcionaron</h2>
+ *
+ * <p>La primera era de tubos finos y Javier la describió como «parece un grillo». La segunda le
+ * puso masas —depósito, motor, asiento— y pasó a «parece una chapeadora»: seguía siendo un objeto
+ * <b>largo y bajo</b>, con un tubo gris cruzándolo de punta a punta y una antena saliendo adelante.
+ * Las dos tenían el mismo defecto de fondo: la silueta era casi toda horizontal.</p>
+ *
+ * <h2>Esta no se dibujó a ojo</h2>
+ *
+ * <p>Las proporciones salen de la moto que el catálogo usa de ejemplo, una Honda CB190, medidas
+ * contra su distancia entre ejes (1356 mm = 62 unidades aquí):</p>
+ *
+ * <ul>
+ *   <li>rueda 640 mm ≈ 0,47 de la distancia entre ejes → radio 14,5;</li>
+ *   <li>alto al manillar 1100 mm ≈ 0,81 → el manillar llega a y=24, no a y=30;</li>
+ *   <li>altura de asiento 795 mm ≈ 0,59 → asiento en y=36;</li>
+ *   <li>largo total 2030 mm ≈ 1,50 → de x=16 a x=107.</li>
+ * </ul>
+ *
+ * <p>Lo que cambia respecto a las anteriores es, sobre todo, que la silueta <b>sube</b>: horquilla
+ * inclinada que llega hasta la tija, manillar por encima del depósito y un retrovisor que corona el
+ * conjunto. Eso es lo que distingue una moto de una herramienta con ruedas.</p>
+ *
+ * <h2>El hueco también dibuja</h2>
+ *
+ * <p>Las ruedas van caladas y el triángulo entre el motor, el asiento y el basculante se deja
+ * vacío: en una moto real se ve el fondo a través de ella, y rellenar esa zona es lo que convertía
+ * el dibujo en un bulto. El escape es un tubo cónico que muere en el eje trasero, no una tabla.</p>
+ *
+ * <p>Perfil puro, mirando a la derecha como los demás dibujos. No afirma marca ni modelo: es una
+ * motocicleta genérica del color que declaró el dueño.</p>
+ */
 function Motocicleta({ p, id }: { p: Pintura; id: string }): React.JSX.Element {
   return (
     <g>
-      <ellipse cx="60" cy="72" rx="36" ry="6" fill={`url(#${id}-piso)`} />
-      {/* Las dos ruedas y, entre ellas, el cuadro: en una moto el dibujo es la estructura. */}
-      <ellipse cx="30" cy="58" rx="13" ry="12" fill={GOMA} />
-      <ellipse cx="30" cy="58" rx="6" ry="5.5" fill={LLANTA} opacity="0.8" />
-      <ellipse cx="92" cy="58" rx="14" ry="13" fill={GOMA} />
-      <ellipse cx="92" cy="58" rx="6.5" ry="6" fill={LLANTA} opacity="0.8" />
-      <path d="M30 58 L48 42 L70 40 L92 58" fill="none" stroke={p.medio} strokeWidth="7" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M48 42 L62 56 L92 58" fill="none" stroke={p.sombra} strokeWidth="5" strokeLinecap="round" />
-      {/* Depósito y asiento. */}
-      <path d="M44 38 L62 36 Q70 36 72 40 L52 44 Q45 44 44 38 Z" fill={`url(#${id}-techo)`} />
-      <path d="M70 40 L86 38 Q90 38 90 41 L72 44 Z" fill={p.sombra} />
-      {/* Manillar y faro. */}
-      <path d="M84 36 L96 30" stroke={LLANTA} strokeWidth="3" strokeLinecap="round" />
-      <ellipse cx="97" cy="42" rx="4" ry="3.4" fill={FARO} opacity="0.9" />
+      <ellipse cx="61" cy="73" rx="44" ry="5" fill={`url(#${id}-piso)`} />
+      {/* Ejes a y=57,5: el suelo queda en y=72 con radio 14,5. */}
+      <RuedaMoto cx={30} cy={57.5} r={14.5} />
+      <RuedaMoto cx={92} cy={57.5} r={14.5} />
+      {/* Corona y cadena. */}
+      <circle cx="30" cy="57.5" r="5" fill="none" stroke={LLANTA} strokeWidth="1.3" opacity="0.7" />
+      <path d="M31 53.8 L54 54.8" stroke={LLANTA} strokeWidth="1.3" opacity="0.6" />
+      {/* Basculante: del pivote del motor al eje trasero. */}
+      <path d="M55 54.5 L31 56 L31 60 L55 59.5 Z" fill={MOTOR} />
+      {/* Amortiguador trasero, inclinado hacia adelante. */}
+      <path d="M45 57.5 L49 44" stroke={LLANTA} strokeWidth="3" strokeLinecap="round" opacity="0.9" />
+      {/* Cuadro: tubo de bajada hasta el motor y subchasis hacia el asiento. */}
+      <path d="M80 38 L62 48.5" stroke={p.sombra} strokeWidth="3.4" strokeLinecap="round" />
+      <path d="M56 42.5 L33 40.5" stroke={p.sombra} strokeWidth="3" strokeLinecap="round" />
+      {/* Escape: colector curvo desde la culata y silenciador cónico que muere en el eje trasero. */}
+      <path d="M71 45 Q78 51.5 73 57.5 Q67 62.5 57 62.5" fill="none" stroke={LLANTA} strokeWidth="2.4" strokeLinecap="round" opacity="0.85" />
+      <path d="M52 60.8 Q38 59.3 27 58 Q23 57.6 23 60.4 Q23 63.4 27 63.2 Q38 62.8 52 64 Z" fill={LLANTA} opacity="0.95" />
+      <ellipse cx="24" cy="60.6" rx="1.7" ry="3" fill={GOMA} opacity="0.75" />
+      {/* Motor: cárter abajo, cilindro inclinado hacia adelante y culata encima. */}
+      <path d="M55 51 Q52 51 52 55 L52 59 Q52 63.5 57 63.5 L68 63.5 Q74 63.5 74 58 L74 54 Q74 51 71 51 Z" fill={MOTOR} />
+      <path d="M55 51 L71 51 Q74 51 74 54.5 L52 54.5 Q52 51 55 51 Z" fill={LLANTA} opacity="0.26" />
+      <path d="M62 52.5 L64 43 Q64.4 41 67 41 L71 41.6 Q73.4 42 73 44.4 L71.6 53 Z" fill={MOTOR} />
+      <path d="M63.4 48 L72.3 49 M63.8 45.8 L72.7 46.8 M64.2 43.6 L73 44.6" stroke={GOMA} strokeWidth="1.1" opacity="0.5" />
+      <path d="M64 42.4 L72.9 43.4 L73.2 40.8 Q73.3 39.4 71.6 39.2 L66 38.6 Q64.2 38.4 64 39.8 Z" fill={MOTOR} />
+      {/* Horquilla: dos barras con el ángulo de lanzamiento real (25° de la vertical). */}
+      <path d="M79.5 33 L90.5 56" stroke={MOTOR} strokeWidth="3.6" strokeLinecap="round" />
+      <path d="M82.5 32 L93.5 55.5" stroke={LLANTA} strokeWidth="4" strokeLinecap="round" />
+      <path d="M88.5 44 L93.5 55.5" stroke={MOTOR} strokeWidth="4.6" strokeLinecap="round" opacity="0.9" />
+      <path d="M77.5 33.5 L85 30 L87 34 L79.5 37.5 Z" fill={MOTOR} />
+      {/* Guardabarros delantero: arco concéntrico con la rueda, pintado. */}
+      <path d="M81.4 44.9 A 16.5 16.5 0 0 1 102.6 44.9" fill="none" stroke={p.medio} strokeWidth="3.4" strokeLinecap="round" />
+      {/* Colín pintado y asiento negro encima. */}
+      <path d="M24.5 43.5 Q24 37.2 28.5 35.8 Q31 35.1 33 35.6 L46 37 L46 46.5 L30 46 Q25.2 45.6 24.5 43.5 Z" fill={`url(#${id}-chapa)`} />
+      <path d="M35 35.9 L57 36.6 Q60 38 57.5 40.4 L38.5 40.3 Q34.2 40.2 34.3 38 Q34.4 36 35 35.9 Z" fill="#1B2129" />
+      {/* Depósito: corto y alto, con la cintura marcada. Encima del tubo superior, no pegado al motor. */}
+      <path d="M57 45.6 Q55.4 39 61 35.6 Q69 31 77.5 32 Q82 32.6 82 37.6 L82 41.6 Q78 46 69.5 46.6 L61 46.6 Q57.6 46.6 57 45.6 Z" fill={`url(#${id}-techo)`} />
+      <path d="M62 37.6 Q69 34.2 78 34.8" stroke={p.claro} strokeWidth="1.5" fill="none" opacity="0.7" />
+      {/* Faro redondo: la pieza que más rápido dice «moto» de frente o de lado. */}
+      <circle cx="89.5" cy="34" r="5.8" fill={p.medio} />
+      <circle cx="90.6" cy="34" r="4.2" fill={FARO} opacity="0.93" />
+      {/* Manillar con puño, y retrovisor: lo que levanta la silueta por encima del depósito. */}
+      <path d="M82.8 33 L83.2 27" stroke={MOTOR} strokeWidth="2.2" strokeLinecap="round" />
+      <path d="M76 28.2 L91 24.6" stroke={GOMA} strokeWidth="2.4" fill="none" strokeLinecap="round" />
+      <path d="M86.5 25.7 L91 24.6" stroke="#0F141C" strokeWidth="3.4" strokeLinecap="round" />
+      <path d="M88 24.9 L93 19.6" stroke={GOMA} strokeWidth="1.6" strokeLinecap="round" />
+      <ellipse cx="94.8" cy="18.4" rx="3.6" ry="2.4" fill={MOTOR} />
+      <ellipse cx="94.8" cy="18.1" rx="2.4" ry="1.4" fill={LLANTA} opacity="0.6" />
     </g>
   );
 }
