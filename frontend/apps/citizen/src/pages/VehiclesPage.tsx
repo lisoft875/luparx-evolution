@@ -11,13 +11,13 @@ import {
   EmptyState,
   FormField,
   IconCar,
-  VehicleThumb,
   IconMore,
   IconPlus,
   Input,
   Modal,
   Select,
 } from '@luparx/ui';
+import { VehicleImage } from '../vehicleImages/VehicleImage';
 import type { CreateVehicleRequest, Vehicle } from '@luparx/api-client';
 import { CitizenShell } from '../components/CitizenShell';
 import { QueryBoundary } from '../components/QueryBoundary';
@@ -228,76 +228,80 @@ export function VehiclesPage(): React.JSX.Element {
       >
         {(vehicles) => (
         <CardStack>
-          {vehicles.map((vehicle) => (
-            <Card key={vehicle.id}>
-              {/*
-                `flexWrap` es lo que impide que la miniatura le robe el sitio a la placa: cuando la
-                fila no da, las insignias bajan a la línea siguiente en vez de aplastar el dato que
-                todo el mundo viene a leer. Medido a 393 px antes de ponerlo: la placa salía
-                recortada a media letra.
-              */}
-              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 'var(--lx-space-3)', flexWrap: 'wrap' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--lx-space-3)', minWidth: 0, flex: '1 1 auto' }}>
-                  {/*
-                    La miniatura del boceto (20-10-2026). Dibujo por categoría teñido del color
-                    declarado; ni marca ni modelo entran en la elección, porque el dominio no tiene
-                    foto y inventarla era lo único que la haría parecerse a la del boceto.
+          {/*
+            La advertencia, UNA vez y arriba de todo.
 
-                    Matiza —no contradice— la nota de abajo sobre no pintar la tarjeta con el color
-                    del carro: lo que lleva color es el DIBUJO DEL VEHÍCULO, que es el objeto que el
-                    color describe. La tarjeta, sus bordes y sus insignias siguen sin teñirse.
-                  */}
-                  {/* 56 y no 40: en el boceto la imagen del vehículo es lo primero que se ve de la
-                      fila, del tamaño de la placa. A 40 competía con las insignias y parecía un
-                      icono más. */}
-                  <VehicleThumb type={vehicle.type} color={vehicle.color} size={56} />
-                  <p className="lx-text-amount-lg" style={{ margin: 0, minWidth: 0, overflowWrap: 'anywhere' }}>
-                    {vehicle.plate}
+            La imagen de cada tarjeta es una ilustración genérica elegida por tipo, modelo y color;
+            no es una foto del vehículo de esa persona y no afirma su carrocería. Decirlo acá y no
+            en cada tarjeta es lo que evita repetir cuatro veces la misma frase en una lista de
+            cuatro vehículos, y deja la tarjeta para los datos.
+          */}
+          <p className="lx-text-meta lx-vehiculos-aviso">{t('citizen.vehicles.imageIsGeneric')}</p>
+          {vehicles.map((vehicle) => (
+            /*
+              La tarjeta compacta (22-10-2026). Tres columnas: imagen, datos, menú.
+
+              Antes era imagen+placa arriba, descripción debajo y una fila de hasta tres botones al
+              pie: tres alturas de texto y una de botones por vehículo, que con cuatro vehículos
+              obligaba a desplazar para ver el tercero. Ahora cada tarjeta es UNA fila y la lista
+              entra de un vistazo.
+
+              Las acciones se fueron al menú de tres puntos por instrucción del 22-10-2026. Queda
+              dicho que eso revierte una decisión del 19-10 que está escrita en el historial: «marcar
+              el principal es de un toque y escondido tras Más opciones la gente no lo encuentra».
+              Las dos lecturas son defendibles y la elección es de producto; se deja la nota para que
+              volver atrás sea un cambio consciente y no un redescubrimiento.
+            */
+            <Card key={vehicle.id}>
+              <div className="lx-vehiculo-fila">
+                {/*
+                  La imagen: fotografía con licencia si la hay para ESTE vehículo, imagen de
+                  prototipo por carrocería y color si no, y el dibujo como última red.
+
+                  `title` y no un rótulo visible: la advertencia de que la imagen es genérica se
+                  dice UNA vez arriba de la lista, no cuatro veces dentro de ella. Lo que la tarjeta
+                  sí afirma, en palabras y como dato, es el tipo —«Automóvil»— y la descripción.
+                  La imagen nunca afirma carrocería: un Hilux declarado automóvil se dibuja como
+                  pick-up porque su modelo lo dice, pero la tarjeta sigue diciendo «Automóvil».
+                */}
+                <VehicleImage
+                  type={vehicle.type}
+                  color={vehicle.color}
+                  brand={vehicle.brand}
+                  model={vehicle.model}
+                  year={vehicle.year}
+                  relleno
+                  className="lx-vehiculo-fila__imagen"
+                />
+
+                <div className="lx-vehiculo-fila__datos">
+                  <p className="lx-text-amount-lg lx-vehiculo-fila__placa">{vehicle.plate}</p>
+                  {/* «Toyota Yaris · Gris · 2015» — el color es una palabra en esta línea y nada
+                      más; ninguna parte de la tarjeta se pinta del color del carro. */}
+                  <p className="lx-text-meta lx-vehiculo-fila__descripcion">
+                    {vehicleDescriptor(vehicle, { includeName: true, colorLabel: colorOf(vehicle.color) })}
                   </p>
+                  <div className="lx-vehiculo-fila__insignias">
+                    {/* El tipo, en palabras. Una moto y un automóvil se cobran y se fiscalizan
+                        distinto, así que va junto a la placa y no enterrado en un formulario. Y
+                        desde que hay imagen cumple una segunda función: es el dato real al lado de
+                        una ilustración que sólo es parecida. */}
+                    {typeOf(vehicle.type) ? <Badge tone="neutral">{typeOf(vehicle.type)}</Badge> : null}
+                    {activeVehicleIds.has(vehicle.id) ? <Badge tone="info">{t('citizen.vehicles.activeSessionBadge')}</Badge> : null}
+                    {vehicle.isPrimary ? <Badge tone="success">{t('citizen.vehicles.primaryBadge')}</Badge> : null}
+                  </div>
                 </div>
-                <div style={{ display: 'flex', gap: 'var(--lx-space-2)', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                  {/* What kind of vehicle it is, in words. A motorcycle and a car are charged and
-                      enforced differently, so it belongs where the plate is, not buried in a form. */}
-                  {typeOf(vehicle.type) ? <Badge tone="neutral">{typeOf(vehicle.type)}</Badge> : null}
-                  {activeVehicleIds.has(vehicle.id) ? <Badge tone="info">{t('citizen.vehicles.activeSessionBadge')}</Badge> : null}
-                  {vehicle.isPrimary ? <Badge tone="success">{t('citizen.vehicles.primaryBadge')}</Badge> : null}
-                </div>
-              </div>
-              {/* "Toyota Yaris · Gris · 2015" — the colour is a word in this line and nothing
-                  more; no part of the card is ever painted with the colour of the car. */}
-              <p className="lx-text-meta" style={{ margin: 'var(--lx-space-1) 0 var(--lx-space-3) 0' }}>
-                {vehicleDescriptor(vehicle, { includeName: true, colorLabel: colorOf(vehicle.color) })}
-              </p>
-              <div style={{ display: 'flex', gap: 'var(--lx-space-2)', flexWrap: 'wrap' }}>
-                <Button type="button" variant="secondary" onClick={() => openEdit(vehicle)}>
-                  {t('citizen.vehicles.editCta')}
-                </Button>
-                {/* En la tarjeta y no detrás del menú: marcar el principal es de un toque y tiene
-                    efecto inmediato en la pantalla de estacionar, que preselecciona este vehículo.
-                    Escondido tras «Más opciones» —junto a Eliminar, que es lo único que queda ahí—
-                    la gente no lo encuentra. Ausente cuando ya es el principal: un botón que no
-                    haría nada es peor que ningún botón. */}
-                {!vehicle.isPrimary ? (
-                  /* `secondary` y no `ghost`: al lado de Editar, un `ghost` se lee como un enlace
-                     suelto y no como la otra mitad de un par de acciones. Las dos hacen lo mismo de
-                     importante sobre la misma tarjeta, así que pesan igual. */
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    disabled={setPrimaryVehicle.isPending}
-                    onClick={() => handleSetPrimary(vehicle)}
-                  >
-                    {t('citizen.vehicles.actions.setPrimary')}
-                  </Button>
-                ) : null}
+
+                {/* El nombre accesible lleva la placa: con cuatro tarjetas, cuatro botones que se
+                    llaman «Más opciones» no le dicen a un lector de pantalla cuál es cuál. */}
                 <Button
                   type="button"
-                  variant="secondary"
-                  aria-label={t('citizen.vehicles.menuCta')}
-                  style={{ paddingInline: 'var(--lx-space-3)' }}
+                  variant="ghost"
+                  aria-label={t('citizen.vehicles.menuForPlate', { plate: vehicle.plate })}
+                  className="lx-vehiculo-fila__menu"
                   onClick={() => setMenuVehicle(vehicle)}
                 >
-                  <IconMore size={18} />
+                  <IconMore size={20} />
                 </Button>
               </div>
             </Card>
@@ -332,8 +336,16 @@ export function VehiclesPage(): React.JSX.Element {
             {(types) => (
               <FormField label={t('citizen.vehicles.form.typeLabel')}>
                 {({ inputId }) => (
+                  /*
+                    `aria-label` además del `<label for>`: el disparador del selector es un
+                    `<button>`, así que su nombre accesible sale de su CONTENIDO —«Automóvil»— y no
+                    del rótulo. Sin esto, un lector de pantalla anuncia dos campos llamados por su
+                    valor actual y ninguno dice de qué campo se trata. Medido con el árbol de
+                    accesibilidad el 22-10-2026: los dos comboboxes salían sin nombre.
+                  */
                   <Select
                     id={inputId}
+                    aria-label={t('citizen.vehicles.form.typeLabel')}
                     value={form.type}
                     onChange={(value) => setForm((f) => ({ ...f, type: value }))}
                     options={types.map((entry) => ({ value: entry.value, label: tKey(entry.labelKey) }))}
@@ -348,6 +360,7 @@ export function VehiclesPage(): React.JSX.Element {
                 {({ inputId }) => (
                   <Select
                     id={inputId}
+                    aria-label={t('citizen.vehicles.form.colorLabel')}
                     value={form.color}
                     onChange={(value) => setForm((f) => ({ ...f, color: value }))}
                     options={[
@@ -404,21 +417,57 @@ export function VehiclesPage(): React.JSX.Element {
         </div>
       </Modal>
 
+      {/*
+        Todas las acciones de la tarjeta viven acá desde el 22-10-2026, por instrucción.
+
+        El orden es el de uso: editar es lo que más se hace, marcar principal es ocasional y
+        eliminar va al final, separado y en rojo. «Marcar como principal» no aparece cuando ya lo
+        es: un botón que no haría nada es peor que ningún botón.
+      */}
       <Modal open={menuVehicle !== null} onClose={() => setMenuVehicle(null)} title={menuVehicle?.plate ?? ''} closeLabel={t('common.close')}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--lx-space-2)' }}>
           {menuVehicle ? (
-            <Button
-              type="button"
-              variant="danger"
-              fullWidth
-              onClick={() => {
-                setDeleteError(null);
-                setDeleteTarget(menuVehicle);
-                setMenuVehicle(null);
-              }}
-            >
-              {t('citizen.vehicles.actions.delete')}
-            </Button>
+            <>
+              <Button
+                type="button"
+                variant="secondary"
+                fullWidth
+                onClick={() => {
+                  const elegido = menuVehicle;
+                  setMenuVehicle(null);
+                  openEdit(elegido);
+                }}
+              >
+                {t('citizen.vehicles.editCta')}
+              </Button>
+              {!menuVehicle.isPrimary ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  fullWidth
+                  disabled={setPrimaryVehicle.isPending}
+                  onClick={() => {
+                    const elegido = menuVehicle;
+                    setMenuVehicle(null);
+                    void handleSetPrimary(elegido);
+                  }}
+                >
+                  {t('citizen.vehicles.actions.setPrimary')}
+                </Button>
+              ) : null}
+              <Button
+                type="button"
+                variant="danger"
+                fullWidth
+                onClick={() => {
+                  setDeleteError(null);
+                  setDeleteTarget(menuVehicle);
+                  setMenuVehicle(null);
+                }}
+              >
+                {t('citizen.vehicles.actions.delete')}
+              </Button>
+            </>
           ) : null}
         </div>
       </Modal>

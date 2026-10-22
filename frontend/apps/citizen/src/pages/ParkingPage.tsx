@@ -19,10 +19,10 @@ import {
   ListRow,
   RadioCardGroup,
   Select,
-  VehicleThumb,
   StepList,
   type Step,
 } from '@luparx/ui';
+import { VehicleImage } from '../vehicleImages/VehicleImage';
 import { formatDurationLabel } from '../lib/duration';
 import { parkingErrorMessage } from '../lib/apiErrors';
 import { checkSpaceCode } from '../lib/spaceCode';
@@ -489,6 +489,8 @@ export function ParkingPage(): React.JSX.Element {
                        la dio el servidor. */
                     etiquetas={tarifasPorCodigo(zones, (minor, moneda) =>
                       formatCurrencyMinor(minor, moneda, locale))}
+                      /* El mapa abre encuadrado en la zona elegida, no sobre toda la municipalidad. */
+                      zonaDestacada={zone?.code}
                     textos={{
                       titulo: t('citizen.parking.map.title'),
                       ampliar: t('citizen.parking.map.expand'),
@@ -550,7 +552,7 @@ export function ParkingPage(): React.JSX.Element {
                       // carros, la silueta y el color distinguen de un vistazo cuál es cuál mucho
                       // antes que leer la placa. Dibujo por categoría teñido del color declarado;
                       // nada de marca ni modelo, que el dominio no tiene foto.
-                      icon: <VehicleThumb type={v.type} color={v.color} size={26} />,
+                      icon: <VehicleImage type={v.type} color={v.color} brand={v.brand} model={v.model} year={v.year} size={32} />,
                     })),
                     // Last, because it is the exception: the everyday case is one of your own cars.
                     {
@@ -995,6 +997,8 @@ export function ParkingPage(): React.JSX.Element {
                 onReintentar={() => void zonasGeoQuery.refetch()}
                 etiquetas={tarifasPorCodigo(zones, (minor, moneda) =>
                   formatCurrencyMinor(minor, moneda, locale))}
+                  /* El mapa abre encuadrado en la zona elegida, no sobre toda la municipalidad. */
+                  zonaDestacada={zone?.code}
                 textos={{
                   titulo: t('citizen.parking.map.title'),
                   ampliar: t('citizen.parking.map.expand'),

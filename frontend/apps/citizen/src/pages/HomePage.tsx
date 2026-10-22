@@ -8,7 +8,6 @@ import {
   Card,
   HeroCard,
   IconCar,
-  VehicleThumb,
   IconChevronRight,
   IconCheck,
   IconFine,
@@ -18,8 +17,9 @@ import {
   ListRow,
   SectionHeader,
   StatCard,
-  Timer,
+  TimerRing,
 } from '@luparx/ui';
+import { VehicleImage } from '../vehicleImages/VehicleImage';
 import type { ParkingPolicy, ParkingSession, Vehicle } from '@luparx/api-client';
 import { BalanceRow } from '../components/BalanceRow';
 import { CitizenShell } from '../components/CitizenShell';
@@ -80,11 +80,20 @@ function useCountdown(expiresAt: string | undefined): { remainingSeconds: number
  */
 function ActiveSessionCard({
   session,
+  vehiculo,
   policy,
   remainingSeconds,
   estado,
 }: {
   session: ParkingSession;
+  /**
+   * El vehículo registrado de esta estadía, si lo hay.
+   *
+   * <p>Aporta color, marca y modelo, que la sesión no lleva. Es `undefined` cuando se estacionó el
+   * carro de otra persona escribiendo la placa: entonces el único dato del vehículo es su tipo, y
+   * la imagen se queda con eso en vez de inventar el resto.</p>
+   */
+  vehiculo: Vehicle | undefined;
   policy: ParkingPolicy | undefined;
   /*
     Ni el contador ni el estado se deciden acá dentro: los decide la pantalla y bajan por
@@ -160,18 +169,45 @@ function ActiveSessionCard({
         <p className="lx-text-meta" style={{ margin: 0 }}>
           {t('citizen.home.activeSession.zoneAndSpace', { zone: session.zoneName, space: session.spaceCode })}
         </p>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-          <Timer
+        {/*
+          El segundo boceto aprobado (22-10-2026): el vehículo a la izquierda y el contador
+          circular a la derecha.
+
+          La imagen sale de lo que el servidor sabe de ESTA estadía. `vehicleType` viaja en la
+          sesión —es una copia del momento en que empezó, igual que la placa, por la misma razón:
+          el vehículo pudo editarse después—. Marca, modelo y color no viajan en la sesión, así que
+          se buscan en el vehículo registrado por `vehicleId`; cuando la persona estacionó el carro
+          de otra persona escribiendo la placa, `vehicleId` es nulo y entonces no hay color que
+          mostrar: se dibuja la silueta del tipo, sin inventarle uno.
+        */}
+        <div className="lx-sesion-activa">
+          <VehicleImage
+            className="lx-sesion-activa__vehiculo"
+            relleno
+            type={session.vehicleType}
+            color={vehiculo?.color}
+            brand={vehiculo?.brand}
+            model={vehiculo?.model}
+            year={vehiculo?.year}
+          />
+          <TimerRing
             remainingSeconds={remainingSeconds}
+            /*
+              La fracción del anillo con el total que el servidor cobró, extensiones incluidas
+              (`minutes` es «total booked time, session plus every extension»). Calcularlo
+              restando fechas en el navegador daría un total distinto cada vez que el reloj del
+              teléfono vaya adelantado.
+            */
+            totalSeconds={session.minutes > 0 ? session.minutes * 60 : undefined}
             expiredLabel={t('citizen.timer.expired')}
+            /* «Expirado» con «tiempo restante» debajo se lee como si el tiempo restante fuera
+               «Expirado». Vencida, el rótulo que corresponde no es cuánto queda sino desde cuándo
+               no queda nada, y eso ya lo dice la línea de «Venció a las …» de más abajo. */
+            caption={estado.showRemainingLabel ? t('citizen.home.activeSession.remainingLabel') : undefined}
             aria-label={t(estado.titleKey)}
           />
-          {/* «Expirado» con «tiempo restante» debajo se lee como si el tiempo restante fuera
-              «Expirado». Vencida, el rótulo que corresponde no es cuánto queda sino desde cuándo
-              no queda nada, y eso ya lo dice la línea de «Venció a las …» de más abajo. */}
-          {estado.showRemainingLabel ? (
-            <span className="lx-text-meta">{t('citizen.home.activeSession.remainingLabel')}</span>
-          ) : null}
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
           {mensajeDeVencida ? (
             <span
               className="lx-text-meta"
@@ -283,6 +319,18 @@ export function HomePage(): React.JSX.Element {
     tarjeta leen EL MISMO número en el MISMO render. Mientras cada uno contaba por su lado podían
     discrepar, y discrepaban.
   */
+  /*
+    El vehículo de la estadía, para la imagen de la tarjeta.
+
+    Por `vehicleId` y no por placa: la placa de la sesión es una copia del momento en que empezó
+    (CONTRACT.md v0.2 regla 2) y el vehículo pudo editarse después, así que compararlas podría no
+    encontrar nada o —peor— encontrar otro. Cuando `vehicleId` es nulo la persona estacionó el
+    carro de alguien más escribiendo la placa: no hay vehículo registrado y no se busca ninguno.
+  */
+  const vehiculoDeLaEstadia = session?.vehicleId
+    ? (vehiclesQuery.data ?? []).find((v) => v.id === session.vehicleId)
+    : undefined;
+
   const { remainingSeconds, secondsPastExpiry } = useCountdown(session?.expiresAt);
   const estado = homeSessionState({
     hasSession: Boolean(session),
@@ -328,6 +376,7 @@ export function HomePage(): React.JSX.Element {
       {session ? (
         <ActiveSessionCard
           session={session}
+          vehiculo={vehiculoDeLaEstadia}
           policy={policy}
           remainingSeconds={remainingSeconds}
           estado={estado}
@@ -428,7 +477,7 @@ export function HomePage(): React.JSX.Element {
                   /* La miniatura del boceto cuando hay vehículo; el icono genérico cuando todavía
                      no hay ninguno, que es cuando no hay nada que dibujar. */
                   icon={vehicle
-                    ? <VehicleThumb type={vehicle.type} color={vehicle.color} size={24} />
+                    ? <VehicleImage type={vehicle.type} color={vehicle.color} brand={vehicle.brand} model={vehicle.model} year={vehicle.year} size={28} />
                     : <IconCar size={20} />}
                   label={t('citizen.home.vehicleCard.label')}
                   value={vehicle?.plate ?? t('citizen.home.vehicleCard.empty')}

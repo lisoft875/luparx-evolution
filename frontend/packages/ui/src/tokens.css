@@ -2935,6 +2935,44 @@ a.lx-list-row {
   font-variant-numeric: normal;
 }
 
+/*
+  El contador dentro del anillo (22-10-2026, segundo boceto).
+
+  Más chico que el contador suelto: ahí ocupa el ancho de la tarjeta y acá tiene que caber dentro
+  de un círculo que además comparte fila con la imagen del vehículo. `clamp` y no un número fijo
+  porque la misma tarjeta se dibuja a 320 px de ancho y a 1920, y «Expirado» es más largo que
+  «45:00»: a tamaño fijo, en el teléfono, la palabra se salía del círculo.
+*/
+.lx-timer--anillo {
+  font-size: clamp(1.25rem, 7vw, 1.75rem);
+}
+.lx-timer-ring {
+  position: relative;
+  flex-shrink: 0;
+  display: inline-grid;
+  place-items: center;
+}
+.lx-timer-ring__arco {
+  display: block;
+}
+.lx-timer-ring__centro {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  /* El texto no debe capturar el puntero: encima del anillo no hay nada que tocar. */
+  pointer-events: none;
+  /* Que «Expirado» no toque el aro. */
+  padding: 0 12%;
+  text-align: center;
+}
+.lx-timer-ring__rotulo {
+  line-height: 1.1;
+}
+
 /* ---- Brand / Logo --------------------------------------------------------- */
 
 .lx-brand {
@@ -9011,6 +9049,151 @@ a.lx-list-row {
   justify-content: center;
   flex-shrink: 0;
   overflow: hidden;
+}
+
+/*
+  El marco del hueco del vehículo (22-10-2026).
+
+  Las imágenes de la biblioteca de prototipo traen su propio fondo —un estudio azul oscuro, opaco,
+  sin canal de transparencia— porque así vinieron: son recortes de láminas de referencia, no
+  renders con alfa. Eso obliga a presentarlas como lo que son, una lámina dentro de un marco, en
+  vez de fingir que flotan sobre la tarjeta: sin esquinas redondeadas, en el tema claro, el fondo
+  oscuro de la imagen se lee como un error de maquetación.
+
+  Y el marco lo lleva también el DIBUJO, que no lo necesitaría: en una lista donde unas filas
+  tienen foto y otras no, unas enmarcadas y otras sueltas dejan la columna de imágenes desalineada.
+
+  El borde es el mismo que el de los campos, para que el marco pertenezca a la interfaz y no
+  parezca un recuadro suelto. Si algún día llegan imágenes con fondo transparente, se quita esta
+  regla y nada más.
+*/
+.lx-vehicle-thumb--marco {
+  border-radius: var(--lx-radius-sm, 8px);
+  border: 1px solid var(--lx-border);
+  background: #0e2135;
+}
+
+/*
+  El hueco que se mide con el contenedor y no en píxeles.
+
+  La proporción va acá y no en el elemento de dentro: así el hueco tiene su alto desde el primer
+  cuadro —antes de que la imagen llegue— y la tarjeta no da un salto al cargar.
+*/
+.lx-vehicle-thumb--relleno {
+  display: flex;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 2 / 1;
+}
+.lx-vehicle-thumb--relleno > img,
+.lx-vehicle-thumb--relleno > svg {
+  width: 100%;
+  height: 100%;
+}
+
+/*
+  La tarjeta compacta de «Mis vehículos» (22-10-2026).
+
+  Tres columnas en UNA fila: imagen, datos, menú. Antes cada vehículo ocupaba cuatro alturas
+  —imagen+placa, descripción, y una fila de hasta tres botones—, y con cuatro vehículos había que
+  desplazar para ver el tercero.
+
+  `minmax(0, 1fr)` en la columna del medio y no `1fr` a secas: con `1fr` la columna no baja de su
+  contenido mínimo, y una placa larga o un modelo con nombre largo empujaban la tarjeta hacia
+  afuera. Es el mismo defecto que esta aplicación ya tuvo dos veces.
+*/
+.lx-vehiculos-aviso {
+  margin: 0 0 var(--lx-space-2) 0;
+}
+.lx-vehiculo-fila {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--lx-space-3);
+}
+/*
+  La imagen se mide con el contenedor y no en píxeles (22-10-2026, Paso 4).
+
+  A 48 px de alto quedaba chica al lado de una placa de 28; a un número fijo más grande se comía
+  el ancho del texto a 320. `clamp` resuelve las dos cosas con una sola regla y sin un valor por
+  aparato, que es lo que la guía del proyecto prohíbe. La proporción 2:1 la pone
+  `--relleno`, así que la imagen crece sin recortarse ni deformarse.
+*/
+.lx-vehiculo-fila .lx-vehiculo-fila__imagen {
+  width: clamp(88px, 25vw, 124px);
+}
+.lx-vehiculo-fila__datos {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+/*
+  La placa, bajada de 28 px.
+
+  A 28 dominaba la tarjeta y dejaba la marca y el modelo como letra chica: la placa es el dato que
+  identifica, no el titular de la pantalla. `clamp` y no un número fijo para que a 320 no empuje y
+  a escritorio no se vea perdida. Sigue siendo el elemento más fuerte de la fila.
+
+  `anywhere` y no `break-word`: una placa es una sola «palabra» y sin esto se sale de la caja en
+  vez de partirse. Fue un defecto real a 320 px.
+*/
+.lx-vehiculo-fila__placa {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  line-height: 1.15;
+  font-size: clamp(18px, 5vw, 22px);
+}
+.lx-vehiculo-fila__descripcion {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.lx-vehiculo-fila__insignias {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--lx-space-1);
+  margin-top: var(--lx-space-1);
+}
+/*
+  El botón de tres puntos. Cuadrado y de 44 px porque es el mínimo táctil del sistema, aunque el
+  icono mida 20: un blanco de 24 px al borde de la tarjeta es el que se falla con el pulgar.
+*/
+.lx-vehiculo-fila__menu {
+  align-self: flex-start;
+  flex-shrink: 0;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/*
+  La fila del boceto: el vehículo a la izquierda, el contador circular a la derecha.
+
+  `minmax(0, 1fr)` y no `1fr` a secas: con `1fr` la columna no baja de su contenido mínimo y a
+  320 px la imagen empujaba la tarjeta hacia afuera, que es el defecto que esta aplicación ya tuvo
+  dos veces. Por debajo de ese ancho las dos cosas se apilan, con el contador arriba: cuando hay
+  que elegir, el dato que la persona vino a leer es cuánto tiempo le queda.
+*/
+.lx-sesion-activa {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--lx-space-4);
+}
+@media (max-width: 359px) {
+  .lx-sesion-activa {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+  }
+  .lx-sesion-activa__vehiculo {
+    order: 2;
+    max-width: 240px;
+  }
 }
 
 /*
