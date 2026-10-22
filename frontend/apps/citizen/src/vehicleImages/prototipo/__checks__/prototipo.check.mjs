@@ -49,8 +49,9 @@ for (const archivo of ['vehicleImages/prototipo/catalogoPrototipo.js', 'vehicleI
 }
 
 const mod = await import(join(dir, 'vehicleImages/prototipo/catalogoPrototipo.js'));
-const { carroceriaDe, colorDe, elegirPrototipo, claveDeArchivo,
-  CARROCERIAS, CARROCERIAS_ENTREGADAS, COLORES_PROTOTIPO, EQUIVALENCIAS } = mod;
+const { carroceriaDe, colorDe, elegirPrototipo, claveDeArchivo, esCarroceriaOfrecida,
+  CARROCERIAS, CARROCERIAS_ENTREGADAS, COLORES_PROTOTIPO, EQUIVALENCIAS,
+  CARROCERIAS_OFRECIDAS, ETIQUETA_DE_CARROCERIA } = mod;
 
 let fallos = 0;
 const check = (nombre, cond, detalle = '') => {
@@ -434,6 +435,71 @@ const clavesDeMoto = Object.keys(COLORES_DEL_SERVIDOR)
 check('todas las claves de una moto empiezan por «moto-»',
   clavesDeMoto.length > 0 && clavesDeMoto.every((c) => c.startsWith('moto-')),
   clavesDeMoto.join(', '));
+
+console.log('\n-- la carrocería que elige la persona --');
+
+/*
+  La clasificación del 22-10-2026. El servidor no tiene dónde guardar una carrocería —`VehicleType`
+  son dos valores y `V16_0` retiró el resto— así que la elección vive en el dispositivo y entra acá
+  como un campo más. Lo que se comprueba es el ORDEN de mando, que es donde está el riesgo.
+*/
+check('las carrocerías ofrecidas existen todas en el catálogo',
+  CARROCERIAS_OFRECIDAS.every((c) => CARROCERIAS.includes(c)),
+  CARROCERIAS_OFRECIDAS.filter((c) => !CARROCERIAS.includes(c)).join(', '));
+/*
+  Ninguna ofrecida puede estar en EQUIVALENCIAS: si lo estuviera, la persona elegiría «coupé» y
+  recibiría un sedán sin enterarse. Es la comprobación que dejó al coupé fuera de la lista.
+*/
+check('ninguna carrocería ofrecida se sustituye por otra a la espalda de quien la elige',
+  CARROCERIAS_OFRECIDAS.every((c) => !EQUIVALENCIAS[c]),
+  CARROCERIAS_OFRECIDAS.filter((c) => EQUIVALENCIAS[c]).map((c) => `${c}→${EQUIVALENCIAS[c]}`).join(', '));
+check('cada carrocería ofrecida tiene clave de traducción',
+  CARROCERIAS_OFRECIDAS.every((c) => typeof ETIQUETA_DE_CARROCERIA[c] === 'string'),
+  CARROCERIAS_OFRECIDAS.filter((c) => !ETIQUETA_DE_CARROCERIA[c]).join(', '));
+check('las carrocerías ofrecidas tienen sus diez archivos',
+  CARROCERIAS_OFRECIDAS.every((c) => COLORES_PROTOTIPO.every((col) => existsSync(join(
+    raiz, 'apps/citizen/src/vehicleImages/prototipo/assets', `${c}-${col}.webp`)))));
+
+check('elegir pick-up da una pick-up aunque no haya marca ni modelo',
+  carroceriaDe({ type: 'CAR', carroceria: 'pickup' }) === 'pickup',
+  String(carroceriaDe({ type: 'CAR', carroceria: 'pickup' })));
+check('y la clave del archivo es la de la pick-up',
+  elegirPrototipo({ type: 'CAR', color: 'RED', carroceria: 'pickup' })?.clave === 'pickup-rojo',
+  String(elegirPrototipo({ type: 'CAR', color: 'RED', carroceria: 'pickup' })?.clave));
+
+/* Lo elegido manda sobre la tabla: quien dice que su Corolla es una SUV, recibe una SUV. */
+check('la elección de la persona gana a la tabla de modelos',
+  carroceriaDe({ type: 'CAR', brand: 'Toyota', model: 'Corolla', carroceria: 'suv-compacta' }) === 'suv-compacta',
+  String(carroceriaDe({ type: 'CAR', brand: 'Toyota', model: 'Corolla', carroceria: 'suv-compacta' })));
+/* Y sin elección, la tabla sigue mandando: lo de antes no se rompió. */
+check('sin elección, la tabla de modelos sigue decidiendo',
+  carroceriaDe({ type: 'CAR', brand: 'Toyota', model: 'Hilux' }) === 'pickup');
+
+/*
+  LA COMPROBACIÓN QUE MÁS IMPORTA DE ESTA SECCIÓN.
+
+  Una carrocería guardada en un navegador no puede convertir una moto en automóvil. El tipo es lo
+  que resuelve una tarifa y lo que lee un inspector; la elección es una preferencia visual. Si esto
+  alguna vez se invierte, un motociclista ve la foto de un sedán en su propia tarjeta.
+*/
+for (const c of CARROCERIAS_OFRECIDAS) {
+  check(`una MOTOCICLETA con «${c}» guardado sigue siendo moto`,
+    carroceriaDe({ type: 'MOTORCYCLE', carroceria: c }) === 'moto',
+    String(carroceriaDe({ type: 'MOTORCYCLE', carroceria: c })));
+}
+check('y su archivo sigue siendo un moto-',
+  elegirPrototipo({ type: 'MOTORCYCLE', color: 'RED', carroceria: 'pickup' })?.clave === 'moto-rojo',
+  String(elegirPrototipo({ type: 'MOTORCYCLE', color: 'RED', carroceria: 'pickup' })?.clave));
+
+/* Una carrocería inventada —almacenamiento editado a mano, versión futura— se ignora, no rompe. */
+for (const basura of ['', 'tanque', 'coupe', 'SEDAN', 'suv-grande', '../../etc', null, undefined]) {
+  const r = carroceriaDe({ type: 'CAR', brand: 'Toyota', model: 'Hilux', carroceria: basura });
+  check(`una carrocería inválida (${JSON.stringify(basura)}) se ignora y manda la tabla`,
+    r === 'pickup', String(r));
+}
+check('esCarroceriaOfrecida acepta sólo las de la lista',
+  CARROCERIAS_OFRECIDAS.every((c) => esCarroceriaOfrecida(c))
+  && !esCarroceriaOfrecida('coupe') && !esCarroceriaOfrecida('moto') && !esCarroceriaOfrecida(''));
 
 /*
   Las carrocerías que SÍ se alcanzan desde un dato real. Sirve para que nadie vuelva a escribir en

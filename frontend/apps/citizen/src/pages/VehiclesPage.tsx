@@ -18,6 +18,15 @@ import {
   Select,
 } from '@luparx/ui';
 import { VehicleImage } from '../vehicleImages/VehicleImage';
+import {
+  guardarCarroceriaElegida,
+  leerCarroceriaElegida,
+  olvidarCarroceriaElegida,
+} from '../vehicleImages/carroceriaElegida';
+import {
+  CARROCERIAS_OFRECIDAS,
+  ETIQUETA_DE_CARROCERIA,
+} from '../vehicleImages/prototipo/catalogoPrototipo';
 import type { CreateVehicleRequest, Vehicle } from '@luparx/api-client';
 import { CitizenShell } from '../components/CitizenShell';
 import { QueryBoundary } from '../components/QueryBoundary';
@@ -43,8 +52,33 @@ interface VehicleFormState {
   year: string;
   /** Catalog key. Never a literal in this file — see `DEFAULT_VEHICLE_TYPE`. */
   type: string;
+  /**
+   * La carrocería elegida, o `''` para «que la elija la aplicación».
+   *
+   * <p>No viaja al servidor: el contrato no tiene dónde ponerla —ver `carroceriaElegida.ts`— y se
+   * guarda en este dispositivo después de que el servidor confirme el vehículo.</p>
+   */
+  carroceria: string;
   color: string;
   isOwner: boolean;
+}
+
+/**
+ * Una sola pregunta para la persona, dos destinos por debajo.
+ *
+ * <p>El valor del selector es `TIPO:carroceria`: `CAR:pickup`, `MOTORCYCLE:`, `CAR:` para «no lo
+ * sé». Lo de antes de los dos puntos es del servidor y viaja en el `type` del DTO; lo de después
+ * se queda en el dispositivo. Partirlo en dos selectores sería honesto con la arquitectura y
+ * malísimo para quien registra un carro: nadie quiere contestar «automóvil» y después «pick-up».</p>
+ */
+function valorDeSelector(form: Pick<VehicleFormState, 'type' | 'carroceria'>): string {
+  return `${form.type}:${form.carroceria}`;
+}
+
+function desdeValorDeSelector(valor: string): Pick<VehicleFormState, 'type' | 'carroceria'> {
+  const corte = valor.indexOf(':');
+  if (corte < 0) return { type: valor, carroceria: '' };
+  return { type: valor.slice(0, corte), carroceria: valor.slice(corte + 1) };
 }
 
 /**
@@ -61,6 +95,7 @@ const EMPTY_FORM: VehicleFormState = {
   model: '',
   year: '',
   type: DEFAULT_VEHICLE_TYPE,
+  carroceria: '',
   color: '',
   isOwner: false,
 };
@@ -73,6 +108,9 @@ function formFromVehicle(vehicle: Vehicle): VehicleFormState {
     model: vehicle.model ?? '',
     year: vehicle.year ? String(vehicle.year) : '',
     type: vehicle.type || DEFAULT_VEHICLE_TYPE,
+    // Un vehículo registrado antes de que existiera esta pregunta no tiene nada guardado, y eso es
+    // «que la elija la aplicación»: abre el formulario sin elección y se sigue editando igual.
+    carroceria: leerCarroceriaElegida(vehicle.id) ?? '',
     color: vehicle.color ?? '',
     isOwner: vehicle.isOwner,
   };
@@ -105,6 +143,36 @@ export function VehiclesPage(): React.JSX.Element {
   const colorCatalogQuery = useVehicleColorCatalog();
   const typeOf = catalogLabeller(typeCatalogQuery.data, tKey);
   const colorOf = catalogLabeller(colorCatalogQuery.data, tKey);
+
+  /**
+   * Las opciones del selector: el catálogo del servidor, con el automóvil desplegado en carrocerías.
+   *
+   * <p>La lista de TIPOS sigue viniendo del servidor y no está escrita acá —si la plataforma
+   * agrega uno mañana, aparece sin publicar esta aplicación, que es como estaba hecho y no se
+   * rompe—. Lo que se añade es el despliegue del automóvil, y sólo del automóvil: es el único tipo
+   * donde el contrato no distingue, porque `V16_0` dejó a la pick-up y al sedán siendo los dos
+   * `CAR`. Un tipo nuevo del servidor entra como una opción suya, sin carrocerías, hasta que
+   * alguien decida si las necesita.</p>
+   */
+  function opcionesDeTipo(
+    types: readonly { value: string; labelKey: string }[],
+  ): { value: string; label: string }[] {
+    return types.flatMap((entry) => {
+      if (entry.value !== DEFAULT_VEHICLE_TYPE) {
+        return [{ value: `${entry.value}:`, label: tKey(entry.labelKey) }];
+      }
+      return [
+        // «Automóvil» a secas encabeza la lista y es lo que trae un formulario nuevo: quien no
+        // sepa o no quiera elegir carrocería deja esto y la aplicación la deduce del modelo, como
+        // hasta hoy. Lleva el rótulo del servidor para no inventar una palabra distinta.
+        { value: `${entry.value}:`, label: tKey(entry.labelKey) },
+        ...CARROCERIAS_OFRECIDAS.map((clave) => ({
+          value: `${entry.value}:${clave}`,
+          label: tKey(ETIQUETA_DE_CARROCERIA[clave] ?? clave),
+        })),
+      ];
+    });
+  }
   const { data: activeSessions } = useActiveParkingSessions();
   const createVehicle = useCreateVehicle();
   const updateVehicle = useUpdateVehicle();
@@ -166,10 +234,18 @@ export function VehiclesPage(): React.JSX.Element {
     setSaveError(null);
     const payload = toCreateRequest(form);
     try {
+      /*
+        La carrocería se guarda DESPUÉS de que el servidor confirme, y con el identificador que él
+        devuelve. Guardarla antes dejaría una carrocería huérfana cada vez que una placa repetida
+        hace fallar el alta: el mapa del dispositivo se llenaría de elecciones de vehículos que no
+        existen, y la primera que coincidiera con un identificador ajeno pintaría mal otra tarjeta.
+      */
       if (formVehicle) {
         await updateVehicle.mutateAsync({ id: formVehicle.id, payload });
+        guardarCarroceriaElegida(formVehicle.id, form.carroceria || null);
       } else {
-        await createVehicle.mutateAsync(payload);
+        const creado = await createVehicle.mutateAsync(payload);
+        if (creado?.id) guardarCarroceriaElegida(creado.id, form.carroceria || null);
       }
       closeForm();
     } catch (error) {
@@ -192,6 +268,9 @@ export function VehiclesPage(): React.JSX.Element {
     setDeleteError(null);
     try {
       await deleteVehicle.mutateAsync(deleteTarget.id);
+      // Y se olvida su carrocería: sin esto el mapa del dispositivo crece para siempre y, el día
+      // que el servidor reutilizara un identificador, el vehículo nuevo heredaría la del borrado.
+      olvidarCarroceriaElegida(deleteTarget.id);
       setDeleteTarget(null);
     } catch (error) {
       setDeleteError(vehicleDeleteErrorMessage(error, t));
@@ -265,6 +344,7 @@ export function VehiclesPage(): React.JSX.Element {
                   pick-up porque su modelo lo dice, pero la tarjeta sigue diciendo «Automóvil».
                 */}
                 <VehicleImage
+                  vehicleId={vehicle.id}
                   type={vehicle.type}
                   color={vehicle.color}
                   brand={vehicle.brand}
@@ -334,8 +414,8 @@ export function VehiclesPage(): React.JSX.Element {
               type the platform adds tomorrow appears without a release of this app. */}
           <QueryBoundary query={typeCatalogQuery} errorTitle={t('citizen.vehicles.form.typeLabel')}>
             {(types) => (
-              <FormField label={t('citizen.vehicles.form.typeLabel')}>
-                {({ inputId }) => (
+              <FormField label={t('citizen.vehicles.form.typeLabel')} hint={t('citizen.vehicles.form.typeHint')}>
+                {({ inputId, describedBy }) => (
                   /*
                     `aria-label` además del `<label for>`: el disparador del selector es un
                     `<button>`, así que su nombre accesible sale de su CONTENIDO —«Automóvil»— y no
@@ -346,9 +426,10 @@ export function VehiclesPage(): React.JSX.Element {
                   <Select
                     id={inputId}
                     aria-label={t('citizen.vehicles.form.typeLabel')}
-                    value={form.type}
-                    onChange={(value) => setForm((f) => ({ ...f, type: value }))}
-                    options={types.map((entry) => ({ value: entry.value, label: tKey(entry.labelKey) }))}
+                    aria-describedby={describedBy}
+                    value={valorDeSelector(form)}
+                    onChange={(value) => setForm((f) => ({ ...f, ...desdeValorDeSelector(value) }))}
+                    options={opcionesDeTipo(types)}
                   />
                 )}
               </FormField>

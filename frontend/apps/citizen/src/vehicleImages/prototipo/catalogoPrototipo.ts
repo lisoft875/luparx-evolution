@@ -425,11 +425,57 @@ function carroceriaDelModelo(marca: string | undefined, modelo: string | undefin
   return null;
 }
 
+/**
+ * Las carrocerías que el formulario le ofrece a la persona (22-10-2026).
+ *
+ * <h2>Por qué esta lista y no `CARROCERIAS` entera</h2>
+ *
+ * <p>`coupe`, `suv-grande` y `suv-premium` no se ofrecen porque están en `EQUIVALENCIAS`: quien
+ * las eligiera recibiría la imagen de otra carrocería sin saberlo. El caso del <b>coupé</b> se
+ * midió el 22-10-2026 porque Javier lo pidió por su nombre, y el número manda: en los cuatro
+ * colores neutros —blanco, plata, gris y <b>negro</b>— el panel iluminado sale en tono 355-357 con
+ * saturación 56-69%, es decir <b>rojo</b>, no gris. Son cuatro de diez colores y son los cuatro más
+ * comunes. En los otros seis el coupé es correcto (tono a 3-8° del sedán). Ofrecer una categoría
+ * que para la mayoría de los carros devuelve un sedán es peor que no ofrecerla; vuelve a la lista
+ * el día que lleguen activos de coupé bien recoloreados.</p>
+ *
+ * <p>`electrico` existe y se ve bien, pero no estaba en las categorías que pidió Javier y añadirla
+ * sería decidir por él. `moto` tampoco está acá: esa no es una carrocería que el frontend recuerde,
+ * es un <b>tipo del servidor</b>, y se elige como tal.</p>
+ *
+ * <p>El orden es el de la calle en Costa Rica, no el alfabético: lo que más se registra primero.</p>
+ */
+export const CARROCERIAS_OFRECIDAS = [
+  'sedan', 'hatchback', 'suv-compacta', 'pickup', 'minivan', 'van-comercial',
+] as const;
+
+/** La clave de traducción de cada carrocería ofrecida. Ningún texto visible vive en el código. */
+export const ETIQUETA_DE_CARROCERIA: Readonly<Record<string, string>> = {
+  sedan: 'citizen.vehicles.body.sedan',
+  hatchback: 'citizen.vehicles.body.hatchback',
+  'suv-compacta': 'citizen.vehicles.body.suv',
+  pickup: 'citizen.vehicles.body.pickup',
+  minivan: 'citizen.vehicles.body.minivan',
+  'van-comercial': 'citizen.vehicles.body.van',
+};
+
+/** `true` si la cadena es una carrocería que el formulario ofrece. */
+export function esCarroceriaOfrecida(valor: string | null | undefined): valor is Carroceria {
+  return !!valor && (CARROCERIAS_OFRECIDAS as readonly string[]).includes(valor);
+}
+
 export interface VehiculoParaPrototipo {
   type?: string;
   brand?: string;
   model?: string;
   color?: string;
+  /**
+   * La carrocería que la persona eligió a mano, si eligió alguna.
+   *
+   * <p>Manda sobre la tabla de modelos, porque el dueño del carro sabe más que una tabla; <b>no</b>
+   * manda sobre el tipo del servidor. Ver {@link carroceriaDe}.</p>
+   */
+  carroceria?: string;
 }
 
 export interface EleccionPrototipo {
@@ -442,9 +488,21 @@ export interface EleccionPrototipo {
 /**
  * La carrocería que le corresponde al vehículo, o null si no hay ninguna que no mienta.
  *
- * <p>Orden: el tipo del servidor decide primero —es el dato duro—, y marca+modelo sólo <b>afinan</b>
- * dentro de lo que el tipo ya permitió. Un vehículo declarado PICKUP cuyo modelo esté en la tabla
+ * <p>Orden: el tipo del servidor decide primero —es el dato duro—, después la elección de la
+ * persona, y marca+modelo sólo al final. Un vehículo declarado PICKUP cuyo modelo esté en la tabla
  * como sedán sigue siendo una pick-up: el servidor sabe más que una tabla escrita a mano.</p>
+ *
+ * <h2>Por qué la elección de la persona va encima de la tabla y debajo del servidor</h2>
+ *
+ * <p><b>Encima de la tabla</b> porque el dueño del carro sabe cuál es su carro y la tabla sólo
+ * adivina: 253 modelos cubren bastante, pero quien registró «Chery Tiggo» sin que la tabla lo
+ * conozca recibe un sedán, y ahora puede decir que es una SUV.</p>
+ *
+ * <p><b>Debajo del servidor</b> porque el tipo no es decoración: es lo que resuelve una tarifa y lo
+ * que lee un inspector. Si el servidor dice MOTORCYCLE, ninguna elección guardada en un navegador
+ * puede convertir esa moto en un automóvil. La elección sólo refina DENTRO del automóvil, que es
+ * justo donde el contrato no distingue —desde `V16_0` una pick-up y un sedán son los dos `CAR`— y
+ * por eso es el único lugar donde hace falta preguntar.</p>
  */
 export function carroceriaDe(vehiculo: VehiculoParaPrototipo): Carroceria | null {
   const tipo = (vehiculo.type ?? '').toUpperCase();
@@ -457,13 +515,23 @@ export function carroceriaDe(vehiculo: VehiculoParaPrototipo): Carroceria | null
   if (base === null || base === undefined) return null;
 
   /*
-    El automóvil se afina por modelo, y es el único que lo necesita: desde `V16_0` el contrato no
-    distingue una pick-up de un sedán, así que ES el caso general y no una excepción.
+    El automóvil se afina —por lo que dijo la persona, y si no dijo nada, por el modelo—, y es el
+    único que lo necesita: desde `V16_0` el contrato no distingue una pick-up de un sedán, así que
+    ES el caso general y no una excepción.
+
+    La comprobación `base === 'sedan'` es la que impide que una carrocería guardada se le pegue a
+    una moto. No sobra aunque la elegida venga de una lista cerrada: el día que alguien edite el
+    almacenamiento del navegador a mano, o que una moto y un automóvil compartan identificador por
+    un error ajeno, acá no pasa nada.
   */
   let elegida = base;
   if (base === 'sedan') {
-    const delModelo = carroceriaDelModelo(vehiculo.brand, vehiculo.model);
-    if (delModelo) elegida = delModelo;
+    if (esCarroceriaOfrecida(vehiculo.carroceria)) {
+      elegida = vehiculo.carroceria;
+    } else {
+      const delModelo = carroceriaDelModelo(vehiculo.brand, vehiculo.model);
+      if (delModelo) elegida = delModelo;
+    }
   }
 
   return EQUIVALENCIAS[elegida] ?? elegida;

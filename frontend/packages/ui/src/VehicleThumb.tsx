@@ -358,13 +358,24 @@ export function VehicleThumb({ type, color, size = 44, ancho, relleno, className
   const pintura = (color && PINTURA[color.toUpperCase()]) || SIN_COLOR;
   // Un tipo que el catálogo crezca y esta tabla no conozca cae en el volumen neutro, que es mejor
   // que dibujar un automóvil para algo que el servidor llamó de otra manera.
-  const Dibujo = DIBUJOS[(type || '').toUpperCase()] ?? Generico;
+  const clave = (type || '').toUpperCase();
+  const Dibujo = DIBUJOS[clave] ?? Generico;
   return (
     <span
       className={['lx-vehicle-thumb', relleno ? 'lx-vehicle-thumb--relleno' : '', className]
         .filter(Boolean).join(' ')}
       style={relleno ? undefined : { height: size, width: ancho ?? Math.round((size * 4) / 3) }}
       aria-hidden="true"
+      /*
+        Qué silueta se dibujó, para que una prueba pueda comprobarlo.
+
+        Un SVG en línea no tiene nombre ni texto, así que desde fuera «se dibujó una pick-up» y «se
+        dibujó un automóvil» son indistinguibles: las dos son un `<svg>`. Sin este atributo, la
+        prueba de la carrocería elegida sólo podría comprobar que hay DIBUJO, que es justo lo que
+        no interesa. No lleva información del vehículo —es una clave de categoría— y `aria-hidden`
+        sigue dejando la miniatura fuera del árbol de accesibilidad.
+      */
+      data-lx-dibujo={DIBUJOS[clave] ? clave : 'GENERICO'}
     >
       <svg viewBox="0 0 120 90" width="100%" height="100%" focusable="false" preserveAspectRatio="xMidYMid meet">
         {/*

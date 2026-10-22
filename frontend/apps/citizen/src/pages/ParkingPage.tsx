@@ -552,7 +552,7 @@ export function ParkingPage(): React.JSX.Element {
                       // carros, la silueta y el color distinguen de un vistazo cuál es cuál mucho
                       // antes que leer la placa. Dibujo por categoría teñido del color declarado;
                       // nada de marca ni modelo, que el dominio no tiene foto.
-                      icon: <VehicleImage type={v.type} color={v.color} brand={v.brand} model={v.model} year={v.year} size={32} />,
+                      icon: <VehicleImage vehicleId={v.id} type={v.type} color={v.color} brand={v.brand} model={v.model} year={v.year} size={32} />,
                     })),
                     // Last, because it is the exception: the everyday case is one of your own cars.
                     {

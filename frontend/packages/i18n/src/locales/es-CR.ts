@@ -1906,6 +1906,19 @@ export const esCR = {
   'citizen.vehicles.form.plateHint': 'Se guarda en mayúsculas, sin espacios ni guiones.',
   'citizen.vehicles.form.nameLabel': 'Nombre del vehículo',
   'citizen.vehicles.form.typeLabel': 'Tipo de vehículo',
+  /*
+    La pista dice lo que la carrocería hace y lo que NO hace. Lo segundo importa más: lo que se
+    cobra y lo que fiscaliza un inspector es «automóvil» o «motocicleta», y elegir pick-up no
+    cambia ninguna de las dos cosas. Sin esta línea, alguien podría creer que registrar su carro
+    como pick-up le cambia la tarifa.
+  */
+  'citizen.vehicles.form.typeHint': 'La carrocería solo cambia la imagen que ves en esta aplicación; la tarifa se cobra por automóvil o motocicleta.',
+  'citizen.vehicles.body.sedan': 'Sedán',
+  'citizen.vehicles.body.hatchback': 'Hatchback',
+  'citizen.vehicles.body.suv': 'SUV',
+  'citizen.vehicles.body.pickup': 'Pick-up',
+  'citizen.vehicles.body.minivan': 'Miniván',
+  'citizen.vehicles.body.van': 'Furgoneta',
   'citizen.vehicles.form.colorLabel': 'Color',
   'citizen.vehicles.form.colorUnset': 'Sin especificar',
   'citizen.vehicles.form.brandLabel': 'Marca',

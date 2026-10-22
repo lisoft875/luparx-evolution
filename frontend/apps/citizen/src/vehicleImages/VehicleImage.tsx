@@ -5,6 +5,7 @@ import { CATALOGO_VEHICULOS } from './galeria';
 import { elegirImagen } from './catalogo';
 import { elegirPrototipo } from './prototipo/catalogoPrototipo';
 import { PROTOTIPOS } from './prototipo/galeriaPrototipo';
+import { useCarroceriaElegida } from './carroceriaElegida';
 
 /**
  * La imagen de un vehículo: la mejor de las tres que haya, y nunca una que mienta.
@@ -56,7 +57,40 @@ import { PROTOTIPOS } from './prototipo/galeriaPrototipo';
  */
 const PROPORCION = 2;
 
+/**
+ * Qué dibujo le toca cuando no hay ninguna imagen: el del tipo, afinado por la carrocería elegida.
+ *
+ * <h2>Para qué sirve, si ya hay fotografías</h2>
+ *
+ * <p>Para los tres colores que la biblioteca no trae —amarillo, café y «otro»—. Un carro amarillo
+ * no tiene archivo y cae al dibujo, y hasta hoy el dibujo era siempre un automóvil genérico aunque
+ * su dueño hubiera dicho que es una pick-up. `VehicleThumb` tiene desde el principio un dibujo de
+ * pick-up y uno de furgoneta que el contrato dejó de alcanzar cuando `V16_0` retiró esos tipos;
+ * esto los vuelve a usar, que es exactamente para lo que se conservaron.</p>
+ *
+ * <p>El tipo del servidor sigue mandando: si dijo MOTORCYCLE, se dibuja una moto y la carrocería
+ * guardada no se mira.</p>
+ */
+function dibujoDe(type: string | undefined, carroceria: string | null): string | undefined {
+  if ((type ?? '').toUpperCase() !== 'CAR' || !carroceria) return type;
+  if (carroceria === 'pickup') return 'PICKUP';
+  if (carroceria === 'van-comercial' || carroceria === 'minivan') return 'VAN';
+  return type;
+}
+
 export interface VehicleImageProps {
+  /**
+   * Identificador del vehículo, para leer la carrocería que su dueño eligió.
+   *
+   * <p>Va acá y no como una carrocería ya resuelta a propósito: la imagen se dibuja en cuatro
+   * pantallas —la lista, el Inicio, la sesión activa y el selector de Estacionar— y si cada una
+   * tuviera que buscar la carrocería y pasarla, bastaría olvidarse en una para que el mismo
+   * vehículo saliera distinto en dos sitios. Con el identificador, la regla vive en un solo lugar
+   * y las cuatro pantallas dicen lo mismo sin ponerse de acuerdo.</p>
+   *
+   * <p>Sin él, la imagen se elige sola por marca y modelo, que es lo que hacía antes.</p>
+   */
+  vehicleId?: string;
   /** Clave de `GET /catalog/vehicle-types`, que hoy tiene dos valores: `CAR` y `MOTORCYCLE`. */
   type?: string;
   /** Clave del catálogo de colores. Elige el color de la imagen y tiñe el dibujo. */
@@ -83,6 +117,7 @@ export interface VehicleImageProps {
 }
 
 export function VehicleImage({
+  vehicleId,
   type,
   color,
   brand,
@@ -93,6 +128,9 @@ export function VehicleImage({
   className,
   alt,
 }: VehicleImageProps): React.JSX.Element {
+  // Se suscribe: al guardar una carrocería en el formulario, esta imagen se redibuja sola, sin
+  // esperar a que la pantalla se vuelva a montar.
+  const carroceria = useCarroceriaElegida(vehicleId);
   /*
     Qué escalones ya fallaron al cargar. Se guarda la URL y no un booleano: si la pantalla cambia
     de vehículo, el fallo del anterior no debe arrastrarse al nuevo.
@@ -100,7 +138,7 @@ export function VehicleImage({
   const [fallidas, setFallidas] = useState<readonly string[]>([]);
 
   const conLicencia = elegirImagen(CATALOGO_VEHICULOS, { brand, model, year, color });
-  const prototipo = elegirPrototipo({ type, brand, model, color });
+  const prototipo = elegirPrototipo({ type, brand, model, color, carroceria: carroceria ?? undefined });
   const delPrototipo = prototipo ? (PROTOTIPOS[prototipo.clave] ?? null) : null;
 
   const url = [conLicencia, delPrototipo].find((u) => u !== null && !fallidas.includes(u)) ?? null;
@@ -120,7 +158,7 @@ export function VehicleImage({
   if (!url) {
     return (
       <VehicleThumb
-        type={type}
+        type={dibujoDe(type, carroceria)}
         color={color}
         size={size}
         ancho={ancho}

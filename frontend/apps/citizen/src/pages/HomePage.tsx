@@ -184,6 +184,7 @@ function ActiveSessionCard({
           <VehicleImage
             className="lx-sesion-activa__vehiculo"
             relleno
+            vehicleId={vehiculo?.id}
             type={session.vehicleType}
             color={vehiculo?.color}
             brand={vehiculo?.brand}
@@ -477,7 +478,7 @@ export function HomePage(): React.JSX.Element {
                   /* La miniatura del boceto cuando hay vehículo; el icono genérico cuando todavía
                      no hay ninguno, que es cuando no hay nada que dibujar. */
                   icon={vehicle
-                    ? <VehicleImage type={vehicle.type} color={vehicle.color} brand={vehicle.brand} model={vehicle.model} year={vehicle.year} size={28} />
+                    ? <VehicleImage vehicleId={vehicle.id} type={vehicle.type} color={vehicle.color} brand={vehicle.brand} model={vehicle.model} year={vehicle.year} size={28} />
                     : <IconCar size={20} />}
                   label={t('citizen.home.vehicleCard.label')}
                   value={vehicle?.plate ?? t('citizen.home.vehicleCard.empty')}
