@@ -54,7 +54,9 @@ const CASOS = [
   { placa: 'PCK104', categoria: /^Pick-up$/, color: /^Negro$/, archivo: 'pickup-negro.webp' },
   { placa: 'MIN105', categoria: /^Miniván$/, color: /^Plateado$/, archivo: 'minivan-plata.webp' },
   { placa: 'VAN106', categoria: /^Furgoneta$/, color: /^Blanco$/, archivo: 'van-comercial-blanco.webp' },
-  { placa: 'MOT107', categoria: /^Motocicleta$/, color: /^Naranja$/, archivo: 'moto-naranja.webp' },
+  /* Sin fotografías de moto desde el 22-10-2026 por la tarde: manda el dibujo. Ver el LEEME. */
+  { placa: 'MOT107', categoria: /^Motocicleta$/, color: /^Naranja$/, archivo: null, dibujo: 'MOTORCYCLE',
+    nota: 'motocicleta: dibujo, que llena la casilla sin fondo' },
   /* La elección manda sobre la tabla: la tabla sabe que un Hilux es pick-up, su dueño dice sedán. */
   { placa: 'CON108', categoria: /^Sedán$/, color: /^Beige$/, marca: 'Toyota', modelo: 'Hilux',
     archivo: 'sedan-beige.webp', nota: 'la elección gana a la tabla de modelos' },
@@ -323,9 +325,9 @@ const MIRAR = (selector) => {
     await page.waitForTimeout(1600);
     ({ filas } = await page.evaluate(AUDITAR));
     const volvio = filas.find((x) => x.placa === 'MOT107');
-    ok(volvio?.archivo === 'moto-naranja.webp' && volvio.insignias.some((b) => /Motocicleta/.test(b)),
-      'y al volver a Motocicleta recupera la imagen de moto, no la del sedán',
-      `${volvio?.archivo} · ${volvio?.insignias.join(', ')}`);
+    ok(volvio?.dibujo === 'MOTORCYCLE' && volvio.insignias.some((b) => /Motocicleta/.test(b)),
+      'y al volver a Motocicleta recupera el dibujo de moto, no la imagen del sedán',
+      `${volvio?.archivo} ${volvio?.dibujo} · ${volvio?.insignias.join(', ')}`);
 
     console.log('\n══ 5 · el vehículo de la sesión activa ══');
     /*

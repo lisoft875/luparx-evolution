@@ -22,7 +22,7 @@ en su propia sección.
 | **Procesado aplicado** | Recorte del 5% inferior (tira de muestras incrustada) y reescalado a 560 px. Ningún retoque de color |
 | **Pendiente** | El propio paquete dice que **no están aprobadas para producción**. Antes de producción hace falta la decisión de Javier sobre si se reemplazan por activos con licencia |
 
-## Las motocicletas (`../prototipo/assets/moto-*.webp`, 9 archivos)
+## Las motocicletas — INCORPORADAS Y RETIRADAS el 22-10-2026
 
 | | |
 |---|---|
@@ -32,7 +32,10 @@ en su propia sección.
 | **Qué NO se puede afirmar** | Que representan una marca o un modelo. El dibujo recuerda a una naked de baja cilindrada, pero el catálogo no afirma marca ni modelo: sólo tipo y color |
 | **Procesado aplicado** | **No se recortó la moto**: se restó el fondo. Se estima el campo del plató, se calcula una opacidad continua por píxel y se resta el campo sólo donde esa opacidad es baja, dejando el azul de la biblioteca (17,34,48) en el plató y la moto intacta. Después, relleno hasta la proporción 560:266 y reescalado. Ningún retoque del color de la moto |
 | **Qué se incorporó** | 9 de los 10: rojo, verde, azul, negro, blanco, plata, gris, beige y naranja. `moto-amarillo.webp` **no** se incorporó porque `amarillo` no es un color de esta biblioteca; el archivo queda en el paquete entregado. No hay `moto-azul-oscuro`, y no hace falta: ningún color del servidor produce ese nombre |
-| **Pendiente** | Decisión de Javier antes de producción, y el conflicto de la línea siguiente |
+| **Estado** | **RETIRADAS.** Estuvieron en `../prototipo/assets/` desde la noche del 22-10-2026 hasta la tarde siguiente. Una motocicleta se dibuja |
+| **Por qué se retiraron** | En un hueco 2:1, un recorte de tres cuartos frontal deja la moto en el **40% del ancho**, dentro de un recuadro visible, al lado de automóviles que llenan el suyo. No es el fondo —eso se corrigió y se midió— sino el encuadre, y no tiene arreglo por software |
+| **Qué las traería de vuelta** | Un paquete con la moto **de perfil** (1,85:1 llena un hueco 2:1) o **con fondo transparente**. Volver es dejar los archivos en la carpeta: la regla de búsqueda no cambió |
+| **Pendiente** | Si vuelven, el conflicto de la línea siguiente sigue en pie |
 
 > **CONFLICTO, anotado y sin resolver.** La sección «Lo que no entra» de este mismo archivo excluye
 > los renders generados por inteligencia artificial. Estas nueve imágenes **lo son**, por

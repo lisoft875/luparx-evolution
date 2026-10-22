@@ -351,6 +351,34 @@ const DIBUJOS: Record<string, (p: { p: Pintura; id: string }) => React.JSX.Eleme
   MOTORCYCLE: Motocicleta,
 };
 
+/**
+ * Todos los dibujos están trazados sobre 120×90, que es 4:3.
+ *
+ * <p>El hueco de la tarjeta es 2:1, así que con `meet` el dibujo se ajusta por el ALTO y deja aire
+ * a los lados. Para un automóvil eso no se nota —ocupa casi todo el ancho de su ventana—, pero un
+ * vehículo que sea estrecho dentro de 120×90 aparece pequeño en una lista donde los coches llenan
+ * su casilla.</p>
+ */
+const VENTANA_POR_OMISION = '0 0 120 90';
+
+/**
+ * Ventanas propias, para el dibujo cuya forma no es la de un automóvil.
+ *
+ * <h2>Por qué la motocicleta necesita la suya</h2>
+ *
+ * <p>Una motocicleta de perfil mide, de verdad, unos 2030 mm de largo por 1100 mm de alto: 1,85 a
+ * 1. Un automóvil mide 4,5 m por 1,45: 3,1 a 1. En un hueco 2:1 el automóvil lo llena y la moto no
+ * puede, y eso no es un defecto del dibujo sino la forma del vehículo.</p>
+ *
+ * <p>Lo que sí se puede es no desperdiciar: con la ventana de 120×90 la moto ocupaba el 51% del
+ * ancho de la casilla porque sobraban 18 unidades de aire arriba y abajo que no usa. Recortada a
+ * 2:1 alrededor de lo que de verdad dibuja —de y=14 a y=77, que es del retrovisor a la sombra—
+ * pasa a ocupar el <b>72%</b>. El resto es el aire que le corresponde a un vehículo estrecho.</p>
+ */
+const VENTANAS: Readonly<Record<string, string>> = {
+  MOTORCYCLE: '-3 14 126 63',
+};
+
 export function VehicleThumb({ type, color, size = 44, ancho, relleno, className }: VehicleThumbProps): React.JSX.Element {
   // Un identificador por instancia: dos miniaturas en la misma lista no pueden compartir el
   // nombre de un degradado, o la segunda se pinta con la pintura de la primera.
@@ -377,7 +405,7 @@ export function VehicleThumb({ type, color, size = 44, ancho, relleno, className
       */
       data-lx-dibujo={DIBUJOS[clave] ? clave : 'GENERICO'}
     >
-      <svg viewBox="0 0 120 90" width="100%" height="100%" focusable="false" preserveAspectRatio="xMidYMid meet">
+      <svg viewBox={VENTANAS[clave] ?? VENTANA_POR_OMISION} width="100%" height="100%" focusable="false" preserveAspectRatio="xMidYMid meet">
         {/*
           Los degradados son lo que separa un dibujo plano de algo con cuerpo: la chapa no es de un
           solo color, se aclara donde le pega la luz y se apaga hacia los bajos. El vidrio hace lo

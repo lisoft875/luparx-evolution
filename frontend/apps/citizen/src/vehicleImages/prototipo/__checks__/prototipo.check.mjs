@@ -411,19 +411,20 @@ console.log(`  ··  ${conImagen} de ${total} combinaciones tipo×color muestran
 console.log(`  ··  sin imagen (${sinImagenTotal}): ${huecos.join(', ')}`);
 
 check('todo automóvil de un color con imagen recibe imagen',
-  conImagen === 18, `${conImagen}, se esperaban 18 (CAR y MOTORCYCLE × los 9 colores con imagen)`);
+  conImagen === 9, `${conImagen}, se esperaban 9 (CAR × los 9 colores con imagen)`);
 /*
   Lo que queda sin foto, dicho por su nombre y no como un número.
 
-  Hasta el 22-10-2026 esta comprobación decía «ninguna MOTOCICLETA recibe imagen todavía» y exigía
-  doce huecos. Llegaron nueve motos esa noche, así que la afirmación cambió: ahora exige que los
-  huecos de moto sean EXACTAMENTE los tres colores que ninguna carrocería tiene —amarillo, café y
-  «otro»—. Escrita así, falla tanto si alguien borra un archivo como si alguien declara cubierto
-  un color que no lo está.
+  Esta comprobación ya cambió dos veces en un día y las dos veces estuvo bien que cambiara:
+  exigía doce huecos de moto, pasó a exigir tres cuando llegaron las nueve fotografías, y vuelve a
+  exigir doce ahora que esas fotografías se retiraron. La razón de retirarlas está en el LEEME:
+  son recortes de tres cuartos frontal y en un hueco 2:1 la moto ocupaba el 40% del ancho dentro de
+  un recuadro visible. El dibujo llena su casilla y no tiene fondo, así que es mejor activo
+  mientras no lleguen fotografías de perfil o con fondo transparente.
 */
-const huecosMoto = huecos.filter((h) => h.startsWith('MOTORCYCLE')).map((h) => h.split('/')[1]).sort();
-check('las motos sin foto son sólo los tres colores sin imagen en toda la biblioteca',
-  huecosMoto.join(',') === 'BROWN,OTHER,YELLOW', huecosMoto.join(', '));
+const huecosMoto = huecos.filter((h) => h.startsWith('MOTORCYCLE'));
+check('ninguna MOTOCICLETA recibe fotografía: se retiraron por no caber en la casilla',
+  huecosMoto.length === 12, huecosMoto.join(', '));
 /*
   La otra mitad de la misma garantía, y la que de verdad importa: pase lo que pase con las tablas,
   una moto NUNCA puede terminar pidiendo la imagen de un automóvil.
@@ -540,8 +541,8 @@ const archivos = existsSync(carpeta)
   ? readdirSync(carpeta).filter((f) => /\.webp$/i.test(f)) : [];
 const malos = archivos.filter((f) => claveDeArchivo(f) === null);
 check(`los ${archivos.length} archivos siguen la convención`, malos.length === 0, malos.join(', '));
-check('están las 100 combinaciones del paquete de automóviles más las 9 motos',
-  archivos.length === 109, `hay ${archivos.length}`);
+check('están las 100 combinaciones del paquete de automóviles',
+  archivos.length === 100, `hay ${archivos.length}`);
 
 const faltan = [];
 for (const c of CARROCERIAS_ENTREGADAS) {
@@ -559,17 +560,16 @@ check('no falta ninguna de las carrocerías ENTREGADAS', faltan.length === 0, fa
 const motoFaltantes = COLORES_PROTOTIPO
   .filter((col) => !archivos.includes(`moto-${col}.webp`))
   .map((col) => `moto-${col}.webp`);
-console.log(motoFaltantes.length === 0
-  ? '  ok  la carrocería «moto» ya tiene sus diez archivos'
-  : `  ··  faltan ${motoFaltantes.length} de moto: ${motoFaltantes.join(', ')}`
-    + ' (ningún color del servidor los alcanza, así que no deja a nadie sin imagen)');
+console.log(motoFaltantes.length === COLORES_PROTOTIPO.length
+  ? '  ··  la carrocería «moto» no tiene archivos: manda el dibujo, por decisión del 22-10-2026'
+  : `  ··  hay ${COLORES_PROTOTIPO.length - motoFaltantes.length} activos de moto en la carpeta`);
 /*
-  Y que lo que falta sea SÓLO eso. Si mañana desaparece `moto-rojo.webp`, la línea de arriba lo
-  imprimiría sin que nada fallara; esta línea sí falla.
+  Y que la carpeta esté limpia de verdad. Dejar media docena de `moto-*` sueltos sería peor que
+  tenerlos todos: unas motos saldrían en fotografía y otras dibujadas, en la misma lista.
 */
-check('las nueve motos alcanzables están en la carpeta',
-  motoFaltantes.length === 1 && motoFaltantes[0] === 'moto-azul-oscuro.webp',
-  motoFaltantes.join(', '));
+check('no queda ningún activo de moto a medias en la carpeta',
+  motoFaltantes.length === COLORES_PROTOTIPO.length,
+  `presentes: ${COLORES_PROTOTIPO.filter((c) => !motoFaltantes.includes(`moto-${c}.webp`)).join(', ')}`);
 
 // Una imagen de prototipo sin su procedencia escrita es una imagen que no se puede publicar.
 const licencias = readFileSync(
