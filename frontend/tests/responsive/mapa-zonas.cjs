@@ -217,13 +217,18 @@ const PUNTOS_DE_ZONA = () => {
 const FICHA = () => {
   const f = document.querySelector('.lx-zona-ficha');
   if (!f) return null;
-  const filas = {};
-  for (const d of f.querySelectorAll('.lx-zona-ficha__datos > div')) {
-    filas[(d.querySelector('dt')?.textContent || '').trim()] = (d.querySelector('dd')?.textContent || '').trim();
-  }
+  // La tarjeta adelgazó el 23-10-2026: ya no son pares etiqueta/valor, es una línea de tarifa.
+  const filas = { Tarifa: (f.querySelector('.lx-zona-ficha__tarifa')?.textContent || '').trim() };
   return {
     zona: f.getAttribute('data-lx-zona'),
-    nombre: (f.querySelector('.lx-zona-ficha__nombre span')?.textContent || '').trim(),
+    // El nombre, SIN la pastilla del código que vive dentro del mismo elemento.
+    nombre: (() => {
+      const n = f.querySelector('.lx-zona-ficha__nombre');
+      if (!n) return '';
+      const copia = n.cloneNode(true);
+      copia.querySelector('.lx-zona-ficha__codigo')?.remove();
+      return copia.textContent.trim();
+    })(),
     codigo: (f.querySelector('.lx-zona-ficha__codigo')?.textContent || '').trim(),
     filas,
     boton: (f.querySelector('button')?.textContent || '').trim() || null,
@@ -271,6 +276,31 @@ const ANILLO = () => {
       'no hay que abrirlo: ya está abierto');
     const montado = await esperarMapa(page);
     ok(montado, 'MapLibre montó y las capas de zona existen');
+    /*
+      La captura que pide la orden: la pantalla tal como se abre, con el selector arriba y el mapa
+      debajo, SIN desplazar. Se mide además cuánto del mapa se ve así, que es la diferencia entre
+      «el mapa está» y «el mapa se ve».
+    */
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.waitForTimeout(500);
+    await page.screenshot({ path: path.join(SALIDA, 'arriba-390.png') });
+    const encuadre = await page.evaluate(() => {
+      const sel = document.querySelector('[aria-label="Zona"]');
+      const m = document.querySelector('.lx-zonemap');
+      if (!sel || !m) return null;
+      const rs = sel.getBoundingClientRect(); const rm = m.getBoundingClientRect();
+      const barra = document.querySelector('.lx-sticky-cta');
+      const techo = barra ? Math.min(barra.getBoundingClientRect().top, window.innerHeight) : window.innerHeight;
+      return {
+        selectorArriba: Math.round(rs.top), mapaArriba: Math.round(rm.top),
+        debajo: rm.top >= rs.bottom - 1,
+        visible: Math.round(Math.max(0, Math.min(rm.bottom, techo) - Math.max(rm.top, 0))),
+        alto: Math.round(rm.height),
+      };
+    });
+    ok(encuadre !== null && encuadre.debajo,
+      'el mapa está DEBAJO del selector de zona, como pide el boceto', JSON.stringify(encuadre));
+    console.log(`     ·· sin desplazar se ven ${encuadre.visible} de los ${encuadre.alto} px del mapa`);
 
     // ---- 2 · Las zonas son las del servidor ----------------------------------------------------
     console.log('\n══ 2 · las zonas son las que publicó el servidor ══');
@@ -352,10 +382,16 @@ const ANILLO = () => {
     ok(Boolean(fichaTocada?.boton), 'aparece la acción de seleccionarla', JSON.stringify(fichaTocada));
     // La captura que pide la orden: mapa, zona resaltada y ficha de detalle, los tres a la vez.
     await page.evaluate(() => {
-      document.querySelector('.lx-mapa-portada')?.scrollIntoView({ block: 'start' });
+      document.querySelector('.lx-zonemap')?.scrollIntoView({ block: 'start' });
     });
     await page.waitForTimeout(700);
     await page.screenshot({ path: path.join(SALIDA, 'tocada-390.png') });
+    // Y la tarjeta entera, con su acción, desplazada por encima de la barra fija.
+    await page.evaluate(() => {
+      document.querySelector('.lx-zona-ficha')?.scrollIntoView({ block: 'center' });
+    });
+    await page.waitForTimeout(600);
+    await page.screenshot({ path: path.join(SALIDA, 'tarjeta-390.png') });
     /*
       Los datos de la ficha salen del servidor o no salen. Una zona sin tarifa publicada no estrena
       un precio: lo que se exige es que lo que SÍ aparece sea verdad, no que aparezca todo.
@@ -410,7 +446,7 @@ const ANILLO = () => {
       'y la ficha la da por elegida, sin pedir confirmar algo que ya se dijo',
       JSON.stringify(fichaVuelta));
     await page.evaluate(() => {
-      document.querySelector('.lx-mapa-portada')?.scrollIntoView({ block: 'start' });
+      document.querySelector('.lx-zonemap')?.scrollIntoView({ block: 'start' });
     });
     await page.waitForTimeout(700);
     await page.screenshot({ path: path.join(SALIDA, 'mapa-390.png') });
@@ -498,8 +534,18 @@ const ANILLO = () => {
       await p.waitForTimeout(2500);
       ok(await p.locator('.lx-zonemap__lienzo').count() === 0,
         'sin geometrías no se dibuja ningún mapa: no hay dónde centrarlo');
+      /*
+        Y la nota NOMBRA las zonas que no tienen perímetro. Es lo que pide la orden del 23-10 —
+        «indicar qué zonas carecen de geometría»— y es la diferencia entre «esto está roto» y
+        «esto falta»: quien busca la suya y no la ve necesita saber cuál de las dos cosas pasa.
+      */
+      const nota = (await p.locator('.lx-zonemap__nota').first().textContent()) || '';
       ok(await p.locator('.lx-zonemap__nota').count() === 1,
         'queda la nota de una línea que explica por qué');
+      ok(/Centro/.test(nota) && /Sabana/.test(nota),
+        'la nota nombra las zonas que todavía no tienen límite dibujado', nota.slice(0, 160));
+      ok(/municipalidad/i.test(nota),
+        'y dice qué hace falta para verlas', nota.slice(0, 160));
       ok(await p.locator('[aria-label="Zona"]').count() === 1,
         'y la lista de zonas sigue estando: se puede estacionar igual');
       await p.screenshot({ path: path.join(SALIDA, 'sin-zonas-390.png') });

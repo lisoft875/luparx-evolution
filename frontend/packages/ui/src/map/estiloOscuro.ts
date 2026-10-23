@@ -40,19 +40,6 @@ export const PALETA_MAPA = {
   zona: '#0079FB',
   /** El relleno de una geometría que NO es oficial. */
   zonaNoOficial: '#8B5CF6',
-  /**
-   * El contorno de la zona que la persona tiene elegida.
-   *
-   * <p>No sustituye al color del estado —azul oficial, violeta no oficial—, se le suma: la zona
-   * elegida conserva su relleno y su borde, y encima lleva este anillo. Así «cuál elegí» y «es
-   * oficial o no» siguen siendo dos preguntas con dos respuestas, en vez de un solo color que
-   * intenta decir las dos cosas y acaba sin decir ninguna.</p>
-   *
-   * <p>Blanco cálido a propósito: es el único tono del mapa que no está ya tomado, y se distingue
-   * del azul y del violeta sin depender de distinguir azul de violeta. El anillo además es casi
-   * el doble de ancho, que es la señal que le queda a quien no ve el color.</p>
-   */
-  zonaElegida: '#F2F7FF',
 } as const;
 
 /**

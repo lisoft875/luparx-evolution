@@ -8985,8 +8985,25 @@ a.lx-list-row {
   Arriba a la IZQUIERDA, que es la esquina que MapLibre deja libre: los controles de zoom van
   arriba a la derecha y la atribución abajo.
 */
+/*
+  El envoltorio que sostiene el lienzo y el botón que va encima.
+
+  `flex: 1 1 auto` y `display: flex` no son decoración: al meter este envoltorio, el hijo flexible
+  de la sección dejó de ser el lienzo y pasó a ser él. Sin heredar el crecimiento, al AMPLIAR el
+  lienzo se quedaba con su contenido —medido: 321 px en compacto y 300 al ampliar, o sea que
+  ampliar ENCOGÍA el mapa— porque la regla de ampliado le pone `min-height: 0` al lienzo y ya nadie
+  le daba altura.
+*/
 .lx-zonemap__lienzoConAccion {
   position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.lx-zonemap__lienzoConAccion > .lx-zonemap__lienzo {
+  flex: 1 1 auto;
+  width: 100%;
 }
 
 .lx-zonemap__accion--sobre {
@@ -9003,8 +9020,19 @@ a.lx-list-row {
   El aviso de «no son límites oficiales» cuando va debajo del mapa. Mismo texto y mismo papel que
   cuando va encima; lo único que cambia es el margen, que ahora separa del lienzo y no del título.
 */
+/*
+  Debajo del mapa y COMPACTO (23-10-2026).
+
+  Encima del lienzo costaba dos líneas antes de que se viera nada; debajo y con el texto largo se
+  comía 85 px del alto del mapa, dentro del mismo marco. El aviso no desaparece —la regla que
+  impide que una geometría de demostración pase por oficial no se negocia— pero dice lo mismo en
+  una línea: lo punteado es demostración. El detalle largo vivía repitiendo lo que el propio
+  punteado ya muestra.
+*/
 .lx-zonemap__noOficial--debajo {
   margin: var(--lx-space-2) 0 0;
+  padding: var(--lx-space-1) var(--lx-space-2);
+  font-size: 0.78rem;
 }
 
 /* MapLibre inyecta su propia hoja; esto sólo ajusta lo que choca con el lienzo oscuro. */
@@ -9013,21 +9041,44 @@ a.lx-list-row {
 }
 
 /*
-  LA FICHA DE LA ZONA TOCADA EN EL MAPA (22-10-2026)
+  La municipalidad activa, en una línea, dentro de Estacionar (23-10-2026).
 
-  El boceto la pinta como una tarjeta baja entre el mapa y el botón de continuar: el nombre de la
-  zona con su tarifa, y la acción que la convierte en la zona de la estadía. Acá lleva además
-  municipalidad, horario y condiciones, cada uno SÓLO si el servidor los publicó — una zona sin
-  tarifa no estrena un precio inventado.
+  Es la misma insignia de la barra superior, que en esta pantalla no se dibuja porque hay botón de
+  volver. Sólo le reserva su renglón; el aspecto es el de la insignia.
+*/
+.lx-municipio-linea {
+  display: flex;
+  align-items: center;
+}
 
-  Es `dl` y no una lista de párrafos porque son pares de etiqueta y valor, y eso es exactamente lo
-  que un lector de pantalla necesita para leerlos emparejados. La rejilla de dos columnas se cae a
-  una sola por debajo de 360 px, donde una etiqueta y su valor en la misma fila dejan al valor sin
-  sitio para una tarifa con símbolo de moneda.
+/*
+  Dentro del formulario la insignia es un control táctil, y llega a 44 px.
+
+  En la barra superior mide 32 y está bien: ahí es cromo, con aire alrededor y sin nada con qué
+  confundirse. Acá vive entre campos de formulario, es lo primero que se toca en la pantalla, y el
+  barrido móvil lo midió en 32 × 100 — por debajo del mínimo del contrato. La regla va acotada a
+  este contenedor para no engordar la insignia de la barra, que no tiene el problema.
+*/
+.lx-municipio-linea .lx-tenant-badge {
+  min-height: 44px;
+}
+
+/*
+  LA TARJETA COMPACTA DE LA ZONA (23-10-2026)
+
+  El boceto la pinta como una fila baja entre el mapa y el botón de continuar: un icono, el nombre
+  de la zona con su tarifa debajo, y la acción a la derecha. Nació el 22-10 con cuatro filas
+  —municipalidad, tarifa, horario y condiciones— y ocupaba casi tanto como el mapa; tres de esas
+  cuatro repetían algo que ya estaba en la pantalla. Queda lo que el boceto pone.
+
+  Una sola fila con `flex`, y el texto en el medio con `min-width: 0` para que un nombre largo
+  envuelva dentro de su columna en vez de empujar el botón fuera de la tarjeta. Por debajo de
+  360 px la fila se parte en dos: a ese ancho, nombre y botón en la misma línea dejan al botón sin
+  sitio para su propia etiqueta.
 */
 .lx-zona-ficha {
   display: flex;
-  flex-direction: column;
+  align-items: center;
   gap: var(--lx-space-3);
   padding: var(--lx-space-3);
   border: 1px solid var(--lx-border);
@@ -9035,75 +9086,68 @@ a.lx-list-row {
   background: var(--lx-surface-2);
 }
 
+.lx-zona-ficha__icono {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--lx-radius-sm, 8px);
+  background: var(--lx-primary-soft, rgba(0, 121, 251, 0.16));
+  color: var(--lx-primary);
+}
+
+.lx-zona-ficha__texto {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  /* Sin esto, un nombre largo empuja el botón fuera de la tarjeta en vez de envolver. */
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
 .lx-zona-ficha__nombre {
   display: flex;
   align-items: center;
   gap: var(--lx-space-2);
-  margin: 0;
-  font-weight: 600;
-  /* El nombre de una zona puede ser largo; que corte y no empuje el código fuera de la tarjeta. */
   flex-wrap: wrap;
+  font-weight: 600;
 }
 
 .lx-zona-ficha__codigo {
-  padding: 2px var(--lx-space-2);
+  padding: 1px var(--lx-space-2);
   border: 1px solid var(--lx-border);
   border-radius: 999px;
   color: var(--lx-text-muted);
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   font-weight: 500;
   /* El código es un identificador: nunca se parte a mitad de palabra. */
   white-space: nowrap;
 }
 
-.lx-zona-ficha__datos {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: var(--lx-space-1) var(--lx-space-3);
-  margin: var(--lx-space-2) 0 0;
-}
-
-.lx-zona-ficha__datos > div {
-  display: contents;
-}
-
-.lx-zona-ficha__datos dt {
+.lx-zona-ficha__tarifa {
   color: var(--lx-text-muted);
-  font-size: 0.8rem;
-}
-
-.lx-zona-ficha__datos dd {
-  margin: 0;
   font-size: 0.85rem;
-  /* Una condición larga se envuelve dentro de su columna en vez de ensanchar la tarjeta. */
   overflow-wrap: anywhere;
 }
 
 /*
-  Cuando la zona de la ficha ya es la elegida no hay botón, porque no habría nada que pulsar. En su
-  lugar va esta línea, que además es `role="status"`: quien usa lector de pantalla se entera de que
-  la elección quedó hecha sin tener que volver a recorrer la tarjeta.
+  Cuando la zona de la tarjeta ya es la elegida no hay botón, porque no habría nada que pulsar. En
+  su lugar va esta línea, que además es `role="status"`: quien usa lector de pantalla se entera de
+  que la elección quedó hecha sin tener que volver a recorrer la tarjeta.
 */
 .lx-zona-ficha__elegida {
-  margin: 0;
+  flex: 0 0 auto;
   color: var(--lx-success, var(--lx-text-muted));
-  font-size: 0.85rem;
+  font-size: 0.8rem;
+  text-align: right;
 }
 
 /*
-  Una zona que el mapa dibuja y la lista no ofrece. No es un error de la aplicación —los dos datos
-  vienen del servidor— así que no se pinta como alerta: se dice, y ahí queda.
-*/
-.lx-zona-ficha__noOfrecida {
-  margin: 0;
-  color: var(--lx-text-muted);
-  font-size: 0.85rem;
-  line-height: 1.4;
-}
-
-/*
-  El aviso de que el mapa se toca. Va DEBAJO del mapa y no encima: encima es una instrucción que se
-  lee antes de ver qué hay, y debajo es la respuesta a la pregunta que acaba de aparecer.
+  El aviso de que el mapa se toca, y el de qué zonas no tienen perímetro. Van DEBAJO del mapa y no
+  encima: encima son instrucciones que se leen antes de ver qué hay, y debajo son la respuesta a
+  la pregunta que acaba de aparecer.
 */
 .lx-zonemap-pista {
   margin: 0;
@@ -9112,14 +9156,29 @@ a.lx-list-row {
   line-height: 1.4;
 }
 
-@media (max-width: 359px) {
-  .lx-zona-ficha__datos {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 0;
+/*
+  Por debajo de 420 px el botón baja a su propia línea.
+
+  Medido a 390: con el botón al lado, al nombre le quedaban unos 120 px y «La Sabana» se partía en
+  dos renglones — una tarjeta de tres líneas por culpa de la colocación, no del contenido. Con el
+  botón abajo son dos líneas limpias y el botón gana el ancho entero, que además es como lo pinta
+  el boceto. 420 y no 360 porque el corte lo decide el texto, y a 390 ya se parte.
+*/
+@media (max-width: 419px) {
+  .lx-zona-ficha {
+    flex-wrap: wrap;
   }
-  .lx-zona-ficha__datos > div {
-    display: block;
-    margin-bottom: var(--lx-space-2);
+  /*
+    Sólo el botón se lleva la línea entera. El texto NO: con `flex-basis: 100%` el icono se quedaba
+    solo en la primera fila y el nombre bajaba a la segunda, que es más alto y más raro que lo que
+    se venía a arreglar. Icono y texto siguen juntos; lo que baja es el botón.
+  */
+  .lx-zona-ficha > button {
+    flex: 1 1 100%;
+  }
+  .lx-zona-ficha__elegida {
+    flex: 1 1 100%;
+    text-align: left;
   }
 }
 

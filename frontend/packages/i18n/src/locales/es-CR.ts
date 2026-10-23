@@ -2326,23 +2326,18 @@ export const esCR = {
   'citizen.parking.map.error': 'No se pudo cargar el mapa. Puede continuar sin él.',
   'citizen.parking.map.noProvider': 'Esta instalación no tiene configurado un proveedor de mapas.',
   'citizen.parking.map.notOfficial': 'No son límites oficiales.',
-  'citizen.parking.map.notOfficialDetail': 'Las zonas con borde punteado son datos de demostración y no representan el perímetro real de cobro.',
-  'citizen.parking.map.tapHint': 'Tocá una zona del mapa para ver su tarifa, o elegila en la lista de abajo.',
+  'citizen.parking.map.notOfficialDetail': 'Las punteadas son datos de demostración.',
+  'citizen.parking.map.tapHint': 'Tocá una zona del mapa, o elegila en la lista.',
+  'citizen.parking.map.withoutPerimeter':
+    'Todavía sin límites dibujados: {{zonas}}. Se pueden elegir igual en la lista.',
+  'citizen.parking.map.emptyNamed':
+    'Ninguna zona de esta municipalidad tiene todavía dibujado su límite: {{zonas}}. El estacionamiento funciona igual: la zona y la bahía que escribís son las que valen. Para verlas en el mapa, la municipalidad tiene que cargar los perímetros.',
 
   // ---- Ciudadano: la ficha de la zona tocada en el mapa (22-10-2026) ----------------------------
-  'citizen.parking.zoneCard.municipality': 'Municipalidad',
   'citizen.parking.zoneCard.rate': 'Tarifa',
-  'citizen.parking.zoneCard.schedule': 'Horario de cobro',
-  'citizen.parking.zoneCard.conditions': 'Condiciones',
-  'citizen.parking.zoneCard.choose': 'Seleccionar esta zona',
+  'citizen.parking.zoneCard.choose': 'Seleccionar zona',
   'citizen.parking.zoneCard.chosen': 'Es la zona de esta estadía.',
   'citizen.parking.zoneCard.notOffered': 'Esta zona está en el mapa pero no aparece en la lista de zonas donde se puede estacionar.',
-  // El horario dicho en una línea. Si no cabe entero, la fila no aparece: ver `horarioDeCobro.ts`.
-  'citizen.parking.schedule.allDay': 'Se cobra a toda hora.',
-  'citizen.parking.schedule.never': 'No se cobra ningún día.',
-  'citizen.parking.schedule.span': '{{desde}} a {{hasta}}, {{inicio}}–{{fin}}',
-  'citizen.parking.schedule.oneDay': '{{dia}}, {{inicio}}–{{fin}}',
-  'citizen.parking.schedule.exceptNotice': '{{base}} · salvo feriados',
   'citizen.parking.step1.spaceCodeLabel': 'Código del espacio',
   'citizen.parking.step1.spaceCodeHint': 'El número pintado en el espacio donde estás.',
   'citizen.parking.step1.noZones': 'Esta municipalidad todavía no publicó sus zonas de parqueo.',

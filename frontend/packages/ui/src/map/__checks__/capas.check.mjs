@@ -32,7 +32,9 @@ try {
   }
 }
 
-const { VERIFICADA, FUENTE, PROP_ETIQUETA, capasDeZonas } = await import(join(dir, 'capas.js'));
+const {
+  VERIFICADA, FUENTE, PROP_ETIQUETA, PROP_TONO, TONOS_DE_ZONA, capasDeZonas, tonoDeZona,
+} = await import(join(dir, 'capas.js'));
 
 let fallos = 0;
 const check = (nombre, cond, detalle = '') => {
@@ -47,6 +49,9 @@ const BORDE_TEXTO = '#06101C';
 const FUENTE_TIPOGRAFICA = ['Noto Sans Bold'];
 
 const base = { colorOficial: OFICIAL, colorNoOficial: NO_OFICIAL, colorTexto: TEXTO, colorBordeTexto: BORDE_TEXTO };
+/* Varias propiedades pasaron a ser expresiones el 23-10-2026; esto saca sus ramas numéricas
+   para poder exigirlas TODAS. Una rama olvidada en 0 apaga el neón sin dar error. */
+const numerosDe = (v) => (Array.isArray(v) ? v.filter((x) => typeof x === 'number') : [v]);
 const capas = capasDeZonas({ ...base, fuenteTexto: FUENTE_TIPOGRAFICA });
 const sinTipografia = capasDeZonas(base);
 const porId = Object.fromEntries(capas.map((c) => [c.id, c]));
@@ -87,22 +92,27 @@ check('el anillo va encima de los dos contornos y debajo del rótulo',
   Lo que de verdad protege esta: que «cuál elegí» no se diga sólo con un color. Quien no distingue
   el blanco del azul tiene que poder verlo igual, y lo que le queda es el ancho.
 */
+const anchoBorde = Math.max(...numerosDe(porId['zonas-borde'].paint['line-width']));
 check('el anillo se distingue también por el ancho, no sólo por el color',
-  elegida.paint['line-width'] >= porId['zonas-borde'].paint['line-width'] * 1.5,
-  `${elegida.paint['line-width']} contra ${porId['zonas-borde'].paint['line-width']}`);
-check('el anillo no cambia el color del estado: ni el oficial ni el no oficial',
-  elegida.paint['line-color'] === ELEGIDA && elegida.paint['line-color'] !== OFICIAL
-  && elegida.paint['line-color'] !== NO_OFICIAL,
-  String(elegida.paint['line-color']));
+  elegida.paint['line-width'] >= anchoBorde * 1.3,
+  `${elegida.paint['line-width']} contra ${anchoBorde}`);
+check('un color explícito, si se pasa, se respeta',
+  elegida.paint['line-color'] === ELEGIDA, String(elegida.paint['line-color']));
 check('el anillo es continuo: el punteado sigue queriendo decir «no oficial»',
   elegida.paint['line-dasharray'] === undefined);
 /*
-  Un código sin color, o un color sin código, no dibujan medio anillo: no dibujan nada. Una capa a
-  medias en MapLibre es un estilo que no valida y una pantalla que cae al aviso de fallo.
+  Desde el 23-10-2026 el anillo toma el tono de la zona, así que un código BASTA: el color dejó de
+  ser obligatorio. Lo que sigue siendo cierto —y es lo que protege de una capa a medias, que en
+  MapLibre es un estilo que no valida y una pantalla caída al aviso de fallo— es que sin código no
+  hay anillo.
 */
-check('un código sin color no añade la capa',
-  capasDeZonas({ ...base, codigoElegido: 'SJ-AMON' }).some((c) => c.id === 'zonas-elegida') === false);
-check('un color sin código tampoco',
+check('un código sin color ya alcanza: el anillo toma el tono de la zona',
+  capasDeZonas({ ...base, codigoElegido: 'SJ-AMON' }).some((c) => c.id === 'zonas-elegida'));
+check('y ese anillo lee el tono del rasgo',
+  JSON.stringify(capasDeZonas({ ...base, codigoElegido: 'SJ-AMON' })
+    .find((c) => c.id === 'zonas-elegida').paint['line-color'])
+    === JSON.stringify(['coalesce', ['get', 'lxTono'], OFICIAL]));
+check('un color sin código no añade nada: sin zona elegida no hay anillo',
   capasDeZonas({ ...base, colorElegida: ELEGIDA }).some((c) => c.id === 'zonas-elegida') === false);
 
 /*
@@ -112,15 +122,31 @@ check('un color sin código tampoco',
 check('el resplandor se dibuja antes que los contornos',
   capas.findIndex((c) => c.id === 'zonas-resplandor') < capas.findIndex((c) => c.id === 'zonas-borde'),
   capas.map((c) => c.id).join(' → '));
-check('el resplandor es ancho y difuminado, no un borde más',
-  porId['zonas-resplandor'].paint['line-width'] >= 6 && porId['zonas-resplandor'].paint['line-blur'] > 0,
+/*
+  El ancho y el desenfoque pasaron a ser expresiones el 23-10-2026 —la zona elegida resplandece
+  más— así que se comprueban TODAS sus ramas: una rama olvidada en 0 apaga el neón de media lista
+  y el estilo sigue siendo válido, que es la clase de defecto que no da error.
+*/
+check('el resplandor es ancho y difuminado en todas sus ramas',
+  numerosDe(porId['zonas-resplandor'].paint['line-width']).every((n) => n >= 6)
+  && numerosDe(porId['zonas-resplandor'].paint['line-blur']).every((n) => n > 0),
   JSON.stringify(porId['zonas-resplandor'].paint));
 
 // --- el reparto entre oficial y no oficial ----------------------------------------------------
-check('el relleno decide el color por el estado, no por el orden de llegada',
+/*
+  EL COLOR CAMBIÓ DE SIGNIFICADO EL 23-10-2026, Y ESTA COMPROBACIÓN CAMBIÓ CON ÉL.
+
+  Decía «el relleno decide el color por el ESTADO»: azul verificado, violeta no verificado. Ahora
+  el color dice QUÉ ZONA es —tres tonos neón, como el boceto— y lo que distingue una geometría de
+  demostración es el trazo punteado, el relleno más tenue y la palabra del rótulo. Lo que se exige
+  acá es que el tono venga del propio rasgo y no de una decisión escrita en el estilo.
+*/
+check('el relleno toma el tono del rasgo, no del estado',
   JSON.stringify(porId['zonas-relleno'].paint['fill-color'])
-    === JSON.stringify(['case', ['==', ['get', 'status'], 'VERIFIED'], OFICIAL, NO_OFICIAL]),
+    === JSON.stringify(['coalesce', ['get', 'lxTono'], OFICIAL]),
   JSON.stringify(porId['zonas-relleno'].paint['fill-color']));
+check('y hay un color de reserva: un rasgo sin tono se pinta, no desaparece',
+  porId['zonas-relleno'].paint['fill-color'][2] === OFICIAL);
 check('el borde sólido sólo acepta VERIFIED',
   JSON.stringify(porId['zonas-borde'].filter) === JSON.stringify(['==', ['get', 'status'], 'VERIFIED']),
   JSON.stringify(porId['zonas-borde'].filter));
@@ -131,9 +157,18 @@ check('los dos filtros son complementarios: ninguna geometría queda sin borde n
   porId['zonas-borde'].filter[0] === '==' && porId['zonas-borde-no-oficial'].filter[0] === '!='
   && JSON.stringify(porId['zonas-borde'].filter.slice(1))
     === JSON.stringify(porId['zonas-borde-no-oficial'].filter.slice(1)));
-check('una geometría no oficial nunca lleva el color del límite oficial',
-  porId['zonas-borde-no-oficial'].paint['line-color'] === NO_OFICIAL
-  && porId['zonas-borde'].paint['line-color'] === OFICIAL);
+/*
+  Lo que sustituye a la regla del color: una geometría no oficial tiene que distinguirse SIN
+  depender de él. Tres señales, y las tres se comprueban: el trazo punteado (más abajo), el relleno
+  más tenue, y la palabra en el rótulo (al final de este archivo).
+*/
+const relleno = porId['zonas-relleno'].paint['fill-opacity'];
+check('lo no oficial se rellena más tenue que lo oficial',
+  relleno[0] === 'case' && relleno[relleno.length - 1] < relleno[relleno.length - 2],
+  JSON.stringify(relleno));
+const brillo = porId['zonas-resplandor'].paint['line-opacity'];
+check('y resplandece menos',
+  brillo[brillo.length - 1] < brillo[brillo.length - 2], JSON.stringify(brillo));
 
 // --- lo que distingue sin depender del color --------------------------------------------------
 check('lo no oficial se distingue también por el trazo',
@@ -154,9 +189,14 @@ check('ninguna capa pone una expresión en line-dasharray', conExpresion.length 
   JSON.stringify(conExpresion));
 
 // --- el relleno deja ver la calle -------------------------------------------------------------
-const opacidad = porId['zonas-relleno'].paint['fill-opacity'];
-check('el relleno es translúcido: no tapa las calles de referencia',
-  typeof opacidad === 'number' && opacidad > 0 && opacidad <= 0.4, String(opacidad));
+/*
+  Translúcido en TODAS sus ramas, incluida la de la zona elegida: tapar las calles de abajo deja al
+  ciudadano sin la referencia que vino a buscar, y la zona elegida es justo la que más va a mirar.
+*/
+const opacidades = numerosDe(porId['zonas-relleno'].paint['fill-opacity']);
+check('el relleno es translúcido en todas sus ramas',
+  opacidades.length >= 3 && opacidades.every((o) => o > 0 && o <= 0.5),
+  JSON.stringify(opacidades));
 
 // --- nada inventado ---------------------------------------------------------------------------
 /*

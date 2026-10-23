@@ -569,7 +569,12 @@ async function pasadaFuncional(browser) {
     console.log('\n── Compacto, ampliado y teclado ──');
     const altoCompacto = await page.evaluate(
       () => Math.round(document.querySelector('.lx-zonemap__lienzo').getBoundingClientRect().height));
-    ok(altoCompacto >= 150 && altoCompacto <= 260, 'compacto mide lo que dice medir', `${altoCompacto}px`);
+/*
+      El rango subió el 23-10-2026: la orden pide «280–350 px, adaptable al dispositivo», y la
+      pantalla lo pasa como `clamp(280px, 38vh, 350px)`. Se comprueban las dos puntas del clamp y
+      no un número, que es lo que hace que «adaptable» signifique algo.
+    */
+    ok(altoCompacto >= 280 && altoCompacto <= 350, 'compacto mide lo que dice medir', `${altoCompacto}px`);
 
     await botonAmpliar(page).focus();
     ok(await page.evaluate(() => document.activeElement.classList.contains('lx-zonemap__accion')),
@@ -708,12 +713,20 @@ async function pasadaFuncional(browser) {
     ok(deSanJose.length >= 1, 'San José tiene geometrías dibujadas', JSON.stringify(deSanJose));
     ok(await page.locator('.lx-zonemap__lienzo').count() === 1, 'y el mapa de San José se dibuja');
 
-    // El selector de municipalidad vive en el paso 0 de esta misma pantalla.
-    const cambiar = page.getByRole('button', { name: /^cambiar$|^switch$/i }).first();
-    if (await cambiar.count() === 0) {
-      ok(false, 'se encontró el control de cambio de municipalidad en /park');
+    /*
+      El cambio de municipalidad se hace desde la BARRA SUPERIOR desde el 23-10-2026.
+
+      Vivía además en un paso 0 de esta pantalla, con su tarjeta de logo, nombre y botón. La orden
+      del 23-10 pide no repetir la información municipal y recuperar el espacio para el mapa, y esa
+      tarjeta era las dos cosas: la barra del portal ya lleva la municipalidad activa y ya abre el
+      mismo selector. Lo que esta prueba comprueba —que cambiar de municipalidad no filtre
+      geometrías de una a otra— no cambió; cambió por dónde se entra.
+    */
+    const disparador = page.locator('.lx-tenant-badge--interactive').first();
+    if (await disparador.count() === 0) {
+      ok(false, 'se encontró el control de cambio de municipalidad en la barra superior');
     } else {
-      await cambiar.click();
+      await disparador.click();
       await page.waitForTimeout(600);
       const escazu = page.locator('button, [role=option], li').filter({ hasText: /Escazú/ }).last();
       if (await escazu.count() === 0) {
@@ -748,8 +761,16 @@ async function pasadaFuncional(browser) {
             mapa que valga la pena, porque no hay dónde centrarlo. Queda la nota de UNA LÍNEA —no la
             caja— y ni lienzo ni hueco reservado.
           */
-          ok(/todavía no tiene zonas verificadas/i.test(textoNota),
-            'sin geometrías, el aviso aparece como nota de una línea', textoNota || '(sin nota)');
+/*
+            Y desde el 23-10-2026 la nota NOMBRA las zonas que no tienen límite y dice qué hace
+            falta para verlas. «No hay mapa» a secas dejaba a quien buscaba su zona sin saber si
+            la aplicación estaba rota o si ese dato todavía no existe, que son cosas distintas y
+            la segunda tiene respuesta.
+          */
+          ok(/l[íi]mite/i.test(textoNota)
+            && /Centro/.test(textoNota) && /municipalidad/i.test(textoNota),
+            'sin geometrías, la nota dice qué zonas faltan y qué hace falta',
+            textoNota || '(sin nota)');
           ok(await page.locator('.lx-zonemap__lienzo').count() === 0,
             'y no se dibuja ningún mapa: no hay dónde centrarlo');
           ok(await page.locator('.lx-zonemap__aviso').count() === 0,

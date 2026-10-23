@@ -27,6 +27,46 @@ export const CAPA_ELEGIDA = 'zonas-elegida';
 /** La propiedad que lleva el rótulo ya compuesto: nombre, tarifa y, si toca, el aviso de DEMO. */
 export const PROP_ETIQUETA = 'lxEtiqueta';
 
+/** La propiedad que lleva el tono neón de cada zona, decidido en TypeScript y no en el estilo. */
+export const PROP_TONO = 'lxTono';
+
+/**
+ * Los tres tonos neón del boceto: azul eléctrico, violeta y cian.
+ *
+ * <h2>Qué significa ahora el color, y qué significaba antes</h2>
+ *
+ * <p>Hasta el 22-10-2026 el color decía <b>oficial o no</b>: azul una geometría verificada,
+ * violeta una de demostración. Era una decisión defendible y tenía una buena razón detrás: una
+ * geometría DEMO pintada como oficial es el error que no puede ocurrir.</p>
+ *
+ * <p>La orden del 23-10-2026 pide el aspecto del boceto, donde las zonas se distinguen ENTRE SÍ
+ * por color —azul, violeta y cian— como hacen los mapas de zonas de todo el mundo. Con un solo
+ * tono para todas las verificadas, tres zonas vecinas verificadas se leen como una sola mancha, y
+ * «¿cuál es cuál?» es la pregunta que el mapa existe para contestar.</p>
+ *
+ * <p>Así que el color pasa a decir <b>qué zona es</b>, y lo que distingue una geometría de
+ * demostración pasa a ser lo que ya la distinguía sin depender del color: el <b>contorno
+ * punteado</b>, el <b>relleno más tenue</b> y la <b>palabra en el rótulo</b>. Quien no distingue
+ * azul de violeta —que es a quien protegía la regla anterior— no pierde nada: nunca tuvo el color
+ * y siempre tuvo el trazo y la palabra.</p>
+ */
+export const TONOS_DE_ZONA: readonly string[] = ['#0079FB', '#8B5CF6', '#22D3EE'];
+
+/**
+ * El tono de una zona, a partir de su código.
+ *
+ * <p>Determinista y no por orden de llegada: el servidor puede devolver las zonas en cualquier
+ * orden, y un color que cambia de una carga a otra convierte «la azul» en una referencia inútil.
+ * Con el código, la misma zona es del mismo color hoy y mañana, en el teléfono y en la
+ * computadora.</p>
+ */
+export function tonoDeZona(codigo: string | null | undefined): string {
+  const texto = typeof codigo === 'string' ? codigo : '';
+  let suma = 0;
+  for (let i = 0; i < texto.length; i += 1) suma = (suma * 31 + texto.charCodeAt(i)) % 100003;
+  return TONOS_DE_ZONA[suma % TONOS_DE_ZONA.length]!;
+}
+
 export interface CapaDeZonas {
   id: string;
   type: 'fill' | 'line' | 'symbol';
@@ -37,10 +77,18 @@ export interface CapaDeZonas {
 }
 
 export interface OpcionesDeCapas {
-  /** El relleno y el borde de una zona verificada. */
+  /** El tono con que se pinta una zona sin `lxTono` propio. */
   colorOficial: string;
-  /** El de una geometría que no lo está. */
-  colorNoOficial: string;
+  /**
+   * Ya no se usa para pintar.
+   *
+   * <p>Era el color de una geometría no verificada, cuando el color decía eso. Desde el 23-10-2026
+   * el color dice QUÉ ZONA es —ver {@link TONOS_DE_ZONA}— y lo no oficial se distingue por el
+   * trazo, el relleno y la palabra del rótulo. Se conserva en la firma para no romper a quien lo
+   * pasa, y se ignora a propósito: quitarlo obligaría a tocar llamadas que no tienen nada que
+   * decidir acá.</p>
+   */
+  colorNoOficial?: string;
   /** Color del rótulo. */
   colorTexto: string;
   /** Borde del rótulo, para que se lea sobre cualquier calle. */
@@ -93,11 +141,19 @@ export interface OpcionesDeCapas {
  */
 export function capasDeZonas(opciones: OpcionesDeCapas): CapaDeZonas[] {
   const {
-    colorOficial, colorNoOficial, colorTexto, colorBordeTexto, fuenteTexto,
-    codigoElegido, colorElegida,
+    colorOficial, colorTexto, colorBordeTexto, fuenteTexto, codigoElegido, colorElegida,
   } = opciones;
   const esOficial = ['==', ['get', 'status'], VERIFICADA];
-  const porEstado = ['case', esOficial, colorOficial, colorNoOficial];
+  /*
+    El tono sale del propio rasgo. Se calcula en TypeScript —`tonoDeZona`, comprobable sin mapa— y
+    viaja en la propiedad `lxTono` que el componente añade al copiar la colección. `coalesce` deja
+    un camino de vuelta: un rasgo sin tono pintado con el color de siempre es preferible a un
+    polígono invisible.
+  */
+  const tono = ['coalesce', ['get', PROP_TONO], colorOficial];
+  const esElegida = codigoElegido
+    ? ['==', ['get', 'code'], codigoElegido]
+    : ['literal', false];
 
   const capas: CapaDeZonas[] = [
     {
@@ -105,10 +161,14 @@ export function capasDeZonas(opciones: OpcionesDeCapas): CapaDeZonas[] {
       type: 'fill',
       source: FUENTE,
       paint: {
-        'fill-color': porEstado,
-        // Translúcido a propósito: el perímetro importa, pero tapar las calles que hay debajo
-        // deja al ciudadano sin la referencia que vino a buscar.
-        'fill-opacity': 0.3,
+        'fill-color': tono,
+        /*
+          Tres niveles, y los tres dejan ver la calle de abajo —que es la referencia que el
+          ciudadano vino a buscar—: la elegida más encendida, el resto visible, y lo que no es
+          oficial más tenue todavía. Esa última diferencia es la que sustituye al color: una
+          geometría de demostración se nota apagada aunque su tono sea el mismo que el de al lado.
+        */
+        'fill-opacity': ['case', esElegida, 0.42, esOficial, 0.26, 0.16],
       },
     },
     {
@@ -118,10 +178,10 @@ export function capasDeZonas(opciones: OpcionesDeCapas): CapaDeZonas[] {
       type: 'line',
       source: FUENTE,
       paint: {
-        'line-color': porEstado,
-        'line-width': 9,
-        'line-blur': 6,
-        'line-opacity': 0.55,
+        'line-color': tono,
+        'line-width': ['case', esElegida, 14, 9],
+        'line-blur': ['case', esElegida, 8, 6],
+        'line-opacity': ['case', esElegida, 0.85, esOficial, 0.55, 0.35],
       },
     },
     {
@@ -129,7 +189,7 @@ export function capasDeZonas(opciones: OpcionesDeCapas): CapaDeZonas[] {
       type: 'line',
       source: FUENTE,
       filter: esOficial,
-      paint: { 'line-color': colorOficial, 'line-width': 2.2 },
+      paint: { 'line-color': tono, 'line-width': ['case', esElegida, 3, 2.2] },
     },
     {
       id: 'zonas-borde-no-oficial',
@@ -137,10 +197,11 @@ export function capasDeZonas(opciones: OpcionesDeCapas): CapaDeZonas[] {
       source: FUENTE,
       filter: ['!=', ['get', 'status'], VERIFICADA],
       paint: {
-        'line-color': colorNoOficial,
-        'line-width': 2.2,
+        'line-color': tono,
+        'line-width': ['case', esElegida, 3, 2.2],
         // Punteado para lo que no es oficial: se distingue sin depender del color, que es lo que
-        // necesita quien no distingue azul de violeta.
+        // necesita quien no distingue azul de violeta — y lo que hace falta ahora que el color
+        // dice qué zona es y no si está verificada.
         'line-dasharray': [2, 1.5],
       },
     },
@@ -154,17 +215,29 @@ export function capasDeZonas(opciones: OpcionesDeCapas): CapaDeZonas[] {
     tanto en la oficial como en la que no lo es. Como capa, además, desaparece sola cuando no hay
     zona elegida: sin código no se añade, y no queda un filtro imposible dibujando nada.
   */
-  if (codigoElegido && colorElegida) {
+  if (codigoElegido) {
     capas.push({
       id: CAPA_ELEGIDA,
       type: 'line',
       source: FUENTE,
       filter: ['==', ['get', 'code'], codigoElegido],
       paint: {
-        'line-color': colorElegida,
-        // Casi el doble que un contorno normal: la señal que le queda a quien no ve el color.
+        /*
+          EL ANILLO ES DEL TONO DE LA ZONA, NO BLANCO (23-10-2026).
+
+          Nació blanco el 22-10, cuando el color decía «oficial o no» y hacía falta una señal que
+          no fuera color. Con tres tonos por zona, un contorno blanco encima apaga justo lo que la
+          orden pide ver: «contorno luminoso más intenso y relleno destacado». Medido en pantalla,
+          la zona elegida se leía como una caja blanca apagada al lado de una azul encendida, que
+          es lo contrario de lo que tiene que pasar.
+
+          Lo que sustituye al blanco como señal sin color es el ANCHO —casi el doble que un
+          contorno normal— más el relleno y el resplandor, que también suben. Tres señales que no
+          dependen de distinguir un tono de otro.
+        */
+        'line-color': colorElegida || ['coalesce', ['get', PROP_TONO], colorOficial],
         'line-width': 4,
-        'line-opacity': 0.95,
+        'line-opacity': 1,
       },
     });
   }

@@ -2231,23 +2231,18 @@ export const enUS: Record<TranslationKey, string> = {
   'citizen.parking.map.error': 'The map could not be loaded. You can carry on without it.',
   'citizen.parking.map.noProvider': 'This installation has no map provider configured.',
   'citizen.parking.map.notOfficial': 'These are not official boundaries.',
-  'citizen.parking.map.notOfficialDetail': 'Zones with a dashed outline are demonstration data and do not represent the real charging perimeter.',
-  'citizen.parking.map.tapHint': 'Tap a zone on the map to see its rate, or pick one from the list below.',
+  'citizen.parking.map.notOfficialDetail': 'Dashed ones are demonstration data.',
+  'citizen.parking.map.tapHint': 'Tap a zone on the map, or pick one from the list.',
+  'citizen.parking.map.withoutPerimeter':
+    'No boundaries drawn yet: {{zonas}}. They can still be picked from the list.',
+  'citizen.parking.map.emptyNamed':
+    'No zone in this municipality has its boundary drawn yet: {{zonas}}. Parking still works: the zone and bay you type are what count. To see them on the map, the municipality has to load the perimeters.',
 
   // ---- Citizen: the card for the zone tapped on the map (2026-10-22) ----------------------------
-  'citizen.parking.zoneCard.municipality': 'Municipality',
   'citizen.parking.zoneCard.rate': 'Rate',
-  'citizen.parking.zoneCard.schedule': 'Charging hours',
-  'citizen.parking.zoneCard.conditions': 'Conditions',
-  'citizen.parking.zoneCard.choose': 'Select this zone',
+  'citizen.parking.zoneCard.choose': 'Select zone',
   'citizen.parking.zoneCard.chosen': 'This is the zone for this stay.',
   'citizen.parking.zoneCard.notOffered': 'This zone is on the map but is not in the list of zones where parking is offered.',
-  // The schedule in one line. When it does not fit whole, the row is absent: see `horarioDeCobro.ts`.
-  'citizen.parking.schedule.allDay': 'Charged around the clock.',
-  'citizen.parking.schedule.never': 'No charging on any day.',
-  'citizen.parking.schedule.span': '{{desde}} to {{hasta}}, {{inicio}}–{{fin}}',
-  'citizen.parking.schedule.oneDay': '{{dia}}, {{inicio}}–{{fin}}',
-  'citizen.parking.schedule.exceptNotice': '{{base}} · except public holidays',
   'citizen.parking.step1.spaceCodeLabel': 'Bay code',
   'citizen.parking.step1.spaceCodeHint': 'The number painted on the bay you are in.',
   'citizen.parking.step1.noZones': 'This municipality has not published its parking zones yet.',

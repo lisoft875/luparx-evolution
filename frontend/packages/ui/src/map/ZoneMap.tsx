@@ -11,7 +11,9 @@ import type { ZoneGeoJsonFeatureCollection } from '@luparx/api-client';
 import { Button } from '../components/Button';
 import { encuadreDe, etiquetaDeZona } from './zoneGeometry';
 import { PALETA_MAPA, oscurecer, urlDelEstilo } from './estiloOscuro';
-import { CAPA_ELEGIDA, CAPA_RELLENO, FUENTE, PROP_ETIQUETA, VERIFICADA, capasDeZonas } from './capas';
+import {
+  CAPA_ELEGIDA, CAPA_RELLENO, FUENTE, PROP_ETIQUETA, PROP_TONO, VERIFICADA, capasDeZonas, tonoDeZona,
+} from './capas';
 
 export interface ZoneMapTextos {
   /** Nombre accesible del mapa. */
@@ -38,8 +40,14 @@ export interface ZoneMapProps {
   error?: boolean;
   onReintentar?: () => void;
   textos: ZoneMapTextos;
-  /** Alto de la vista compacta. Al ampliar ocupa la pantalla. */
-  altoCompacto?: number;
+  /**
+   * Alto de la vista compacta. Al ampliar ocupa la pantalla.
+   *
+   * <p>Admite una medida CSS y no sólo píxeles: la orden del 23-10-2026 pide «280–350 px,
+   * adaptable al dispositivo», y eso es un `clamp`, no un número. Un número se sigue aceptando y
+   * se lee como píxeles, que es lo que esperan las pantallas que ya lo pasaban así.</p>
+   */
+  altoCompacto?: number | string;
   /** Desactiva el recoloreado cuando el proveedor ya sirve un estilo oscuro. */
   recolorear?: boolean;
   /**
@@ -291,7 +299,6 @@ export function ZoneMap({
       colorBordeTexto: PALETA_MAPA.textoBorde,
       fuenteTexto: fuenteDelEstilo(m),
       codigoElegido: zonaDestacada,
-      colorElegida: PALETA_MAPA.zonaElegida,
     });
     const hay = Boolean(zonas && zonas.features.length > 0);
     const datos = hay ? conEtiquetas(zonas as ZoneGeoJsonFeatureCollection, etiquetas) : zonas;
@@ -406,7 +413,10 @@ export function ZoneMap({
     <section
       className={['lx-zonemap', ampliado ? 'lx-zonemap--ampliado' : ''].filter(Boolean).join(' ')}
       aria-labelledby={`${id}-titulo`}
-      style={ampliado ? undefined : { ['--lx-zonemap-alto' as string]: `${altoCompacto}px` }}
+      style={ampliado ? undefined : {
+        ['--lx-zonemap-alto' as string]:
+          typeof altoCompacto === 'number' ? `${altoCompacto}px` : altoCompacto,
+      }}
     >
       {/*
         EL CROMO SE QUITA DE ENCIMA DEL MAPA CUANDO EL MAPA ES LO PRINCIPAL (22-10-2026).
@@ -537,6 +547,9 @@ function conEtiquetas(
           tarifas?.[f.properties.code],
           f.properties.status,
         ),
+        // El tono neón de esta zona, decidido acá y no en el estilo: así se puede comprobar sin
+        // mapa que la misma zona sale siempre del mismo color.
+        [PROP_TONO]: tonoDeZona(f.properties.code),
       },
     })),
   };
