@@ -4722,12 +4722,32 @@ function mockCitizenZones(tenantId: string | null): unknown {
   // `GET /policy` le mostraría al ciudadano una duración que el inicio va a rechazar.
   const withRules = (zone: Record<string, unknown>) => {
     const rules = mockZoneRulesDto(zone.id as string, tenantId) as Record<string, unknown>;
+    /*
+      `durations` SE DERIVA DE LA MISMA TARIFA QUE COBRA EL PRESUPUESTO (22-10-2026).
+
+      `ParkingZone.durations` existe en el contrato desde v0.24 —lo que cuesta cada duración que la
+      municipalidad vende, en ESTA zona— y este transporte simulado no lo publicaba. La pantalla de
+      Estacionar lo usa para rotular cada zona del mapa con su precio, que es lo que el boceto pone
+      debajo del nombre, así que sin esto el mapa simulado sale sin precios y no se puede comprobar
+      que el precio de la ficha es el de SU zona.
+
+      No se escribe una tabla de precios a mano: se calcula con `mockZoneRate`, la misma función de
+      la que sale el presupuesto. Así un precio de la lista y el que se cobra no pueden divergir,
+      que es exactamente el defecto que un fixture escrito aparte habría introducido.
+    */
+    const tarifa = mockZoneRate(zone.id as string, tenantId);
+    const incrementos = (rules.effectiveSessionIncrementsMinutes as number[] | undefined) ?? [];
     return {
       ...zone,
       sessionIncrementsMinutes: rules.effectiveSessionIncrementsMinutes,
       sessionMinMinutes: rules.effectiveSessionMinMinutes,
       sessionMaxMinutes: rules.effectiveSessionMaxMinutes,
       freeMinutes: rules.effectiveFreeMinutes,
+      durations: incrementos.map((minutes) => ({
+        minutes,
+        amountMinor: Math.round(tarifa.rateMinorPerMinute * minutes),
+        currencyCode: tarifa.currencyCode,
+      })),
     };
   };
   return tenantId === 'tenant-escazu'
@@ -4745,6 +4765,32 @@ function mockCitizenZones(tenantId: string | null): unknown {
           code: 'SJ-CENTRO',
           name: 'Centro',
           spaceCodes: { first: 'LUP-0001', last: 'LUP-0050', count: 50 },
+        }),
+        /*
+          LA SABANA SE AÑADIÓ EL 22-10-2026, Y NO ES UN FIXTURE DE ADORNO.
+
+          Este transporte simulado publicaba DOS zonas con perímetro en `/zones/geojson`
+          —`zone-centro` y `zone-sabana`— y UNA SOLA en `/zones`. Mientras el mapa era una
+          confirmación de la zona ya elegida en la lista, esa incoherencia no se notaba: nadie
+          tocaba el dibujo. Desde que el mapa es la forma de ELEGIR, significa que se puede tocar
+          una zona que la lista no ofrece, y el arnés lo encontró a la primera.
+
+          La simulación tiene que ser coherente consigo misma: si el servidor dibuja una zona, el
+          ciudadano tiene que poder estacionar en ella. `zone-escalante` sigue A PROPÓSITO sin
+          geometría —está en la lista y no en el mapa—, que es el estado normal el día uno y lo que
+          deja comprobar que a una zona sin perímetro no se le inventa uno.
+        */
+        withRules({
+          id: 'zone-sabana',
+          code: 'SJ-SABANA',
+          name: 'La Sabana',
+          spaceCodes: { first: 'LUP-0201', last: 'LUP-0240', count: 40 },
+        }),
+        withRules({
+          id: 'zone-escalante',
+          code: 'SJ-ESCALANTE',
+          name: 'Barrio Escalante',
+          spaceCodes: { first: 'LUP-0101', last: 'LUP-0109', count: 9 },
         }),
       ];
 }

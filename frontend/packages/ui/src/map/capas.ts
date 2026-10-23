@@ -12,6 +12,18 @@ export const VERIFICADA = 'VERIFIED';
 /** El identificador de la fuente GeoJSON que alimenta las capas. */
 export const FUENTE = 'zonas';
 
+/**
+ * La capa que recibe el toque.
+ *
+ * <p>Es el relleno, no el contorno: el dedo apunta al interior de la zona, y acertarle a una línea
+ * de 2 px en un teléfono no es razonable. Se exporta porque el componente la necesita para
+ * registrar el manejador y el cursor, y escribir el literal dos veces es cómo se desincronizan.</p>
+ */
+export const CAPA_RELLENO = 'zonas-relleno';
+
+/** El anillo de la zona elegida. Sólo existe cuando hay una. */
+export const CAPA_ELEGIDA = 'zonas-elegida';
+
 /** La propiedad que lleva el rótulo ya compuesto: nombre, tarifa y, si toca, el aviso de DEMO. */
 export const PROP_ETIQUETA = 'lxEtiqueta';
 
@@ -42,6 +54,17 @@ export interface OpcionesDeCapas {
    * manda `undefined` y la capa de rótulos sencillamente no se añade.
    */
   fuenteTexto?: string[];
+  /**
+   * El código de la zona que la persona tiene elegida, si tiene alguna.
+   *
+   * <p>Con un código acá se añade UNA capa más: un anillo alrededor de esa zona. Sin código no se
+   * añade nada, y el mapa queda exactamente como estaba. Se filtra por `code` —que el servidor sí
+   * publica en el GeoJSON— y no por el `id` del rasgo, porque el identificador interno de una zona
+   * no tiene por qué llegar al cliente y el código es el que la persona ve escrito.</p>
+   */
+  codigoElegido?: string;
+  /** El color de ese anillo. */
+  colorElegida?: string;
 }
 
 /**
@@ -69,13 +92,16 @@ export interface OpcionesDeCapas {
  * aviso de error. El trazo se decide entonces por capa, y es el filtro el que reparte las zonas.</p>
  */
 export function capasDeZonas(opciones: OpcionesDeCapas): CapaDeZonas[] {
-  const { colorOficial, colorNoOficial, colorTexto, colorBordeTexto, fuenteTexto } = opciones;
+  const {
+    colorOficial, colorNoOficial, colorTexto, colorBordeTexto, fuenteTexto,
+    codigoElegido, colorElegida,
+  } = opciones;
   const esOficial = ['==', ['get', 'status'], VERIFICADA];
   const porEstado = ['case', esOficial, colorOficial, colorNoOficial];
 
   const capas: CapaDeZonas[] = [
     {
-      id: 'zonas-relleno',
+      id: CAPA_RELLENO,
       type: 'fill',
       source: FUENTE,
       paint: {
@@ -119,6 +145,29 @@ export function capasDeZonas(opciones: OpcionesDeCapas): CapaDeZonas[] {
       },
     },
   ];
+
+  /*
+    El anillo de la elegida, encima de los dos contornos y debajo del rótulo.
+
+    Va como capa aparte y no como expresión en el borde por la misma razón que hay dos bordes: el
+    trazo no se puede decidir por los datos, y el ancho de la elegida tiene que poder ser distinto
+    tanto en la oficial como en la que no lo es. Como capa, además, desaparece sola cuando no hay
+    zona elegida: sin código no se añade, y no queda un filtro imposible dibujando nada.
+  */
+  if (codigoElegido && colorElegida) {
+    capas.push({
+      id: CAPA_ELEGIDA,
+      type: 'line',
+      source: FUENTE,
+      filter: ['==', ['get', 'code'], codigoElegido],
+      paint: {
+        'line-color': colorElegida,
+        // Casi el doble que un contorno normal: la señal que le queda a quien no ve el color.
+        'line-width': 4,
+        'line-opacity': 0.95,
+      },
+    });
+  }
 
   if (fuenteTexto && fuenteTexto.length > 0) {
     capas.push({

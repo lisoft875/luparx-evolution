@@ -11,7 +11,7 @@ import type { ZoneGeoJsonFeatureCollection } from '@luparx/api-client';
 import { Button } from '../components/Button';
 import { encuadreDe, etiquetaDeZona } from './zoneGeometry';
 import { PALETA_MAPA, oscurecer, urlDelEstilo } from './estiloOscuro';
-import { FUENTE, PROP_ETIQUETA, VERIFICADA, capasDeZonas } from './capas';
+import { CAPA_ELEGIDA, CAPA_RELLENO, FUENTE, PROP_ETIQUETA, VERIFICADA, capasDeZonas } from './capas';
 
 export interface ZoneMapTextos {
   /** Nombre accesible del mapa. */
@@ -60,6 +60,22 @@ export interface ZoneMapProps {
    * esa zona aún no tiene geometría dibujada, el encuadre se cae al de las que sí la tienen.
    */
   zonaDestacada?: string;
+  /**
+   * Qué hacer cuando alguien toca una zona dibujada. Recibe el **código** de esa zona.
+   *
+   * <p>Sin esto el mapa es de sólo lectura, que es como nació: una confirmación de dónde cae la
+   * zona que ya se eligió en otra parte. Con esto pasa a ser también la forma de elegirla, que es
+   * lo que pide el boceto aprobado.</p>
+   *
+   * <p><b>El mapa no es la única forma de elegir, y no puede serlo.</b> Un lienzo WebGL no se
+   * recorre con el teclado ni lo lee un lector de pantalla: quien navegue así necesita el selector
+   * de la pantalla, que sigue estando y manda lo mismo. Por eso este componente no se anuncia como
+   * un control: se queda como imagen, y la lista de zonas es la vía accesible.</p>
+   *
+   * <p>Devuelve el código y no el identificador interno porque es lo único que el GeoJSON publica,
+   * y porque es lo que la persona ve escrito en el rótulo.</p>
+   */
+  onZonaElegida?: (codigo: string) => void;
 }
 
 /**
@@ -92,6 +108,7 @@ export function ZoneMap({
   recolorear = true,
   etiquetas,
   zonaDestacada,
+  onZonaElegida,
 }: ZoneMapProps): React.JSX.Element {
   const id = useId();
   const contenedor = useRef<HTMLDivElement>(null);
@@ -136,6 +153,31 @@ export function ZoneMap({
   zonasRef.current = zonas;
   const destacadaRef = useRef(zonaDestacada);
   destacadaRef.current = zonaDestacada;
+  const elegirRef = useRef(onZonaElegida);
+  elegirRef.current = onZonaElegida;
+  /*
+    QUÉ SE ENCUADRA, Y POR QUÉ DEPENDE DE PARA QUÉ ESTÁ EL MAPA (22-10-2026).
+
+    El 22-10 por la mañana se cambió el encuadre para que abriera en LA ZONA ELEGIDA: la usuaria
+    había elegido «Barrio Amón» y veía Costa Rica y Panamá. Para un mapa que confirma dónde cae la
+    zona que ya se eligió en otra parte, ése es el encuadre correcto.
+
+    Esa misma tarde el mapa pasó a ser también la forma de ELEGIR la zona, y ahí el encuadre en una
+    sola zona se vuelve un defecto: las demás quedan fuera del lienzo y no hay nada que tocar. El
+    arnés lo midió —La Sabana caía en x = −240— antes de que lo viera ningún usuario.
+
+    Así que el encuadre depende del papel: un mapa que ELIGE muestra entre qué se elige; uno que
+    CONFIRMA muestra lo confirmado. El papel se sabe por si hay alguien escuchando los toques.
+  */
+  const encuadrarEnLaElegida = !onZonaElegida;
+  /*
+    Si el último cambio de zona vino de un toque EN el mapa, no se reencuadra.
+
+    Reencuadrar es lo correcto cuando la zona cambió desde la lista —la persona pidió otra zona y
+    hay que llevarla ahí— y es lo incorrecto cuando acaba de tocarla con el dedo: ya la está
+    mirando, ya la encuadró ella, y moverle el mapa debajo del dedo se siente como un fallo.
+  */
+  const vinoDelMapa = useRef(false);
   const [generacion, setGeneracion] = useState(0);
 
   // --- ciclo de vida del mapa ------------------------------------------------------------------
@@ -169,7 +211,8 @@ export function ZoneMap({
             de las que haya si todavía no eligió ninguna. Nunca un encuadre inventado: este efecto
             sólo corre cuando hay al menos un polígono.
           */
-          bounds: encuadreAMaplibre(zonasRef.current, destacadaRef.current),
+          bounds: encuadreAMaplibre(zonasRef.current,
+            encuadrarEnLaElegida ? destacadaRef.current : undefined),
           fitBoundsOptions: { padding: 24, maxZoom: 15 },
           attributionControl: { compact: true },
           // En móvil el mapa vive dentro de un formulario que se desplaza: sin esto, el dedo que
@@ -182,6 +225,19 @@ export function ZoneMap({
         });
         instancia = m;
         mapa.current = m;
+        /*
+          La costura del arnés, y la única.
+
+          Para comprobar en un navegador que tocar una zona la elige hay que saber DÓNDE cae esa
+          zona en pantalla, y eso sólo lo sabe MapLibre: es una proyección que depende del centro y
+          del zoom del momento. Sin esta línea, la prueba tendría que tocar el centro del lienzo a
+          ciegas —lo que sólo sirve para la zona ya encuadrada— o reimplementar la proyección, que
+          es comprobar una copia en vez del código que se despliega.
+
+          Es una asignación y nada más: el componente no lee esta propiedad, no cambia de
+          comportamiento con ella, y vive en el nodo del DOM, no en `window`.
+        */
+        (contenedor.current as unknown as { __lxMapa?: unknown }).__lxMapa = m;
         m.touchZoomRotate?.disableRotation?.();
         m.addControl(new maplibre.NavigationControl({ showCompass: false }), 'top-right');
 
@@ -202,7 +258,7 @@ export function ZoneMap({
       try { instancia?.remove(); } catch { /* ya se fue */ }
       mapa.current = null;
     };
-  }, [estilo, recolorear, puedeDibujarse]);
+  }, [estilo, recolorear, puedeDibujarse, encuadrarEnLaElegida]);
 
   /*
     Los polígonos, cuando los hay.
@@ -222,8 +278,11 @@ export function ZoneMap({
       getLayer?: (id: string) => unknown;
       fitBounds?: (b: unknown, o: unknown) => void;
       getStyle?: () => EstiloCargado | undefined;
+      getCanvas?: () => HTMLCanvasElement;
+      on?: (evento: string, capa: string, fn: (e: unknown) => void) => void;
+      off?: (evento: string, capa: string, fn: (e: unknown) => void) => void;
     } | null;
-    if (!m || generacion === 0) return;
+    if (!m || generacion === 0) return undefined;
 
     const capas = capasDeZonas({
       colorOficial: PALETA_MAPA.zona,
@@ -231,6 +290,8 @@ export function ZoneMap({
       colorTexto: PALETA_MAPA.texto,
       colorBordeTexto: PALETA_MAPA.textoBorde,
       fuenteTexto: fuenteDelEstilo(m),
+      codigoElegido: zonaDestacada,
+      colorElegida: PALETA_MAPA.zonaElegida,
     });
     const hay = Boolean(zonas && zonas.features.length > 0);
     const datos = hay ? conEtiquetas(zonas as ZoneGeoJsonFeatureCollection, etiquetas) : zonas;
@@ -240,11 +301,24 @@ export function ZoneMap({
         const fuente = m.getSource?.(FUENTE);
         if (fuente?.setData) fuente.setData(datos as never);
         else m.addSource?.(FUENTE, { type: 'geojson', data: datos as never });
+        /*
+          El anillo se quita y se vuelve a poner en cada pasada.
+
+          Su filtro lleva el código de la zona elegida DENTRO, así que una capa que ya existe tiene
+          el filtro de la zona anterior. Añadir sólo las que faltan —que es lo correcto para las
+          otras cuatro, que nunca cambian— dejaría el anillo clavado en la primera zona que se
+          eligió, y el síntoma sería el peor posible: el mapa marcando una zona distinta de la que
+          dice la tarjeta.
+        */
+        if (m.getLayer?.(CAPA_ELEGIDA)) m.removeLayer?.(CAPA_ELEGIDA);
         for (const capa of capas) {
           if (!m.getLayer?.((capa as { id: string }).id)) m.addLayer?.(capa as never);
         }
-        const encuadre = encuadreAMaplibre(zonas, zonaDestacada);
-        if (encuadre) m.fitBounds?.(encuadre, { padding: 24, maxZoom: 16, animate: false });
+        if (!vinoDelMapa.current) {
+          const encuadre = encuadreAMaplibre(zonas, encuadrarEnLaElegida ? zonaDestacada : undefined);
+          if (encuadre) m.fitBounds?.(encuadre, { padding: 24, maxZoom: 16, animate: false });
+        }
+        vinoDelMapa.current = false;
       } else {
         for (const capa of capas) {
           if (m.getLayer?.((capa as { id: string }).id)) m.removeLayer?.((capa as { id: string }).id);
@@ -254,7 +328,37 @@ export function ZoneMap({
     } catch {
       // El mapa puede estar yéndose mientras esto corre; no es un fallo que deba ver nadie.
     }
-  }, [zonas, generacion, etiquetas, zonaDestacada]);
+
+    /*
+      El toque sobre una zona.
+
+      Va contra el RELLENO y no contra el contorno: el dedo apunta al interior, y acertarle a una
+      línea de 2 px en un teléfono no es razonable. El manejador se registra acá, después de que
+      las capas existan, y se retira al salir: MapLibre reparte el evento por capa, así que un
+      manejador vivo sobre una capa que ya no está es ruido que no se dispara pero que se acumula
+      cada vez que cambian los datos.
+    */
+    if (!hay || !elegirRef.current) return undefined;
+    const alTocar = (e: unknown): void => {
+      const rasgo = (e as { features?: { properties?: { code?: unknown } }[] }).features?.[0];
+      const codigo = rasgo?.properties?.code;
+      if (typeof codigo !== 'string' || codigo.length === 0) return;
+      vinoDelMapa.current = true;
+      elegirRef.current?.(codigo);
+    };
+    const entrar = (): void => { const c = m.getCanvas?.(); if (c) c.style.cursor = 'pointer'; };
+    const salir = (): void => { const c = m.getCanvas?.(); if (c) c.style.cursor = ''; };
+    m.on?.('click', CAPA_RELLENO, alTocar);
+    m.on?.('mouseenter', CAPA_RELLENO, entrar);
+    m.on?.('mouseleave', CAPA_RELLENO, salir);
+    return () => {
+      try {
+        m.off?.('click', CAPA_RELLENO, alTocar);
+        m.off?.('mouseenter', CAPA_RELLENO, entrar);
+        m.off?.('mouseleave', CAPA_RELLENO, salir);
+      } catch { /* el mapa ya se fue */ }
+    };
+  }, [zonas, generacion, etiquetas, zonaDestacada, encuadrarEnLaElegida]);
 
   // Al ampliar y al cerrar cambia el tamaño del contenedor, y MapLibre no se entera solo.
   useEffect(() => {
@@ -304,28 +408,72 @@ export function ZoneMap({
       aria-labelledby={`${id}-titulo`}
       style={ampliado ? undefined : { ['--lx-zonemap-alto' as string]: `${altoCompacto}px` }}
     >
-      <div className="lx-zonemap__barra">
-        <h3 id={`${id}-titulo`} className="lx-zonemap__titulo">{textos.titulo}</h3>
-        {puedeDibujarse && !falloMapa ? (
-          <Button
-            type="button"
-            variant="secondary"
-            className="lx-zonemap__accion"
-            aria-expanded={ampliado}
-            onClick={() => setAmpliado((v) => !v)}
-          >
-            {ampliado ? textos.cerrar : textos.ampliar}
-          </Button>
-        ) : null}
-      </div>
+      {/*
+        EL CROMO SE QUITA DE ENCIMA DEL MAPA CUANDO EL MAPA ES LO PRINCIPAL (22-10-2026).
 
-      {noOficiales > 0 ? (
+        Con el mapa al final de un formulario, un título y un botón encima costaban 56 px que no se
+        notaban. Desde que el mapa abre con la pantalla y es la forma de elegir la zona, cada fila
+        que va encima lo empuja fuera de la primera pantalla: medido a 390 × 844, el mapa empezaba
+        a 690 px de una ventana de 844.
+
+        Así que con `onZonaElegida` —el mapa que ELIGE— el título queda sólo para quien usa lector
+        de pantalla y el control de ampliar se dibuja SOBRE el lienzo, en una esquina. Sin él —el
+        mapa que confirma, en «¡Listo!»— la barra se queda como estaba: ahí el mapa es un apunte
+        dentro de una pantalla que ya cuenta otra cosa, y un título ayuda a saber qué es.
+      */}
+      {onZonaElegida ? (
+        <h3 id={`${id}-titulo`} className="lx-visually-hidden">{textos.titulo}</h3>
+      ) : (
+        <div className="lx-zonemap__barra">
+          <h3 id={`${id}-titulo`} className="lx-zonemap__titulo">{textos.titulo}</h3>
+          {puedeDibujarse && !falloMapa ? (
+            <Button
+              type="button"
+              variant="secondary"
+              className="lx-zonemap__accion"
+              aria-expanded={ampliado}
+              onClick={() => setAmpliado((v) => !v)}
+            >
+              {ampliado ? textos.cerrar : textos.ampliar}
+            </Button>
+          ) : null}
+        </div>
+      )}
+
+      {/*
+        El aviso de «no son límites oficiales» pasa DEBAJO del mapa cuando el mapa es lo principal.
+
+        Encima costaba otras dos líneas antes de que se viera nada, y el aviso es sobre lo que se
+        está mirando: leerlo después de ver los bordes punteados es cuando significa algo. Lo que
+        NO cambia es que el aviso exista siempre que haya una geometría no verificada: es la regla
+        que impide que una zona de demostración pase por oficial, y no depende de dónde se escriba.
+      */}
+      {noOficiales > 0 && !onZonaElegida ? (
         <p className="lx-zonemap__noOficial" role="note">
           <strong>{textos.noOficial}</strong> {textos.noOficialDetalle}
         </p>
       ) : null}
 
-      {cuerpo}
+      {onZonaElegida && puedeDibujarse && !falloMapa ? (
+        <div className="lx-zonemap__lienzoConAccion">
+          {cuerpo}
+          <Button
+            type="button"
+            variant="secondary"
+            className="lx-zonemap__accion lx-zonemap__accion--sobre"
+            aria-expanded={ampliado}
+            onClick={() => setAmpliado((v) => !v)}
+          >
+            {ampliado ? textos.cerrar : textos.ampliar}
+          </Button>
+        </div>
+      ) : cuerpo}
+
+      {noOficiales > 0 && onZonaElegida ? (
+        <p className="lx-zonemap__noOficial lx-zonemap__noOficial--debajo" role="note">
+          <strong>{textos.noOficial}</strong> {textos.noOficialDetalle}
+        </p>
+      ) : null}
 
       {/* Una línea, DEBAJO del mapa: primero se ven las calles y después se lee por qué no hay
           límites dibujados. Al revés, el texto volvía a ser lo primero y lo único. */}

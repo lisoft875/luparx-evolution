@@ -274,9 +274,26 @@ async function entrar(page) {
   }
 }
 
-/** Abre el desplegable rotulado `etiqueta` y elige la opción cuyo texto coincide. */
+/**
+ * Elige la opción cuyo texto coincide, en el desplegable rotulado `etiqueta`.
+ *
+ * Sirve para los dos controles, y tiene que servir: desde el 22-10-2026 el selector de zona usa el
+ * `<select>` del sistema en cuanto hay dedo —`pointer: coarse`—, y en esos contextos `[role=option]`
+ * no existe nunca. Los ocho tamaños de esta prueba corren con `hasTouch`, así que sin esta rama la
+ * prueba se cuelga treinta segundos esperando una lista que el navegador dibuja él.
+ */
 async function elegir(page, etiqueta, texto) {
   const disparador = page.locator(`[aria-label="${etiqueta}"]`).first();
+  if (await disparador.evaluate((n) => n.tagName) === 'SELECT') {
+    const valor = await disparador.evaluate((n, buscado) => {
+      const o = [...n.options].find((x) => x.textContent.includes(buscado));
+      return o ? o.value : null;
+    }, texto);
+    if (valor === null) throw new Error(`no hay opción «${texto}» en «${etiqueta}»`);
+    await disparador.selectOption(valor);
+    await page.waitForTimeout(400);
+    return;
+  }
   await disparador.click();
   await page.waitForTimeout(300);
   await page.locator('[role=option]').filter({ hasText: texto }).first().click();
@@ -286,6 +303,19 @@ async function elegir(page, etiqueta, texto) {
 const campoBahia = (page) => page.locator('input[inputmode=numeric], input[inputmode=text]').first();
 const seccionMapa = (page) => page.locator('.lx-zonemap');
 const botonAbrir = (page) => page.getByRole('button', { name: /ver la zona en el mapa|see the zone on the map/i });
+
+/*
+  Desde el 22-10-2026 el mapa ya está abierto al entrar, así que este botón normalmente NO existe.
+  El ayudante se queda —y tolera su ausencia— porque las secciones de abajo comprueban otras cosas
+  (sin proveedor, sin geometrías, al volver) y lo que les importa es tener el mapa delante, no cómo
+  llegó. Si algún día vuelve un modo plegado, estas secciones siguen sirviendo sin tocarlas.
+*/
+async function abrirMapa(page) {
+  if (await botonAbrir(page).count() > 0) {
+    await botonAbrir(page).click();
+    await page.waitForTimeout(400);
+  }
+}
 const botonAmpliar = (page) => page.locator('.lx-zonemap__accion');
 
 /** Deja la pantalla con zona elegida y la bahía indicada. */
@@ -380,8 +410,7 @@ async function pasadaSinProveedor(browser) {
   await entrar(page);
   await prepararPaso1(page, BAHIA_OK);
 
-  ok(await botonAbrir(page).count() === 1, 'el botón de abrir el mapa sigue estando');
-  await botonAbrir(page).click();
+  await abrirMapa(page);
   await page.waitForTimeout(1200);
 
   const aviso = page.locator('.lx-zonemap__aviso');
@@ -410,7 +439,23 @@ async function pasadaSinProveedor(browser) {
 async function pasadaFuncional(browser) {
   const origen = new URL(BASE).origin;
 
-  // ---- 1. El mapa no aparece antes de tiempo --------------------------------------------------
+  // ---- 1. El mapa aparece con la pantalla -----------------------------------------------------
+  /*
+    ESTA SECCIÓN CAMBIÓ DE SIGNO EL 22-10-2026, Y NO ES QUE SE HAYA DEBILITADO.
+
+    Hasta esa fecha comprobaba lo contrario: que el mapa NO apareciera hasta que el código de bahía
+    validara, y que detrás hubiera un botón para abrirlo. Era la política correcta mientras el mapa
+    era una confirmación opcional de dónde cae la zona ya elegida en la lista.
+
+    La orden del 22-10-2026 cambia esa política —«mostrar el mapa al ingresar a Estacionar»— porque
+    cambia lo que el mapa ES: pasa a ser la forma principal de ELEGIR la zona, que es lo que dice
+    el boceto aprobado. Una comprobación que siguiera exigiendo el botón estaría defendiendo una
+    decisión que ya no se toma.
+
+    Lo que sí se conserva —y por eso sigue habiendo una sección acá— es la cuenta de peticiones:
+    una sola del GeoJSON y una sola del estilo. Ese número es el que avisa si un redibujado empieza
+    a pedir el mapa dos veces, y ese riesgo no lo cambió ninguna orden.
+  */
   console.log('\n── Cuándo aparece el mapa ──');
   {
     const context = await browser.newContext({ viewport: { width: 390, height: 844 }, locale: 'es-CR' });
@@ -419,22 +464,22 @@ async function pasadaFuncional(browser) {
     await entrar(page);
 
     await prepararPaso1(page, null);
-    ok(await seccionMapa(page).count() === 0, 'sin bahía escrita no hay mapa ni botón');
-    ok(await botonAbrir(page).count() === 0, 'sin bahía escrita no se ofrece abrirlo');
+    await page.waitForTimeout(3500);
+    ok(await seccionMapa(page).count() === 1, 'el mapa está desde que se abre la pantalla, sin bahía escrita');
+    ok(await botonAbrir(page).count() === 0, 'y ya no hay botón de abrirlo: no hay nada que abrir');
+    ok(estado.geojson === 1, 'se pidieron las geometrías una sola vez al entrar',
+      `peticiones: ${estado.geojson}`);
 
+    // La bahía sigue validándose igual: lo que cambió es dónde vive el mapa, no la validación.
     await campoBahia(page).fill(BAHIA_MAL_FORMADA);
     await page.waitForTimeout(500);
-    ok(await botonAbrir(page).count() === 0, 'con la bahía mal formada tampoco');
-
+    ok(await seccionMapa(page).count() === 1, 'una bahía mal formada no se lleva el mapa por delante');
     await campoBahia(page).fill(BAHIA_FUERA_DE_RANGO);
     await page.waitForTimeout(500);
-    ok(await botonAbrir(page).count() === 0, 'con la bahía fuera de rango tampoco');
-
+    ok(await seccionMapa(page).count() === 1, 'una bahía fuera de rango tampoco');
     await campoBahia(page).fill(BAHIA_OK);
     await page.waitForTimeout(600);
-    ok(await botonAbrir(page).count() === 1, 'con la bahía válida aparece el botón');
-    ok(await seccionMapa(page).count() === 0, 'y el mapa sigue cerrado hasta que se pide');
-    ok(estado.geojson === 0, 'no se pidió ninguna geometría mientras el mapa estaba cerrado',
+    ok(estado.geojson === 1, 'escribir la bahía no vuelve a pedir las geometrías',
       `peticiones: ${estado.geojson}`);
 
     await context.close();
@@ -448,7 +493,6 @@ async function pasadaFuncional(browser) {
     const page = await context.newPage();
     await entrar(page);
     await prepararPaso1(page, BAHIA_OK);
-    await botonAbrir(page).click();
     await page.waitForTimeout(3500);
 
     ok(estado.geojson === 1, 'se pidieron las geometrías una sola vez', `peticiones: ${estado.geojson}`);
@@ -599,13 +643,20 @@ async function pasadaFuncional(browser) {
     const page = await context.newPage();
     await entrar(page);
 
-    // Carga
+    /*
+      Carga. El modo lento se arma ANTES de navegar, y no después: desde el 22-10-2026 la petición
+      del GeoJSON sale al entrar a la pantalla, así que ponerlo después de `prepararPaso1` llegaba
+      tarde —la respuesta ya había vuelto— y lo que se medía era el mapa dibujado, no el de carga.
+    */
     estado.geojsonModo = 'lento';
-    await prepararPaso1(page, BAHIA_OK);
-    await botonAbrir(page).click();
-    await page.waitForTimeout(700);
+    await page.goto(`${BASE}/park`, { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(900);
     const enCarga = (await page.locator('.lx-zonemap__aviso, .lx-text-meta').allInnerTexts()).join(' | ');
     ok(/cargando el mapa/i.test(enCarga), 'mientras llega, el mapa dice que está cargando', enCarga);
+    await page.waitForTimeout(2200);
+    await elegir(page, 'Zona', 'Centro');
+    await campoBahia(page).fill(BAHIA_OK);
+    await page.waitForTimeout(500);
     await page.waitForTimeout(3200);
     ok(await page.locator('.lx-zonemap__lienzo').count() === 1, 'y después se dibuja');
 
@@ -616,7 +667,7 @@ async function pasadaFuncional(browser) {
     await elegir(page, 'Zona', 'Centro');
     await campoBahia(page).fill(BAHIA_OK);
     await page.waitForTimeout(500);
-    await botonAbrir(page).click();
+    await abrirMapa(page);
     await page.waitForTimeout(3000);
 
     const avisoError = page.locator('.lx-zonemap__aviso');
@@ -650,7 +701,7 @@ async function pasadaFuncional(browser) {
     const page = await context.newPage();
     await entrar(page);
     await prepararPaso1(page, BAHIA_OK);
-    await botonAbrir(page).click();
+    await abrirMapa(page);
     await page.waitForTimeout(3000);
 
     const deSanJose = ((estado.ultimasZonas && estado.ultimasZonas.features) || []).map((f) => f.id);
@@ -775,13 +826,14 @@ async function pasadaFuncional(browser) {
     const page = await context.newPage();
     await entrar(page);
     await prepararPaso1(page, BAHIA_OK);
-    if (await botonAbrir(page).count() === 0) {
-      ok(false, `${tamano.nombre}: aparece el botón de abrir el mapa`);
+    /* Desde el 22-10-2026 el mapa ya viene abierto; lo que se mide acá es cómo cabe, no cómo abre. */
+    await abrirMapa(page);
+    await page.waitForTimeout(3000);
+    if (await seccionMapa(page).count() === 0) {
+      ok(false, `${tamano.nombre}: el mapa está en la pantalla`);
       await context.close();
       continue;
     }
-    await botonAbrir(page).click();
-    await page.waitForTimeout(3000);
 
     const medidas = await page.evaluate(() => {
       const s = document.querySelector('.lx-zonemap');

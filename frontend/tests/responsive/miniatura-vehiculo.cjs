@@ -198,9 +198,19 @@ function revisar(etiqueta, datos, minimo) {
     await page.waitForTimeout(1800);
     const zona = page.getByRole('combobox', { name: /^Zona$|^Zone$/i }).first();
     if (await zona.count()) {
-      await zona.click();
-      await page.waitForTimeout(350);
-      await page.locator('[role=listbox] [role=option]').first().click();
+      /*
+        Con dedo, el selector de zona es el `<select>` del sistema desde el 22-10-2026, y ahí la
+        lista la dibuja el navegador: `[role=option]` no existe y esperarlo cuelga la prueba treinta
+        segundos. Se eligen las dos formas, que es lo que hace cualquier arnés que toque un `Select`.
+      */
+      if (await zona.evaluate((n) => n.tagName) === 'SELECT') {
+        const valor = await zona.evaluate((n) => [...n.options].find((o) => o.value)?.value ?? null);
+        if (valor) await zona.selectOption(valor);
+      } else {
+        await zona.click();
+        await page.waitForTimeout(350);
+        await page.locator('[role=listbox] [role=option]').first().click();
+      }
       await page.waitForTimeout(400);
       await page.locator('input[inputmode=numeric], input[inputmode=text]').first().fill(BAHIA_OK);
       await page.waitForTimeout(700);

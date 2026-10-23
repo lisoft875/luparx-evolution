@@ -5,6 +5,7 @@ import { useTranslation, formatCurrencyMinor, formatWeekdayTime } from '@luparx/
 import type { TranslationKey } from '@luparx/i18n';
 import type { ParkingSession } from '@luparx/api-client';
 import { TenantSwitchControl } from '@luparx/features';
+import { useAuth } from '@luparx/auth';
 import {
   Alert,
   Button,
@@ -26,7 +27,8 @@ import { VehicleImage } from '../vehicleImages/VehicleImage';
 import { formatDurationLabel } from '../lib/duration';
 import { parkingErrorMessage } from '../lib/apiErrors';
 import { checkSpaceCode } from '../lib/spaceCode';
-import { tarifasPorCodigo } from '../lib/tarifaDeZona';
+import { tarifaDeZona, tarifasPorCodigo } from '../lib/tarifaDeZona';
+import { horarioDeCobro } from '../lib/horarioDeCobro';
 import { ExtendSessionSheet } from '../components/ExtendSessionSheet';
 
 /*
@@ -86,6 +88,7 @@ export function ParkingPage(): React.JSX.Element {
   const navigate = useNavigate();
   const tKey = (key: string): string => t(key as Parameters<typeof t>[0]);
 
+  const { activeTenant } = useAuth();
   const zonesQuery = useParkingZones();
   const zones = zonesQuery.data;
   const [zoneId, setZoneId] = useState<string>('');
@@ -97,11 +100,18 @@ export function ParkingPage(): React.JSX.Element {
   // The bay code as it is painted on the ground. Kept as typed-in text rather than derived from
   // the zone: one zone holds hundreds of bays, and only the person standing in one knows which.
   const [spaceCode, setSpaceCode] = useState('');
-  /*
-    Cerrado al principio, a propósito. El mapa es opcional: abrirlo solo lo pide quien lo quiere, y
-    así nadie paga una petición ni la descarga de MapLibre por escribir un código de bahía.
-  */
-  const [mapaAbierto, setMapaAbierto] = useState(false);
+  /**
+   * La zona que se tocó en el mapa y todavía no se confirmó.
+   *
+   * <p>Dos estados y no uno, porque el boceto pide dos gestos: tocar una zona la resalta y abre su
+   * ficha, y es el botón el que la convierte en la zona de esta sesión. Con un solo estado, tocar
+   * para mirar ya cambiaría la zona del cobro, y el botón «Seleccionar esta zona» no tendría nada
+   * que hacer. Cuando no hay nada tocado, manda la elegida.</p>
+   *
+   * <p>Se guarda el **código** y no el identificador: es lo único que el GeoJSON publica, así que
+   * es lo único que un toque en el mapa puede devolver.</p>
+   */
+  const [codigoEnfocado, setCodigoEnfocado] = useState<string | null>(null);
   /** El mapa de la pantalla «¡Listo!», que se abre desde «Ver en el mapa». */
   const [mapaResultado, setMapaResultado] = useState(false);
   /** La hoja de ampliar tiempo, la misma que usa el Inicio. */
@@ -117,11 +127,45 @@ export function ParkingPage(): React.JSX.Element {
    */
   const spaceProblem = checkSpaceCode(spaceCode, spaceFormat, zone);
   /*
-    El mapa aparece cuando la bahía ya validó, y no antes: es una confirmación de dónde queda la
-    zona, no un paso para elegirla. Mientras esa condición no se cumpla la consulta ni se dispara.
+    EL MAPA ABRE CON LA PANTALLA (22-10-2026).
+
+    Hasta hoy aparecía sólo después de que el código de bahía validara, y detrás de un botón: era
+    una confirmación de dónde cae la zona que ya se había elegido en la lista. La orden del
+    22-10-2026 lo cambia de sitio en el flujo —«mostrar el mapa al ingresar a Estacionar»— y con
+    eso el mapa pasa a ser la forma principal de ELEGIR la zona, que es lo que dice el boceto
+    aprobado.
+
+    Lo que esto cuesta, dicho para que no se descubra como sorpresa: MapLibre y la petición del
+    GeoJSON ahora los paga todo el que entra a Estacionar, no sólo quien abría el mapa. El
+    componente se sigue cargando de forma perezosa, así que no entra en el paquete inicial.
   */
-  const bahiaLista = Boolean(zone) && spaceCode.trim().length > 0 && !spaceProblem;
-  const zonasGeoQuery = useZonesGeoJson(bahiaLista && mapaAbierto);
+  const zonasGeoQuery = useZonesGeoJson(true);
+  /** La zona cuya ficha se está viendo: la tocada en el mapa, y si no, la que ya está elegida. */
+  const zonaEnFicha = (codigoEnfocado
+    ? zones?.find((z) => z.code === codigoEnfocado)
+    : null) ?? (codigoEnfocado ? null : zone);
+  /*
+    Una zona DIBUJADA que la lista no ofrece.
+
+    No es hipotético: el propio transporte simulado publicaba dos perímetros y una sola zona en la
+    lista, y el arnés lo encontró el primer día que el mapa se pudo tocar. En un servidor de verdad
+    puede pasar igual —`/zones/geojson` y `/zones` son dos consultas— y lo que no puede pasar es
+    que el dedo caiga sobre un polígono y la pantalla se quede muda: quien toca algo que se dibuja
+    espera una respuesta, y «no pasó nada» se lee como que la aplicación falló.
+
+    Así que se dice lo que se sabe —el nombre y el código que trae el propio GeoJSON— y se dice lo
+    único cierto sobre por qué no se puede elegir: que no está en la lista. No se inventa un motivo.
+  */
+  const rasgoEnfocado = codigoEnfocado && !zonaEnFicha
+    ? zonasGeoQuery.data?.features.find((f) => f.properties.code === codigoEnfocado)
+    : undefined;
+  /** Hay algo que confirmar sólo cuando lo tocado no es ya lo elegido. */
+  const hayQueConfirmar = Boolean(zonaEnFicha && zonaEnFicha.id !== zoneId);
+  /* La tarifa de la zona de la ficha, tal como la publica el servidor. Si no publica ninguna, no
+     hay fila de tarifa: nunca se calcula un precio por hora a partir de otra duración. */
+  const tarifaEnFicha = zonaEnFicha
+    ? tarifaDeZona(zonaEnFicha, (minor, moneda) => formatCurrencyMinor(minor, moneda, locale))
+    : undefined;
   const spaceCodeError = spaceProblem
     ? spaceProblem.kind === 'format'
       ? t('citizen.parking.step1.spaceCodeError.format', { example: spaceProblem.example })
@@ -343,6 +387,31 @@ export function ParkingPage(): React.JSX.Element {
         : t('citizen.parking.schedule.notCharging')
       : null;
 
+  /*
+    El horario de cobro dicho en una línea para la ficha de la zona, o nada.
+
+    `horarioDeCobro` calla cuando el horario no cabe entero —franjas distintas por día, pausa de
+    mediodía, un feriado vigente— y eso es a propósito: la orden pide el horario «sólo si está
+    disponible», y media verdad sobre cuándo se cobra es peor que el silencio. El aviso de «ahora
+    no se está cobrando», que es puntual y exacto, se sigue dando aparte.
+  */
+  const horarioEnUnaLinea = horarioDeCobro(schedule, {
+    todoElDia: t('citizen.parking.schedule.allDay'),
+    nunca: t('citizen.parking.schedule.never'),
+    corrido: (v) => t('citizen.parking.schedule.span', v),
+    unDia: (v) => t('citizen.parking.schedule.oneDay', v),
+    conFeriados: (v) => t('citizen.parking.schedule.exceptNotice', v),
+    dias: {
+      MONDAY: t('weekday.monday'),
+      TUESDAY: t('weekday.tuesday'),
+      WEDNESDAY: t('weekday.wednesday'),
+      THURSDAY: t('weekday.thursday'),
+      FRIDAY: t('weekday.friday'),
+      SATURDAY: t('weekday.saturday'),
+      SUNDAY: t('weekday.sunday'),
+    },
+  });
+
   async function handleSubmit(): Promise<void> {
     if (!vehicleChosen || !minutes || !zoneId || !spaceCode.trim() || spaceProblem) return;
     setError(null);
@@ -397,6 +466,138 @@ export function ParkingPage(): React.JSX.Element {
     setError(null);
   }
 
+  /*
+    EL MAPA COMO PORTADA DE LA PANTALLA (22-10-2026).
+
+    Vivía dentro del paso «Zona y espacio», debajo del bloque de Municipalidad. Medido a 320 × 568:
+    el mapa empezaba a 560 px de una ventana de 568, o sea que de la pantalla que la orden pide
+    «ver al ingresar» no se veía NADA sin desplazar. A 390 se veían 148 px de sus 375.
+
+    El boceto aprobado lo pone donde se ve: justo debajo del indicador de pasos y antes de
+    cualquier campo. Eso es lo que se hace acá, y no toca ninguna validación ni mueve ningún paso
+    —la lista de zonas y el código de bahía siguen donde estaban—: lo único que cambia de sitio es
+    el dibujo y la ficha de la zona, que son lo que hay que ver primero.
+  */
+  const portadaDelMapa = (
+    <div className="lx-mapa-portada">
+      {/*
+        El mapa, arriba y abierto: es lo primero de la pantalla y la forma principal de
+        elegir la zona. Tocar un polígono abre su ficha; el botón de la ficha es el que
+        convierte lo tocado en la zona de esta sesión.
+      */}
+      <Suspense fallback={<p className="lx-text-meta">{t('citizen.parking.map.loading')}</p>}>
+        <ZoneMap
+          zonas={zonasGeoQuery.data}
+          cargando={zonasGeoQuery.isLoading}
+          error={zonasGeoQuery.isError}
+          onReintentar={() => void zonasGeoQuery.refetch()}
+          altoCompacto={260}
+          /* La tarifa que el boceto escribe debajo del nombre de cada zona. Sale de las
+             zonas que esta pantalla ya pidió —el GeoJSON no trae precios— y va tal cual
+             la dio el servidor. */
+          etiquetas={tarifasPorCodigo(zones, (minor, moneda) =>
+            formatCurrencyMinor(minor, moneda, locale))}
+          /* Lo resaltado es lo que se está mirando: lo tocado, o lo ya elegido. */
+          zonaDestacada={zonaEnFicha?.code}
+          onZonaElegida={(codigo) => setCodigoEnfocado(codigo)}
+          textos={{
+            titulo: t('citizen.parking.map.title'),
+            ampliar: t('citizen.parking.map.expand'),
+            cerrar: t('citizen.parking.map.collapse'),
+            cargando: t('citizen.parking.map.loading'),
+            vacio: t('citizen.parking.map.empty'),
+            errorTitulo: t('citizen.parking.map.error'),
+            reintentar: t('common.retry'),
+            sinProveedor: t('citizen.parking.map.noProvider'),
+            noOficial: t('citizen.parking.map.notOfficial'),
+            noOficialDetalle: t('citizen.parking.map.notOfficialDetail'),
+          }}
+        />
+      </Suspense>
+      {/* Que el mapa se toca no se adivina. La frase nombra además la lista de abajo,
+          que es la vía de quien no puede tocar un lienzo. */}
+      {zonasGeoQuery.data && zonasGeoQuery.data.features.length > 0 ? (
+        <p className="lx-zonemap-pista">{t('citizen.parking.map.tapHint')}</p>
+      ) : null}
+
+      {/*
+        La ficha compacta del boceto. Cada dato aparece SÓLO si el servidor lo mandó:
+        una zona sin tarifa publicada no estrena un precio inventado, y una sin
+        descripción no estrena una condición.
+      */}
+      {zonaEnFicha ? (
+        <div className="lx-zona-ficha" data-lx-zona={zonaEnFicha.code}>
+          <div className="lx-zona-ficha__cuerpo">
+            <p className="lx-zona-ficha__nombre">
+              <IconPin size={16} aria-hidden />
+              <span>{zonaEnFicha.name}</span>
+              <span className="lx-zona-ficha__codigo">{zonaEnFicha.code}</span>
+            </p>
+            <dl className="lx-zona-ficha__datos">
+              {activeTenant?.name ? (
+                <div>
+                  <dt>{t('citizen.parking.zoneCard.municipality')}</dt>
+                  <dd>{activeTenant.name}</dd>
+                </div>
+              ) : null}
+              {tarifaEnFicha ? (
+                <div>
+                  <dt>{t('citizen.parking.zoneCard.rate')}</dt>
+                  <dd>{tarifaEnFicha}</dd>
+                </div>
+              ) : null}
+              {horarioEnUnaLinea ? (
+                <div>
+                  <dt>{t('citizen.parking.zoneCard.schedule')}</dt>
+                  <dd>{horarioEnUnaLinea}</dd>
+                </div>
+              ) : null}
+              {zonaEnFicha.description ? (
+                <div>
+                  <dt>{t('citizen.parking.zoneCard.conditions')}</dt>
+                  <dd>{zonaEnFicha.description}</dd>
+                </div>
+              ) : null}
+            </dl>
+          </div>
+          {/*
+            El botón sólo existe cuando hay algo que confirmar. Con la zona ya elegida
+            en la ficha, un botón que no hace nada es peor que ningún botón: la persona
+            lo pulsa, no pasa nada visible, y deja de creerle a la pantalla.
+          */}
+          {hayQueConfirmar ? (
+            <Button
+              type="button"
+              onClick={() => {
+                setZoneId(zonaEnFicha.id);
+                setCodigoEnfocado(null);
+              }}
+            >
+              {t('citizen.parking.zoneCard.choose')}
+            </Button>
+          ) : (
+            <p className="lx-zona-ficha__elegida" role="status">
+              {t('citizen.parking.zoneCard.chosen')}
+            </p>
+          )}
+        </div>
+      ) : rasgoEnfocado ? (
+        <div className="lx-zona-ficha" data-lx-zona={rasgoEnfocado.properties.code}>
+          <div className="lx-zona-ficha__cuerpo">
+            <p className="lx-zona-ficha__nombre">
+              <IconPin size={16} aria-hidden />
+              <span>{rasgoEnfocado.properties.name}</span>
+              <span className="lx-zona-ficha__codigo">{rasgoEnfocado.properties.code}</span>
+            </p>
+          </div>
+          <p className="lx-zona-ficha__noOfrecida" role="status">
+            {t('citizen.parking.zoneCard.notOffered')}
+          </p>
+        </div>
+      ) : null}
+    </div>
+  );
+
   const steps: Step[] = useMemo(
     () => [
       {
@@ -418,12 +619,22 @@ export function ParkingPage(): React.JSX.Element {
               isEmpty={(list) => list.length === 0}
               empty={<Alert tone="danger">{t('citizen.parking.step1.noZones')}</Alert>}
             >
+              {/*
+                La lista, que sigue siendo la vía accesible: un lienzo WebGL no se recorre con el
+                teclado ni lo lee un lector de pantalla. Elegir acá manda directo —no hay nada que
+                confirmar, la persona ya nombró la zona— y además limpia lo tocado en el mapa, para
+                que la ficha y el resaltado no se queden mirando otra zona.
+              */}
               {(list) => (
                 <Select
                   icon={<IconPin size={18} />}
                   aria-label={t('citizen.parking.step1.zoneLabel')}
+                  nativoEnMovil
                   value={zoneId}
-                  onChange={(value) => setZoneId(value)}
+                  onChange={(value) => {
+                    setZoneId(value);
+                    setCodigoEnfocado(null);
+                  }}
                   placeholder={t('common.select.placeholder')}
                   options={list.map((z) => ({
                     value: z.id,
@@ -471,46 +682,6 @@ export function ParkingPage(): React.JSX.Element {
                 />
               )}
             </FormField>
-            {/*
-              El mapa, sólo cuando la bahía ya validó. Es informativo y opcional: no pide GPS, no
-              marca la bahía —`parking_spaces` no tiene coordenadas— y si falla, el botón de
-              continuar sigue donde estaba. Por eso vive aquí abajo y no como un paso del asistente.
-            */}
-            {bahiaLista ? (
-              mapaAbierto ? (
-                <Suspense fallback={<p className="lx-text-meta">{t('citizen.parking.map.loading')}</p>}>
-                  <ZoneMap
-                    zonas={zonasGeoQuery.data}
-                    cargando={zonasGeoQuery.isLoading}
-                    error={zonasGeoQuery.isError}
-                    onReintentar={() => void zonasGeoQuery.refetch()}
-                    /* La tarifa que el boceto escribe debajo del nombre de cada zona. Sale de las
-                       zonas que esta pantalla ya pidió —el GeoJSON no trae precios— y va tal cual
-                       la dio el servidor. */
-                    etiquetas={tarifasPorCodigo(zones, (minor, moneda) =>
-                      formatCurrencyMinor(minor, moneda, locale))}
-                      /* El mapa abre encuadrado en la zona elegida, no sobre toda la municipalidad. */
-                      zonaDestacada={zone?.code}
-                    textos={{
-                      titulo: t('citizen.parking.map.title'),
-                      ampliar: t('citizen.parking.map.expand'),
-                      cerrar: t('citizen.parking.map.collapse'),
-                      cargando: t('citizen.parking.map.loading'),
-                      vacio: t('citizen.parking.map.empty'),
-                      errorTitulo: t('citizen.parking.map.error'),
-                      reintentar: t('common.retry'),
-                      sinProveedor: t('citizen.parking.map.noProvider'),
-                      noOficial: t('citizen.parking.map.notOfficial'),
-                      noOficialDetalle: t('citizen.parking.map.notOfficialDetail'),
-                    }}
-                  />
-                </Suspense>
-              ) : (
-                <Button type="button" variant="secondary" onClick={() => setMapaAbierto(true)}>
-                  {t('citizen.parking.map.open')}
-                </Button>
-              )
-            ) : null}
             {/* The format is a hint, so its failure is reported where the hint would have been —
                 with a way back — instead of blocking a step the citizen could still complete. */}
             {spaceFormatQuery.isError ? (
@@ -950,6 +1121,7 @@ export function ParkingPage(): React.JSX.Element {
         })}
       </ol>
       ) : null}
+      {paso === 1 ? portadaDelMapa : null}
       {paso === 1 ? <StepList className="lx-step-list--sin-numero" steps={steps.slice(0, 2)} /> : null}
       {paso === 2 ? <StepList className="lx-step-list--sin-numero" steps={steps.slice(2, 4)} /> : null}
       {paso === 3 ? <StepList className="lx-step-list--sin-numero" steps={steps.slice(4, 5)} /> : null}

@@ -283,18 +283,31 @@ async function recorrido(browser) {
 
     const zona = page.getByRole('combobox', { name: /^Zona$|^Zone$/i }).first();
     ok(await zona.count() === 1, 'la zona se ofrece como desplegable accesible');
-    await zona.click();
-    await page.waitForTimeout(350);
-    await page.locator('[role=listbox] [role=option]').first().click();
+    /*
+      Con dedo —`pointer: coarse`— el selector es el `<select>` del sistema desde el 22-10-2026, y
+      ahí `[role=option]` no existe: la lista la dibuja el navegador. Se eligen las dos formas.
+    */
+    if (await zona.evaluate((n) => n.tagName) === 'SELECT') {
+      const valor = await zona.evaluate((n) => [...n.options].find((o) => o.value)?.value ?? null);
+      if (valor) await zona.selectOption(valor);
+    } else {
+      await zona.click();
+      await page.waitForTimeout(350);
+      await page.locator('[role=listbox] [role=option]').first().click();
+    }
     await page.waitForTimeout(400);
 
     const bahia = page.locator('input[inputmode=numeric], input[inputmode=text]').first();
     await bahia.fill(BAHIA_OK);
     await page.waitForTimeout(700);
 
-    const abrirMapa = page.getByRole('button', { name: /ver la zona en el mapa|see the zone on the map/i });
-    ok(await abrirMapa.count() === 1, 'con zona y bahía válidas se ofrece el mapa');
-    await abrirMapa.click();
+    /*
+      El 22-10-2026 el mapa dejó de abrirse a petición: abre con la pantalla, porque pasó a ser la
+      forma de ELEGIR la zona y no una confirmación de la ya elegida. Lo que esta prueba comprueba
+      sigue siendo lo mismo —que el mapa se dibuja, que lo no oficial va rotulado y que no se pide
+      la ubicación—; lo único que cambia es que ya no hay que pulsar nada para verlo.
+    */
+    ok(await page.locator('.lx-zonemap').count() === 1, 'el mapa está desde que se abre la pantalla');
     await page.waitForTimeout(3200);
     ok(await page.locator('.lx-zonemap__lienzo canvas').count() === 1, 'el mapa se dibuja');
     ok(await page.locator('.lx-zonemap__noOficial').count() === 1,
@@ -308,6 +321,10 @@ async function recorrido(browser) {
       navegación inferior. Zona y espacio es el paso 1; vehículo y tiempo el 2; confirmar el 3.
     */
     const continuar = page.getByRole('button', { name: /^Continuar$|^Continue$/i }).first();
+    /* El campo de la bahía se suelta: con el foco dentro, la hoja esconde la barra fija a
+       propósito (teclado abierto), y el botón existe pero no se puede pulsar. */
+    await bahia.blur();
+    await page.waitForTimeout(800);
     ok(await continuar.isEnabled(), 'con zona y bahía válidas se puede continuar, con el mapa abierto');
     await continuar.click();                       // paso 1 → 2
     await page.waitForTimeout(1200);

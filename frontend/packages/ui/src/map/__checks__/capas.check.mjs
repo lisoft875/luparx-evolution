@@ -60,6 +60,51 @@ check('están las cinco: relleno, resplandor, borde oficial, borde no oficial y 
   && porId['zonas-borde'] && porId['zonas-borde-no-oficial'] && porId['zonas-etiqueta'],
   capas.map((c) => c.id).join(', '));
 
+// --- el anillo de la zona elegida (22-10-2026) -------------------------------------------------
+/*
+  Sin zona elegida el mapa tiene que quedar EXACTAMENTE como estaba. Es la mitad que se olvida de
+  una capa condicional: se comprueba que aparece cuando toca, y no que desaparece cuando no toca.
+*/
+const ELEGIDA = '#F2F7FF';
+const conElegida = capasDeZonas({
+  ...base, fuenteTexto: FUENTE_TIPOGRAFICA, codigoElegido: 'SJ-AMON', colorElegida: ELEGIDA,
+});
+const elegida = conElegida.find((c) => c.id === 'zonas-elegida');
+check('sin zona elegida no se añade ninguna capa más',
+  capas.some((c) => c.id === 'zonas-elegida') === false, capas.map((c) => c.id).join(', '));
+check('con zona elegida se añade una sola capa, el anillo',
+  conElegida.length === capas.length + 1 && Boolean(elegida), conElegida.map((c) => c.id).join(', '));
+check('el anillo se filtra por el código que el servidor sí publica',
+  JSON.stringify(elegida.filter) === JSON.stringify(['==', ['get', 'code'], 'SJ-AMON']),
+  JSON.stringify(elegida.filter));
+check('el anillo va encima de los dos contornos y debajo del rótulo',
+  conElegida.findIndex((c) => c.id === 'zonas-elegida')
+    > conElegida.findIndex((c) => c.id === 'zonas-borde-no-oficial')
+  && conElegida.findIndex((c) => c.id === 'zonas-elegida')
+    < conElegida.findIndex((c) => c.id === 'zonas-etiqueta'),
+  conElegida.map((c) => c.id).join(' → '));
+/*
+  Lo que de verdad protege esta: que «cuál elegí» no se diga sólo con un color. Quien no distingue
+  el blanco del azul tiene que poder verlo igual, y lo que le queda es el ancho.
+*/
+check('el anillo se distingue también por el ancho, no sólo por el color',
+  elegida.paint['line-width'] >= porId['zonas-borde'].paint['line-width'] * 1.5,
+  `${elegida.paint['line-width']} contra ${porId['zonas-borde'].paint['line-width']}`);
+check('el anillo no cambia el color del estado: ni el oficial ni el no oficial',
+  elegida.paint['line-color'] === ELEGIDA && elegida.paint['line-color'] !== OFICIAL
+  && elegida.paint['line-color'] !== NO_OFICIAL,
+  String(elegida.paint['line-color']));
+check('el anillo es continuo: el punteado sigue queriendo decir «no oficial»',
+  elegida.paint['line-dasharray'] === undefined);
+/*
+  Un código sin color, o un color sin código, no dibujan medio anillo: no dibujan nada. Una capa a
+  medias en MapLibre es un estilo que no valida y una pantalla que cae al aviso de fallo.
+*/
+check('un código sin color no añade la capa',
+  capasDeZonas({ ...base, codigoElegido: 'SJ-AMON' }).some((c) => c.id === 'zonas-elegida') === false);
+check('un color sin código tampoco',
+  capasDeZonas({ ...base, colorElegida: ELEGIDA }).some((c) => c.id === 'zonas-elegida') === false);
+
 /*
   El resplandor va DEBAJO del contorno nítido: si se añadiera encima, lo difuminaría en vez de
   rodearlo. El orden del arreglo es el orden en que se añaden al mapa.

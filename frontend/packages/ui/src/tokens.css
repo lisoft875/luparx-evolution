@@ -8962,9 +8962,165 @@ a.lx-list-row {
   line-height: 1.4;
 }
 
+/*
+  La portada de Estacionar: el mapa y la ficha de la zona, antes de cualquier campo (22-10-2026).
+
+  No es una tarjeta ni un paso: es el bloque que el boceto pone debajo del indicador de pasos. Sólo
+  reparte el espacio, para que el mapa y su ficha se lean como una sola cosa y no como dos islas.
+*/
+.lx-mapa-portada {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lx-space-2);
+  margin-bottom: var(--lx-space-4);
+}
+
+/*
+  El control de ampliar, dibujado SOBRE el mapa (22-10-2026).
+
+  Cuando el mapa es lo principal de la pantalla, el título y el botón que iban encima le costaban
+  56 px de primera pantalla. El botón se mueve a una esquina del lienzo —donde los mapas ponen sus
+  controles— y el título queda sólo para el lector de pantalla.
+
+  Arriba a la IZQUIERDA, que es la esquina que MapLibre deja libre: los controles de zoom van
+  arriba a la derecha y la atribución abajo.
+*/
+.lx-zonemap__lienzoConAccion {
+  position: relative;
+}
+
+.lx-zonemap__accion--sobre {
+  position: absolute;
+  top: var(--lx-space-2);
+  left: var(--lx-space-2);
+  z-index: 2;
+  /* Sobre el mapa hace falta fondo propio: debajo pasan calles de cualquier color. */
+  background: color-mix(in srgb, var(--lx-surface-2) 88%, transparent);
+  backdrop-filter: blur(4px);
+}
+
+/*
+  El aviso de «no son límites oficiales» cuando va debajo del mapa. Mismo texto y mismo papel que
+  cuando va encima; lo único que cambia es el margen, que ahora separa del lienzo y no del título.
+*/
+.lx-zonemap__noOficial--debajo {
+  margin: var(--lx-space-2) 0 0;
+}
+
 /* MapLibre inyecta su propia hoja; esto sólo ajusta lo que choca con el lienzo oscuro. */
 .lx-zonemap .maplibregl-ctrl-attrib {
   font-size: 0.7rem;
+}
+
+/*
+  LA FICHA DE LA ZONA TOCADA EN EL MAPA (22-10-2026)
+
+  El boceto la pinta como una tarjeta baja entre el mapa y el botón de continuar: el nombre de la
+  zona con su tarifa, y la acción que la convierte en la zona de la estadía. Acá lleva además
+  municipalidad, horario y condiciones, cada uno SÓLO si el servidor los publicó — una zona sin
+  tarifa no estrena un precio inventado.
+
+  Es `dl` y no una lista de párrafos porque son pares de etiqueta y valor, y eso es exactamente lo
+  que un lector de pantalla necesita para leerlos emparejados. La rejilla de dos columnas se cae a
+  una sola por debajo de 360 px, donde una etiqueta y su valor en la misma fila dejan al valor sin
+  sitio para una tarifa con símbolo de moneda.
+*/
+.lx-zona-ficha {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lx-space-3);
+  padding: var(--lx-space-3);
+  border: 1px solid var(--lx-border);
+  border-radius: var(--lx-radius-md, 12px);
+  background: var(--lx-surface-2);
+}
+
+.lx-zona-ficha__nombre {
+  display: flex;
+  align-items: center;
+  gap: var(--lx-space-2);
+  margin: 0;
+  font-weight: 600;
+  /* El nombre de una zona puede ser largo; que corte y no empuje el código fuera de la tarjeta. */
+  flex-wrap: wrap;
+}
+
+.lx-zona-ficha__codigo {
+  padding: 2px var(--lx-space-2);
+  border: 1px solid var(--lx-border);
+  border-radius: 999px;
+  color: var(--lx-text-muted);
+  font-size: 0.75rem;
+  font-weight: 500;
+  /* El código es un identificador: nunca se parte a mitad de palabra. */
+  white-space: nowrap;
+}
+
+.lx-zona-ficha__datos {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--lx-space-1) var(--lx-space-3);
+  margin: var(--lx-space-2) 0 0;
+}
+
+.lx-zona-ficha__datos > div {
+  display: contents;
+}
+
+.lx-zona-ficha__datos dt {
+  color: var(--lx-text-muted);
+  font-size: 0.8rem;
+}
+
+.lx-zona-ficha__datos dd {
+  margin: 0;
+  font-size: 0.85rem;
+  /* Una condición larga se envuelve dentro de su columna en vez de ensanchar la tarjeta. */
+  overflow-wrap: anywhere;
+}
+
+/*
+  Cuando la zona de la ficha ya es la elegida no hay botón, porque no habría nada que pulsar. En su
+  lugar va esta línea, que además es `role="status"`: quien usa lector de pantalla se entera de que
+  la elección quedó hecha sin tener que volver a recorrer la tarjeta.
+*/
+.lx-zona-ficha__elegida {
+  margin: 0;
+  color: var(--lx-success, var(--lx-text-muted));
+  font-size: 0.85rem;
+}
+
+/*
+  Una zona que el mapa dibuja y la lista no ofrece. No es un error de la aplicación —los dos datos
+  vienen del servidor— así que no se pinta como alerta: se dice, y ahí queda.
+*/
+.lx-zona-ficha__noOfrecida {
+  margin: 0;
+  color: var(--lx-text-muted);
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+/*
+  El aviso de que el mapa se toca. Va DEBAJO del mapa y no encima: encima es una instrucción que se
+  lee antes de ver qué hay, y debajo es la respuesta a la pregunta que acaba de aparecer.
+*/
+.lx-zonemap-pista {
+  margin: 0;
+  color: var(--lx-text-muted);
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+@media (max-width: 359px) {
+  .lx-zona-ficha__datos {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+  .lx-zona-ficha__datos > div {
+    display: block;
+    margin-bottom: var(--lx-space-2);
+  }
 }
 
 /*
