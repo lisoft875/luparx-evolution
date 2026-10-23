@@ -10,6 +10,7 @@ import type {
   PagedResponse,
   PlateStatus,
   Citation,
+  CitationStatus,
 } from '@luparx/api-client';
 import {
   flushQueue,
@@ -35,9 +36,16 @@ import { lastLookup, rememberLookup, subscribeToLastLookup, type LastLookup } fr
  * invalidation and the "what did the server just teach us about zones" side effect all live in one
  * file.
  */
+export interface MyCitationsFilters {
+  status?: CitationStatus;
+  from?: string;
+  to?: string;
+}
+
 const KEYS = {
   infractionTypes: ['inspector', 'infraction-types'] as const,
-  citations: (page: number, size: number) => ['inspector', 'citations', page, size] as const,
+  citations: (page: number, size: number, filters: MyCitationsFilters = {}) =>
+    ['inspector', 'citations', page, size, filters] as const,
   citation: (id: string) => ['inspector', 'citation', id] as const,
   notifications: (page: number, size: number) => ['inspector', 'notifications', page, size] as const,
   unreadCount: ['inspector', 'notifications', 'unread-count'] as const,
@@ -101,12 +109,16 @@ export function useInfractionTypes(): UseQueryResult<InfractionType[]> {
   });
 }
 
-export function useMyCitations(page: number, size: number): UseQueryResult<PagedResponse<Citation>> {
+export function useMyCitations(
+  page: number,
+  size: number,
+  filters: MyCitationsFilters = {},
+): UseQueryResult<PagedResponse<Citation>> {
   const { apiClient, activeTenant } = useAuth();
   const tenantId = activeTenant?.id ?? null;
   const query = useQuery({
-    queryKey: KEYS.citations(page, size),
-    queryFn: () => apiClient.inspectorEnforcement.list({ page, size }),
+    queryKey: KEYS.citations(page, size, filters),
+    queryFn: () => apiClient.inspectorEnforcement.list({ page, size, ...filters }),
   });
   // Every citation names the zone it was written in, and the enforcement portal publishes no zone
   // catalogue of its own (see ./zoneDirectory). This is one of the two places the app learns them.

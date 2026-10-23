@@ -2578,6 +2578,13 @@ export const enUS: Record<TranslationKey, string> = {
   'inspector.citations.title': 'My citations',
   'inspector.citations.empty': 'You have not issued any citation in this municipality yet.',
   'inspector.citations.detail.title': 'Citation',
+  'inspector.citations.emptyFiltered': 'No citations match those filters.',
+  'inspector.citations.filter.status': 'Status',
+  'inspector.citations.filter.from': 'From',
+  'inspector.citations.filter.to': 'To',
+  'inspector.citations.filter.allStatuses': 'All statuses',
+  'inspector.citations.filter.apply': 'Apply',
+  'inspector.citations.filter.clear': 'Clear',
 
   'inspector.offline.badge': 'Offline',
   'inspector.offline.queued.one': 'Offline · 1 pending',

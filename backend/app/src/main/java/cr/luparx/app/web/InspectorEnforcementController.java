@@ -19,6 +19,7 @@ import cr.luparx.enforcement.entity.Citation;
 import cr.luparx.enforcement.entity.EnforcementCheck;
 import cr.luparx.enforcement.entity.CitationEvidence;
 import cr.luparx.enforcement.entity.InfractionType;
+import cr.luparx.enforcement.model.CitationStatus;
 import cr.luparx.enforcement.model.EnforcementActor;
 import cr.luparx.enforcement.model.LocationState;
 import cr.luparx.enforcement.model.PlateStatus;
@@ -302,11 +303,19 @@ public class InspectorEnforcementController {
     @Operation(summary = "Citations I wrote in this municipality")
     public PageResponse<EnforcementDtos.CitationResponse> citations(
             @RequestParam(required = false) Integer page,
-            @RequestParam(required = false) Integer size) {
+            @RequestParam(required = false) Integer size,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) Instant from,
+            @RequestParam(required = false) Instant to) {
         TenantId tenantId = TenantContextHolder.requireTenantId();
+        UUID me = TenantContextHolder.requireUserId().value();
+        // Filtros opcionales (estado + rango de fechas), los mismos que el panel administrativo y por
+        // el mismo servicio: CitationService.search ya los acepta. Sigue acotado a ESTE fiscalizador
+        // porque el identificador sale de la sesion y no de un parametro (no hay forma de pedir el de
+        // otra persona). Sin filtros equivale al listado anterior: la pagina de mis boletas.
+        CitationStatus parsed = CitationStatus.parse(status).orElse(null);
         PageRequest request = PageRequest.parse(page, size, null);
-        PageResponse<Citation> citations = citationService.listForInspector(tenantId,
-                TenantContextHolder.requireUserId().value(), request);
+        PageResponse<Citation> citations = citationService.search(tenantId, parsed, null, me, null, from, to, request);
         return new PageResponse<>(mapper.toCitations(citations.items(), tenantId.value()), citations.page(),
                 citations.size(), citations.totalElements(), citations.totalPages());
     }

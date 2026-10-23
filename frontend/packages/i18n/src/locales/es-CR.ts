@@ -2696,6 +2696,13 @@ export const esCR = {
   'inspector.citations.title': 'Mis boletas',
   'inspector.citations.empty': 'Todavía no emitiste boletas en esta municipalidad.',
   'inspector.citations.detail.title': 'Boleta',
+  'inspector.citations.emptyFiltered': 'No hay boletas que coincidan con esos filtros.',
+  'inspector.citations.filter.status': 'Estado',
+  'inspector.citations.filter.from': 'Desde',
+  'inspector.citations.filter.to': 'Hasta',
+  'inspector.citations.filter.allStatuses': 'Todos los estados',
+  'inspector.citations.filter.apply': 'Aplicar',
+  'inspector.citations.filter.clear': 'Limpiar',
 
   'inspector.offline.badge': 'Sin conexión',
   'inspector.offline.queued.one': 'Sin conexión · 1 pendiente',

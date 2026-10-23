@@ -1168,9 +1168,17 @@ export class ApiClient {
         }),
       ),
     /** My citations, newest first. Always paginated: a shift writes many. */
-    list: async (params: PageParams = {}): Promise<PagedResponse<Citation>> => {
+    list: async (
+      params: { status?: CitationStatus; from?: string; to?: string } & PageParams = {},
+    ): Promise<PagedResponse<Citation>> => {
       const page = await this.http.request<PagedResponse<WireCitation>>('GET', '/api/v1/inspector/citations', {
-        query: { page: params.page, size: params.size },
+        query: {
+          page: params.page,
+          size: params.size,
+          status: params.status,
+          from: params.from,
+          to: params.to,
+        },
       });
       return { ...page, items: (page.items ?? []).map(toCitation) };
     },
