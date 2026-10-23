@@ -213,27 +213,21 @@ const PUNTOS_DE_ZONA = () => {
   });
 };
 
-/** Lo que la ficha dice ahora mismo. */
-const FICHA = () => {
-  const f = document.querySelector('.lx-zona-ficha');
-  if (!f) return null;
-  // La tarjeta adelgazó el 23-10-2026: ya no son pares etiqueta/valor, es una línea de tarifa.
-  const filas = { Tarifa: (f.querySelector('.lx-zona-ficha__tarifa')?.textContent || '').trim() };
-  return {
-    zona: f.getAttribute('data-lx-zona'),
-    // El nombre, SIN la pastilla del código que vive dentro del mismo elemento.
-    nombre: (() => {
-      const n = f.querySelector('.lx-zona-ficha__nombre');
-      if (!n) return '';
-      const copia = n.cloneNode(true);
-      copia.querySelector('.lx-zona-ficha__codigo')?.remove();
-      return copia.textContent.trim();
-    })(),
-    codigo: (f.querySelector('.lx-zona-ficha__codigo')?.textContent || '').trim(),
-    filas,
-    boton: (f.querySelector('button')?.textContent || '').trim() || null,
-    yaElegida: Boolean(f.querySelector('.lx-zona-ficha__elegida')),
-  };
+/**
+ * Qué zona muestra el SELECTOR ahora mismo.
+ *
+ * <p>La tarjeta de zona se fue el 23-10-2026 —«información repetida», dice el boceto— así que lo
+ * que hay que leer es el control, que es donde vive la elección de verdad. Sirve para el
+ * `<select>` del sistema y para el desplegable propio.</p>
+ */
+const ENLISTA = () => {
+  const n = document.querySelector('[aria-label="Zona"]');
+  if (!n) return null;
+  if (n.tagName === 'SELECT') {
+    const o = n.options[n.selectedIndex];
+    return { id: n.value || null, texto: (o ? o.textContent : '').trim() };
+  }
+  return { id: n.getAttribute('data-value') || null, texto: (n.textContent || '').trim() };
 };
 
 /** El filtro del anillo: con qué código está resaltando el mapa ahora mismo. */
@@ -346,14 +340,22 @@ const ANILLO = () => {
     ok(puntos.every((p) => p.dentro), 'todas las zonas quedan dentro del lienzo, alcanzables con el dedo',
       JSON.stringify(puntos));
 
-    // ---- 3 · Tocar una zona --------------------------------------------------------------------
-    console.log('\n══ 3 · tocar una zona: resaltado y ficha ══');
-    const fichaInicial = await page.evaluate(FICHA);
-    ok(fichaInicial !== null, 'al entrar ya hay ficha: la de la zona que viene elegida');
-    const otra = puntos.find((p) => p.code !== fichaInicial.zona);
-    ok(Boolean(otra), 'hay al menos dos zonas dibujadas para poder cambiar',
-      JSON.stringify(puntos.map((p) => p.code)));
-    // Se vuelven a medir por si el desplazamiento movió el lienzo entre una sección y otra.
+    // ---- 3 · Tocar una zona la elige -----------------------------------------------------------
+    /*
+      UN TOQUE, NO DOS (23-10-2026).
+
+      Hasta esta mañana tocar una zona abría una tarjeta con un botón de confirmar. El boceto
+      aprobado quita esa tarjeta —«información repetida»— y sin ella el segundo toque no confirma
+      nada: pide uno de más. Así que tocar ELIGE, y lo que hay que comprobar es que el selector y
+      el resaltado del mapa quedan los dos en la zona tocada.
+    */
+    console.log('\n══ 3 · tocar una zona la elige ══');
+    const alEntrar = await page.evaluate(ENLISTA);
+    ok(alEntrar !== null && Boolean(alEntrar.id), 'al entrar ya hay una zona elegida en el selector',
+      JSON.stringify(alEntrar));
+    const otra = puntos.find((p) => !alEntrar.texto.includes(p.name));
+    ok(Boolean(otra), 'hay otra zona dibujada a la que cambiar',
+      JSON.stringify({ selector: alEntrar.texto, mapa: puntos.map((p) => p.name) }));
     /*
       Se vuelven a medir, y se comprueba que el punto NO esté tapado por la barra fija de
       «Continuar». Es lo que escondía el defecto la primera vez: el clic llegaba a la barra y el
@@ -371,37 +373,25 @@ const ANILLO = () => {
       `encima hay ${encima}`);
     await page.mouse.click(destino.x, destino.y);
     await page.waitForTimeout(900);
-    const fichaTocada = await page.evaluate(FICHA);
-    ok(fichaTocada?.zona === otra.code, 'la ficha pasa a ser la de la zona tocada',
-      `${fichaTocada?.zona} ≠ ${otra.code}`);
-    ok(fichaTocada?.nombre === otra.name, 'y dice el nombre de ESA zona, no el de otra',
-      `${fichaTocada?.nombre} ≠ ${otra.name}`);
-    ok(fichaTocada?.codigo === otra.code, 'y su código');
-    ok(await page.evaluate(ANILLO) === otra.code, 'el mapa resalta la zona tocada',
+
+    const trasTocar = await page.evaluate(ENLISTA);
+    ok(trasTocar !== null && trasTocar.texto.includes(otra.name),
+      'el selector queda en la zona tocada, de un solo toque',
+      `${trasTocar && trasTocar.texto} ≠ ${otra.name}`);
+    ok(await page.evaluate(ANILLO) === otra.code, 'y el mapa la resalta',
       String(await page.evaluate(ANILLO)));
-    ok(Boolean(fichaTocada?.boton), 'aparece la acción de seleccionarla', JSON.stringify(fichaTocada));
-    // La captura que pide la orden: mapa, zona resaltada y ficha de detalle, los tres a la vez.
+    ok(await page.locator('.lx-zona-ficha').count() === 0,
+      'no vuelve a aparecer la tarjeta de zona: la información no se repite');
     await page.evaluate(() => {
       document.querySelector('.lx-zonemap')?.scrollIntoView({ block: 'start' });
     });
     await page.waitForTimeout(700);
     await page.screenshot({ path: path.join(SALIDA, 'tocada-390.png') });
-    // Y la tarjeta entera, con su acción, desplazada por encima de la barra fija.
-    await page.evaluate(() => {
-      document.querySelector('.lx-zona-ficha')?.scrollIntoView({ block: 'center' });
-    });
-    await page.waitForTimeout(600);
-    await page.screenshot({ path: path.join(SALIDA, 'tarjeta-390.png') });
+
     /*
-      Los datos de la ficha salen del servidor o no salen. Una zona sin tarifa publicada no estrena
-      un precio: lo que se exige es que lo que SÍ aparece sea verdad, no que aparezca todo.
-    */
-    /*
-      Los datos de la ficha salen del servidor o no salen. Lo que se exige acá es que lo que SÍ
-      aparece pertenezca a la zona de la ficha: la tarifa que el mapa escribió en el rótulo de ESA
-      zona y la que la ficha muestra tienen que ser la misma. Es la comprobación que atrapa el
-      defecto realmente peligroso —la ficha de una zona con el precio de otra— sin exigir que toda
-      zona publique tarifa, que no es cierto.
+      Y la tarifa: la del rótulo del mapa tiene que ser la que el servidor publica para ESA zona.
+      Es la comprobación que atrapa el defecto peligroso —el precio de una zona sobre otra— sin
+      exigir que toda zona publique tarifa, que no es cierto.
     */
     const rotulos = await page.evaluate(() => {
       const nodo = document.querySelector('.lx-zonemap__lienzo');
@@ -409,42 +399,23 @@ const ANILLO = () => {
       if (!datos) return {};
       return Object.fromEntries(datos.features.map((f) => [f.properties.code, f.properties.lxEtiqueta || '']));
     });
-    const tarifaFicha = fichaTocada?.filas['Tarifa'];
-    if (tarifaFicha) {
-      ok((rotulos[otra.code] || '').includes(tarifaFicha),
-        'la tarifa de la ficha es la de SU zona, la misma que el mapa rotula',
-        `ficha «${tarifaFicha}» contra rótulo «${rotulos[otra.code]}»`);
-    } else {
-      ok(true, 'esta zona no publica tarifa y la ficha no inventa ninguna');
-    }
-    ok(Object.keys(rotulos).every((c) => c === otra.code || !(tarifaFicha && rotulos[c] === rotulos[otra.code] && c !== otra.code)),
-      'la ficha no está mostrando el precio de otra zona');
+    ok(String(rotulos[otra.code] || '').includes(otra.name),
+      'el rótulo del mapa nombra su zona', `${otra.code}: «${rotulos[otra.code]}»`);
+    const conTarifa = Object.values(rotulos).filter((r) => /[0-9]/.test(String(r)));
+    ok(conTarifa.length === 0 || new Set(conTarifa).size === conTarifa.length,
+      'dos zonas no comparten el mismo rótulo con precio: no se copia la tarifa de una a otra',
+      JSON.stringify(rotulos));
 
-    // ---- 4 · Confirmar, y sincronía con la lista -----------------------------------------------
-    console.log('\n══ 4 · seleccionar, cambiar y sincronizar ══');
-    await page.locator('.lx-zona-ficha button').first().click();
-    await page.waitForTimeout(800);
-    const confirmada = await page.evaluate(FICHA);
-    ok(confirmada?.yaElegida === true && confirmada.boton === null,
-      'confirmada: el botón da paso a la línea de «es la zona de esta estadía»',
-      JSON.stringify(confirmada));
-    const enLista = await page.locator('[aria-label="Zona"]').first()
-      .evaluate((n) => (n.tagName === 'SELECT'
-        ? n.options[n.selectedIndex]?.textContent?.trim()
-        : (n.textContent || '').trim()));
-    ok(enLista?.includes(otra.name), 'la lista quedó mostrando la misma zona que el mapa',
-      `${enLista} ≠ ${otra.name}`);
-
-    // Y al revés: elegir en la lista mueve el resaltado del mapa.
+    // ---- 4 · Y al revés: elegir en la lista mueve el mapa ---------------------------------------
+    console.log('\n══ 4 · elegir en la lista mueve el mapa ══');
     const volver = puntos.find((p) => p.code !== otra.code);
     await elegirEnLista(page, 'Zona', volver.name);
     await page.waitForTimeout(900);
     ok(await page.evaluate(ANILLO) === volver.code,
       'elegir en la lista mueve el resaltado del mapa', String(await page.evaluate(ANILLO)));
-    const fichaVuelta = await page.evaluate(FICHA);
-    ok(fichaVuelta?.zona === volver.code && fichaVuelta.yaElegida === true,
-      'y la ficha la da por elegida, sin pedir confirmar algo que ya se dijo',
-      JSON.stringify(fichaVuelta));
+    const trasLista = await page.evaluate(ENLISTA);
+    ok(trasLista !== null && trasLista.texto.includes(volver.name),
+      'y el selector queda donde se lo dejó', JSON.stringify(trasLista));
     await page.evaluate(() => {
       document.querySelector('.lx-zonemap')?.scrollIntoView({ block: 'start' });
     });
@@ -453,7 +424,7 @@ const ANILLO = () => {
 
     // ---- 5 · El id de zona que viaja -----------------------------------------------------------
     console.log('\n══ 5 · el identificador de zona que viaja al iniciar ══');
-    const idElegido = await page.locator('[aria-label="Zona"]').first().evaluate((n) => n.value ?? null);
+    const idElegido = (await page.evaluate(ENLISTA))?.id ?? null;
     const idEsperado = enLaLista.find((z) => z.nombre.includes(volver.name))?.id;
     ok(Boolean(idEsperado), 'la zona elegida tiene identificador en la lista', JSON.stringify(enLaLista));
     ok(idElegido === idEsperado,
@@ -541,11 +512,14 @@ const ANILLO = () => {
       */
       const nota = (await p.locator('.lx-zonemap__nota').first().textContent()) || '';
       ok(await p.locator('.lx-zonemap__nota').count() === 1,
-        'queda la nota de una línea que explica por qué');
-      ok(/Centro/.test(nota) && /Sabana/.test(nota),
-        'la nota nombra las zonas que todavía no tienen límite dibujado', nota.slice(0, 160));
-      ok(/municipalidad/i.test(nota),
-        'y dice qué hace falta para verlas', nota.slice(0, 160));
+        'queda una nota en lugar del mapa');
+      /*
+        UNA línea, y SIN la lista de zonas. El boceto del 23-10 marca como defecto «demasiado texto
+        técnico» y «listas extensas de perímetros»: la versión anterior nombraba las ocho zonas sin
+        dibujar, dos veces. Lo que se exige ahora es que NO vuelva a crecer.
+      */
+      ok(nota.length <= 120, 'la nota es una línea, no un párrafo', `${nota.length} caracteres`);
+      ok(!/,.*,/.test(nota), 'y no lista los perímetros que faltan', nota.slice(0, 160));
       ok(await p.locator('[aria-label="Zona"]').count() === 1,
         'y la lista de zonas sigue estando: se puede estacionar igual');
       await p.screenshot({ path: path.join(SALIDA, 'sin-zonas-390.png') });
@@ -598,7 +572,7 @@ const ANILLO = () => {
       const listo = await esperarMapa(p);
       const medidas = await p.evaluate(() => {
         const s = document.querySelector('.lx-zonemap');
-        const f = document.querySelector('.lx-zona-ficha');
+        const f = document.querySelector('[aria-label="Zona"]');
         const r = s ? s.getBoundingClientRect() : null;
         const rf = f ? f.getBoundingClientRect() : null;
         const barra = document.querySelector('.lx-sticky-cta');
@@ -608,9 +582,9 @@ const ANILLO = () => {
         const visible = r ? Math.max(0, Math.min(r.bottom, techo) - Math.max(r.top, 0)) : 0;
         return {
           mapa: Boolean(s),
-          ficha: Boolean(f),
+          selector: Boolean(f),
           derechaMapa: r ? Math.round(r.right) : 0,
-          derechaFicha: rf ? Math.round(rf.right) : 0,
+          derechaSelector: rf ? Math.round(rf.right) : 0,
           vw: window.innerWidth,
           desborde: Math.round(document.documentElement.scrollWidth - window.innerWidth),
           arribaDelMapa: r ? Math.round(r.top) : 0,
@@ -622,11 +596,11 @@ const ANILLO = () => {
       console.log(`     ·· ${tam.nombre}: el mapa empieza a ${medidas.arribaDelMapa} px de `
         + `${medidas.vh}; se ven ${medidas.visibleSinDesplazar} de sus ${medidas.altoMapa} px sin desplazar`);
       ok(listo && medidas.mapa, `${tam.nombre}: el mapa se dibuja`);
-      ok(medidas.ficha, `${tam.nombre}: la ficha de la zona está`);
+      ok(medidas.selector, `${tam.nombre}: el selector de zona está`);
       ok(medidas.desborde <= 0, `${tam.nombre}: sin desplazamiento horizontal`,
         `desborde ${medidas.desborde}px`);
-      ok(medidas.derechaMapa <= medidas.vw + 1 && medidas.derechaFicha <= medidas.vw + 1,
-        `${tam.nombre}: ni el mapa ni la ficha se salen por la derecha`, JSON.stringify(medidas));
+      ok(medidas.derechaMapa <= medidas.vw + 1 && medidas.derechaSelector <= medidas.vw + 1,
+        `${tam.nombre}: ni el mapa ni el selector se salen por la derecha`, JSON.stringify(medidas));
       await p.screenshot({ path: path.join(SALIDA, `${tam.nombre}.png`) });
       await c.close();
     }

@@ -27,7 +27,7 @@ import { VehicleImage } from '../vehicleImages/VehicleImage';
 import { formatDurationLabel } from '../lib/duration';
 import { parkingErrorMessage } from '../lib/apiErrors';
 import { checkSpaceCode } from '../lib/spaceCode';
-import { tarifaDeZona, tarifasPorCodigo } from '../lib/tarifaDeZona';
+import { tarifasPorCodigo } from '../lib/tarifaDeZona';
 import { ExtendSessionSheet } from '../components/ExtendSessionSheet';
 
 /*
@@ -99,18 +99,6 @@ export function ParkingPage(): React.JSX.Element {
   // The bay code as it is painted on the ground. Kept as typed-in text rather than derived from
   // the zone: one zone holds hundreds of bays, and only the person standing in one knows which.
   const [spaceCode, setSpaceCode] = useState('');
-  /**
-   * La zona que se tocó en el mapa y todavía no se confirmó.
-   *
-   * <p>Dos estados y no uno, porque el boceto pide dos gestos: tocar una zona la resalta y abre su
-   * ficha, y es el botón el que la convierte en la zona de esta sesión. Con un solo estado, tocar
-   * para mirar ya cambiaría la zona del cobro, y el botón «Seleccionar esta zona» no tendría nada
-   * que hacer. Cuando no hay nada tocado, manda la elegida.</p>
-   *
-   * <p>Se guarda el **código** y no el identificador: es lo único que el GeoJSON publica, así que
-   * es lo único que un toque en el mapa puede devolver.</p>
-   */
-  const [codigoEnfocado, setCodigoEnfocado] = useState<string | null>(null);
   /*
     El cambio de municipalidad, en una línea.
 
@@ -152,47 +140,8 @@ export function ParkingPage(): React.JSX.Element {
     componente se sigue cargando de forma perezosa, así que no entra en el paquete inicial.
   */
   const zonasGeoQuery = useZonesGeoJson(true);
-  /** La zona cuya ficha se está viendo: la tocada en el mapa, y si no, la que ya está elegida. */
-  const zonaEnFicha = (codigoEnfocado
-    ? zones?.find((z) => z.code === codigoEnfocado)
-    : null) ?? (codigoEnfocado ? null : zone);
-  /*
-    Una zona DIBUJADA que la lista no ofrece.
-
-    No es hipotético: el propio transporte simulado publicaba dos perímetros y una sola zona en la
-    lista, y el arnés lo encontró el primer día que el mapa se pudo tocar. En un servidor de verdad
-    puede pasar igual —`/zones/geojson` y `/zones` son dos consultas— y lo que no puede pasar es
-    que el dedo caiga sobre un polígono y la pantalla se quede muda: quien toca algo que se dibuja
-    espera una respuesta, y «no pasó nada» se lee como que la aplicación falló.
-
-    Así que se dice lo que se sabe —el nombre y el código que trae el propio GeoJSON— y se dice lo
-    único cierto sobre por qué no se puede elegir: que no está en la lista. No se inventa un motivo.
-  */
-  const rasgoEnfocado = codigoEnfocado && !zonaEnFicha
-    ? zonasGeoQuery.data?.features.find((f) => f.properties.code === codigoEnfocado)
-    : undefined;
-  /** Hay algo que confirmar sólo cuando lo tocado no es ya lo elegido. */
-  const hayQueConfirmar = Boolean(zonaEnFicha && zonaEnFicha.id !== zoneId);
-  /* La tarifa de la zona de la ficha, tal como la publica el servidor. Si no publica ninguna, no
-     hay línea de tarifa: nunca se calcula un precio por hora a partir de otra duración. */
-  const tarifaEnFicha = zonaEnFicha
-    ? tarifaDeZona(zonaEnFicha, (minor, moneda) => formatCurrencyMinor(minor, moneda, locale))
-    : undefined;
   /** Si llegó al menos un perímetro que dibujar. */
   const hayGeometrias = Boolean(zonasGeoQuery.data && zonasGeoQuery.data.features.length > 0);
-  /*
-    Las zonas de esta municipalidad que NO tienen perímetro cargado, por su nombre.
-
-    Se calcula comparando las dos consultas que la pantalla ya hizo —la lista de zonas y el
-    GeoJSON—, no se adivina. Una zona que está en la lista y no en el mapa no es un fallo del
-    mapa: es una zona a la que todavía nadie le dibujó el límite, y decirlo es la diferencia entre
-    «esto está roto» y «esto falta».
-  */
-  const zonasSinPerimetro = React.useMemo(() => {
-    if (!zones || !zonasGeoQuery.data) return [];
-    const dibujadas = new Set(zonasGeoQuery.data.features.map((f) => f.properties.code));
-    return zones.filter((z) => !dibujadas.has(z.code)).map((z) => z.name);
-  }, [zones, zonasGeoQuery.data]);
   const spaceCodeError = spaceProblem
     ? spaceProblem.kind === 'format'
       ? t('citizen.parking.step1.spaceCodeError.format', { example: spaceProblem.example })
@@ -200,16 +149,18 @@ export function ParkingPage(): React.JSX.Element {
     : undefined;
 
   const range = zone?.spaceCodes;
-  const spaceCodeHint = [
-    range && range.count > 1
-      ? t('citizen.parking.step1.spaceCodeRange', { first: range.first, last: range.last, count: range.count })
-      : range && range.count === 1
-        ? t('citizen.parking.step1.spaceCodeRangeSingle', { code: range.first })
-        : t('citizen.parking.step1.spaceCodeHint'),
-    spaceFormat?.example ? t('citizen.parking.step1.spaceCodeFormat', { example: spaceFormat.example }) : undefined,
-  ]
-    .filter(Boolean)
-    .join(' ');
+  /*
+    El rango, y SÓLO el rango (23-10-2026).
+
+    Decía además «Formato: LUP-0001», que es exactamente lo que el propio campo ya muestra como
+    texto de ejemplo. Dos líneas de ayuda encima del mapa, y una de las dos repitiendo lo que se
+    ve en el renglón de abajo. El formato sigue estando donde hace falta: dentro del campo.
+  */
+  const spaceCodeHint = range && range.count > 1
+    ? t('citizen.parking.step1.spaceCodeRange', { first: range.first, last: range.last, count: range.count })
+    : range && range.count === 1
+      ? t('citizen.parking.step1.spaceCodeRangeSingle', { code: range.first })
+      : t('citizen.parking.step1.spaceCodeHint');
 
   const vehiclesQuery = useVehicles();
   const vehicles = vehiclesQuery.data;
@@ -484,7 +435,6 @@ export function ParkingPage(): React.JSX.Element {
     setSpaceCode('');
     setMinutes(null);
     setError(null);
-    setCodigoEnfocado(null);
   }, [municipalidadActiva]);
 
   const steps: Step[] = useMemo(
@@ -494,191 +444,30 @@ export function ParkingPage(): React.JSX.Element {
         state: 'active',
         content: (
           /*
-            Sin la frase de arriba (23-10-2026). Decía «elegí la zona donde estás estacionado»
-            encima de un selector rotulado «Zona» y de un mapa de zonas: cuarenta píxeles para
-            repetir lo que el propio control ya dice, justo donde hacen falta para el mapa.
+            EL ORDEN DEL BOCETO APROBADO (23-10-2026, segunda corrección).
+
+            Número de parqueo primero, zona después, y el mapa debajo de los dos. Es lo que pide el
+            boceto `03_BOCETO_FINAL_APROBADO` con todas las letras, y la razón se ve en la captura
+            de staging que vino con él: con el mapa arriba, el campo del número quedaba por debajo
+            del pliegue —el dato que la persona TIENE delante, pintado en el suelo, y que es lo
+            primero que quiere escribir.
+
+            Lo que se fue en esta vuelta, y por qué:
+              · la tarjeta de la zona — «información repetida»: la zona ya está en el selector y
+                dibujada en el mapa; una tercera copia con su propio botón no agregaba nada;
+              · las dos notas que listaban los perímetros faltantes — «demasiado texto técnico» y
+                «listas extensas de perímetros». Queda UNA línea, sin nombres.
+
+            Y con la tarjeta se fue su botón de confirmar: tocar una zona del mapa AHORA LA ELIGE,
+            sin segundo paso. Era el gesto de dos tiempos que la tarjeta justificaba; sin tarjeta,
+            pedir una confirmación aparte es pedir dos toques para una decisión.
           */
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--lx-space-3)' }}>
             <div className="lx-municipio-linea">
               <ActiveTenantBadge onOpenSelector={() => setCambiarMunicipio(true)} />
             </div>
-            <QueryBoundary
-              query={zonesQuery}
-              errorTitle={t('citizen.parking.step1.title')}
-              isEmpty={(list) => list.length === 0}
-              empty={<Alert tone="danger">{t('citizen.parking.step1.noZones')}</Alert>}
-            >
-              {/*
-                La lista, que sigue siendo la vía accesible: un lienzo WebGL no se recorre con el
-                teclado ni lo lee un lector de pantalla. Elegir acá manda directo —no hay nada que
-                confirmar, la persona ya nombró la zona— y además limpia lo tocado en el mapa, para
-                que la ficha y el resaltado no se queden mirando otra zona.
-              */}
-              {(list) => (
-                <>
-                  <Select
-                    icon={<IconPin size={18} />}
-                    aria-label={t('citizen.parking.step1.zoneLabel')}
-                    nativoEnMovil
-                    value={zoneId}
-                    onChange={(value) => {
-                      setZoneId(value);
-                      setCodigoEnfocado(null);
-                    }}
-                    placeholder={t('common.select.placeholder')}
-                    options={list.map((z) => ({
-                      value: z.id,
-                      label: z.name,
-                      detail: z.description || undefined,
-                      icon: <IconPin size={16} />,
-                    }))}
-                  />
 
-                  {/*
-                    EL MAPA VA DEBAJO DEL SELECTOR (23-10-2026).
-
-                    El 22 lo puse de portada, encima de todo, para ganarle altura a la primera
-                    pantalla. La orden del 23 lo devuelve a su sitio —«debajo del selector de
-                    zona, como en el diseño anterior»— y tiene razón: el boceto pone el buscador
-                    arriba y el mapa debajo, y así la pantalla se lee en el orden en que se usa.
-                    La altura la ganan ahora la tarjeta, que adelgazó, y el cromo del propio mapa,
-                    que se quitó de encima.
-                  */}
-                  <Suspense fallback={<p className="lx-text-meta">{t('citizen.parking.map.loading')}</p>}>
-                    <ZoneMap
-                      zonas={zonasGeoQuery.data}
-                      cargando={zonasGeoQuery.isLoading}
-                      error={zonasGeoQuery.isError}
-                      onReintentar={() => void zonasGeoQuery.refetch()}
-                      /* 280–350 px «adaptable al dispositivo», que es un clamp y no un número:
-                         en un teléfono chico manda el piso, en uno grande el techo, y en medio
-                         manda la ventana. */
-                      altoCompacto="clamp(280px, 38vh, 350px)"
-                      /* La tarifa que el boceto escribe debajo del nombre de cada zona. Sale de
-                         las zonas que esta pantalla ya pidió —el GeoJSON no trae precios— y va
-                         tal cual la dio el servidor. */
-                      etiquetas={tarifasPorCodigo(zones, (minor, moneda) =>
-                        formatCurrencyMinor(minor, moneda, locale))}
-                      /* Lo resaltado es lo que se está mirando: lo tocado, o lo ya elegido. */
-                      zonaDestacada={zonaEnFicha?.code}
-                      onZonaElegida={(codigo) => setCodigoEnfocado(codigo)}
-                      textos={{
-                        titulo: t('citizen.parking.map.title'),
-                        ampliar: t('citizen.parking.map.expand'),
-                        cerrar: t('citizen.parking.map.collapse'),
-                        cargando: t('citizen.parking.map.loading'),
-                        /*
-                          Sin NINGÚN perímetro no se dibuja mapa, y la nota dice por su nombre
-                          qué zonas faltan y qué hace falta para verlas. No se dibuja un mapa
-                          base porque no hay dónde centrarlo: el contrato del ciudadano no trae
-                          ninguna coordenada de la municipalidad —`TenantCatalogEntry` son id,
-                          slug, nombre, país, logo y color— y el único encuadre que quedaría es
-                          el del país, que es exactamente lo que se reportó el 20-10 como defecto.
-                          Inventar un centro está prohibido, así que lo que se hace es decir qué
-                          dato falta.
-                        */
-                        vacio: zonasSinPerimetro.length > 0
-                          ? t('citizen.parking.map.emptyNamed', { zonas: zonasSinPerimetro.join(', ') })
-                          : t('citizen.parking.map.empty'),
-                        errorTitulo: t('citizen.parking.map.error'),
-                        reintentar: t('common.retry'),
-                        sinProveedor: t('citizen.parking.map.noProvider'),
-                        noOficial: t('citizen.parking.map.notOfficial'),
-                        noOficialDetalle: t('citizen.parking.map.notOfficialDetail'),
-                      }}
-                    />
-                  </Suspense>
-
-                  {/*
-                    LA TARJETA COMPACTA DEL BOCETO (23-10-2026).
-
-                    Antes tenía cuatro filas —municipalidad, tarifa, horario y condiciones— y
-                    ocupaba casi tanto como el mapa. Tres de esas cuatro repetían algo que ya está
-                    en la pantalla: la municipalidad la dice el paso de arriba, y el horario lo
-                    dice el aviso de «ahora no se cobra» cuando toca decirlo. Queda lo que el
-                    boceto pone: el nombre, el código y la tarifa.
-                  */}
-                  {zonaEnFicha ? (
-                    <div className="lx-zona-ficha" data-lx-zona={zonaEnFicha.code}>
-                      <span className="lx-zona-ficha__icono" aria-hidden>
-                        <IconPin size={18} />
-                      </span>
-                      <span className="lx-zona-ficha__texto">
-                        <span className="lx-zona-ficha__nombre">
-                          {zonaEnFicha.name}
-                          <span className="lx-zona-ficha__codigo">{zonaEnFicha.code}</span>
-                        </span>
-                        {/* Sin tarifa publicada no se estrena un precio: la línea sencillamente
-                            no aparece. */}
-                        {tarifaEnFicha ? (
-                          <span className="lx-zona-ficha__tarifa">{tarifaEnFicha}</span>
-                        ) : null}
-                      </span>
-                      {/*
-                        El botón sólo existe cuando hay algo que confirmar. Con la zona ya elegida
-                        en la tarjeta, un botón que no hace nada es peor que ningún botón: la
-                        persona lo pulsa, no pasa nada visible, y deja de creerle a la pantalla.
-                      */}
-                      {hayQueConfirmar ? (
-                        <Button
-                          type="button"
-                          onClick={() => {
-                            setZoneId(zonaEnFicha.id);
-                            setCodigoEnfocado(null);
-                          }}
-                        >
-                          {t('citizen.parking.zoneCard.choose')}
-                        </Button>
-                      ) : (
-                        <span className="lx-zona-ficha__elegida" role="status">
-                          {t('citizen.parking.zoneCard.chosen')}
-                        </span>
-                      )}
-                    </div>
-                  ) : rasgoEnfocado ? (
-                    <div className="lx-zona-ficha" data-lx-zona={rasgoEnfocado.properties.code}>
-                      <span className="lx-zona-ficha__icono" aria-hidden>
-                        <IconPin size={18} />
-                      </span>
-                      <span className="lx-zona-ficha__texto">
-                        <span className="lx-zona-ficha__nombre">
-                          {rasgoEnfocado.properties.name}
-                          <span className="lx-zona-ficha__codigo">
-                            {rasgoEnfocado.properties.code}
-                          </span>
-                        </span>
-                        <span className="lx-zona-ficha__tarifa">
-                          {t('citizen.parking.zoneCard.notOffered')}
-                        </span>
-                      </span>
-                    </div>
-                  ) : null}
-
-                  {/*
-                    Qué zonas no están dibujadas, dichas por su nombre.
-
-                    La orden del 23-10-2026 lo pide con todas las letras: «indicar qué zonas
-                    carecen de geometría». Antes el mapa dibujaba las que tenía y de las otras no
-                    decía nada, así que quien buscaba la suya y no la encontraba no sabía si el
-                    mapa estaba roto o si esa zona todavía no tiene perímetro cargado. Son cosas
-                    distintas y la segunda tiene respuesta.
-                  */}
-                  {zonasSinPerimetro.length > 0 ? (
-                    <p className="lx-zonemap-pista" role="note">
-                      {t('citizen.parking.map.withoutPerimeter', {
-                        zonas: zonasSinPerimetro.join(', '),
-                      })}
-                    </p>
-                  ) : null}
-
-                  {/* Que el mapa se toca no se adivina. La frase nombra además la lista de
-                      arriba, que es la vía de quien no puede tocar un lienzo. */}
-                  {hayGeometrias ? (
-                    <p className="lx-zonemap-pista">{t('citizen.parking.map.tapHint')}</p>
-                  ) : null}
-                </>
-              )}
-            </QueryBoundary>
+            {/* 1 · El número de parqueo, lo primero. */}
             <FormField label={t('citizen.parking.step1.spaceCodeLabel')} hint={spaceCodeHint} error={spaceCodeError}>
               {({ inputId, describedBy }) => (
                 <Input
@@ -688,8 +477,8 @@ export function ParkingPage(): React.JSX.Element {
                   value={spaceCode}
                   /*
                     El ejemplo que da el servidor para esta municipalidad («0001», «A-12»…), no un
-                    literal: el formato lo decide cada una. El hint de abajo sigue diciendo el rango
-                    completo; esto es para saber qué escribir sin leer nada.
+                    literal: el formato lo decide cada una. El boceto escribe «Ej. 1023», que es
+                    ilustrativo; el número de verdad lo dice el servidor.
                   */
                   placeholder={spaceFormat?.example ?? undefined}
                   /*
@@ -723,6 +512,94 @@ export function ParkingPage(): React.JSX.Element {
                 {() => null}
               </QueryBoundary>
             ) : null}
+
+            {/* 2 · La zona, y 3 · el mapa justo debajo. */}
+            <QueryBoundary
+              query={zonesQuery}
+              errorTitle={t('citizen.parking.step1.zoneLabel')}
+              isEmpty={(list) => list.length === 0}
+              empty={<Alert tone="danger">{t('citizen.parking.step1.noZones')}</Alert>}
+            >
+              {(list) => (
+                <>
+                  <FormField label={t('citizen.parking.step1.zoneLabel')}>
+                    {() => (
+                      <Select
+                        icon={<IconPin size={18} />}
+                        aria-label={t('citizen.parking.step1.zoneLabel')}
+                        nativoEnMovil
+                        value={zoneId}
+                        onChange={(value) => setZoneId(value)}
+                        placeholder={t('citizen.parking.step1.zonePlaceholder')}
+                        /*
+                          Sólo el nombre. El `detail` traía la descripción de la zona y en staging
+                          se vio lo que produce: «Barrio Amón · Barrio Amón, al norte del centr…»,
+                          el nombre dos veces y cortado. La descripción no desaparece del sistema;
+                          deja de repetirse donde no cabe.
+                        */
+                        options={list.map((z) => ({
+                          value: z.id,
+                          label: z.name,
+                          icon: <IconPin size={16} />,
+                        }))}
+                      />
+                    )}
+                  </FormField>
+
+                  {/*
+                    La línea que el boceto pone entre el selector y el mapa. Dice la relación entre
+                    los dos controles, que es lo único que no se adivina mirándolos.
+
+                    Sin geometrías NO se escribe nada acá: el mapa no se dibuja y pone su propia
+                    nota de una línea en ese mismo hueco. Escribir las dos era el mismo aviso dos
+                    veces seguidas, que es justo el texto repetido que la orden manda quitar.
+                  */}
+                  {hayGeometrias ? (
+                    <p className="lx-zonemap-pista">{t('citizen.parking.map.tapHint')}</p>
+                  ) : null}
+
+                  <Suspense fallback={<p className="lx-text-meta">{t('citizen.parking.map.loading')}</p>}>
+                    <ZoneMap
+                      zonas={zonasGeoQuery.data}
+                      cargando={zonasGeoQuery.isLoading}
+                      error={zonasGeoQuery.isError}
+                      onReintentar={() => void zonasGeoQuery.refetch()}
+                      /* 280–350 px «adaptable al dispositivo», que es un clamp y no un número. */
+                      altoCompacto="clamp(280px, 38vh, 350px)"
+                      /* La tarifa que el boceto escribe debajo del nombre de cada zona. Sale de
+                         las zonas que esta pantalla ya pidió —el GeoJSON no trae precios— y va
+                         tal cual la dio el servidor. Las del boceto son ilustrativas. */
+                      etiquetas={tarifasPorCodigo(zones, (minor, moneda) =>
+                        formatCurrencyMinor(minor, moneda, locale))}
+                      zonaDestacada={zone?.code}
+                      /*
+                        Tocar una zona LA ELIGE. Sin paso intermedio: la tarjeta que justificaba
+                        confirmar se fue, y pedir dos toques para una decisión es pedir uno de más.
+                        Si el código tocado no está en la lista de la municipalidad —el servidor
+                        puede dibujar una zona que no ofrece— no se cambia nada, que es lo honesto:
+                        no se puede elegir lo que no se ofrece.
+                      */
+                      onZonaElegida={(codigo) => {
+                        const elegida = zones?.find((z) => z.code === codigo);
+                        if (elegida) setZoneId(elegida.id);
+                      }}
+                      textos={{
+                        titulo: t('citizen.parking.map.title'),
+                        ampliar: t('citizen.parking.map.expand'),
+                        cerrar: t('citizen.parking.map.collapse'),
+                        cargando: t('citizen.parking.map.loading'),
+                        vacio: t('citizen.parking.map.emptyShort'),
+                        errorTitulo: t('citizen.parking.map.error'),
+                        reintentar: t('common.retry'),
+                        sinProveedor: t('citizen.parking.map.noProvider'),
+                        noOficial: t('citizen.parking.map.notOfficial'),
+                        noOficialDetalle: t('citizen.parking.map.notOfficialDetail'),
+                      }}
+                    />
+                  </Suspense>
+                </>
+              )}
+            </QueryBoundary>
           </div>
         ),
       },
@@ -1131,7 +1008,12 @@ export function ParkingPage(): React.JSX.Element {
   ];
 
   return (
-    <CitizenShell title={t('citizen.parking.title')} subtitle={t('citizen.parking.subtitle')} onBack={retroceder}>
+    /*
+      Sin subtítulo (23-10-2026). «Sigue estos pasos para iniciar tu sesión» decía lo que el
+      indicador de pasos muestra justo debajo, y costaba 26 px encima del mapa. El boceto no lo
+      tiene: su encabezado es «Estacionar» y nada más.
+    */
+    <CitizenShell title={t('citizen.parking.title')} onBack={retroceder}>
       {notChargingNotice && paso < 4 ? <Alert tone="info">{notChargingNotice}</Alert> : null}
       {/*
         El indicador compacto del boceto: cuatro números en una fila, el actual marcado. Dice dónde
@@ -1155,7 +1037,16 @@ export function ParkingPage(): React.JSX.Element {
         })}
       </ol>
       ) : null}
-      {paso === 1 ? <StepList className="lx-step-list--sin-numero" steps={steps.slice(0, 1)} /> : null}
+      {/*
+        El paso 1 se dibuja SIN el envoltorio de la lista de pasos (23-10-2026).
+
+        Cuando eran dos bloques —Municipalidad y «Zona y espacio»— el título de cada uno hacía
+        falta para separarlos. Ahora es uno solo, con sus campos ya rotulados y el indicador de
+        pasos justo encima diciendo dónde está la persona: el título «Zona y espacio» repetía esa
+        información y costaba 34 px justo encima del mapa. Los pasos 2 y 3 sí tienen dos bloques
+        cada uno y conservan su lista.
+      */}
+      {paso === 1 ? <div className="lx-paso-suelto">{steps[0]?.content}</div> : null}
       {paso === 2 ? <StepList className="lx-step-list--sin-numero" steps={steps.slice(1, 3)} /> : null}
       {paso === 3 ? <StepList className="lx-step-list--sin-numero" steps={steps.slice(3, 4)} /> : null}
       {/*

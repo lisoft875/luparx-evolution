@@ -32,12 +32,19 @@ const BASE = process.env.BASE ?? 'https://staging.luparx.com';
 const PASS = process.env.PASS ?? 'Password123!';
 const PORTAL = process.env.PORTAL ?? 'citizen';
 
+/*
+  Las cuentas son las de staging. `CUENTA` las sobrescribe —igual que en sobre-el-pliegue.cjs—
+  porque sin eso este arnés SOLO corre contra staging, y desde el contenedor de la nube staging no
+  se alcanza. Al apuntarlo a un servidor local con el transporte simulado la sesión no se abría, el
+  enrutador devolvía todas las rutas a `/login`, y las ocho rutas «fallaban» midiendo la MISMA
+  pantalla de acceso. Un fallo así no dice nada y se confunde con uno real; de ahí la salida.
+*/
 const CUENTAS = {
   // Ana tiene saldo, tres municipalidades e historial: es la que más llena las pantallas.
-  citizen: 'ana.morales@luparx.test',
-  admin: 'admin@luparx.test',
-  inspector: 'inspector@luparx.test',
-  platform: 'platform@luparx.test',
+  citizen: process.env.CUENTA ?? 'ana.morales@luparx.test',
+  admin: process.env.CUENTA ?? 'admin@luparx.test',
+  inspector: process.env.CUENTA ?? 'inspector@luparx.test',
+  platform: process.env.CUENTA ?? 'platform@luparx.test',
 };
 
 const PREFIJO = { citizen: '', admin: '/admin', inspector: '/inspector', platform: '/platform' };

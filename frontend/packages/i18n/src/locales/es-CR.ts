@@ -1786,7 +1786,7 @@ export const esCR = {
   'citizen.timerBar.announce.warning': '{{plate}}: quedan menos de 10 minutos.',
   'citizen.timerBar.announce.expired': '{{plate}}: el estacionamiento venció.',
 
-  'citizen.parking.title': 'Estacionamiento',
+  'citizen.parking.title': 'Estacionar',
   'citizen.parking.subtitle': 'Sigue estos pasos para iniciar tu sesión.',
   'citizen.parking.step0.title': 'Municipalidad',
   'citizen.parking.step1.title': 'Zona y espacio',
@@ -2328,17 +2328,10 @@ export const esCR = {
   'citizen.parking.map.notOfficial': 'No son límites oficiales.',
   'citizen.parking.map.notOfficialDetail': 'Las punteadas son datos de demostración.',
   'citizen.parking.map.tapHint': 'Tocá una zona del mapa, o elegila en la lista.',
-  'citizen.parking.map.withoutPerimeter':
-    'Todavía sin límites dibujados: {{zonas}}. Se pueden elegir igual en la lista.',
-  'citizen.parking.map.emptyNamed':
-    'Ninguna zona de esta municipalidad tiene todavía dibujado su límite: {{zonas}}. El estacionamiento funciona igual: la zona y la bahía que escribís son las que valen. Para verlas en el mapa, la municipalidad tiene que cargar los perímetros.',
+  'citizen.parking.step1.zonePlaceholder': 'Selecciona la zona',
+  'citizen.parking.map.emptyShort': 'Esta municipalidad todavía no tiene zonas dibujadas en el mapa.',
 
-  // ---- Ciudadano: la ficha de la zona tocada en el mapa (22-10-2026) ----------------------------
-  'citizen.parking.zoneCard.rate': 'Tarifa',
-  'citizen.parking.zoneCard.choose': 'Seleccionar zona',
-  'citizen.parking.zoneCard.chosen': 'Es la zona de esta estadía.',
-  'citizen.parking.zoneCard.notOffered': 'Esta zona está en el mapa pero no aparece en la lista de zonas donde se puede estacionar.',
-  'citizen.parking.step1.spaceCodeLabel': 'Código del espacio',
+  'citizen.parking.step1.spaceCodeLabel': 'Número de parqueo',
   'citizen.parking.step1.spaceCodeHint': 'El número pintado en el espacio donde estás.',
   'citizen.parking.step1.noZones': 'Esta municipalidad todavía no publicó sus zonas de parqueo.',
   'citizen.parking.step4.chargeableMinutesLabel': 'Minutos que se cobran',

@@ -762,19 +762,63 @@ async function pasadaFuncional(browser) {
             caja— y ni lienzo ni hueco reservado.
           */
 /*
-            Y desde el 23-10-2026 la nota NOMBRA las zonas que no tienen límite y dice qué hace
-            falta para verlas. «No hay mapa» a secas dejaba a quien buscaba su zona sin saber si
-            la aplicación estaba rota o si ese dato todavía no existe, que son cosas distintas y
-            la segunda tiene respuesta.
+            El 23-10-2026, por la mañana, la nota NOMBRABA las zonas sin límite y decía qué hacía
+            falta para verlas: «No hay mapa» a secas no distinguía una aplicación rota de un dato
+            que todavía no existe.
+
+            La corrección de esa misma tarde la deshace, y conviene que se entienda por qué y no
+            quede como un retroceso. Javier fotografió la pantalla con esos párrafos puestos: la
+            orden escrita que llegó después dice «mostrar UNA nota breve, no párrafos técnicos» y
+            «eliminar textos técnicos repetidos y listas extensas de perímetros». Nombrar cada
+            zona que le falta el límite ES la lista de perímetros, y crecía con la municipalidad.
+            Lo que la nota tiene que decir en una línea es que el mapa todavía no está dibujado
+            —no que la aplicación falló— y nada más; la causa y el dato que hace falta van en el
+            informe a Javier y a la municipalidad, no en la pantalla del ciudadano.
+
+            Así que se comprueba lo contrario de antes: que sea UNA línea, que diga mapa y zonas,
+            y que NO enumere zonas. Y que siga apareciendo una sola vez: la línea de pista que va
+            entre el selector y el mapa se calla en este caso para no repetir el mismo aviso.
           */
-          ok(/l[íi]mite/i.test(textoNota)
-            && /Centro/.test(textoNota) && /municipalidad/i.test(textoNota),
-            'sin geometrías, la nota dice qué zonas faltan y qué hace falta',
+          ok(/mapa/i.test(textoNota) && /zonas?/i.test(textoNota),
+            'sin geometrías queda una nota que dice que el mapa aún no está dibujado',
             textoNota || '(sin nota)');
+          ok(textoNota.length > 0 && textoNota.length <= 120 && !textoNota.includes('\n'),
+            'y es UNA línea breve, no un párrafo técnico',
+            `${textoNota.length} caracteres · ${JSON.stringify(textoNota)}`);
+          ok(!/Centro|Sabana|Escalante|Am[óo]n/.test(textoNota),
+            'sin enumerar los perímetros que faltan: esa lista crece con la municipalidad',
+            textoNota || '(sin nota)');
+          {
+            const pistas = await page.locator('.lx-zonemap-pista').count();
+            ok(pistas === 0 && (await nota.count()) === 1,
+              'y el aviso aparece una sola vez: la línea de pista se calla',
+              `pistas=${pistas} · notas=${await nota.count()}`);
+          }
           ok(await page.locator('.lx-zonemap__lienzo').count() === 0,
             'y no se dibuja ningún mapa: no hay dónde centrarlo');
           ok(await page.locator('.lx-zonemap__aviso').count() === 0,
             'tampoco queda la caja gris de 200 px');
+          /*
+            Y la caja tampoco vuelve desde el CONTENEDOR, que es por donde volvió el 23-10-2026:
+            el cuerpo estaba anulado, pero `.lx-zonemap` seguía poniendo borde, fondo y relleno, y
+            en la captura se veía un recuadro vacío con la nota adentro. La comprobación de arriba
+            miraba `__aviso` y lo daba por bueno. Se mide el cromo pintado, no el nombre de la clase.
+          */
+          {
+            const cromo = await page.locator('.lx-zonemap').first().evaluate((n) => {
+              const e = getComputedStyle(n);
+              return {
+                borde: e.borderTopWidth,
+                fondo: e.backgroundColor,
+                relleno: e.paddingTop,
+              };
+            });
+            const sinBorde = parseFloat(cromo.borde) === 0;
+            const sinFondo = /rgba\(0, 0, 0, 0\)|transparent/.test(cromo.fondo);
+            ok(sinBorde && sinFondo,
+              'ni el contenedor dibuja un marco vacío donde no hay mapa',
+              JSON.stringify(cromo));
+          }
           ok(deEscazu.length === 0,
             'no llegó ninguna geometría, así que no hay ningún límite que dibujar');
           console.log(`  ··  captura: ${await capturar(page, 'vacio-escazu-390x844')}`);

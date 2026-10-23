@@ -411,7 +411,22 @@ export function ZoneMap({
 
   return (
     <section
-      className={['lx-zonemap', ampliado ? 'lx-zonemap--ampliado' : ''].filter(Boolean).join(' ')}
+      /*
+        SIN NADA QUE DIBUJAR, LA SECCIÓN TAMPOCO SE DIBUJA (23-10-2026).
+
+        El cuerpo ya se anulaba —ni lienzo ni aviso— pero la propia `<section>` seguía poniendo su
+        borde, su fondo y su relleno, y lo que quedaba era un recuadro vacío con una línea de texto
+        adentro. Es, exactamente, la caja que el incidente del 21-10 mandó quitar: volvió por la
+        puerta de atrás, desde el contenedor en vez de desde el aviso, y la comprobación que la
+        vigilaba miraba `__aviso` y no la veía.
+
+        Con `--sin-mapa` la sección pasa a ser sólo el párrafo. La nota queda como una línea más de
+        la pantalla, que es lo que la orden pide: «UNA nota breve, no párrafos técnicos» —y tampoco
+        un marco que insinúe que ahí debía haber un mapa y falló.
+      */
+      className={['lx-zonemap', ampliado ? 'lx-zonemap--ampliado' : '',
+        !hayQueDibujar && !cargando && !error ? 'lx-zonemap--sin-mapa' : '']
+        .filter(Boolean).join(' ')}
       aria-labelledby={`${id}-titulo`}
       style={ampliado ? undefined : {
         ['--lx-zonemap-alto' as string]:

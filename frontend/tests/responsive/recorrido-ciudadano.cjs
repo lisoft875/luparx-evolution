@@ -278,8 +278,15 @@ async function recorrido(browser) {
     await page.goto(`${BASE}/park`, { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(1800);
     const pantalla = await page.evaluate(() => document.body.innerText);
-    ok(/Zona y espacio|Zone and space/i.test(pantalla), 'la pantalla de estacionar abre',
-      pantalla.slice(0, 120).replace(/\n+/g, ' / '));
+    /*
+      Antes se buscaba el rótulo del paso, «Zona y espacio». Desde el 23-10-2026 el paso 1 no se
+      dibuja dentro de la lista de pasos —el boceto aprobado pone los dos campos y el mapa sueltos
+      bajo el título «Estacionar»— así que ese texto ya no existe y buscarlo era buscar el andamio
+      en lugar de la pantalla. Se comprueba lo que la orden enumera: los DOS campos, en su orden.
+    */
+    ok(/N[úu]mero de parqueo|Parking number/i.test(pantalla)
+      && /\bZona\b|\bZone\b/i.test(pantalla), 'la pantalla de estacionar abre con sus dos campos',
+      pantalla.slice(0, 160).replace(/\n+/g, ' / '));
 
     const zona = page.getByRole('combobox', { name: /^Zona$|^Zone$/i }).first();
     ok(await zona.count() === 1, 'la zona se ofrece como desplegable accesible');

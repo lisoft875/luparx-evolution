@@ -1715,7 +1715,7 @@ export const enUS: Record<TranslationKey, string> = {
   'citizen.timerBar.announce.warning': '{{plate}}: less than 10 minutes remaining.',
   'citizen.timerBar.announce.expired': '{{plate}}: parking session expired.',
 
-  'citizen.parking.title': 'Parking',
+  'citizen.parking.title': 'Park',
   'citizen.parking.subtitle': 'Follow these steps to start your session.',
   'citizen.parking.step0.title': 'Municipality',
   'citizen.parking.step1.title': 'Zone and space',
@@ -2233,17 +2233,10 @@ export const enUS: Record<TranslationKey, string> = {
   'citizen.parking.map.notOfficial': 'These are not official boundaries.',
   'citizen.parking.map.notOfficialDetail': 'Dashed ones are demonstration data.',
   'citizen.parking.map.tapHint': 'Tap a zone on the map, or pick one from the list.',
-  'citizen.parking.map.withoutPerimeter':
-    'No boundaries drawn yet: {{zonas}}. They can still be picked from the list.',
-  'citizen.parking.map.emptyNamed':
-    'No zone in this municipality has its boundary drawn yet: {{zonas}}. Parking still works: the zone and bay you type are what count. To see them on the map, the municipality has to load the perimeters.',
+  'citizen.parking.step1.zonePlaceholder': 'Select the zone',
+  'citizen.parking.map.emptyShort': 'This municipality has no zones drawn on the map yet.',
 
-  // ---- Citizen: the card for the zone tapped on the map (2026-10-22) ----------------------------
-  'citizen.parking.zoneCard.rate': 'Rate',
-  'citizen.parking.zoneCard.choose': 'Select zone',
-  'citizen.parking.zoneCard.chosen': 'This is the zone for this stay.',
-  'citizen.parking.zoneCard.notOffered': 'This zone is on the map but is not in the list of zones where parking is offered.',
-  'citizen.parking.step1.spaceCodeLabel': 'Bay code',
+  'citizen.parking.step1.spaceCodeLabel': 'Parking number',
   'citizen.parking.step1.spaceCodeHint': 'The number painted on the bay you are in.',
   'citizen.parking.step1.noZones': 'This municipality has not published its parking zones yet.',
   'citizen.parking.step4.chargeableMinutesLabel': 'Chargeable minutes',
