@@ -244,22 +244,56 @@ export interface EnqueueInput {
 export async function enqueueCitation(input: EnqueueInput): Promise<QueuedCitation> {
   const deviceCitationId = newId();
   const photos: QueuedPhoto[] = [];
-  for (const photo of input.photos) {
-    const key = `${deviceCitationId}:${newId()}`;
-    await putPhoto(key, photo.blob);
-    photos.push({
-      key,
-      fileName: photo.fileName,
-      contentType: photo.blob.type || 'image/jpeg',
-      byteSize: photo.blob.size,
-      capturedAt: photo.capturedAt,
-      latitude: photo.latitude,
-      longitude: photo.longitude,
-      scaledDown: photo.scaledDown,
-      originalByteSize: photo.originalByteSize,
-      uploaded: false,
-    });
+  /*
+    Las claves que YA se escribieron, para poder deshacerlas (22-10-2026, Fase 3).
+
+    El defecto: si `putPhoto` fallaba a mitad del bucle —cuota de IndexedDB llena, ventana privada,
+    Safari desalojando— la excepción salía de esta función, la fila NO se comprometía y las
+    fotografías ya escritas quedaban en IndexedDB sin que ninguna fila las reclamara. Es el peor par
+    posible: el fiscalizador pierde la boleta Y el aparato se queda más lleno que antes, así que el
+    siguiente intento falla más temprano. Con seis fotos por boleta, dos capturas bastan para dejar
+    inservible el almacenamiento de la jornada.
+
+    Ahora se deshace lo escrito y el fallo sale con un código propio, para que la pantalla pueda
+    decir qué pasó en vez de «algo salió mal»: lo que hay que hacer —liberar espacio, salir del modo
+    privado— no se adivina desde una frase genérica.
+  */
+  const escritas: string[] = [];
+  try {
+    for (const photo of input.photos) {
+      const key = `${deviceCitationId}:${newId()}`;
+      await putPhoto(key, photo.blob);
+      escritas.push(key);
+      photos.push({
+        key,
+        fileName: photo.fileName,
+        contentType: photo.blob.type || 'image/jpeg',
+        byteSize: photo.blob.size,
+        capturedAt: photo.capturedAt,
+        latitude: photo.latitude,
+        longitude: photo.longitude,
+        scaledDown: photo.scaledDown,
+        originalByteSize: photo.originalByteSize,
+        uploaded: false,
+      });
+    }
+  } catch {
+    // Primero deshacer, después avisar: si el borrado también falla no hay nada más que hacer acá,
+    // pero no se puede dejar de reportar el fallo original por culpa del segundo.
+    if (escritas.length > 0) {
+      try {
+        await deletePhotos(escritas);
+      } catch {
+        /* El aparato no deja ni borrar. El aviso de abajo es lo único que queda. */
+      }
+    }
+    marcarEscrituraFallida('fotos');
+    // Un código propio, no el error de IndexedDB: la pantalla necesita una frase, y el fallo
+    // original ya no dice nada útil a estas alturas. Ver QUEUE_ERROR_KEYS en apiErrors.ts.
+    throw new Error('EVIDENCE_STORE_FAILED');
   }
+  // A partir de aquí la boleta se guarda con sus fotos o no se guarda: no deja basura que haga
+  // fallar la próxima.
   const row: QueuedCitation = {
     id: newId(),
     tenantId: input.tenantId,
@@ -353,23 +387,61 @@ const TERMINAL_CODES = new Set([
 let flushing = false;
 
 /**
+ * Qué pasó con una tanda de envío. `intentado` dice que se intentó, NO que todo llegó: el resultado
+ * de cada fila vive en la fila, y prometer éxito desde acá sería la mentira más fácil de contar.
+ */
+export type ResultadoEnvio =
+  /** Se recorrieron las filas vencidas. Cada una tiene su propio estado. */
+  | 'intentado'
+  /** No había nada vencido que enviar. */
+  | 'nada-pendiente'
+  /** El sistema dice que no hay red y no era un intento forzado: no se tocó nada. */
+  | 'sin-red'
+  /** Ya había una tanda en curso; ésta no hace nada para no enviar dos veces. */
+  | 'en-curso';
+
+/**
  * Sends everything that is due, oldest first.
  *
  * Re-entrancy is guarded rather than queued: a second call while one is running is a no-op, so the
  * `online` event, the periodic sweep and the officer's own "retry" cannot triple-send.
+ *
+ * <h2>`forzado`, y por qué hacía falta (22-10-2026, Fase 3)</h2>
+ *
+ * <p>Esta función se rendía ante `navigator.onLine === false` sin decir nada, y el botón
+ * «Reintentar ahora» de la cola se deshabilitaba con la misma señal. Las dos cosas juntas dejaban
+ * un callejón sin salida: en un aparato donde `onLine` se queda pegado en `false` —pasa al
+ * despertar de suspensión y con algunas VPN— la cola se congelaba y el fiscalizador no tenía NINGUNA
+ * forma de forzar el envío ni de enterarse de por qué. Un turno entero de boletas atrapado en un
+ * teléfono por una señal que el propio navegador documenta como «no confiable en positivo».</p>
+ *
+ * <p>Con `forzado` el intento sale igual. Si de verdad no hay red, cada fila queda con
+ * `NETWORK_ERROR` y su mensaje, que es información real; un botón muerto no es información.</p>
+ *
+ * <p>El barrido automático sigue respetando `onLine === false`: ahí la señal es un atajo barato y
+ * equivocarse sólo cuesta veinte segundos de espera. Lo que no puede depender de ella es la
+ * decisión de una persona.</p>
  */
-export async function flushQueue(apiClient: ApiClient, tenantId: string | null): Promise<void> {
-  if (!tenantId || flushing) return;
-  if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+export async function flushQueue(
+  apiClient: ApiClient,
+  tenantId: string | null,
+  opciones?: { forzado?: boolean },
+): Promise<ResultadoEnvio> {
+  if (!tenantId) return 'nada-pendiente';
+  if (flushing) return 'en-curso';
+  const forzado = opciones?.forzado === true;
+  if (!forzado && typeof navigator !== 'undefined' && navigator.onLine === false) return 'sin-red';
   flushing = true;
   try {
     const now = Date.now();
     const due = snapshot(tenantId).filter(
       (row) => (row.state === 'PENDING' || row.state === 'FAILED') && row.nextAttemptAt <= now,
     );
+    if (due.length === 0) return 'nada-pendiente';
     for (const row of due) {
       await send(apiClient, tenantId, row.id);
     }
+    return 'intentado';
   } finally {
     flushing = false;
   }

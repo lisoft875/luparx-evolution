@@ -16,6 +16,7 @@ import {
   pendingCount,
   queueSnapshot,
   retryAllNow,
+  type ResultadoEnvio,
   subscribeToQueue,
   type QueuedCitation,
 } from './citationQueue';
@@ -241,7 +242,16 @@ export interface QueueApi {
   pending: number;
   /** Sends everything that is due. Safe to call from anywhere: concurrent flushes collapse into one. */
   flush: () => Promise<void>;
-  retryAll: () => void;
+  /**
+   * Lo que pidió una PERSONA: limpia la espera de todas las filas fallidas e intenta enviar, aunque
+   * el sistema diga que no hay red.
+   *
+   * <p>Devuelve qué pasó, y por eso devuelve algo: antes no devolvía nada y la pantalla no tenía
+   * manera de distinguir «se intentó» de «no se intentó», así que no podía decirlo. Un botón que no
+   * explica su resultado obliga a adivinar, y acá adivinar significa no saber si el turno está a
+   * salvo.</p>
+   */
+  retryAll: () => Promise<ResultadoEnvio>;
 }
 
 /**
@@ -258,11 +268,21 @@ export function useCitationQueue(): QueueApi {
   const getSnapshot = useCallback(() => queueSnapshot(tenantId), [tenantId]);
   const rows = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 
+  const enviar = useCallback(
+    async (forzado: boolean): Promise<ResultadoEnvio> => {
+      const resultado = await flushQueue(apiClient, tenantId, { forzado });
+      // A citation that just landed belongs in "my citations" without a manual refresh.
+      await queryClient.invalidateQueries({ queryKey: ['inspector', 'citations'] });
+      return resultado;
+    },
+    [apiClient, queryClient, tenantId],
+  );
+
+  // El barrido y el evento `online` siguen siendo no forzados: ahí `navigator.onLine` es un atajo
+  // barato y equivocarse cuesta veinte segundos. Lo forzado es sólo lo que pide una persona.
   const flush = useCallback(async () => {
-    await flushQueue(apiClient, tenantId);
-    // A citation that just landed belongs in "my citations" without a manual refresh.
-    await queryClient.invalidateQueries({ queryKey: ['inspector', 'citations'] });
-  }, [apiClient, queryClient, tenantId]);
+    await enviar(false);
+  }, [enviar]);
 
   useEffect(() => {
     if (!tenantId) return;
@@ -285,12 +305,12 @@ export function useCitationQueue(): QueueApi {
       rows,
       pending: pendingCount(rows),
       flush,
-      retryAll: () => {
+      retryAll: async () => {
         retryAllNow(tenantId);
-        void flush();
+        return enviar(true);
       },
     }),
-    [flush, rows, tenantId],
+    [enviar, flush, rows, tenantId],
   );
 }
 

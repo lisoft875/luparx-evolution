@@ -2605,6 +2605,17 @@ export const esCR = {
   'inspector.cite.draftPhotosLost.other': 'El aparato ya no tiene {{count}} de sus fotografías: habrá que tomarlas otra vez.',
   'inspector.queue.error.EVIDENCE_BYTES_MISSING':
     'La fotografía ya no está en este aparato, así que esta boleta no se puede enviar como está. No se reintenta más: hay que volver a tomarla, o descartar la boleta.',
+  'inspector.cite.possibleDuplicate':
+    'En ESTE aparato ya hay una boleta para {{placa}}, capturada hace {{minutos}} min. Si es el mismo hecho, no la emitás de nuevo; si es una infracción distinta, seguí.',
+  'inspector.cite.possibleDuplicate.bay': 'Era la misma bahía ({{bahia}}).',
+  'inspector.queue.error.EVIDENCE_STORE_FAILED':
+    'Este aparato no pudo guardar la fotografía, así que la boleta NO quedó en cola. Liberá espacio —o salí del modo privado— y volvé a capturarla.',
+  'inspector.queue.retry.attempted': 'Se intentó enviar. Mirá cada boleta para ver cómo le fue.',
+  'inspector.queue.retry.noNetwork': 'No se envió nada: este aparato no tiene red en este momento.',
+  'inspector.queue.retry.inProgress': 'Ya hay un envío en curso.',
+  'inspector.queue.retry.nothing': 'No había nada pendiente de enviar.',
+  'inspector.storage.lowSpace':
+    'A este aparato le queda poco espacio ({{restante}} de {{total}}). Las fotografías de las próximas boletas pueden no guardarse: conviene enviar lo pendiente ahora.',
   'inspector.cite.draftNotSaved': 'El aparato no está guardando el borrador. Si se cierra la aplicación, lo escrito se pierde: emitila antes de alejarte.',
   'inspector.storage.degraded.cola': 'El aparato no está guardando las boletas pendientes. Siguen en pantalla, pero NO sobreviven a un cierre de la aplicación.',
   'inspector.storage.degraded.borrador': 'El aparato no está guardando el borrador en curso.',

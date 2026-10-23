@@ -27,6 +27,13 @@ const MEMBERSHIP_ERROR_KEYS: Record<string, TranslationKey> = {
  */
 export function apiErrorMessage(error: unknown, t: Translate, known?: Record<string, TranslationKey>): string {
   if (error instanceof NetworkError) return t('common.error.network');
+  // Los códigos que produce la cola misma llegan como un Error corriente cuyo mensaje ES el código
+  // (22-10-2026). Sin esto se aplanaban a «algo salió mal», que en esta aplicación significa un
+  // fiscalizador en la calle sin saber si el problema es el aparato, la red o lo que escribió.
+  const codigoPropio = error instanceof Error && !(error instanceof ApiError)
+    ? QUEUE_ERROR_KEYS[error.message]
+    : undefined;
+  if (codigoPropio) return t(codigoPropio);
   if (!(error instanceof ApiError)) return t('common.error.generic');
   const membership = MEMBERSHIP_ERROR_KEYS[error.code];
   if (membership) return t(membership);
@@ -56,6 +63,10 @@ export function lookupErrorMessage(error: unknown, t: Translate): string {
  */
 const QUEUE_ERROR_KEYS: Record<string, TranslationKey> = {
   EVIDENCE_BYTES_MISSING: 'inspector.queue.error.EVIDENCE_BYTES_MISSING',
+  // El aparato no pudo GUARDAR la fotografía al capturar (22-10-2026). Distinto de
+  // EVIDENCE_BYTES_MISSING, que es «se guardó y después desapareció»: acá la boleta no llegó a
+  // encolarse, así que lo que hay que hacer es liberar espacio y volver a capturarla.
+  EVIDENCE_STORE_FAILED: 'inspector.queue.error.EVIDENCE_STORE_FAILED',
 };
 
 export function codeMessage(code: string | null, t: Translate): string | undefined {

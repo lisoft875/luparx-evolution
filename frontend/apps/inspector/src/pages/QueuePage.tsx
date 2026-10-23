@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { formatDateTime, useTranslation, type TranslationKey } from '@luparx/i18n';
 import { Alert, Badge, Button, Card, EmptyState, IconCheck, Modal, SummaryList, SummaryRow } from '@luparx/ui';
 import { InspectorShell } from '../components/InspectorShell';
+import type { ResultadoEnvio } from '../lib/citationQueue';
 import { useCitationQueue, useIsOnline } from '../lib/queries';
 import { discardQueued, type QueuedCitationState } from '../lib/citationQueue';
 import { codeMessage } from '../lib/apiErrors';
@@ -34,6 +35,14 @@ const STATE_TONES: Record<QueuedCitationState, 'neutral' | 'warning' | 'danger' 
  * The device identifier is shown, and the fact that resending never duplicates is stated in words,
  * because the alternative is an officer who is afraid to press retry and therefore does not.
  */
+/** Una frase por resultado. El mapa es exhaustivo por tipo: un resultado nuevo no compila sin su frase. */
+const RESULTADO_CLAVE: Record<ResultadoEnvio, 'inspector.queue.retry.attempted' | 'inspector.queue.retry.noNetwork' | 'inspector.queue.retry.inProgress' | 'inspector.queue.retry.nothing'> = {
+  intentado: 'inspector.queue.retry.attempted',
+  'sin-red': 'inspector.queue.retry.noNetwork',
+  'en-curso': 'inspector.queue.retry.inProgress',
+  'nada-pendiente': 'inspector.queue.retry.nothing',
+};
+
 export function QueuePage(): React.JSX.Element {
   const { t, tPlural, locale } = useTranslation();
   const navigate = useNavigate();
@@ -41,6 +50,16 @@ export function QueuePage(): React.JSX.Element {
   const queue = useCitationQueue();
   const online = useIsOnline();
   const [confirmDiscard, setConfirmDiscard] = useState<string | null>(null);
+  /*
+    Qué pasó la última vez que una PERSONA pidió enviar (22-10-2026, Fase 3).
+
+    El botón llamaba a `retryAll` y no decía nada. Si el aparato no tenía red, el botón además
+    estaba deshabilitado, así que el fiscalizador no podía ni intentarlo ni enterarse de por qué: la
+    cola se quedaba quieta y la pantalla callada. Ahora el intento SALE —`retryAll` es forzado— y
+    acá se dice en qué terminó. Si de verdad no hay red, cada fila queda con su `NETWORK_ERROR`, que
+    es información; un botón muerto no lo es.
+  */
+  const [resultadoReintento, setResultadoReintento] = useState<ResultadoEnvio | null>(null);
 
   /*
     Si el aparato dejó de guardar, esta pantalla es la que MÁS tiene que decirlo: lo que lista son
@@ -128,11 +147,25 @@ export function QueuePage(): React.JSX.Element {
           <Button
             type="button"
             fullWidth
-            disabled={!online || queue.pending === 0}
-            onClick={() => queue.retryAll()}
+            /*
+              Sólo se deshabilita si no hay NADA que enviar. Antes `!online` también lo apagaba, y
+              `navigator.onLine` es una señal que el propio navegador documenta como no confiable en
+              positivo: con ella pegada en `false` —al despertar de suspensión, con ciertas VPN— el
+              turno entero quedaba atrapado en el aparato sin forma de forzar el envío.
+            */
+            disabled={queue.pending === 0}
+            onClick={() => {
+              setResultadoReintento(null);
+              void queue.retryAll().then(setResultadoReintento);
+            }}
           >
             {t('inspector.queue.retryAll')}
           </Button>
+          {resultadoReintento ? (
+            <Alert tone={resultadoReintento === 'sin-red' ? 'warning' : 'info'}>
+              {t(RESULTADO_CLAVE[resultadoReintento])}
+            </Alert>
+          ) : null}
           {!online ? <p className="lx-text-meta">{t('inspector.cite.queuedHint')}</p> : null}
         </>
       )}

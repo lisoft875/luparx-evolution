@@ -2491,6 +2491,17 @@ export const enUS: Record<TranslationKey, string> = {
   'inspector.cite.draftPhotosLost.other': 'The device no longer has {{count}} of its photographs: they must be taken again.',
   'inspector.queue.error.EVIDENCE_BYTES_MISSING':
     'The photograph is no longer on this device, so this citation cannot be sent as it stands. It will not be retried: take it again, or discard the citation.',
+  'inspector.cite.possibleDuplicate':
+    'THIS device already has a citation for {{placa}}, captured {{minutos}} min ago. If it is the same act, do not issue it again; if it is a different infraction, carry on.',
+  'inspector.cite.possibleDuplicate.bay': 'It was the same bay ({{bahia}}).',
+  'inspector.queue.error.EVIDENCE_STORE_FAILED':
+    'This device could not store the photograph, so the citation was NOT queued. Free up space — or leave private mode — and capture it again.',
+  'inspector.queue.retry.attempted': 'Sending was attempted. Check each citation to see how it went.',
+  'inspector.queue.retry.noNetwork': 'Nothing was sent: this device has no network right now.',
+  'inspector.queue.retry.inProgress': 'A send is already in progress.',
+  'inspector.queue.retry.nothing': 'There was nothing pending to send.',
+  'inspector.storage.lowSpace':
+    'This device is low on space ({{restante}} of {{total}}). Photographs for the next citations may not be stored: send what is pending now.',
   'inspector.cite.draftNotSaved': 'The device is not saving the draft. If the app closes, what you wrote is lost: issue it before walking away.',
   'inspector.storage.degraded.cola': 'The device is not saving pending citations. They are still on screen, but they will NOT survive the app closing.',
   'inspector.storage.degraded.borrador': 'The device is not saving the draft in progress.',

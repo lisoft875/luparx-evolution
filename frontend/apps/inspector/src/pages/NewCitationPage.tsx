@@ -49,9 +49,16 @@ import {
 } from '../lib/citationDraft';
 import {
   escrituraDegradada,
+  estimarAlmacenamiento,
   pedirPersistenciaUnaVez,
   suscribirAlmacenamiento,
 } from '../lib/almacenamiento';
+import { posibleDuplicado } from '../lib/posibleDuplicado';
+
+/** Megabytes con un decimal. Los bytes crudos no le dicen nada a nadie de pie en la calle. */
+function formatearMegas(bytes: number): string {
+  return `${(Math.max(0, bytes) / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 /**
  * Desde cuántos tipos de infracción el catálogo deja de verse entero y conviene poder filtrarlo.
@@ -154,6 +161,47 @@ export function NewCitationPage(): React.JSX.Element {
   const [borradorSinGuardar, setBorradorSinGuardar] = useState(false);
 
   const almacenamientoRoto = React.useSyncExternalStore(suscribirAlmacenamiento, escrituraDegradada, () => null);
+
+  /*
+    Poco espacio, dicho ANTES de que falle (22-10-2026, Fase 3).
+
+    `estimarAlmacenamiento` existía y no la llamaba nadie: el aparato avisaba cuando la escritura ya
+    había fallado, es decir cuando la fotografía ya se había perdido. Se mira una vez al abrir la
+    pantalla —no en cada tecla: la estimación es costosa y no cambia entre dos pulsaciones— y el
+    aviso no bloquea nada.
+
+    `null` no es cero: Safari no publica la cuota en varias versiones, y «no sé cuánto queda» no es
+    una alarma. Sin número no se dice nada.
+  */
+  const [pocoEspacio, setPocoEspacio] = useState<{ restante: number; total: number } | null>(null);
+  useEffect(() => {
+    let vivo = true;
+    void estimarAlmacenamiento().then((estimacion) => {
+      if (!vivo || !estimacion) return;
+      const restante = estimacion.cuotaBytes - estimacion.usadoBytes;
+      // El umbral es una boleta completa: seis fotografías ya reducidas al límite de subida. Por
+      // debajo de eso la siguiente captura es la que se va a perder, y avisar después no sirve.
+      if (restante < MAX_PHOTOS_PER_CITATION * MAX_EVIDENCE_BYTES) {
+        setPocoEspacio({ restante, total: estimacion.cuotaBytes });
+      }
+    });
+    return () => {
+      vivo = false;
+    };
+  }, []);
+
+  /*
+    ¿Ya hay una captura de esta misma placa en este aparato? (22-10-2026, Fase 3)
+
+    Los identificadores de la cola protegen el reenvío, no la doble captura del mismo hecho. Esto
+    avisa y NO bloquea: el mismo carro puede infringir dos veces en media hora, y una regla que lo
+    impidiera dejaría sin multa un caso legítimo. La regla vive —y se prueba— en
+    ../lib/posibleDuplicado.ts.
+  */
+  const duplicado = React.useMemo(
+    () => posibleDuplicado(queue.rows, { plate, spaceCode }),
+    [queue.rows, plate, spaceCode],
+  );
 
   // Se pide una vez por carga: el navegador decide, y repetirlo no cambia la respuesta.
   useEffect(() => {
@@ -599,6 +647,32 @@ export function NewCitationPage(): React.JSX.Element {
       */}
       {almacenamientoRoto ? (
         <Alert tone="danger">{t(`inspector.storage.degraded.${almacenamientoRoto}`)}</Alert>
+      ) : null}
+
+      {/* Poco espacio: se dice antes de capturar, que es cuando todavía se puede hacer algo. */}
+      {pocoEspacio && !almacenamientoRoto ? (
+        <Alert tone="warning">
+          {t('inspector.storage.lowSpace', {
+            restante: formatearMegas(pocoEspacio.restante),
+            total: formatearMegas(pocoEspacio.total),
+          })}
+        </Alert>
+      ) : null}
+
+      {/*
+        Posible boleta repetida. Aviso y nada más: la persona que está mirando el carro decide, y
+        bloquear acá podría impedir una multa legítima.
+      */}
+      {duplicado ? (
+        <Alert tone="warning">
+          {t('inspector.cite.possibleDuplicate', {
+            placa: duplicado.anterior.payload.plate ?? '',
+            minutos: String(duplicado.minutos),
+          })}
+          {duplicado.mismaBahia
+            ? ` ${t('inspector.cite.possibleDuplicate.bay', { bahia: duplicado.anterior.payload.spaceCode ?? '' })}`
+            : ''}
+        </Alert>
       ) : null}
 
       {/*
