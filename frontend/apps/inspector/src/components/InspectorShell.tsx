@@ -14,6 +14,7 @@ import {
   IconFine,
   IconList,
   IconPin,
+  SelloDeCompilacion,
 } from '@luparx/ui';
 import type { BottomTab } from '@luparx/ui';
 import { useCitationQueue, useInspectorUnreadCount, useIsOnline, useZoneDirectorySeed } from '../lib/queries';
@@ -361,6 +362,16 @@ export function InspectorShell({
         }}
       >
         {children}
+      {/*
+        El sello de compilación. Va al final del contenido y no pegado abajo: pegado tendría que
+        pelear con la barra de navegación, con la barra fija de «Continuar» y con el teclado, y
+        acabaría tapando justo la pantalla que viene a verificar. En producción no se dibuja.
+      */}
+      <SelloDeCompilacion
+        entorno={__LUPARX_ENV__}
+        construidoEn={__LUPARX_BUILT_AT__}
+        commit={__LUPARX_BUILD__}
+      />
       </main>
       <div
         ref={footerRef}

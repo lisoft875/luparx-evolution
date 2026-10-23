@@ -139,6 +139,9 @@ services:
         # pantalla lo dice en vez de inventarlo.
         LUPARX_BUILD: ${LUPARX_VERSION:-}
         LUPARX_ENVIRONMENT: ${LUPARX_ENVIRONMENT:-staging}
+        # El instante del despliegue, uno para los cuatro portales: lo exporta deploy.sh
+        # justo antes de construir. Vacío —un build a mano— cada portal usa su propia hora.
+        LUPARX_BUILT_AT: ${LUPARX_BUILT_AT:-}
         # Estilo de teselas del mapa del ciudadano. Vacío = sin mapa, y el portal sigue
         # funcionando; se pone en infra/.env cuando se decide quién sirve las teselas.
         MAP_STYLE_URL: ${MAP_STYLE_URL:-}

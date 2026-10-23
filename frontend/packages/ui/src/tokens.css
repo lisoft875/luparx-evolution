@@ -9124,6 +9124,68 @@ a.lx-list-row {
 }
 
 /*
+  EL SELLO DE COMPILACIÓN (23-10-2026)
+
+  Una línea al pie de cada vista con el consecutivo del build y el commit, para poder mirar una
+  pantalla y saber si el despliegue salió y qué código quedó. En producción no se dibuja —lo decide
+  `selloDeCompilacion.ts`—, así que estas reglas sólo existen para demos y desarrollo.
+
+  Discreto a propósito: es información de obra, no de la aplicación. Tamaño pequeño, color apagado
+  y monoespaciado, que es lo que hace que un hash se lea carácter por carácter en vez de adivinarse.
+
+  `user-select: all` para que un clic lo seleccione entero: el sello acaba pegado en un mensaje
+  —«estoy viendo la 20261023-1432»— y seleccionar a mano un texto de 9 px en un teléfono no es
+  razonable.
+*/
+.lx-sello {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--lx-space-2);
+  margin: var(--lx-space-4) 0 0;
+  padding: var(--lx-space-1) 0;
+  color: var(--lx-text-muted);
+  font-size: 0.7rem;
+  line-height: 1.4;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  /* Que no se lleve por delante el ancho de la vista en un teléfono chico. */
+  overflow-wrap: anywhere;
+  user-select: all;
+  -webkit-user-select: all;
+  /* Apagado del todo hasta que se lo busca: está para consultarlo, no para mirarlo. */
+  opacity: 0.6;
+}
+
+.lx-sello:hover,
+.lx-sello:focus-within {
+  opacity: 1;
+}
+
+/*
+  El entorno va en pastilla y no como texto suelto: es lo primero que hay que poder distinguir de
+  un vistazo —«¿esto es staging o es mi máquina?»— y una palabra suelta en gris se confunde con el
+  resto del sello.
+*/
+.lx-sello__entorno {
+  padding: 1px var(--lx-space-2);
+  border: 1px solid var(--lx-border);
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.62rem;
+}
+
+.lx-sello__numero {
+  font-variant-numeric: tabular-nums;
+}
+
+.lx-sello__commit::before {
+  content: '·';
+  margin-right: var(--lx-space-2);
+}
+
+/*
   Lo del Ciudadano va ANTES del bloque del Inicio del administrador, y no por orden estético.
 
   Ese bloque es lo último del archivo a propósito y `ambitoInicio.check.mjs` lo vigila: lee desde

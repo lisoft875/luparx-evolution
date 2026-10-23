@@ -36,6 +36,13 @@ ARG PUBLIC_BASE_URL=http://localhost
 ARG LUPARX_BUILD=
 ARG LUPARX_ENVIRONMENT=
 
+# El instante del despliegue, para el sello de compilación al pie de cada vista
+# (23-10-2026). UNO para los cuatro portales: se construyen en serie, así que sin esto cada
+# uno se sellaría con la hora en que le tocó el turno y los cuatro sellos de un mismo
+# despliegue saldrían distintos. `scripts/deploy.sh` lo exporta antes de construir; vacío,
+# cada portal usa la hora de su propio build, que es la verdad disponible.
+ARG LUPARX_BUILT_AT=
+
 # El estilo de teselas del mapa del ciudadano (OpenFreeMap «liberty», 17-10-2026).
 #
 # Entra como argumento de build porque Vite lo resuelve al compilar, igual que todo lo de arriba.
@@ -88,6 +95,7 @@ RUN set -eu; \
       echo "== build $app en $prefix =="; \
       VITE_API_BASE_URL="$PUBLIC_BASE_URL" VITE_BASE_PATH="$prefix" \
         LUPARX_BUILD="$LUPARX_BUILD" LUPARX_ENVIRONMENT="$LUPARX_ENVIRONMENT" \
+        LUPARX_BUILT_AT="$LUPARX_BUILT_AT" \
         VITE_MAP_STYLE_URL="$MAP_STYLE_URL" \
         npx vite build --config "apps/$app/vite.config.ts" "apps/$app"; \
     done

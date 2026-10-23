@@ -217,7 +217,15 @@ if (( PULL )); then
 fi
 COMMIT="$(git rev-parse --short HEAD)"
 export LUPARX_VERSION="$COMMIT"
-echo "Desplegando $COMMIT"
+# El instante de ESTE despliegue, UNO para los cuatro portales (23-10-2026).
+#
+# El Dockerfile los construye uno detrás de otro —en paralelo se comen la memoria de una instancia
+# chica— así que cada `vite build` arranca en un minuto distinto. Sin esta variable cada portal se
+# sellaría con su propia hora y los cuatro sellos de un mismo despliegue saldrían diferentes, con
+# lo que la pregunta que el sello existe para contestar —«¿salieron los cuatro?»— no se podría
+# contestar comparándolos.
+export LUPARX_BUILT_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+echo "Desplegando $COMMIT ($LUPARX_BUILT_AT)"
 
 # --- 4. respaldo ---------------------------------------------------------------------------------
 if "${COMPOSE[@]}" ps --status running --services 2>/dev/null | grep -qx postgres; then

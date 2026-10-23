@@ -14,6 +14,7 @@ import {
   IconUsers,
   PageLayout,
   PlatformBanner,
+  SelloDeCompilacion,
 } from '@luparx/ui';
 
 export interface PlatformShellProps {
@@ -81,6 +82,16 @@ export function PlatformShell({ children }: PlatformShellProps): React.JSX.Eleme
         }
       >
         {children}
+      {/*
+        El sello de compilación. Va al final del contenido y no pegado abajo: pegado tendría que
+        pelear con la barra de navegación, con la barra fija de «Continuar» y con el teclado, y
+        acabaría tapando justo la pantalla que viene a verificar. En producción no se dibuja.
+      */}
+      <SelloDeCompilacion
+        entorno={__LUPARX_ENV__}
+        construidoEn={__LUPARX_BUILT_AT__}
+        commit={__LUPARX_BUILD__}
+      />
       </PageLayout>
     </div>
   );

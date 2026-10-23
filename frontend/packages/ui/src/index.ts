@@ -164,3 +164,12 @@ export {
   IconSettings,
   IconTag,
 } from './icons';
+
+/* El sello de compilación al pie de cada vista (23-10-2026). En producción no se dibuja: la
+   decisión está en `selloDeCompilacion.ts`, contra una lista de entornos permitidos. */
+export { SelloDeCompilacion } from './components/SelloDeCompilacion';
+export type { SelloDeCompilacionProps } from './components/SelloDeCompilacion';
+export {
+  seMuestraElSello, consecutivoDeCompilacion, selloLegible, ENTORNOS_CON_SELLO,
+} from './selloDeCompilacion';
+export type { SelloLegible } from './selloDeCompilacion';

@@ -11,3 +11,12 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv;
 }
+
+/* --- Qué compilación es ésta (23-10-2026) -------------------------------------------------------
+   Las pone `vite.config.ts` con `define`, o sea que al llegar acá ya son literales: no hay lectura
+   en tiempo de ejecución que pueda fallar. `null` significa «esta compilación no lo supo», y eso
+   es lo que la pantalla dice — inventar el dato está prohibido; no tenerlo, no. */
+declare const __LUPARX_VERSION__: string;
+declare const __LUPARX_BUILD__: string | null;
+declare const __LUPARX_ENV__: string | null;
+declare const __LUPARX_BUILT_AT__: string;
