@@ -17,7 +17,8 @@
 # Cubre, en este orden: entrar y elegir municipalidad · zonas · tipos de infracción · consulta de
 # placa en sus tres estados de ubicación (FIX / NO_FIX / NOT_GRANTED) · ZONE_NOT_ASSIGNED ·
 # emisión 201 y reenvío 200 por `deviceCitationId` · reenvío por `Idempotency-Key` · evidencia
-# (subir y descargar) · emitir · lista y detalle · resumen de turno.
+# (subir y descargar) · emitir · lista y detalle · FILTROS de Mis boletas (estado + fechas) ·
+# resumen de turno.
 #
 # No cubre, y se dice: la cola sin conexión y el almacenamiento del aparato, que viven en el
 # navegador y no tienen contraparte en el servidor.
@@ -271,6 +272,49 @@ H=$(cur -o "$TMP/det.json" -w '%{http_code}' "${AUT[@]}" "$API/inspector/citatio
 ok "$([ "$H" = 200 ] && echo 1 || echo 0)" "el detalle contesta 200 (HTTP $H)"
 ok "$(grep -q "$NUMERO" "$TMP/det.json" && echo 1 || echo 0)" "y trae el número de la boleta"
 ok "$(grep -qi "evidence\|evidencia" "$TMP/det.json" && echo 1 || echo 0)" "y menciona su evidencia"
+
+# --- 8b. Mis boletas: filtros (estado + rango de fechas) ----------------------------------------
+echo
+echo "8b. Mis boletas: filtros"
+# $BOLETA quedó ISSUED en el paso 7; se filtra sobre datos REALES.
+HOY_DESDE=$(date -u -d 'today 00:00' +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -v0H -v0M -v0S +%Y-%m-%dT%H:%M:%SZ)
+HOY_HASTA=$(date -u -d 'tomorrow 00:00' +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -v+1d -v0H -v0M -v0S +%Y-%m-%dT%H:%M:%SZ)
+
+H=$(cur -o "$TMP/f_issued.json" -w '%{http_code}' "${AUT[@]}" "$API/inspector/citations?status=ISSUED&size=50")
+ok "$([ "$H" = 200 ] && echo 1 || echo 0)" "status=ISSUED contesta 200 (HTTP $H)"
+ok "$(grep -q "$BOLETA" "$TMP/f_issued.json" && echo 1 || echo 0)" "y la boleta emitida está en el filtro ISSUED"
+
+cur -o "$TMP/f_draft.json" "${AUT[@]}" "$API/inspector/citations?status=DRAFT&size=50"
+ok "$(grep -q "$BOLETA" "$TMP/f_draft.json" && echo 0 || echo 1)" "con status=DRAFT la boleta ISSUED NO está"
+
+cur -o "$TMP/f_bad.json" "${AUT[@]}" "$API/inspector/citations?status=NO_EXISTE&size=50"
+ok "$(grep -q "$BOLETA" "$TMP/f_bad.json" && echo 1 || echo 0)" "un status inválido se ignora (contrato leniente): la boleta sigue"
+
+cur -o "$TMP/f_hoy.json" "${AUT[@]}" "$API/inspector/citations?from=$HOY_DESDE&to=$HOY_HASTA&size=50"
+ok "$(grep -q "$BOLETA" "$TMP/f_hoy.json" && echo 1 || echo 0)" "rango de hoy (from+to): la boleta está"
+
+cur -o "$TMP/f_viejo.json" "${AUT[@]}" "$API/inspector/citations?from=2000-01-01T00:00:00Z&to=2000-01-02T00:00:00Z&size=50"
+ok "$(grep -q "$BOLETA" "$TMP/f_viejo.json" && echo 0 || echo 1)" "rango viejo: la boleta no está"
+
+cur -o "$TMP/f_combo.json" "${AUT[@]}" "$API/inspector/citations?status=ISSUED&from=$HOY_DESDE&to=$HOY_HASTA&size=50"
+ok "$(grep -q "$BOLETA" "$TMP/f_combo.json" && echo 1 || echo 0)" "estado+fechas combinados: la boleta está"
+
+cur -o "$TMP/f_inv.json" "${AUT[@]}" "$API/inspector/citations?from=$HOY_HASTA&to=$HOY_DESDE&size=50"
+ok "$(grep -q "$BOLETA" "$TMP/f_inv.json" && echo 0 || echo 1)" "rango invertido: lista sin la boleta (vacío por contrato)"
+
+H=$(cur -o "$TMP/f_none.json" -w '%{http_code}' "${AUT[@]}" "$API/inspector/citations?page=0&size=20")
+ok "$([ "$H" = 200 ] && grep -q "$BOLETA" "$TMP/f_none.json" && echo 1 || echo 0)" "sin filtros: la boleta sigue (equivale al listado anterior)"
+if python3 - "$TMP/f_none.json" <<'PYORD'
+import json,sys
+d=json.load(open(sys.argv[1])); it=d.get('items') or []
+raise SystemExit(0 if len(it) < 2 or (it[0].get('occurredAt','') >= it[1].get('occurredAt','')) else 1)
+PYORD
+then ord=1; else ord=0; fi
+ok "$ord" "sin filtros: orden más reciente primero (o una sola fila)"
+
+# Aislamiento: el endpoint NO acepta inspectorUserId ni tenant; inyectarlos no cambia nada.
+cur -o "$TMP/f_iso.json" "${AUT[@]}" "$API/inspector/citations?inspectorUserId=00000000-0000-0000-0000-000000000000&tenantId=otro&size=50"
+ok "$(grep -q "$BOLETA" "$TMP/f_iso.json" && echo 1 || echo 0)" "inyectar inspectorUserId/tenant ajenos se ignora: siguen siendo MIS boletas"
 
 # --- 9. resumen de turno ------------------------------------------------------------------------
 echo
