@@ -461,14 +461,45 @@ const ANILLO = () => {
       if (await continuar.count() === 0) { console.log(`     ·· sin botón Continuar en el paso ${paso + 1}`); break; }
       await continuar.click();
       await page.waitForTimeout(1500);
+      /*
+        Con «Otro vehículo» y una placa de la corrida, no con el vehículo por omisión.
+
+        El simulador arranca con DOS estadías activas sembradas, y una de ellas es la del vehículo
+        que el paso 2 trae elegido: cualquier intento con él vuelve con 409
+        SESSION_ALREADY_ACTIVE_FOR_VEHICLE. Esta sección enviaba igual —por eso «se envió el inicio
+        de la estadía» pasaba— pero NUNCA llegaba a «¡Listo!», y la comprobación de la pantalla de
+        resultado se saltaba sola porque toleraba no encontrarla. Es decir: el camino completo del
+        asistente no estaba probado, y nadie se enteraba. Con la placa de invitada sí llega.
+      */
+      const selectorVehiculo = page.locator('[aria-label="Selecciona un vehículo"]').first();
+      if (await selectorVehiculo.count() > 0
+        && await selectorVehiculo.inputValue().catch(() => '') !== 'guest') {
+        await elegirEnLista(page, 'Selecciona un vehículo', 'Otro vehículo');
+        const placa = page.locator('input[maxlength="16"]').first();
+        if (await placa.count() > 0) {
+          await placa.fill('PRB5678');
+          await placa.blur();
+          await page.waitForTimeout(600);
+        }
+      }
       const aviso = await page.locator('.lx-sticky-cta__notice').allInnerTexts();
       if (aviso.length) console.log(`     ·· el paso ${paso + 1} pide: ${aviso.join(' | ')}`);
       await page.waitForTimeout(300);
     }
-    const confirmar = page.getByRole('button', { name: /Confirmar y pagar|Iniciar estacionamiento/i }).first();
-    if (await confirmar.count() > 0) {
-      await confirmar.click();
-      await page.waitForTimeout(3000);
+    /* Confirmar, cerrando la hoja de «ahora no se cobra» si la zona está fuera de horario. */
+    for (let intento = 0; intento < 3; intento += 1) {
+      if (await page.locator('.lx-resultado').count() > 0) break;
+      const entendido = page.getByRole('button', { name: /^Entendido$/i }).first();
+      if (await entendido.isVisible().catch(() => false)) {
+        await entendido.click();
+        await page.waitForTimeout(900);
+      }
+      const confirmar = page
+        .getByRole('button', { name: /Confirmar y pagar|Iniciar estacionamiento/i }).first();
+      if (await confirmar.isVisible().catch(() => false)) {
+        await confirmar.click();
+        await page.waitForTimeout(2600);
+      }
     }
     ok(envios.length > 0, 'se envió el inicio de la estadía', `envíos: ${envios.length}`);
     if (envios.length > 0) {
@@ -480,13 +511,50 @@ const ANILLO = () => {
       Y la evidencia que ve la persona: la pantalla de resultado nombra la zona. Si el identificador
       fuera el correcto pero la pantalla dijera otra zona, el error seguiría siendo grave.
     */
+    /*
+      Y se EXIGE llegar. Antes esta comprobación aceptaba `null` —«si no hay pantalla de resultado,
+      bueno»— y por eso nadie notó durante semanas que el asistente nunca llegaba al final en las
+      pruebas. Una comprobación que se aprueba a sí misma cuando falta lo que mide no mide nada.
+    */
     const enElResultado = await page.locator('.lx-resultado').first()
       .textContent().catch(() => null);
-    ok(enElResultado === null || enElResultado.includes(volver.name),
+    ok(enElResultado !== null, 'el asistente llega hasta «¡Listo!»');
+    ok(enElResultado !== null && enElResultado.includes(volver.name),
       'la pantalla de resultado nombra la zona elegida',
       `buscaba «${volver.name}» en «${(enElResultado || '').slice(0, 160)}»`);
     await page.screenshot({ path: path.join(SALIDA, 'resultado-390.png') });
     ok(envios.every((e) => !e || !('cardToken' in e)), 'no viajó ningún dato de tarjeta');
+
+    /*
+      El otro lado de la corrección del 23-10: CON geometrías el botón sí está, y lo que promete
+      aparece. Las dos mitades tienen que comprobarse juntas, porque «no ofrecer el botón» es fácil
+      de lograr de más —quitándolo siempre— y eso sería otra regresión, no un arreglo.
+    */
+    if (await page.locator('.lx-resultado').count() > 0) {
+      const verMapa = page.getByRole('button', { name: /Ver en el mapa/i }).first();
+      ok(await verMapa.count() === 1,
+        'con geometrías, «¡Listo!» sí ofrece ver el mapa');
+      if (await verMapa.count() === 1) {
+        await verMapa.click();
+        await page.waitForTimeout(2500);
+        ok(await page.locator('.lx-resultado .lx-zonemap__lienzo canvas').count() === 1,
+          'y al pulsarlo aparece un mapa de verdad, no un hueco');
+        await page.evaluate(() => {
+          document.querySelector('.lx-resultado .lx-zonemap')?.scrollIntoView({ block: 'center' });
+        });
+        await page.waitForTimeout(800);
+        await page.screenshot({ path: path.join(SALIDA, 'listo-con-mapa-390.png') });
+        const ocultar = page.getByRole('button', { name: /Ocultar el mapa/i }).first();
+        ok(await ocultar.count() === 1,
+          'el rótulo pasa a «Ocultar el mapa» porque ahora SÍ hay mapa que ocultar');
+        if (await ocultar.count() === 1) {
+          await ocultar.click();
+          await page.waitForTimeout(1200);
+          ok(await page.locator('.lx-resultado .lx-zonemap__lienzo').count() === 0,
+            'y ocultarlo lo oculta: la alternancia hace lo que dice');
+        }
+      }
+    }
 
     await ctx.close();
 
@@ -500,6 +568,13 @@ const ANILLO = () => {
         status: 200, contentType: 'application/geo+json',
         body: JSON.stringify({ type: 'FeatureCollection', features: [] }),
       }));
+      const respuestasInicio = [];
+      p.on('response', async (r) => {
+        if (/\/parking\/sessions?\b|\/parking\/start/.test(r.url()) && r.request().method() === 'POST') {
+          respuestasInicio.push({ url: r.url().slice(-40), estado: r.status(),
+            cuerpo: await r.text().then((t) => t.slice(0, 200)).catch(() => '') });
+        }
+      });
       await entrar(p);
       await p.goto(`${BASE}/park`, { waitUntil: 'domcontentloaded' });
       await p.waitForTimeout(2500);
@@ -523,6 +598,100 @@ const ANILLO = () => {
       ok(await p.locator('[aria-label="Zona"]').count() === 1,
         'y la lista de zonas sigue estando: se puede estacionar igual');
       await p.screenshot({ path: path.join(SALIDA, 'sin-zonas-390.png') });
+
+      /*
+        ── EL BOTÓN DE «¡LISTO!» NO PROMETE UN MAPA QUE NO VA A APARECER ──
+
+        Es el fallo que Javier fotografió en staging el 23-10-2026: estacionamiento activo BNY963
+        en Barrio Amón, y un botón que decía «Ocultar el mapa» sobre una pantalla sin mapa. Tocarlo
+        y volver a tocarlo no cambiaba nada, porque no había nada que ocultar ni que mostrar: el
+        botón guardaba la intención de la persona y el componente decidía aparte, con otros datos.
+
+        Se comprueba acá, en el contexto que ya tiene el GeoJSON vacío, porque ésa es exactamente
+        la condición del fallo. Lo que se exige no es que el rótulo diga otra cosa: es que la
+        acción NO se ofrezca, y que en su lugar quede la misma nota de una línea.
+      */
+      await p.goto(`${BASE}/park`, { waitUntil: 'domcontentloaded' });
+      await p.waitForTimeout(1200);
+      await elegirEnLista(p, 'Zona', 'Centro');
+      await p.locator('input[inputmode=numeric], input[inputmode=text]').first().fill('LUP-0001');
+      await p.locator('input[inputmode=numeric], input[inputmode=text]').first().blur();
+      await p.waitForTimeout(400);
+      /*
+        Se estaciona con «Otro vehículo» y una placa inventada para esta corrida, no con uno de los
+        del catálogo.
+
+        Razón medida, no estética: la sección 5 de este mismo arnés ya inició una estadía con el
+        vehículo por omisión, y el simulador comparte estado entre contextos. El segundo intento
+        volvía con 409 SESSION_ALREADY_ACTIVE_FOR_VEHICLE, la pantalla se quedaba en el paso 3 y
+        esta comprobación se informaba como «sin probar» sin decir por qué. La placa de invitada no
+        se guarda en ninguna parte y no tiene estadía previa, así que la prueba deja de depender
+        del orden en que corran las secciones.
+      */
+      for (let paso = 0; paso < 3; paso += 1) {
+        const seguir = p.getByRole('button', { name: /^Continuar$/ }).first();
+        if (await seguir.count() === 0) break;
+        await seguir.click();
+        await p.waitForTimeout(1400);
+        const selectorVehiculo = p.locator('[aria-label="Selecciona un vehículo"]').first();
+        if (await selectorVehiculo.count() > 0 && await selectorVehiculo.inputValue().catch(() => '') !== 'guest') {
+          await elegirEnLista(p, 'Selecciona un vehículo', 'Otro vehículo');
+          const placa = p.locator('input[maxlength="16"]').first();
+          if (await placa.count() > 0) {
+            await placa.fill('PRB1234');
+            await placa.blur();
+            await p.waitForTimeout(600);
+          }
+        }
+      }
+      /*
+        Confirmar, cerrando por el camino la hoja que la aplicación abre cuando la zona no cobra a
+        esta hora —«Ahora no se cobra; el cobro se reanuda el sábado», con su «Entendido»—.
+
+        Va en un bucle corto y no en una secuencia fija porque el orden depende de la hora: si la
+        hoja ya está abierta al llegar al paso 3, el clic de confirmar se lo lleva ella; si se abre
+        al confirmar, hay que cerrarla y confirmar otra vez. Dos intentos cubren las dos. El primer
+        intento de esta prueba suponía un orden, se quedaba en el paso 3, y la comprobación del
+        botón del mapa se informaba como «sin probar» — que es no comprobar nada.
+      */
+      for (let intento = 0; intento < 3; intento += 1) {
+        if (await p.locator('.lx-resultado').count() > 0) break;
+        const entendido = p.getByRole('button', { name: /^Entendido$/i }).first();
+        if (await entendido.isVisible().catch(() => false)) {
+          await entendido.click();
+          await p.waitForTimeout(900);
+        }
+        const confirmar2 = p
+          .getByRole('button', { name: /Confirmar y pagar|Iniciar estacionamiento/i }).first();
+        if (await confirmar2.isVisible().catch(() => false)) {
+          await confirmar2.click();
+          await p.waitForTimeout(2600);
+        }
+      }
+      const enListo = await p.locator('.lx-resultado').count() > 0;
+      if (!enListo && process.env.DEPURAR === '1') {
+        console.log('     ·· respuestas del inicio: ' + JSON.stringify(respuestasInicio));
+        console.log('     ·· botones: ' + JSON.stringify((await p.getByRole('button').allInnerTexts())
+          .map((x) => x.trim()).filter(Boolean).slice(0, 14)));
+        console.log('     ·· texto: ' + (await p.evaluate(() => document.body.innerText))
+          .replace(/\n+/g, ' / ').slice(0, 300));
+      }
+      if (enListo) {
+        const botonMapa = p.getByRole('button', { name: /Ver en el mapa|Ocultar el mapa/i });
+        ok(await botonMapa.count() === 0,
+          'en «¡Listo!» sin geometrías NO se ofrece el botón del mapa: no hay mapa que mostrar');
+        const notaListo = (await p.locator('.lx-resultado .lx-zonemap__nota').first()
+          .textContent().catch(() => '')) || '';
+        ok(notaListo.length > 0 && notaListo.length <= 120,
+          'y en su lugar queda la misma línea breve, no el párrafo de tres renglones',
+          `${notaListo.length} caracteres · ${JSON.stringify(notaListo.slice(0, 120))}`);
+        ok(!/funciona igual|la bah[íi]a que escribi/i.test(notaListo),
+          'sin el texto largo que salía en la captura de staging',
+          notaListo.slice(0, 160));
+        await p.screenshot({ path: path.join(SALIDA, 'listo-sin-zonas-390.png') });
+      } else {
+        console.log('  ··  SIN PROBAR: no se llegó a «¡Listo!» en este contexto');
+      }
       await c.close();
     }
     {

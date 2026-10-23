@@ -38,6 +38,17 @@ import { ExtendSessionSheet } from '../components/ExtendSessionSheet';
 const ZoneMap = lazy(() => import('@luparx/ui/map').then((m) => ({ default: m.ZoneMap })));
 
 /*
+  La pregunta «¿va a aparecer un mapa?» se importa de su entrada propia y NO de `@luparx/ui/map`:
+  desde ahí arrastraría `ZoneMap` al paquete inicial y la carga perezosa de arriba dejaría de
+  servir para nada. Medido: con esta entrada el paquete inicial queda igual y MapLibre sigue en su
+  propio archivo de 800 kB.
+
+  Hace falta porque esta pantalla OFRECE un botón que promete un mapa, y el 23-10-2026 Javier
+  fotografió ese botón diciendo «Ocultar el mapa» sobre una pantalla sin mapa.
+*/
+import { hayProveedorDeMapa, sePuedeDibujarElMapa } from '@luparx/ui/map-disponibilidad';
+
+/*
   Los papelitos de la pantalla «¡Listo!», colocados a mano.
 
   Ocho piezas y sus posiciones fijas: el boceto las tiene repartidas alrededor del disco y no
@@ -142,6 +153,19 @@ export function ParkingPage(): React.JSX.Element {
   const zonasGeoQuery = useZonesGeoJson(true);
   /** Si llegó al menos un perímetro que dibujar. */
   const hayGeometrias = Boolean(zonasGeoQuery.data && zonasGeoQuery.data.features.length > 0);
+  /*
+    ¿Va a aparecer un mapa si lo pido? La MISMA pregunta que se hace el componente, con la misma
+    función, para que el botón de «¡Listo!» no prometa lo que no va a pasar.
+
+    No se le pasa `hayCentro`: hoy no existe ningún centro por municipalidad que pasarle —ni el
+    contrato del ciudadano ni la tabla `tenants` guardan coordenadas—, así que afirmar que lo hay
+    sería inventarlo. El día que exista, se añade acá y en el `centro` del componente, y las dos
+    pantallas empiezan a mostrar calles sin polígonos sin tocar nada más.
+  */
+  const habraMapa = sePuedeDibujarElMapa({
+    estiloConfigurado: hayProveedorDeMapa(),
+    hayGeometrias,
+  });
   const spaceCodeError = spaceProblem
     ? spaceProblem.kind === 'format'
       ? t('citizen.parking.step1.spaceCodeError.format', { example: spaceProblem.example })
@@ -1082,9 +1106,21 @@ export function ParkingPage(): React.JSX.Element {
           {/*
             «Ver en el mapa» del boceto, y es el mismo mapa del paso 1: la zona de la estadía que
             se acaba de iniciar. No marca la bahía —`parking_spaces` no tiene coordenadas— ni pide
-            ubicación. Si la municipalidad no tiene geometrías, el mapa base igual se ve.
+            ubicación.
+
+            El comentario que había acá decía «si la municipalidad no tiene geometrías, el mapa
+            base igual se ve». Era falso desde el 22-10, cuando el mapa volvió a depender de la
+            geometría, y nadie lo actualizó: un comentario que afirma lo contrario de lo que hace
+            el código es peor que ninguno, porque se lee como garantía. Lo que pasa hoy está en
+            `sePuedeDibujarElMapa`, en un solo lugar, y esta pantalla lo consulta en `habraMapa`.
+
+            Sin mapa posible va la nota de una línea, no un hueco: la persona acaba de estacionar
+            y merece saber por qué no ve el plano, en una frase.
           */}
-          {mapaResultado ? (
+          {!habraMapa ? (
+            <p className="lx-zonemap__nota" role="note">{t('citizen.parking.map.emptyShort')}</p>
+          ) : null}
+          {habraMapa && mapaResultado ? (
             <Suspense fallback={<p className="lx-text-meta">{t('citizen.parking.map.loading')}</p>}>
               <ZoneMap
                 zonas={zonasGeoQuery.data}
@@ -1100,7 +1136,13 @@ export function ParkingPage(): React.JSX.Element {
                   ampliar: t('citizen.parking.map.expand'),
                   cerrar: t('citizen.parking.map.collapse'),
                   cargando: t('citizen.parking.map.loading'),
-                  vacio: t('citizen.parking.map.empty'),
+                  /*
+                    La MISMA línea breve que el paso 1, y no el párrafo largo que había acá. Ése
+                    es el texto que se lee en la captura de staging del 23-10 —tres renglones
+                    explicando que el estacionamiento funciona igual, debajo de una pantalla que ya
+                    dice que el estacionamiento está activo—, y la orden manda quitarlo.
+                  */
+                  vacio: t('citizen.parking.map.emptyShort'),
                   errorTitulo: t('citizen.parking.map.error'),
                   reintentar: t('common.retry'),
                   sinProveedor: t('citizen.parking.map.noProvider'),
@@ -1147,16 +1189,30 @@ export function ParkingPage(): React.JSX.Element {
                 <IconPlus size={16} /> {t('citizen.parking.result.extendCta')}
               </Button>
             ) : null}
-            <Button
-              type="button"
-              variant={policy?.extensionEnabled ? 'outline' : 'primary'}
-              fullWidth
-              aria-expanded={mapaResultado}
-              onClick={() => setMapaResultado((v) => !v)}
-            >
-              <IconPin size={16} />{' '}
-              {mapaResultado ? t('citizen.parking.result.hideMap') : t('citizen.parking.result.seeOnMap')}
-            </Button>
+            {/*
+              EL BOTÓN SÓLO EXISTE SI VA A APARECER UN MAPA (23-10-2026).
+
+              Antes estaba siempre, y en staging Javier lo fotografió diciendo «Ocultar el mapa»
+              sobre una pantalla sin mapa: ocultar y volver a mostrar no arreglaba nada porque no
+              había nada. El estado del botón era la intención de la persona; lo que se dibujaba
+              dependía de otros datos, y cuando los dos no coincidían el que mentía era el rótulo.
+
+              La corrección no es cambiar el texto: es no ofrecer la acción. Un botón que promete
+              un mapa y no lo entrega es peor que no tener botón, y en su lugar queda la nota de
+              una línea que dice por qué no hay mapa. Cuando sí lo hay, funciona como siempre.
+            */}
+            {habraMapa ? (
+              <Button
+                type="button"
+                variant={policy?.extensionEnabled ? 'outline' : 'primary'}
+                fullWidth
+                aria-expanded={mapaResultado}
+                onClick={() => setMapaResultado((v) => !v)}
+              >
+                <IconPin size={16} />{' '}
+                {mapaResultado ? t('citizen.parking.result.hideMap') : t('citizen.parking.result.seeOnMap')}
+              </Button>
+            ) : null}
             <Button type="button" variant="outline" fullWidth onClick={() => navigate('/')}>
               {t('citizen.parking.result.seeMine')}
             </Button>

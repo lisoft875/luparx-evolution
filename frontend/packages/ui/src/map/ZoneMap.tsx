@@ -8,6 +8,7 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import * as React from 'react';
 import { useEffect, useId, useRef, useState } from 'react';
 import type { ZoneGeoJsonFeatureCollection } from '@luparx/api-client';
+import { sePuedeDibujarElMapa } from './disponibilidad';
 import { Button } from '../components/Button';
 import { encuadreDe, etiquetaDeZona } from './zoneGeometry';
 import { PALETA_MAPA, oscurecer, urlDelEstilo } from './estiloOscuro';
@@ -84,6 +85,20 @@ export interface ZoneMapProps {
    * y porque es lo que la persona ve escrito en el rótulo.</p>
    */
   onZonaElegida?: (codigo: string) => void;
+  /**
+   * Dónde centrar el mapa cuando NO hay ni un polígono que encuadrar.
+   *
+   * <p>Es lo que separa el mapa base de los polígonos, que es la corrección pedida el 23-10-2026:
+   * «la falta de geometría NO debe ocultar el mapa base». Con un centro, el mapa se dibuja con sus
+   * calles aunque no llegue ninguna zona; sin él no se dibuja, y eso <b>no</b> es pereza — es que
+   * no hay dónde centrarlo. Ver {@link sePuedeDibujarElMapa}.</p>
+   *
+   * <p><b>No lo rellenes con un valor inventado.</b> Tiene que venir de un dato real: hoy no existe
+   * ninguno en el contrato del ciudadano —`tenants` no guarda coordenadas, y las únicas de la base
+   * son las de Fiscalización y los perímetros de zona—, así que mientras no exista un centro por
+   * municipalidad esta propiedad se queda sin pasar y el comportamiento es el de antes.</p>
+   */
+  centro?: { lon: number; lat: number; zoom?: number };
 }
 
 /**
@@ -117,6 +132,7 @@ export function ZoneMap({
   etiquetas,
   zonaDestacada,
   onZonaElegida,
+  centro,
 }: ZoneMapProps): React.JSX.Element {
   const id = useId();
   const contenedor = useRef<HTMLDivElement>(null);
@@ -129,20 +145,40 @@ export function ZoneMap({
   const noOficiales = rasgos.filter((f) => f.properties.status !== VERIFICADA).length;
   const hayQueDibujar = rasgos.length > 0;
   /*
-    SIN GEOMETRÍA NO HAY MAPA — y esto corrige lo que la usuaria fotografió el 20-10 (22-10-2026).
+    EL MAPA BASE NO DEPENDE DE LOS POLÍGONOS; DEPENDE DE TENER DÓNDE CENTRARLO (23-10-2026).
 
-    El 21-10 se cambió para que el mapa base se dibujara aunque no llegaran polígonos: la idea era
-    que, aunque no sepamos dónde cae la zona, las calles sirven para orientarse. Lo que se vio en
-    staging fue otra cosa: sin una sola geometría, el único encuadre honesto era el país, y el
-    resultado es un mapa de Costa Rica y Panamá debajo de «Barrio Amón». Eso no orienta a nadie; es
-    peor que no tener mapa, y la orden del 22-10 lo dice con todas las letras: «nunca en vista
-    nacional».
+    Vale la pena dejar la historia entera, porque esto cambió tres veces y cada vuelta tenía razón
+    en algo.
 
-    Así que el mapa vuelve a depender de que haya algo que encuadrar, con la diferencia que sí valía
-    la pena conservar: cuando no lo hay, lo que queda es UNA LÍNEA de aviso y no la caja gris de
-    200 px que había antes. Y el encuadre nunca se inventa: sale de la geometría que llegó.
+      · Hasta el 21-10 el mapa sólo existía con geometrías. Sin ellas quedaba una caja gris de
+        200 px donde debían verse calles, y la usuaria la fotografió.
+      · El 21-10 se dibujó el mapa base siempre. En staging salió peor: sin una sola geometría el
+        único encuadre posible era el país, y debajo de «Barrio Amón» apareció un mapa de Costa Rica
+        y Panamá. La orden del 22-10: «nunca en vista nacional».
+      · El 22-10 volvió a depender de la geometría, con una línea de aviso en vez de la caja.
+      · El 23-10 Javier pide lo contrario del 22-10: «la falta de geometría NO debe ocultar el mapa
+        base. Mostrar calles sin polígonos cuando no existan».
+
+    Las dos órdenes se contradicen sólo si uno cree que el problema era el mapa base. No lo era: el
+    problema era el ENCUADRE. Un mapa base centrado en el país no orienta; uno centrado en la
+    municipalidad sí, y es exactamente lo que el 23-10 pide. Así que la condición deja de ser «¿hay
+    polígonos?» y pasa a ser «¿hay dónde centrar?», que es una pregunta distinta y la correcta:
+
+      · con polígonos  → se encuadra en ellos, como siempre;
+      · sin polígonos pero con `centro` → se dibujan las calles de ahí, sin inventar ningún límite;
+      · sin lo uno ni lo otro → no se dibuja, porque centrar en el país ya se probó y está vetado.
+
+    Hoy el tercer caso es el único que ocurre en una municipalidad sin geometrías, porque NO EXISTE
+    todavía un centro por municipalidad que pasarle: el contrato del ciudadano no publica ninguna
+    coordenada y `tenants` no guarda ninguna. Eso es un requisito externo, no una decisión de este
+    archivo, y está anotado como tal en el informe. El día que exista, esta rama ya está escrita.
   */
-  const puedeDibujarse = Boolean(estilo) && !error && !cargando && hayQueDibujar;
+  const hayCentro = Boolean(centro);
+  const puedeDibujarse = !error && !cargando && sePuedeDibujarElMapa({
+    estiloConfigurado: Boolean(estilo),
+    hayGeometrias: hayQueDibujar,
+    hayCentro,
+  });
 
   /*
     El mapa se crea UNA vez y después se le cambian los datos.
@@ -186,6 +222,16 @@ export function ZoneMap({
     mirando, ya la encuadró ella, y moverle el mapa debajo del dedo se siente como un fallo.
   */
   const vinoDelMapa = useRef(false);
+  /*
+    El centro se lee por referencia, como las zonas y la destacada, y por el mismo motivo: es un
+    objeto, cambia de identidad en cada render aunque los números sean los mismos, y meterlo en las
+    dependencias del efecto que CREA el mapa significaría crear uno nuevo cada render. El archivo
+    ya documenta a dónde lleva eso: el navegador limita los lienzos WebGL y a partir del octavo el
+    mapa deja de aparecer, sin error. Que el centro cambie de verdad se atiende abajo, moviendo el
+    mapa que ya existe en vez de construir otro.
+  */
+  const centroRef = useRef(centro);
+  centroRef.current = centro;
   const [generacion, setGeneracion] = useState(0);
 
   // --- ciclo de vida del mapa ------------------------------------------------------------------
@@ -219,9 +265,19 @@ export function ZoneMap({
             de las que haya si todavía no eligió ninguna. Nunca un encuadre inventado: este efecto
             sólo corre cuando hay al menos un polígono.
           */
-          bounds: encuadreAMaplibre(zonasRef.current,
-            encuadrarEnLaElegida ? destacadaRef.current : undefined),
-          fitBoundsOptions: { padding: 24, maxZoom: 15 },
+          ...(() => {
+            /*
+              O se encuadra en los polígonos, o se centra en el centro dado. NUNCA ninguno de los
+              dos: `bounds: undefined` deja a MapLibre en su posición por omisión, que es el mundo
+              entero en zoom 0 —el mapa de Costa Rica y Panamá del 21-10, sólo que peor—. Por eso
+              el componente no se dibuja sin una de las dos cosas, y por eso esto es exhaustivo.
+            */
+            const b = encuadreAMaplibre(zonasRef.current,
+              encuadrarEnLaElegida ? destacadaRef.current : undefined);
+            if (b) return { bounds: b, fitBoundsOptions: { padding: 24, maxZoom: 15 } };
+            const c = centroRef.current!;
+            return { center: [c.lon, c.lat] as [number, number], zoom: c.zoom ?? 13 };
+          })(),
           attributionControl: { compact: true },
           // En móvil el mapa vive dentro de un formulario que se desplaza: sin esto, el dedo que
           // intenta bajar la página arrastra el mapa. Pedir dos dedos es lo que recomienda MapLibre.
@@ -367,6 +423,18 @@ export function ZoneMap({
     };
   }, [zonas, generacion, etiquetas, zonaDestacada, encuadrarEnLaElegida]);
 
+  /*
+    Si el centro cambia —otra municipalidad, por ejemplo— y no hay polígonos que manden, se mueve
+    el mapa que ya existe en vez de rehacerlo. Las dependencias son los NÚMEROS y no el objeto: así
+    un literal nuevo con las mismas coordenadas no mueve nada, que es lo correcto.
+  */
+  useEffect(() => {
+    if (hayQueDibujar || !centro) return;
+    const m = mapa.current as { easeTo?: (o: unknown) => void } | null;
+    m?.easeTo?.({ center: [centro.lon, centro.lat], zoom: centro.zoom ?? 13, duration: 400 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [centro?.lon, centro?.lat, centro?.zoom, hayQueDibujar]);
+
   // Al ampliar y al cerrar cambia el tamaño del contenedor, y MapLibre no se entera solo.
   useEffect(() => {
     const m = mapa.current as { resize?: () => void } | null;
@@ -383,15 +451,28 @@ export function ZoneMap({
   );
 
   let cuerpo: React.JSX.Element | null;
-  if (!hayQueDibujar && !cargando && !error) {
+  if (!estilo) {
     /*
-      Sin geometría no se reserva hueco: ni lienzo, ni caja. Queda el título y la nota de una línea
-      que explica por qué. Dejar el contenedor vacío de 200 px era el defecto original; dibujar el
-      país dentro fue el intento siguiente, y también estaba mal.
+      EL PROVEEDOR SE DIAGNOSTICA PRIMERO (23-10-2026).
+
+      Hasta hoy esta rama iba DESPUÉS de «no hay geometrías», y el orden importaba más de lo que
+      parece: un portal compilado sin `MAP_STYLE_URL` —que es lo que pasa si el despliegue no pone
+      la variable, porque el compose la deja vacía por omisión— no decía «falta el proveedor»,
+      decía «esta municipalidad todavía no tiene zonas». Son dos problemas distintos, con dos
+      responsables distintos: uno lo arregla quien despliega, el otro la municipalidad. Mandar a
+      alguien a cargar perímetros cuando lo que falta es una variable de entorno cuesta días.
+
+      En staging comprobé el 23-10 que el proveedor SÍ está configurado y responde
+      (tiles.openfreemap.org/styles/liberty, 200, 111 capas), así que el fallo que Javier fotografió
+      no es éste. El orden se corrige igual: la próxima vez que lo sea, lo va a decir.
+    */
+    cuerpo = aviso(textos.sinProveedor);
+  } else if (!hayQueDibujar && !hayCentro && !cargando && !error) {
+    /*
+      Ni polígonos ni centro: no hay dónde centrar, así que no se reserva hueco —ni lienzo, ni
+      caja—. Queda la nota de una línea. Con `centro` esta rama no se toma y el mapa base se dibuja.
     */
     cuerpo = null;
-  } else if (!estilo) {
-    cuerpo = aviso(textos.sinProveedor);
   } else if (error) {
     cuerpo = aviso(
       textos.errorTitulo,
@@ -425,7 +506,7 @@ export function ZoneMap({
         un marco que insinúe que ahí debía haber un mapa y falló.
       */
       className={['lx-zonemap', ampliado ? 'lx-zonemap--ampliado' : '',
-        !hayQueDibujar && !cargando && !error ? 'lx-zonemap--sin-mapa' : '']
+        !hayQueDibujar && !hayCentro && !cargando && !error ? 'lx-zonemap--sin-mapa' : '']
         .filter(Boolean).join(' ')}
       aria-labelledby={`${id}-titulo`}
       style={ampliado ? undefined : {
@@ -502,6 +583,12 @@ export function ZoneMap({
 
       {/* Una línea, DEBAJO del mapa: primero se ven las calles y después se lee por qué no hay
           límites dibujados. Al revés, el texto volvía a ser lo primero y lo único. */}
+      {/*
+        La nota de «sin zonas dibujadas» acompaña al mapa cuando hay mapa, y lo reemplaza cuando no
+        lo hay. Depende de los POLÍGONOS y no de si se dibujó el lienzo: con un centro se ven las
+        calles y sigue sin haber límites de zona, y callarse eso sería dejar creer que el mapa está
+        completo.
+      */}
       {!hayQueDibujar && !cargando && !error ? (
         <p className="lx-zonemap__nota" role="note">{textos.vacio}</p>
       ) : null}

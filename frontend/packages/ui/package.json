@@ -10,7 +10,8 @@
     ".": "./src/index.ts",
     "./map": "./src/map/index.ts",
     "./tokens.css": "./src/tokens.css",
-    "./tailwind.css": "./src/tailwind.css"
+    "./tailwind.css": "./src/tailwind.css",
+    "./map-disponibilidad": "./src/map/disponibilidad.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit"

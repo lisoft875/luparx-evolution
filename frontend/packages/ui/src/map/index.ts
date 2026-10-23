@@ -12,3 +12,10 @@ export type { PuntoZona, Encuadre } from './zoneGeometry';
 export { PALETA_MAPA, oscurecer, urlDelEstilo } from './estiloOscuro';
 export { VERIFICADA, FUENTE, capasDeZonas } from './capas';
 export type { CapaDeZonas } from './capas';
+/*
+  La pregunta «¿hay mapa?» se exporta también acá por comodidad de quien ya importa el mapa,
+  pero su entrada propia es `@luparx/ui/map-disponibilidad`: una pantalla que sólo quiere PREGUNTAR
+  —para no ofrecer un botón que promete un mapa que no va a aparecer— no debe arrastrar ZoneMap al
+  paquete inicial sólo por preguntar.
+*/
+export { sePuedeDibujarElMapa, hayProveedorDeMapa } from './disponibilidad';
