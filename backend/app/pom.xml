@@ -13,6 +13,13 @@
   <name>luparx-app</name>
   <description>Spring Boot bootstrap: security, REST controllers, Flyway, OpenAPI, observability.</description>
 
+  <properties>
+    <!-- Por defecto el build EXCLUYE las pruebas de integracion (Testcontainers/Docker): corren
+         aparte con el perfil `integration`, para que una maquina o un CI sin Docker no de un falso
+         verde saltandolas. El perfil de abajo vacia este patron para incluirlas. -->
+    <it.exclude>**/*IntegrationTest.java</it.exclude>
+  </properties>
+
   <dependencies>
     <dependency>
       <groupId>cr.luparx</groupId>
@@ -108,9 +115,10 @@
       version la decide Spring Boot y no hay dos criterios que mantener sincronizados.
 
       Solo en `app`: es el unico modulo que tiene las migraciones de Flyway y el contexto completo.
-      Los modulos de dominio siguen probandose sin Docker, y la unica clase que lo necesita se salta
-      sola cuando Docker no esta (`@Testcontainers(disabledWithoutDocker = true)`), para que el
-      backend se siga compilando y probando en una maquina sin demonio de contenedores.
+      Las pruebas que necesitan Docker (WalletChargeIntegrationTest) estan EXCLUIDAS del build por
+      defecto (ver <properties> `it.exclude` y el perfil `integration` abajo) y corren aparte con
+      `mvn -Pintegration test`; asi el backend se compila y prueba en una maquina sin Docker, pero
+      sin dar un falso verde: cuando se pide integracion y no hay Docker, el build FALLA.
     -->
     <dependency>
       <groupId>org.testcontainers</groupId>
@@ -126,6 +134,26 @@
 
   <build>
     <plugins>
+      <!--
+        docker-java (el que arrastra Testcontainers) negocia la API de Docker en 1.32, y Docker
+        Desktop exige mínimo 1.40 -> el preflight /info falla con 400 y las 9 pruebas de
+        WalletChargeIntegrationTest se saltaban. La variable de entorno DOCKER_API_VERSION se
+        ignora; la API se fija de verdad con esta propiedad de sistema en el JVM que forkea
+        Surefire. El socket, por ser especifico de la maquina, vive en el
+        ~/.testcontainers.properties del desarrollador, no aqui.
+      -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <configuration>
+          <systemPropertyVariables>
+            <api.version>1.44</api.version>
+          </systemPropertyVariables>
+          <excludes>
+            <exclude>${it.exclude}</exclude>
+          </excludes>
+        </configuration>
+      </plugin>
       <plugin>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-maven-plugin</artifactId>
@@ -137,4 +165,20 @@
       </plugin>
     </plugins>
   </build>
+
+  <profiles>
+    <!--
+      Pruebas de integracion contra Docker real. `mvn -Pintegration test` las INCLUYE (vacia
+      it.exclude) y, como WalletChargeIntegrationTest ya no se salta sin Docker, el build FALLA si
+      el demonio no esta, en vez de reportar exito con pruebas criticas omitidas. Requisitos del
+      entorno: Docker en marcha + ~/.testcontainers.properties con docker.host apuntando al socket
+      del engine de la maquina (especifico de cada equipo, por eso no vive en el repo).
+    -->
+    <profile>
+      <id>integration</id>
+      <properties>
+        <it.exclude>**/__no-excluir-nada__.java</it.exclude>
+      </properties>
+    </profile>
+  </profiles>
 </project>

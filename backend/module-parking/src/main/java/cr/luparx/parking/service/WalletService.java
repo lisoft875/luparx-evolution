@@ -20,6 +20,9 @@ import org.springframework.data.domain.Page;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
+import jakarta.persistence.PersistenceContext;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -51,6 +54,9 @@ public class WalletService {
     private final TenantService tenantService;
     private final Clock clock;
     private final TestMoneySpendPolicy politicaDeSaldoDePrueba;
+
+    @PersistenceContext
+    private EntityManager entityManager;
 
     public WalletService(WalletAccountRepository accountRepository,
                          WalletTransactionRepository transactionRepository,
@@ -203,13 +209,17 @@ public class WalletService {
     private WalletAccount lock(TenantId tenantId, UserId userId) {
         // The account is created first when absent, then re-read with the lock: SELECT ... FOR UPDATE
         // cannot lock a row that does not exist yet.
-        require(tenantId, userId);
+        WalletAccount account = require(tenantId, userId);
         // Flushed explicitly: SELECT ... FOR UPDATE cannot see a row that is still pending in the
         // persistence context, and relying on Hibernate's auto-flush to notice the overlap is a
         // subtlety nobody should have to re-derive when reading this.
         accountRepository.flush();
-        return accountRepository.lockByTenantIdAndUserId(tenantId.value(), userId.value())
-                .orElseThrow(() -> new IllegalStateException("wallet disappeared between creation and lock"));
+        // Releer BAJO el lock: require() dejó la entidad en el persistence context, y una query de
+        // lock devuelve esa misma instancia cacheada sin refrescar sus campos. refresh con
+        // PESSIMISTIC_WRITE hace el SELECT ... FOR UPDATE y pisa el estado viejo a la vez, para que
+        // la decisión del cobro se tome sobre el saldo y la versión reales y no sobre una foto previa.
+        entityManager.refresh(account, LockModeType.PESSIMISTIC_WRITE);
+        return account;
     }
 
     /**

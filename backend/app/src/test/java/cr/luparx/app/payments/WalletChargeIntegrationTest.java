@@ -86,11 +86,13 @@ import static org.junit.jupiter.api.Assertions.fail;
  * (V1_0), así que una imagen de PostgreSQL pelado no levanta el esquema. Y usar la misma del
  * entorno de desarrollo evita probar contra un motor distinto del que corre la aplicación.</p>
  *
- * <p>Sin Docker la clase se salta entera ({@code disabledWithoutDocker}) en vez de romper la suite:
- * el resto del backend no depende de un demonio de contenedores para compilar y probarse.</p>
+ * <p>Esta clase esta EXCLUIDA del build por defecto (patron {@code it.exclude} en app/pom.xml), para
+ * que el backend se compile y pruebe sin Docker. Corre aparte con {@code mvn -Pintegration test},
+ * que la incluye y —al no llevar ya {@code disabledWithoutDocker}— FALLA si Docker no esta, en vez
+ * de dar un falso verde saltandola.</p>
  */
-@Testcontainers(disabledWithoutDocker = true)
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@Testcontainers
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 @Import(WalletChargeIntegrationTest.PoliticaDeGuardia.class)
 class WalletChargeIntegrationTest {
 
@@ -108,6 +110,9 @@ class WalletChargeIntegrationTest {
         registro.add("spring.datasource.url", POSTGRES::getJdbcUrl);
         registro.add("spring.datasource.username", POSTGRES::getUsername);
         registro.add("spring.datasource.password", POSTGRES::getPassword);
+        // Sin par de llaves JWT en el working-dir del modulo app, el contexto completo exige una
+        // llave efimera en memoria (solo pruebas; en prod la propiedad queda en false).
+        registro.add("luparx.jwt.ephemeral-keys-when-missing", () -> true);
     }
 
     /**
@@ -421,7 +426,7 @@ class WalletChargeIntegrationTest {
      */
     private UUID crearMunicipalidad() {
         UUID id = Uuid7.generate();
-        String sufijo = id.toString().substring(0, 8);
+        String sufijo = id.toString().substring(24); // cola aleatoria del Uuid7: los primeros 8 hex son el timestamp y no son únicos dentro de ~65s
         OffsetDateTime ahora = OffsetDateTime.now();
         jdbc.update("""
                 INSERT INTO tenants (id, slug, legal_name, display_name, country_code, currency_code,
