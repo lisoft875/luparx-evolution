@@ -6167,6 +6167,39 @@ a.lx-list-row {
     padding-left: var(--lx-space-6);
   }
 }
+/* ---- El marco del portal de fiscalización ----------------------------------------------------
+   Quién decide el ancho de Fiscalización, en un solo sitio (24-10-2026, tarde).
+
+   Nació como estilos en línea en `InspectorShell` para no tocar el CSS compartido, y el instinto
+   era bueno; el problema es que un estilo en línea no puede tener consultas de medio, y acá hacen
+   falta tres tramos. La clase está igual de confinada: sólo la usa ese armazón.
+
+   · Teléfono (<768): ancho completo. El contenido es el que manda y no sobra pantalla.
+   · Tableta (768-1279): 720. Es lo que pide el encargo del iPad —«aproximadamente 560-720,
+     centrada»— y lo que deja 672 útiles, justo lo que la fila de filtros de «Mis boletas»
+     necesita para tres columnas sin recortar «Todos los estados». La tableta APAISADA entra acá a
+     propósito: a 1024 un marco de teléfono deja 288px de vacío a cada lado.
+   · Escritorio (>=1280): 448, el marco de teléfono de la Fase 6. En un monitor, estirar una
+     aplicación pensada para la calle no ayuda a nadie.
+
+   Decidido por Javier el 24-10-2026 ante el choque entre las dos órdenes: el boceto de Fase 6 es
+   de teléfono, el encargo del iPad pide 560-720 en vertical. Gana cada uno en su tramo.
+   ---------------------------------------------------------------------------------------------- */
+.lx-fiscal-marco {
+  width: 100%;
+  margin: 0 auto;
+}
+@media (min-width: 768px) {
+  .lx-fiscal-marco {
+    max-width: 720px;
+  }
+}
+@media (min-width: 1280px) {
+  .lx-fiscal-marco {
+    max-width: 448px;
+  }
+}
+
 /*
   La TABLETA VERTICAL, que es donde el ancho sobra sin que nadie lo pida (24-10-2026).
 
@@ -6183,11 +6216,11 @@ a.lx-list-row {
   El rango se cierra en 1023 a propósito: de 1024 en adelante la pantalla ya es apaisada o de
   escritorio y manda la regla de 960.
 */
-@media (min-width: 768px) and (max-width: 1023px) {
-  .lx-inspector-main {
-    max-width: 720px;
-  }
-}
+/*
+  Retirada el 24-10-2026 por la tarde: el ancho de la columna lo decide ahora `.lx-fiscal-marco`,
+  que envuelve el armazón entero —barra inferior incluida— y cubre los tres tramos. Dejar acá un
+  segundo tope diciendo lo mismo era la forma segura de que un día dijeran cosas distintas.
+*/
 
 /* ---- El saludo y el reloj --------------------------------------------------------------------
    «Hola, [nombre]» y «Fiscalización · [municipalidad]». Es el título principal de la pantalla y

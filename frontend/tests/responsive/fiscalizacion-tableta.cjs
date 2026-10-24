@@ -67,13 +67,19 @@ if (!PASS) {
 }
 
 /* Los seis que pide la lista de Fase 6, más los dos móviles que la guía del proyecto exige. */
+/*
+  `marco` es el ancho que debe medir la columna en cada tramo, y es la decisión de Javier del
+  24-10-2026 ante el choque entre las dos órdenes: el boceto de Fase 6 es de teléfono (448) y el
+  encargo del iPad pide 560-720 en vertical. Gana cada uno en su tramo, y acá queda escrito para
+  que el día que alguien mueva un número una prueba lo diga.
+*/
 const TAMANOS = [
-  { nombre: 'móvil chico', width: 320, height: 568 },
-  { nombre: 'móvil estándar', width: 390, height: 844 },
-  { nombre: 'tableta vertical', width: 768, height: 1024, tabletaVertical: true },
-  { nombre: 'tableta apaisada', width: 1024, height: 768 },
-  { nombre: 'portátil', width: 1366, height: 768 },
-  { nombre: 'escritorio grande', width: 1920, height: 1080 },
+  { nombre: 'móvil chico', width: 320, height: 568, marco: 320 },
+  { nombre: 'móvil estándar', width: 390, height: 844, marco: 390 },
+  { nombre: 'tableta vertical', width: 768, height: 1024, marco: 720 },
+  { nombre: 'tableta apaisada', width: 1024, height: 768, marco: 720 },
+  { nombre: 'portátil', width: 1366, height: 768, marco: 448 },
+  { nombre: 'escritorio grande', width: 1920, height: 1080, marco: 448 },
 ];
 
 /* Las seis pantallas del boceto, con la ruta real de cada una. */
@@ -149,6 +155,7 @@ async function entrar(page) {
 const medir = (page) => page.evaluate(() => {
   const doc = document.documentElement;
   const main = document.querySelector('.lx-inspector-main');
+  const marco = document.querySelector('.lx-fiscal-marco');
   const barra = document.querySelector('[data-lx-bottom-chrome]');
   const rb = barra ? barra.getBoundingClientRect() : null;
   const recortado = (e) => e.scrollWidth > e.clientWidth + 1;
@@ -165,11 +172,22 @@ const medir = (page) => page.evaluate(() => {
 
   const tarjeta = document.querySelector('.lx-inspector-main .lx-card');
 
+  const scroller = document.querySelector('.lx-inspector-main');
   return {
-    desborde: doc.scrollWidth - doc.clientWidth,
+    desborde: Math.max(
+      doc.scrollWidth - doc.clientWidth,
+      scroller ? scroller.scrollWidth - scroller.clientWidth : 0,
+    ),
+    /* Desde el 24-10-2026 el que se desplaza es `main`, no el documento: medir el documento
+       diría «no hay nada que desplazar» en una pantalla con diez boletas. */
+    scroll: scroller
+      ? { alto: scroller.clientHeight, contenido: scroller.scrollHeight, y: Math.round(scroller.scrollTop) }
+      : null,
     ventana: { ancho: doc.clientWidth, alto: window.innerHeight },
     mainAncho: main ? Math.round(main.getBoundingClientRect().width) : null,
     mainIzq: main ? Math.round(main.getBoundingClientRect().left) : null,
+    marcoAncho: marco ? Math.round(marco.getBoundingClientRect().width) : null,
+    marcoIzq: marco ? Math.round(marco.getBoundingClientRect().left) : null,
     barra: rb ? {
       pos: getComputedStyle(barra).position,
       top: Math.round(rb.top), bottom: Math.round(rb.bottom), alto: Math.round(rb.height),
@@ -211,13 +229,15 @@ async function probarPantalla(page, pantalla, t) {
     La columna de contenido en TABLETA VERTICAL. El encargo pide 560-720px centrados y no de borde
     a borde; antes medía los 768 completos.
   */
-  if (t.tabletaVertical && arriba.mainAncho != null) {
-    ok(arriba.mainAncho >= 560 && arriba.mainAncho <= 720,
-      `${pantalla.nombre}: la columna mide ${arriba.mainAncho}px, dentro de los 560-720 del encargo`);
-    const margen = arriba.mainIzq;
-    const margenDerecho = t.width - (arriba.mainIzq + arriba.mainAncho);
-    ok(Math.abs(margen - margenDerecho) <= 1,
-      `${pantalla.nombre}: y está centrada`, `izq ${margen} · der ${margenDerecho}`);
+  if (arriba.marcoAncho != null) {
+    ok(arriba.marcoAncho === t.marco,
+      `${pantalla.nombre}: el marco mide ${t.marco}px, lo que corresponde a este tramo`,
+      `medido ${arriba.marcoAncho}px`);
+    const margenDerecho = t.width - (arriba.marcoIzq + arriba.marcoAncho);
+    ok(Math.abs(arriba.marcoIzq - margenDerecho) <= 1,
+      `${pantalla.nombre}: y está centrado`, `izq ${arriba.marcoIzq} · der ${margenDerecho}`);
+  } else {
+    ok(false, `${pantalla.nombre}: no encontré el marco (.lx-fiscal-marco)`);
   }
 
   /* La barra: fija, pegada abajo, y sin tapar lo último que se puede pulsar — bajando del todo,
@@ -226,14 +246,36 @@ async function probarPantalla(page, pantalla, t) {
     ok(false, `${pantalla.nombre}: no encontré la barra inferior`);
     return;
   }
-  ok(arriba.barra.pos === 'fixed', `${pantalla.nombre}: la barra es fija`, `position: ${arriba.barra.pos}`);
+  /*
+    NO se afirma `position: fixed`. Se afirma lo que la persona necesita: que la barra esté pegada
+    al borde inferior de la ventana antes y después de desplazar. La composición del 24-10-2026 lo
+    consigue sin posicionarla —es el último renglón de una columna de alto fijo— y exigir `fixed`
+    obligaría a volver justamente a lo que Safari pierde al desplazar.
+  */
+  ok(arriba.barra.bottom === arriba.ventana.alto,
+    `${pantalla.nombre}: la barra arranca pegada al borde inferior de la ventana`,
+    `bottom ${arriba.barra.bottom} · ventana ${arriba.ventana.alto}`);
 
-  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  await page.evaluate(() => {
+    const s = document.querySelector('.lx-inspector-main');
+    if (s) s.scrollTo(0, s.scrollHeight);
+    window.scrollTo(0, document.documentElement.scrollHeight);
+  });
   await page.waitForTimeout(700);
   const abajo = await medir(page);
   ok(abajo.barra.bottom === abajo.ventana.alto,
-    `${pantalla.nombre}: tras bajar del todo la barra sigue pegada al borde inferior`,
+    `${pantalla.nombre}: tras bajar del todo la barra SIGUE pegada al borde inferior`,
     `bottom ${abajo.barra.bottom} · ventana ${abajo.ventana.alto}`);
+  ok(abajo.barra.top === arriba.barra.top,
+    `${pantalla.nombre}: y no se movió ni un píxel al desplazar`,
+    `antes ${arriba.barra.top} · después ${abajo.barra.top}`);
+  /* Que el contenido se pueda recorrer ENTERO: con un área de desplazamiento propia, un
+     `min-height` mal puesto deja contenido inalcanzable sin que nada se vea roto. */
+  if (abajo.scroll && abajo.scroll.contenido > abajo.scroll.alto) {
+    ok(abajo.scroll.y + abajo.scroll.alto >= abajo.scroll.contenido - 2,
+      `${pantalla.nombre}: el contenido se recorre hasta el final`,
+      `y ${abajo.scroll.y} + alto ${abajo.scroll.alto} contra contenido ${abajo.scroll.contenido}`);
+  }
   if (abajo.ultimoPulsable) {
     ok(abajo.ultimoPulsable.bottom <= abajo.barra.top,
       `${pantalla.nombre}: «${abajo.ultimoPulsable.texto}» queda por ENCIMA de la barra, no debajo`,

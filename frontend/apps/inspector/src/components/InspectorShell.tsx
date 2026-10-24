@@ -103,7 +103,15 @@ export function InspectorShell({
     reemplaza a nada. El día que se quiera recordar la posición al volver atrás, el sitio de esa
     decisión es éste.
   */
+  const mainRef = useRef<HTMLElement>(null);
   useEffect(() => {
+    /*
+      Desde que el armazón tiene alto fijo, el que se desplaza es `main` y NO el documento, así
+      que `window.scrollTo` no mueve nada: llegar a otra pantalla dejaba la vista donde la había
+      dejado la anterior. Se desplaza el contenedor real, y se conserva `window.scrollTo` por si
+      algún navegador desplazó el documento de todos modos.
+    */
+    mainRef.current?.scrollTo(0, 0);
     window.scrollTo(0, 0);
   }, [location.pathname]);
 
@@ -204,6 +212,7 @@ export function InspectorShell({
 
   return (
     <div
+      className="lx-fiscal-marco"
       // La altura REAL de la barra inferior, medida arriba y publicada como variable para que
       // cualquier acción fija pueda apoyarse en ella sin volver a medirla ni codificar un número:
       // la barra cambia de alto con la safe-area del aparato.
@@ -211,15 +220,31 @@ export function InspectorShell({
         {
           display: 'flex',
           flexDirection: 'column',
-          minHeight: '100dvh',
+          /*
+            ALTO FIJO y sin desbordar, y el desplazamiento adentro de `main` (24-10-2026).
+
+            Era `minHeight: 100dvh` con el documento entero desplazándose y la barra en
+            `position: fixed`. En Safari de iPad eso se rompe: al desplazar, la barra se despega y
+            queda en mitad de la pantalla — reportado con fotos el 24-10, y NO reproducible en
+            Chromium, donde `fixed` se comporta.
+
+            No se parchea la barra: se le quita la dependencia. Con el armazón de alto fijo, el
+            área que se desplaza es `main` y la barra es una fila normal de esta columna. Entonces
+            no hay nada que despegar: la barra no está posicionada, es el último renglón de algo
+            que no se mueve. Es la misma razón por la que tampoco lleva `transform` — `fixed` y
+            `transform` en el MISMO elemento es justamente la combinación que Safari pierde.
+
+            Lo que se paga, y conviene que quede escrito: en iOS la barra de direcciones ya no se
+            recoge al desplazar, porque el documento no se desplaza. Se gana una barra que no se
+            mueve nunca, que para quien trabaja en la calle vale más.
+          */
+          height: '100dvh',
+          overflow: 'hidden',
           background: 'transparent',
-          // Marco móvil (Fase 6, 24-10-2026): en escritorio el portal del fiscalizador se CENTRA
-          // como un teléfono en vez de estirarse. En un celular (<=448px) es ancho completo, igual
-          // que antes. Confinado a Fiscalización: va en estilos en línea de este shell, no en el CSS
-          // compartido, así que no toca ni admin ni ciudadano.
-          width: '100%',
-          maxWidth: '448px',
-          margin: '0 auto',
+          // El ancho del marco ya no vive acá: lo decide `.lx-fiscal-marco`, que necesita
+          // consultas de medio —448 en escritorio, 720 en tableta, completo en teléfono— y un
+          // estilo en línea no puede tenerlas. Sigue igual de confinado: esa clase sólo la usa
+          // este armazón.
           position: 'relative',
           '--lx-bottom-nav-height': `${footerHeight}px`,
         } as React.CSSProperties
@@ -353,20 +378,34 @@ export function InspectorShell({
         relleno inferior, porque depende de la altura MEDIDA de la barra y ningún CSS puede saberla.
       */}
       <main
+        ref={mainRef}
         className="lx-inspector-main"
         /*
-          El relleno inferior: la altura MEDIDA de la barra más un respiro, con un PISO (08-10-2026).
+          EL ÁREA QUE SE DESPLAZA (24-10-2026).
 
-          La v2 del documento lo pide por su número: «padding inferior obligatorio 88-100 px» y «al
-          menos calc(72px + env(safe-area-inset-bottom) + 16px)». Con la barra en 65px y 16 de
-          respiro salían 81 — por debajo del mínimo, y el último elemento quedaba justo pegado.
+          Desde que el armazón tiene alto fijo, lo que se mueve es esto y no el documento. Eso es
+          lo que deja a la barra inferior fuera del recorrido: ya no puede quedar en mitad de la
+          pantalla porque no participa del desplazamiento.
 
-          El `max` conserva lo que ya funcionaba: en un aparato con safe-area la barra mide más y
-          la medición manda; en uno sin ella, el piso de 88 es el que manda. No se sustituye una
-          medida real por un número fijo, se le pone suelo.
+          `minHeight: 0` no es decorativo. Un hijo de `flex` tiene mínimo automático igual a su
+          contenido, así que sin esto `main` crecería hasta el alto de lo que lleva adentro, el
+          armazón desbordaría y volveríamos exactamente a lo de antes, con la barra empujada fuera
+          de la pantalla.
+
+          El relleno inferior ya NO reserva el alto de la barra —la barra ocupa su propio lugar en
+          la columna— y queda sólo el respiro de siempre. El historial del número anterior
+          (88-100px, v2 del documento del 08-10-2026) vive en el commit que lo introdujo; repetirlo
+          acá describiría una composición que ya no existe.
+
+          `overscroll-behavior: contain` para que al llegar al final de una lista el impulso no se
+          lleve lo que haya detrás.
         */
         style={{
-          paddingBottom: `max(88px, calc(var(--lx-space-4) + ${footerHeight}px))`,
+          flex: 1,
+          minHeight: 0,
+          overflowY: 'auto',
+          overscrollBehavior: 'contain',
+          paddingBottom: 'var(--lx-space-4)',
         }}
       >
         {children}
@@ -384,16 +423,15 @@ export function InspectorShell({
       <div
         ref={footerRef}
         data-lx-bottom-chrome=""
-        style={{
-          position: 'fixed',
-          // Centrada al mismo ancho que el marco móvil (448px). En un celular es ancho completo.
-          left: '50%',
-          transform: 'translateX(-50%)',
-          width: '100%',
-          maxWidth: '448px',
-          bottom: 0,
-          zIndex: 20,
-        }}
+        /*
+          Sin `position`, sin `transform` y sin `z-index`: la barra es el último renglón de la
+          columna del armazón, y por eso está abajo. No hay nada que calcular ni nada que se pueda
+          despegar.
+
+          `flexShrink: 0` es lo único que hace falta: sin él, un contenido alto apretaría la barra
+          hasta dejarla más baja que el objetivo táctil de 44px.
+        */
+        style={{ flexShrink: 0 }}
       >
         <BottomTabBar tabs={tabs} />
       </div>
