@@ -108,9 +108,16 @@ export function ZonePerimeterPage(): React.JSX.Element {
           {resultado?.ok ? (
             <Alert tone={resultado.resumen.dentroDeCostaRica ? 'info' : 'warning'}>
               <div className="flex flex-col gap-1">
+                {/*
+                  Los números van CON su nombre. Antes decía «Polygon · 1 · 5» y esa línea existe
+                  para que alguien confirme de un vistazo que pegó lo que creía: dos cifras sin
+                  rótulo no se confirman, se adivinan — y un perímetro con un anillo de más es
+                  justamente lo que tiene que saltar acá.
+                */}
                 <span>
-                  {t('admin.zoneGeometry.valid')}: {resultado.resumen.tipo} · {resultado.resumen.anillos} ·{' '}
-                  {resultado.resumen.vertices}
+                  {t('admin.zoneGeometry.valid')}: {resultado.resumen.tipo} ·{' '}
+                  {t('admin.zoneGeometry.rings', { count: String(resultado.resumen.anillos) })} ·{' '}
+                  {t('admin.zoneGeometry.vertices', { count: String(resultado.resumen.vertices) })}
                 </span>
                 <span className="lx-text-meta">
                   O {resultado.resumen.oeste.toFixed(4)} · S {resultado.resumen.sur.toFixed(4)} · E{' '}

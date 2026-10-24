@@ -981,6 +981,8 @@ export const esCR = {
   'admin.zoneGeometry.paste': 'Pegá el GeoJSON del perímetro (Polygon o MultiPolygon, orden lon/lat)',
   'admin.zoneGeometry.validate': 'Validar',
   'admin.zoneGeometry.valid': 'GeoJSON válido',
+  'admin.zoneGeometry.rings': '{{count}} anillo(s)',
+  'admin.zoneGeometry.vertices': '{{count}} vértices',
   'admin.zoneGeometry.outsideCR': 'Aviso: la caja cae fuera de Costa Rica. Revisá que el orden sea [lon, lat] y no [lat, lon].',
   'admin.zoneGeometry.save': 'Guardar perímetro',
   'admin.zoneGeometry.saved': 'Perímetro guardado. Queda sin verificar hasta que lo apruebes.',

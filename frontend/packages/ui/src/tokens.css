@@ -8519,10 +8519,24 @@ a.lx-list-row {
    huecos; lo que se lee, no.
    ================================================================================================= */
 @media (max-width: 1400px) {
-  /* El menú. 228, dentro de 210-235. Los 20px que suelta se los lleva el contenido. */
+  /* El menú. 228, dentro de 210-235. Los 20px que suelta se los lleva el contenido.
+
+     El rango SE CORTA en 901px, y eso no es un adorno (24-10-2026). Debajo de 900px la regla
+     general pone el cuerpo en columna, y entonces `flex-basis` deja de medir el ANCHO del menú
+     para medir su ALTO. Esta regla es más específica que la general —un atributo más—, así que
+     ganaba aunque viniera antes: el menú del admin quedaba de 228px de alto con 1223px de
+     contenido adentro, recortado a media fila. Se veía igual en TODAS las pantallas del portal.
+     Medido en Chromium a 320/390/768: `getBoundingClientRect().height` 228 contra
+     `scrollHeight` 1223. */
   :root[data-portal='admin'] .lx-page-layout__sidebar {
     width: 228px;
     flex: 0 0 228px;
+  }
+  @media (max-width: 900px) {
+    :root[data-portal='admin'] .lx-page-layout__sidebar {
+      width: 100%;
+      flex: 0 0 auto;
+    }
   }
 
   /* El glifo del KPI. La tabla pide 18-20 en grande y 18 en portátil pequeño; el `<svg>` sale de

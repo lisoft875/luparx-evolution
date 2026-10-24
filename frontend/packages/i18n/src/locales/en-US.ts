@@ -954,6 +954,8 @@ export const enUS: Record<TranslationKey, string> = {
   'admin.zoneGeometry.paste': 'Paste the perimeter GeoJSON (Polygon or MultiPolygon, lon/lat order)',
   'admin.zoneGeometry.validate': 'Validate',
   'admin.zoneGeometry.valid': 'Valid GeoJSON',
+  'admin.zoneGeometry.rings': '{{count}} ring(s)',
+  'admin.zoneGeometry.vertices': '{{count}} vertices',
   'admin.zoneGeometry.outsideCR': 'Warning: the bounding box falls outside Costa Rica. Check the order is [lon, lat], not [lat, lon].',
   'admin.zoneGeometry.save': 'Save perimeter',
   'admin.zoneGeometry.saved': 'Perimeter saved. It stays unverified until you approve it.',
