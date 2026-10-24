@@ -83,6 +83,7 @@ const GRUPOS: Grupo[] = [
     permission: 'TENANT_MANAGE',
     destinos: [
       { to: '/zones', labelKey: 'nav.zones', icon: <IconPin /> },
+      { to: '/zones/geometry', labelKey: 'nav.zonesGeometry', icon: <IconPin />, permission: 'TENANT_MANAGE' },
       { to: '/spaces', labelKey: 'nav.spaces', icon: <IconPark /> },
       { to: '/tariffs', labelKey: 'nav.tariffs', icon: <IconTag /> },
       // El horario vive acá y no en Ajustes: dice CUÁNDO se cobra, que es la otra mitad de lo que

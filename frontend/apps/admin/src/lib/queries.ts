@@ -2,6 +2,9 @@ import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tan
 import { useAuth } from '@luparx/auth';
 import type {
   AdminCitationsQuery,
+  GeoJsonGeometry,
+  ZoneGeometryStatus,
+  ZoneGeometrySource,
   Citation,
   CitationDetail,
   InfractionType,
@@ -239,5 +242,43 @@ export function useAdminInspectors(): UseQueryResult<PagedResponse<StaffMember>>
   return useQuery({
     queryKey: ['admin', 'staff', 'inspectors'],
     queryFn: () => apiClient.adminStaff.list({ size: 100 }),
+  });
+}
+
+/** El perímetro de una zona, o null si nadie lo dibujó. (Fase 5) */
+export function useZoneGeometry(zoneId: string | null): UseQueryResult<GeoJsonGeometry | null> {
+  const { apiClient } = useAuth();
+  return useQuery({
+    queryKey: ['admin', 'parking', 'zone-geometry', zoneId],
+    queryFn: () => apiClient.adminParking.zoneGeometry(zoneId!),
+    enabled: zoneId !== null,
+  });
+}
+
+/** Reemplaza el perímetro de una zona. Queda sin verificar hasta aprobarlo. */
+export function useReplaceZoneGeometry(zoneId: string | null) {
+  const { apiClient } = useAuth();
+  const queryClient = useQueryClient();
+  return useMutation<GeoJsonGeometry, unknown, GeoJsonGeometry>({
+    mutationFn: (geometry) => apiClient.adminParking.replaceZoneGeometry(zoneId!, geometry),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'parking', 'zone-geometry', zoneId] });
+    },
+  });
+}
+
+/** Aprueba / rechaza / manda a revisión el perímetro (permiso ZONE_GEOMETRY_VERIFY en el servidor). */
+export function useReviewZoneGeometry(zoneId: string | null) {
+  const { apiClient } = useAuth();
+  const queryClient = useQueryClient();
+  return useMutation<
+    { status: ZoneGeometryStatus; source: ZoneGeometrySource | null },
+    unknown,
+    { decision: ZoneGeometryStatus; source?: ZoneGeometrySource; note?: string }
+  >({
+    mutationFn: (payload) => apiClient.adminParking.reviewZoneGeometry(zoneId!, payload),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'parking', 'zone-geometry', zoneId] });
+    },
   });
 }

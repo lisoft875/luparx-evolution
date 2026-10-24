@@ -21,6 +21,7 @@ import { RolesPage } from './pages/RolesPage';
 import { UserCreatePage } from './pages/UserCreatePage';
 import { StaffPage } from './pages/StaffPage';
 import { ZonesPage } from './pages/ZonesPage';
+import { ZonePerimeterPage } from './pages/ZonePerimeterPage';
 import { SpacesPage } from './pages/SpacesPage';
 import { TariffsPage } from './pages/TariffsPage';
 import { ParkingPolicyPage } from './pages/ParkingPolicyPage';
@@ -125,6 +126,18 @@ export function App(): React.JSX.Element {
                   <RequireAuth loginPath="/login">
                     <RequireTenant selectTenantPath="/select-tenant">
                       <ZonesPage />
+                    </RequireTenant>
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/zones/geometry"
+                element={
+                  <RequireAuth loginPath="/login">
+                    <RequireTenant selectTenantPath="/select-tenant">
+                      <RequirePermission permission="TENANT_MANAGE" fallback={<Navigate to="/zones" replace />}>
+                        <ZonePerimeterPage />
+                      </RequirePermission>
                     </RequireTenant>
                   </RequireAuth>
                 }
