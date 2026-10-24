@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@luparx/auth';
@@ -9,6 +9,7 @@ import { Alert, Badge, Button, Card, SectionHeader, Textarea } from '@luparx/ui'
 import { CitizenShell } from '../components/CitizenShell';
 import { QueryBoundary } from '../components/QueryBoundary';
 import { FINE_KEYS, useFine } from '../lib/queries';
+import { MAX_IMAGENES_RECLAMO, prepararImagenReclamo } from '../lib/imagenReclamo';
 
 const MAX_BODY = 4000;
 
@@ -89,30 +90,98 @@ export function FineAppealPage(): React.JSX.Element {
     },
   });
 
-  const fileMutation = useMutation({
-    mutationFn: () =>
-      apiClient.citizenFines.fileAppeal(id as string, {
-        body: body.trim(),
-        acceptedNoticeId: noticeQuery.data?.id as string,
-      }),
-    onSuccess: () => {
-      setError(null);
-      setBody('');
-      void queryClient.invalidateQueries({ queryKey: FINE_KEYS.detail(id ?? '') });
-      void queryClient.invalidateQueries({ queryKey: FINE_KEYS.all });
-    },
-    onError: (err: unknown) => {
+  // --- Evidencia opcional, elegida en la MISMA pantalla de presentar (24-10-2026) ---------------
+  // Selector de galería (input file), nunca la cámara: la orden pide no pedir permiso de cámara ni
+  // forzar captura. Las imágenes se preparan (se reducen a <=1 MB) al elegirlas y se suben una por
+  // una DESPUÉS de crear el reclamo; lo que falle se reintenta en la pantalla del reclamo ya
+  // presentado, que sigue teniendo su propio adjuntador.
+  interface ImagenElegida {
+    key: string;
+    blob: Blob;
+    nombre: string;
+    bytes: number;
+    reducida: boolean;
+    url: string;
+  }
+  const [imagenes, setImagenes] = useState<ImagenElegida[]>([]);
+  const [preparando, setPreparando] = useState(false);
+  const [subiendo, setSubiendo] = useState(false);
+  const seleccionRef = useRef<HTMLInputElement>(null);
+
+  // Revocar las URL de previsualización al desmontar, sin revocar las que siguen en uso.
+  const imagenesRef = useRef(imagenes);
+  imagenesRef.current = imagenes;
+  useEffect(() => () => imagenesRef.current.forEach((im) => URL.revokeObjectURL(im.url)), []);
+
+  const agregarImagenes = async (lista: FileList | null): Promise<void> => {
+    if (!lista || lista.length === 0) return;
+    setPreparando(true);
+    setError(null);
+    const nuevas: ImagenElegida[] = [];
+    for (const file of Array.from(lista)) {
+      if (imagenes.length + nuevas.length >= MAX_IMAGENES_RECLAMO) {
+        setError(t('citizen.appeal.attach.error.max', { max: MAX_IMAGENES_RECLAMO }));
+        break;
+      }
+      const r = await prepararImagenReclamo(file);
+      if ('error' in r) {
+        setError(t(r.error === 'tipo' ? 'citizen.appeal.attach.error.type' : 'citizen.appeal.attach.error.prepare'));
+        continue;
+      }
+      nuevas.push({
+        key: `${file.name}-${Date.now()}-${Math.random()}`,
+        blob: r.blob,
+        nombre: r.nombre,
+        bytes: r.bytes,
+        reducida: r.reducida,
+        url: URL.createObjectURL(r.blob),
+      });
+    }
+    if (nuevas.length > 0) setImagenes((prev) => [...prev, ...nuevas]);
+    setPreparando(false);
+  };
+
+  const quitarImagen = (key: string): void => {
+    setImagenes((prev) => {
+      const quitada = prev.find((im) => im.key === key);
+      if (quitada) URL.revokeObjectURL(quitada.url);
+      return prev.filter((im) => im.key !== key);
+    });
+  };
+
+  const presentar = async (): Promise<void> => {
+    const notice = noticeQuery.data;
+    if (!notice) return;
+    setSubiendo(true);
+    setError(null);
+    try {
+      await apiClient.citizenFines.fileAppeal(id as string, { body: body.trim(), acceptedNoticeId: notice.id });
+    } catch (err) {
       const code = (err as { code?: string })?.code;
       if (code === 'APPEAL_NOTICE_OUTDATED') {
-        // The wording changed while they were writing. Re-fetch it and say so — the text they are
-        // about to accept must be the text they can see.
         void noticeQuery.refetch();
         setError(t('citizen.appeal.error.noticeOutdated'));
-        return;
+      } else {
+        setError(t(code === 'APPEAL_ALREADY_FILED' ? 'citizen.appeal.error.alreadyFiled' : 'citizen.appeal.error.generic'));
       }
-      setError(t(code === 'APPEAL_ALREADY_FILED' ? 'citizen.appeal.error.alreadyFiled' : 'citizen.appeal.error.generic'));
-    },
-  });
+      setSubiendo(false);
+      return;
+    }
+    // Reclamo creado. Subir las imágenes; lo que falle queda para reintento en la fase ya presentada.
+    for (const im of imagenes) {
+      try {
+        await apiClient.citizenFines.attachAppealImage(id as string, im.blob, im.nombre);
+      } catch {
+        /* una imagen perdida no pierde el reclamo; se reintenta en la pantalla siguiente */
+      }
+    }
+    imagenes.forEach((im) => URL.revokeObjectURL(im.url));
+    setImagenes([]);
+    setBody('');
+    void queryClient.invalidateQueries({ queryKey: FINE_KEYS.detail(id ?? '') });
+    void queryClient.invalidateQueries({ queryKey: FINE_KEYS.all });
+    setSubiendo(false);
+  };
 
   return (
     <CitizenShell title={t('citizen.appeal.title')} onBack={() => navigate(`/fines/${id}`)}>
@@ -270,7 +339,7 @@ export function FineAppealPage(): React.JSX.Element {
           }
 
           const notice = noticeQuery.data;
-          const canSubmit = body.trim().length > 0 && notice !== undefined && !fileMutation.isPending;
+          const canSubmit = body.trim().length > 0 && notice !== undefined && !subiendo;
 
           return (
             <>
@@ -307,13 +376,78 @@ export function FineAppealPage(): React.JSX.Element {
                 <Textarea
                   aria-label={t('citizen.appeal.write.label')}
                   placeholder={t('citizen.appeal.write.placeholder')}
-                  rows={8}
+                  rows={5}
                   maxLength={MAX_BODY}
                   showCount
                   countLabel={t('citizen.appeal.write.count', { used: body.length, max: MAX_BODY })}
                   value={body}
                   onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setBody(e.target.value)}
                 />
+
+                {/* Evidencia opcional: selector de galería, sin cámara (orden del 24-10-2026). */}
+                <div style={{ marginTop: 'var(--lx-space-3)' }}>
+                  <p className="lx-text-card-title" style={{ margin: '0 0 var(--lx-space-1) 0' }}>
+                    {t('citizen.appeal.attach.title')}
+                  </p>
+                  <p className="lx-text-meta" style={{ margin: '0 0 var(--lx-space-2) 0' }}>
+                    {t('citizen.appeal.attach.hint')}
+                  </p>
+                  <input
+                    ref={seleccionRef}
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    hidden
+                    onChange={(event) => {
+                      const lista = event.target.files;
+                      event.target.value = '';
+                      void agregarImagenes(lista);
+                    }}
+                  />
+                  {imagenes.length > 0 ? (
+                    <ul
+                      style={{
+                        listStyle: 'none',
+                        margin: '0 0 var(--lx-space-2) 0',
+                        padding: 0,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 'var(--lx-space-2)',
+                      }}
+                    >
+                      {imagenes.map((im) => (
+                        <li key={im.key} style={{ display: 'flex', alignItems: 'center', gap: 'var(--lx-space-2)' }}>
+                          <img
+                            src={im.url}
+                            alt=""
+                            style={{ width: 44, height: 44, objectFit: 'cover', borderRadius: 6, flexShrink: 0 }}
+                          />
+                          <span
+                            className="lx-text-meta"
+                            style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                          >
+                            {im.nombre} · {(im.bytes / 1024).toFixed(0)} KB
+                            {im.reducida ? ` · ${t('citizen.appeal.attach.reduced')}` : ''}
+                          </span>
+                          <Button type="button" variant="ghost" onClick={() => quitarImagen(im.key)}>
+                            {t('citizen.appeal.attach.remove')}
+                          </Button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    fullWidth
+                    loading={preparando}
+                    disabled={imagenes.length >= MAX_IMAGENES_RECLAMO}
+                    onClick={() => seleccionRef.current?.click()}
+                  >
+                    {t('citizen.appeal.attach.select')} ({imagenes.length}/{MAX_IMAGENES_RECLAMO})
+                  </Button>
+                </div>
+
                 {error ? <Alert tone="danger">{error}</Alert> : null}
                 {/* The sentence under the button, not a dialog after it: what accepting means has
                     to be readable while deciding, not confirmed once it is too late to read. */}
@@ -321,9 +455,9 @@ export function FineAppealPage(): React.JSX.Element {
                 <Button
                   type="button"
                   fullWidth
-                  loading={fileMutation.isPending}
+                  loading={subiendo}
                   disabled={!canSubmit}
-                  onClick={() => fileMutation.mutate()}
+                  onClick={() => void presentar()}
                 >
                   {t('citizen.appeal.submit')}
                 </Button>
