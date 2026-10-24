@@ -13,11 +13,23 @@
 # incluya también las no verificadas, que el portal pinta en violeta, con borde punteado y la
 # palabra «DEMO · no oficial» encima del nombre de la zona.
 #
+# ╔══════════════════════════════════════════════════════════════════════════════════════════════╗
+# ║ ESTE SCRIPT YA NO CONSIGUE SU OBJETIVO, Y CONVIENE SABERLO ANTES DE CORRERLO (23-10-2026).   ║
+# ╚══════════════════════════════════════════════════════════════════════════════════════════════╝
+#
+# Se escribió cuando las geometrías DEMO estaban UNVERIFIED. El 19-10 la migración V43_0 las pasó a
+# REJECTED, a propósito, porque «no sirven para cobrar, fiscalizar ni resolver un reclamo». Desde
+# entonces `activar` abre un estado que ninguna de ellas usa: pone la variable bien y publica cero.
+#
+# Se conserva —el preflight sigue siendo el mejor diagnóstico que hay del mapa— y ahora termina con
+# un VEREDICTO que cuenta las filas que de verdad saldrían. Si son cero, lo dice en rojo y nombra la
+# salida, en vez de felicitarse en verde con el mapa vacío.
+#
 # ÓRDENES
 #
 #   ./scripts/staging-zonas-demo.sh preflight    sólo lee: dice qué hay y qué falta
 #   ./scripts/staging-zonas-demo.sh sembrar      pone la geometría DEMO que falte (idempotente)
-#   ./scripts/staging-zonas-demo.sh activar      publica también UNVERIFIED y reinicia el backend
+#   ./scripts/staging-zonas-demo.sh activar      publica también UNVERIFIED (ver el aviso de arriba)
 #   ./scripts/staging-zonas-demo.sh postcheck    comprueba lo que quedó
 #   ./scripts/staging-zonas-demo.sh revertir     vuelve a publicar sólo VERIFIED
 #
@@ -121,6 +133,58 @@ recrear_backend() {
   verde "backend sano"
 }
 
+# -------------------------------------------------------------------------------------------------
+# EL VEREDICTO: cuántas geometrías publicaría HOY el endpoint del ciudadano, y si no es ninguna, por
+# qué y qué hacer. Añadido el 23-10-2026, después de que este script mandara a Javier por un camino
+# que no lleva a ninguna parte.
+#
+# QUÉ PASÓ. El script se escribió cuando las geometrías DEMO estaban `UNVERIFIED`, y su trabajo era
+# abrir la publicación a ese estado. El 19-10 la migración **V43_0** las pasó a `REJECTED`, a
+# propósito y con su razón escrita: «a éstas sí las miramos y sabemos que no sirven para cobrar,
+# fiscalizar ni resolver un reclamo». Desde ese día `activar` pone una variable correcta que no
+# publica nada, y lo decía en verde: «activado. Abrí la aplicación y mirá el mapa.» El mapa seguía
+# vacío. El dato estaba en la sección 5 del propio preflight —`con_unverified = 0`— y había que
+# saber leerlo.
+#
+# Un script que miente en verde cuesta más que uno que no existe. Ahora cuenta las filas que de
+# verdad saldrían y, si son cero, lo dice y nombra la salida.
+veredicto() {
+  local statuses filas
+  statuses="$(leer_env GEO_CITIZEN_GEOMETRY_STATUSES || echo 'VERIFIED')"
+  # Las comillas de la lista se arman acá para que la consulta sea la MISMA que filtra el backend.
+  local lista
+  lista="$(printf "%s" "$statuses" | tr ',' '\n' | sed "s/^ *//; s/ *$//; s/.*/'&'/" | paste -sd, -)"
+  filas="$(psql_en_postgres -tAc "
+    SELECT count(*) FROM parking_zones z
+     WHERE z.geom IS NOT NULL
+       AND z.geom_status IN ($lista)
+       AND z.tenant_id = (SELECT t.id FROM tenants t WHERE t.slug = 'san-jose')" 2>/dev/null \
+    | tr -d '[:space:]')"
+
+  echo
+  echo "=== VEREDICTO ==================================================================="
+  if [[ "$filas" =~ ^[0-9]+$ ]] && (( filas > 0 )); then
+    verde "con GEO_CITIZEN_GEOMETRY_STATUSES=$statuses, San José publica $filas geometría(s)."
+    gris  "El mapa del ciudadano debería dibujarlas. Si no se ven, el problema NO son los datos."
+  else
+    rojo  "con GEO_CITIZEN_GEOMETRY_STATUSES=$statuses, San José publica 0 geometrías."
+    echo
+    gris  "Causa: la V43_0 dejó las ocho zonas DEMO en REJECTED, a propósito. 'activar' abre"
+    gris  "UNVERIFIED, que es un estado que ya no usa ninguna de ellas: no hay nada que abrir."
+    echo
+    gris  "Lo que NO hay que hacer:"
+    gris  "  · añadir REJECTED a la variable — publicaría al ciudadano polígonos que el sistema"
+    gris  "    marcó como no aptos, que es lo contrario de lo que ese estado significa;"
+    gris  "  · volver a guardarlas por el portal de administración — eso las pasa a ADMIN_DRAWING"
+    gris  "    y entonces SÍ se podrían verificar, que es justo el agujero que la V43_0 cerró."
+    echo
+    gris  "Para ver CALLES sin perímetros, poné MAP_CENTERS en infra/.env y redesplegá:"
+    gris  "    MAP_CENTERS=san-jose:<lon>,<lat>,13"
+    gris  "Para ver PERÍMETROS, la municipalidad tiene que dibujar los suyos de verdad."
+  fi
+  echo "================================================================================="
+}
+
 orden="${1:-}"
 case "$orden" in
   preflight)
@@ -131,6 +195,7 @@ case "$orden" in
     gris "variable dentro del contenedor:"
     compose exec -T backend sh -lc 'echo "  ${GEO_CITIZEN_GEOMETRY_STATUSES:-(sin definir)}"' 2>/dev/null \
       || gris "  (el backend no está levantado)"
+    veredicto
     ;;
 
   sembrar)
@@ -148,7 +213,8 @@ case "$orden" in
     compose exec -T backend sh -lc 'echo "  GEO_CITIZEN_GEOMETRY_STATUSES=${GEO_CITIZEN_GEOMETRY_STATUSES:-(sin definir)}"'
     echo
     psql_en_postgres -f - < "$SQL_DIR/zonas-demo-postcheck.sql"
-    verde "activado. Abrí la aplicación y mirá el mapa."
+    verde "variable activada."
+    veredicto
     ;;
 
   postcheck)
