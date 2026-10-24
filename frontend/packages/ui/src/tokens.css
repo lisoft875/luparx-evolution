@@ -9438,24 +9438,54 @@ a.lx-list-row {
 }
 
 /*
-  Mientras el teclado está abierto (20-10-2026).
+  Mientras el teclado está abierto: las barras SE MUEVEN, no se esconden (23-10-2026).
 
-  El viewport visual se encoge y lo que está pegado abajo no se entera: la navegación inferior y el
-  botón principal quedan dibujados debajo del teclado o flotando encima, y el campo que se está
-  escribiendo pierde sitio. La orden del 20-10 autoriza en letra ocultarlos durante la edición y
-  devolverlos al cerrar, y es lo que se hace.
+  <h2>Lo que había, y por qué se va</h2>
 
-  `visibility` y no `display`: el hueco se conserva, así que al cerrar el teclado nada se recoloca
-  y la página no da el salto que se quiere evitar. `pointer-events: none` para que, invisible, la
-  barra tampoco se coma un toque destinado al contenido que hay detrás.
+  Desde el 20-10 estas dos barras se ocultaban con `visibility: hidden` mientras un campo tenía el
+  foco. Aquella orden lo autorizaba en letra, y resolvía un problema real: pegadas al borde del
+  viewport de MAQUETACIÓN —que no se encoge en iOS— quedaban dibujadas debajo del teclado o
+  flotando encima del campo.
 
-  El atributo lo pone `useTecladoVirtual`, que exige además que el foco esté en un campo de texto:
-  sin eso, la barra de direcciones de Safari al hacer scroll escondería la navegación sola.
+  El 23-10 Javier fotografió la consecuencia: tocó «Número de parqueo» en su iPhone y «Continuar»
+  y la navegación desaparecieron; volvían sólo al tocar fuera. Reproducido en Chromium a 320×568,
+  390×844 y 768×1024 —y SIN teclado ninguno, porque en un aparato de dedo basta el foco—: en los
+  tres, `visibility: hidden` en las dos barras. La orden del 23-10 sustituye expresamente a la del
+  20-10 para este error: «botón y navegación siempre accesibles, que no se tapen ni desaparezcan».
+
+  <h2>Lo que hace ahora</h2>
+
+  Las barras se suben por encima del teclado en vez de desaparecer. `--lx-teclado-alto` es lo que
+  el teclado se come —`innerHeight - visualViewport.height`, lo publica `useTecladoVirtual`— y
+  subirlas esa distancia las deja apoyadas sobre su borde superior, visibles y pulsables.
+
+  Tres propiedades de esta fórmula que vale la pena no re-descubrir:
+
+    · **Se corrige sola en Android.** Ahí el viewport de maquetación SÍ se encoge, así que la
+      diferencia es ~0, la traslación es ~0 y las barras se quedan donde ya estaban bien.
+    · **Sin medida no inventa nada.** Si `visualViewport` no dice nada —el caso del iPhone del
+      21-10— la variable no existe, el valor cae a 0 y todo queda como sin teclado. Puede que el
+      teclado las tape, pero NO desaparecen y vuelven solas al cerrarse, sin pedir un toque.
+    · **Se sube con `bottom`, NO con `transform`.** El primer intento fue al revés: `transform`
+      parecía más barato porque no recalcula el layout. Pero mueve el elemento DESPUÉS de
+      colocarlo, y un `sticky` ya está colocado contra el borde de su scrollport; trasladarlo
+      encima lo despega de donde tiene que estar. Medido a 844×390 con 210 px de teclado: la barra
+      de «Continuar» acabó flotando a 25–94, en mitad de la pantalla y por ENCIMA del campo. Con
+      `bottom` cada barra se recoloca contra su propio borde de referencia, que es lo que hay que
+      correr.
+
+  Quien necesita sitio es el campo, y de eso se encarga `acomodar()` en `tecladoVirtual.ts`, que
+  descuenta estas barras del suelo útil. Esconder los controles para hacerle sitio al campo era
+  pagar con lo que la persona vino a pulsar.
 */
-:root[data-teclado='abierto'] .lx-bottom-tab-bar,
+:root[data-teclado='abierto'] .lx-bottom-dock {
+  bottom: var(--lx-teclado-alto, 0px);
+}
+
 :root[data-teclado='abierto'] .lx-sticky-cta {
-  visibility: hidden;
-  pointer-events: none;
+  bottom: calc(
+    var(--lx-bottom-nav-height, 0px) + env(safe-area-inset-bottom) + var(--lx-teclado-alto, 0px)
+  );
 }
 
 /*
@@ -9501,6 +9531,46 @@ a.lx-list-row {
   :root[data-portal='citizen'] .lx-top-chrome {
     position: static;
   }
+}
+
+/*
+  Cuando ni soltando el cromo de arriba cabe el campo (23-10-2026).
+
+  Hay una pantalla donde subir las barras por encima del teclado no alcanza: el teléfono en
+  horizontal. Medido con el arnés a 568×320 y 844×390, el viewport visual con el teclado arriba
+  queda en 120 y 180 px, y el botón principal más la navegación miden 143 juntos. No es que quepan
+  mal: NO CABEN, y las barras acaban encima del campo que se está escribiendo. El arnés lo cazó al
+  primer intento —«y nadie se le pone encima»— antes de que lo viera nadie.
+
+  Algo tiene que ceder, y la pregunta es qué. No la visibilidad: esconder los controles es
+  exactamente el defecto que se está arreglando. Lo que cede es que estén PEGADOS: dejan de flotar
+  y se van con el scroll, enteros y en su sitio dentro de la página. Siguen estando, se llega a
+  ellos desplazando, y vuelven a pegarse en cuanto el teclado baja.
+
+  El orden de rendición no es estético. Primero la navegación —son cuatro destinos para irse a otra
+  parte, y quien está escribiendo un número de parqueo no se quiere ir a otra parte—; y sólo si
+  tampoco así cabe, el botón principal. Lo decide `useTecladoVirtual` midiendo, no un tamaño de
+  pantalla escrito a mano: el día que una barra cambie de alto, la condición sigue siendo cierta.
+*/
+/* La colocación de la barra inferior del Ciudadano. Vive acá y no en un `style` en línea porque
+   las reglas de abajo tienen que poder soltarla, y un estilo en línea gana a cualquiera de ellas. */
+.lx-bottom-dock {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
+}
+
+:root[data-barras='todas-sueltas'] .lx-bottom-dock,
+:root[data-barras='todas-sueltas'] .lx-sticky-cta {
+  position: static;
+}
+
+/* Soltada la navegación, ya no ocupa el borde de abajo: el botón principal baja a ocupar su sitio.
+   Sin esto se quedaría con el hueco reservado para una barra que ya no está pegada ahí. */
+:root[data-barras='todas-sueltas'] {
+  --lx-bottom-nav-height: 0px;
 }
 
 /* =================================================================================================

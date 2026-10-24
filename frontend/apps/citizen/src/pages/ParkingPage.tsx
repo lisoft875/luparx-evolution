@@ -46,7 +46,7 @@ const ZoneMap = lazy(() => import('@luparx/ui/map').then((m) => ({ default: m.Zo
   Hace falta porque esta pantalla OFRECE un botón que promete un mapa, y el 23-10-2026 Javier
   fotografió ese botón diciendo «Ocultar el mapa» sobre una pantalla sin mapa.
 */
-import { hayProveedorDeMapa, sePuedeDibujarElMapa } from '@luparx/ui/map-disponibilidad';
+import { centroConfigurado, hayProveedorDeMapa, sePuedeDibujarElMapa } from '@luparx/ui/map-disponibilidad';
 
 /*
   Los papelitos de la pantalla «¡Listo!», colocados a mano.
@@ -162,9 +162,19 @@ export function ParkingPage(): React.JSX.Element {
     sería inventarlo. El día que exista, se añade acá y en el `centro` del componente, y las dos
     pantallas empiezan a mostrar calles sin polígonos sin tocar nada más.
   */
+  /*
+    El centro con el que mirar cuando la municipalidad todavía no tiene ni un perímetro dibujado.
+
+    NO lo decide esta pantalla ni está escrito en el código: sale de `VITE_MAP_CENTERS`, que llena
+    quien despliega con coordenadas que la municipalidad puede verificar. Sin esa variable vale
+    `null`, no hay dónde centrar y el mapa no se dibuja —que es lo correcto: centrar en el país ya
+    se probó el 21-10 y debajo de «Barrio Amón» apareció Costa Rica y Panamá.
+  */
+  const centroDelMapa = centroConfigurado(activeTenant?.slug);
   const habraMapa = sePuedeDibujarElMapa({
     estiloConfigurado: hayProveedorDeMapa(),
     hayGeometrias,
+    hayCentro: Boolean(centroDelMapa),
   });
   const spaceCodeError = spaceProblem
     ? spaceProblem.kind === 'format'
@@ -590,6 +600,7 @@ export function ParkingPage(): React.JSX.Element {
                       onReintentar={() => void zonasGeoQuery.refetch()}
                       /* 280–350 px «adaptable al dispositivo», que es un clamp y no un número. */
                       altoCompacto="clamp(280px, 38vh, 350px)"
+                      centro={centroDelMapa ?? undefined}
                       /* La tarifa que el boceto escribe debajo del nombre de cada zona. Sale de
                          las zonas que esta pantalla ya pidió —el GeoJSON no trae precios— y va
                          tal cual la dio el servidor. Las del boceto son ilustrativas. */
@@ -1127,6 +1138,7 @@ export function ParkingPage(): React.JSX.Element {
                 cargando={zonasGeoQuery.isLoading}
                 error={zonasGeoQuery.isError}
                 onReintentar={() => void zonasGeoQuery.refetch()}
+                centro={centroDelMapa ?? undefined}
                 etiquetas={tarifasPorCodigo(zones, (minor, moneda) =>
                   formatCurrencyMinor(minor, moneda, locale))}
                   /* El mapa abre encuadrado en la zona elegida, no sobre toda la municipalidad. */

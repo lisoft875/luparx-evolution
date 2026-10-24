@@ -360,7 +360,19 @@ export function CitizenShell({
         commit={__LUPARX_BUILD__}
       />
       </main>
-      <div ref={footerRef} style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 20 }}>
+      {/*
+        `lx-bottom-dock`: el enganche que la hoja de estilos necesita para subir la navegación por
+        encima del teclado en vez de esconderla (23-10-2026). La clase va en el contenedor FIJO y
+        no en la barra de dentro, porque lo que hay que mover es lo que está pegado al borde; la
+        regla anterior ocultaba la barra interior, que es otra cosa y por eso bastaba con tocarla.
+
+        Y la colocación se fue de aquí a la hoja de estilos, que no es cosmética: estaba en
+        `style={{ position: 'fixed', ... }}` y un estilo en línea gana a cualquier regla sin
+        `!important`. La regla que suelta esta barra cuando el campo no cabe se escribió, se
+        aplicó… y no hizo nada, porque el `position: fixed` de aquí la pisaba. Medido a 844×390:
+        `data-barras='nav-suelta'` puesto y la barra seguía `fixed`.
+      */}
+      <div ref={footerRef} className="lx-bottom-dock">
         <BottomTabBar tabs={tabs} />
       </div>
       {/* Reopened from the badge. Everything tenant-scoped on the screen behind is dropped and

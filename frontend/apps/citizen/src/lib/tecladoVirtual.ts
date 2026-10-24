@@ -76,6 +76,36 @@ function bordeDelCromoSuperior(desde: number): number {
   }, desde);
 }
 
+/**
+ * Dónde empieza lo que tapa por abajo: el borde SUPERIOR de la primera barra pegada.
+ *
+ * <p>Hasta el 23-10-2026 esto no hacía falta porque el botón principal y la navegación se
+ * ESCONDÍAN mientras se escribía, así que por abajo no tapaba nada. Desde que se quedan —suben por
+ * encima del teclado en vez de desaparecer— hay que saber dónde empiezan.</p>
+ *
+ * <p><b>Se devuelve un BORDE y no una suma de altos</b>, y la diferencia costó una corrida. El
+ * primer intento sumaba los altos de las dos barras: a 844×390 con el teclado arriba daba 155 px
+ * de un viewport visual de 180, y concluía que no quedaba sitio para nada. Pero la navegación
+ * estaba en 304–390, es decir <i>debajo</i> del teclado y fuera de lo visible: no tapaba nada y se
+ * la estaba contando igual. Lo que tapa es lo que cae DENTRO de lo que se ve, y eso lo dice la
+ * posición, no el tamaño.</p>
+ *
+ * <p>Por omisión, el borde inferior del viewport visual: si no hay ninguna barra encima, lo que
+ * tapa por abajo es el final de la pantalla.</p>
+ */
+function bordeDeLasBarrasInferiores(limite: number): number {
+  const nodos = document.querySelectorAll<HTMLElement>('.lx-sticky-cta, .lx-bottom-dock');
+  return [...nodos].reduce((masAlto, nodo) => {
+    const caja = nodo.getBoundingClientRect();
+    if (caja.height <= 0) return masAlto;
+    const estilo = getComputedStyle(nodo);
+    if (estilo.visibility === 'hidden') return masAlto;
+    // Una barra soltada —`position: static`— se va con el scroll y deja de tapar: es contenido.
+    if (estilo.position === 'static') return masAlto;
+    return Math.min(masAlto, caja.top);
+  }, limite);
+}
+
 /** El alto natural de ese cromo, esté pegado o no: lo que ocuparía si se queda arriba. */
 function altoDelCromoSuperior(): number {
   const nodos = document.querySelectorAll<HTMLElement>('.lx-top-chrome, [data-lx-top-chrome]');
@@ -158,7 +188,15 @@ export function useTecladoVirtual(): void {
         navegador y tapado para la persona, que es lo único que cuenta.
       */
       const techo = bordeDelCromoSuperior(vv.offsetTop || 0) + MARGEN_PX;
-      const suelo = vv.height - MARGEN_PX;
+      /*
+        El suelo ya NO es el borde del viewport visual: desde el 23-10-2026 el botón principal y la
+        navegación se quedan ahí —subidos por encima del teclado— en vez de esconderse, así que lo
+        que la persona puede ver del campo termina donde empieza la primera de esas barras.
+
+        Sin este descuento, acomodar dejaría el campo «dentro del viewport» y detrás de
+        «Continuar»: el mismo defecto del 20-10 con los papeles cambiados.
+      */
+      const suelo = bordeDeLasBarrasInferiores(vv.height) - MARGEN_PX;
       if (r.bottom > suelo) {
         window.scrollBy({ top: r.bottom - suelo, behavior: 'auto' });
       } else if (r.top < techo) {
@@ -183,14 +221,53 @@ export function useTecladoVirtual(): void {
       if (!vv) return;
       const activo = document.activeElement as HTMLElement | null;
       const alturaCampo = activo ? activo.getBoundingClientRect().height : 44;
-      const libre = vv.height - altoDelCromoSuperior();
-      if (libre < alturaCampo + MARGEN_PX * 2) raiz.setAttribute('data-teclado-apretado', '');
-      else raiz.removeAttribute('data-teclado-apretado');
+      const necesita = alturaCampo + MARGEN_PX * 2;
+      const cromo = altoDelCromoSuperior();
+      const nav = document.querySelector<HTMLElement>('.lx-bottom-dock');
+      const cta = document.querySelector<HTMLElement>('.lx-sticky-cta');
+      const altoNav = nav ? nav.getBoundingClientRect().height : 0;
+      const altoCta = cta ? cta.getBoundingClientRect().height : 0;
+
+      /*
+        DOS RENDICIONES, EN ORDEN, Y CADA UNA SÓLO SI LA ANTERIOR NO ALCANZÓ (23-10-2026).
+
+        Lo que se busca es que el campo que se está escribiendo quepa entre el cromo de arriba y
+        las barras de abajo. Se prueba soltando cosas, de menos a más costoso para quien escribe:
+
+          1. el cromo de arriba —la barra de la estadía en curso— deja de estar pegado;
+          2. si aún no cabe, las barras de abajo dejan de estar pegadas y se van con el scroll.
+
+        Ninguna se esconde. Todas siguen en la página y se llega a ellas desplazando. Esconderlas
+        es lo que Javier fotografió el 23-10 y lo que esta corrección quita.
+
+        HUBO UN PASO INTERMEDIO Y SE QUITÓ, que es lo que vale la pena dejar escrito: soltar sólo
+        la navegación y dejar «Continuar» pegado. Suena mejor —se conserva la acción principal— y
+        medido a 844×390 con 210 px de teclado resultó peor: `.lx-sticky-cta` es `sticky`, no
+        `fixed`, y en esa pantalla, con la página desplazada hasta el final, no estaba pegada a
+        ningún borde sino en su posición de flujo. Correrle el `bottom` no la movía, y acababa
+        flotando a 25–94 por encima del campo, que es el defecto que se vino a arreglar. Con las
+        dos sueltas no flota nada y el campo queda despejado. Si alguien quiere recuperar el paso
+        intermedio, primero hay que convertir esa barra en `fixed`, y eso es otro cambio.
+      */
+      const cabeCon = (descontar: number): boolean => vv.height - descontar >= necesita;
+
+      if (cabeCon(cromo + altoNav + altoCta)) {
+        raiz.removeAttribute('data-teclado-apretado');
+        raiz.removeAttribute('data-barras');
+        return;
+      }
+      raiz.setAttribute('data-teclado-apretado', '');
+      if (cabeCon(altoNav + altoCta)) {
+        raiz.removeAttribute('data-barras');
+        return;
+      }
+      raiz.setAttribute('data-barras', 'todas-sueltas');
     };
 
     const limpiar = (): void => {
       raiz.removeAttribute('data-teclado');
       raiz.removeAttribute('data-teclado-apretado');
+      raiz.removeAttribute('data-barras');
       raiz.style.removeProperty('--lx-teclado-alto');
     };
 

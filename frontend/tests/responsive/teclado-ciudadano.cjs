@@ -134,6 +134,15 @@ const MIRAR = (sel) => {
   // Un elemento que no se encuentra NO cuenta como oculto: así se leía en verde una regla de CSS
   // que apuntaba a una clase inexistente, que es justo el defecto que esta prueba destapó.
   const oculto = (el) => { if (!el) return null; return getComputedStyle(el).visibility === 'hidden'; };
+  /* Usable = está, se ve y acepta el dedo. Un nodo presente pero `pointer-events: none` no sirve. */
+  const usable = (el) => {
+    if (!el) return false;
+    const e = getComputedStyle(el);
+    const c = el.getBoundingClientRect();
+    return e.visibility !== 'hidden' && e.display !== 'none' && e.pointerEvents !== 'none'
+      && c.height > 0 && c.width > 0;
+  };
+  const solapa = (a, b) => a.bottom > b.top && a.top < b.bottom && a.right > b.left && a.left < b.right;
   return {
     enfocado: Boolean(activo) && /INPUT|TEXTAREA/.test(activo.tagName),
     tieneFoco: activo === document.activeElement,
@@ -141,6 +150,14 @@ const MIRAR = (sel) => {
     propio: Boolean(encima) && (encima === activo || activo.contains(encima)),
     navOculta: oculto(nav),
     ctaOculto: oculto(cta),
+    /*
+      Desde el 23-10-2026 lo que se exige NO es que estén ocultas sino que estén PRESENTES y que
+      no pisen el campo. Se mide lo que la persona puede hacer: que el nodo esté, que se pueda
+      pulsar y que su caja no se solape con la del campo activo.
+    */
+    navUsable: usable(nav),
+    ctaUsable: usable(cta),
+    pisanElCampo: [nav, cta].some((el) => el && r && solapa(el.getBoundingClientRect(), r)),
     atributo: document.documentElement.getAttribute('data-teclado'),
     altoVisual: vv ? Math.round(vv.height) : null,
     altoLayout: window.innerHeight,
@@ -240,10 +257,27 @@ const MIRAR = (sel) => {
     ok(conTeclado.enfocado && conTeclado.dentro,
       `${tam.nombre}: el campo activo se ve entero sobre el teclado`, JSON.stringify(conTeclado));
     ok(conTeclado.propio, `${tam.nombre}: y nadie se le pone encima`, JSON.stringify(conTeclado));
-    ok(conTeclado.navOculta === true, `${tam.nombre}: la navegación inferior no compite con el teclado`,
-      `oculta=${conTeclado.navOculta}`);
-    ok(conTeclado.ctaOculto === true, `${tam.nombre}: el botón fijo tampoco`,
-      `oculto=${conTeclado.ctaOculto}`);
+    /*
+      EL CONTRATO CAMBIÓ EL 23-10-2026, Y AL REVÉS.
+
+      Hasta hoy estas dos comprobaciones exigían que la navegación y el botón estuvieran OCULTOS
+      con el teclado arriba. Era la orden del 20-10, que lo autorizaba en letra para que no
+      compitieran por los pocos píxeles que deja el teclado.
+
+      El 23-10 Javier fotografió la consecuencia en su iPhone: tocó «Número de parqueo» y los dos
+      desaparecieron, y volvían sólo al tocar fuera. Su orden de ese día sustituye expresamente a
+      la anterior: «botón y navegación siempre accesibles, que no se tapen ni desaparezcan».
+
+      Así que se exige lo contrario, y además lo que la orden vieja protegía: que estén y que NO
+      pisen el campo. Las dos cosas a la vez, porque cumplir sólo la primera es volver al defecto
+      del 20-10 y cumplir sólo la segunda es el defecto del 23-10.
+    */
+    ok(conTeclado.navUsable === true, `${tam.nombre}: la navegación inferior sigue estando y se puede pulsar`,
+      JSON.stringify(conTeclado));
+    ok(conTeclado.ctaUsable === true, `${tam.nombre}: el botón fijo también`,
+      JSON.stringify(conTeclado));
+    ok(conTeclado.pisanElCampo === false, `${tam.nombre}: y ninguna de las dos pisa el campo`,
+      JSON.stringify(conTeclado));
 
     // Escribir, borrar y volver a escribir con el teclado arriba.
     await campo.type('0012', { delay: 40 });
@@ -337,9 +371,10 @@ const MIRAR = (sel) => {
       JSON.stringify(despues));
     ok(despues.dentro, 'giro: el campo sigue entero a la vista en apaisado', JSON.stringify(despues));
     ok(despues.propio, 'giro: y nadie se le pone encima', JSON.stringify(despues));
-    ok(despues.navOculta === true, 'giro: la navegación inferior sigue oculta',
+    ok(despues.navUsable === true, 'giro: la navegación inferior sigue estando',
       `oculta=${despues.navOculta}`);
-    ok(despues.ctaOculto === true, 'giro: el botón fijo sigue oculto', `oculto=${despues.ctaOculto}`);
+    ok(despues.ctaUsable === true, 'giro: el botón fijo sigue estando', JSON.stringify(despues));
+    ok(despues.pisanElCampo === false, 'giro: y siguen sin pisar el campo', JSON.stringify(despues));
     ok((await campo.inputValue()) === '0042', 'giro: lo escrito no se pierde al girar');
 
     // Se sigue escribiendo girado.
@@ -422,12 +457,13 @@ const MIRAR = (sel) => {
     ok(v.atributo === (caso.esperaOculto ? 'abierto' : null),
       `${caso.nombre}: ${caso.esperaOculto ? 'se trata como teclado abierto sin medirlo' : 'no se trata como teclado'}`,
       JSON.stringify(v));
-    ok(v.navOculta === caso.esperaOculto,
-      `${caso.nombre}: la navegación inferior ${caso.esperaOculto ? 'se va' : 'se queda'}`,
-      `oculta=${v.navOculta}`);
-    ok(v.ctaOculto === caso.esperaOculto,
-      `${caso.nombre}: el botón fijo ${caso.esperaOculto ? 'se va' : 'se queda'}`,
-      `oculto=${v.ctaOculto}`);
+    /*
+      Y acá está el corazón del defecto del 23-10: SIN encoger el viewport, es decir con el foco
+      como única señal, las barras se iban igual. Ése es el caso que Javier fotografió, porque su
+      iPhone no dio medida. Ahora se quedan, en los dos casos: con señal y sin ella.
+    */
+    ok(v.navUsable === true, `${caso.nombre}: la navegación inferior se queda`, JSON.stringify(v));
+    ok(v.ctaUsable === true, `${caso.nombre}: el botón fijo se queda`, JSON.stringify(v));
     // Sin medida no se reserva alto: un número inventado deja un hueco del tamaño del error.
     const reservado = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--lx-teclado-alto').trim());
     ok(reservado === '', `${caso.nombre}: sin medida no se reserva alto inventado`, `--lx-teclado-alto='${reservado}'`);

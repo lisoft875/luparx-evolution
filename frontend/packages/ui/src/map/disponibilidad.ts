@@ -68,3 +68,72 @@ export function sePuedeDibujarElMapa(datos: {
   if (!datos.estiloConfigurado) return false;
   return datos.hayGeometrias || Boolean(datos.hayCentro);
 }
+
+/** Un centro de mapa: dónde mirar cuando no hay ningún polígono que encuadrar. */
+export interface CentroDeMapa {
+  lon: number;
+  lat: number;
+  zoom?: number;
+}
+
+/**
+ * Los centros por municipalidad que configuró quien despliega.
+ *
+ * <h2>Por qué existe esto, y por qué NO lo rellena Claude</h2>
+ *
+ * <p>La orden del 23-10-2026 pide calles debajo del selector de Zona «aun sin polígonos». Para
+ * dibujar un mapa hace falta saber dónde mirar, y <b>ese dato no existe en ninguna parte del
+ * sistema</b>: revisadas las migraciones, `tenants` no guarda coordenadas (`V4_0__tenancy.sql`),
+ * `administrative_divisions` tampoco (`V2_0__geo.sql`), y las únicas de la base son
+ * `parking_zones.geom` y las de Fiscalización. La misma orden prohíbe fabricar posiciones.</p>
+ *
+ * <p>La salida honesta no es inventarlo ni esperar a un cambio de contrato: es dejar que lo
+ * aporte quien SÍ lo sabe, de la misma forma en que ya se aporta el proveedor de teselas — una
+ * variable de despliegue. Las coordenadas las pone Javier o la municipalidad y se pueden
+ * verificar; acá no hay ninguna escrita.</p>
+ *
+ * <p>Formato, una municipalidad por coma, identificada por su `slug`:</p>
+ *
+ * <pre>VITE_MAP_CENTERS="san-jose:-84.0807,9.9333,13;escazu:-84.1399,9.9189,13"</pre>
+ *
+ * <p>El zoom es opcional. Un trozo mal escrito se descarta en silencio y los demás siguen
+ * valiendo: media configuración es mejor que ninguna, y un mapa de menos no rompe el
+ * estacionamiento.</p>
+ *
+ * <p><b>Esto es un puente, no el destino.</b> El día que el contrato publique un centro por
+ * municipalidad —o que la municipalidad cargue sus perímetros, que es mejor todavía— esta
+ * variable se queda vacía y nadie la echa de menos.</p>
+ */
+export function centroConfigurado(slug: string | null | undefined): CentroDeMapa | null {
+  if (!slug) return null;
+  let bruta = '';
+  try {
+    bruta = (
+      (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env
+        ?.VITE_MAP_CENTERS ?? ''
+    ).trim();
+  } catch {
+    return null;
+  }
+  if (!bruta) return null;
+
+  for (const trozo of bruta.split(';')) {
+    const corte = trozo.indexOf(':');
+    if (corte < 0) continue;
+    if (trozo.slice(0, corte).trim() !== slug) continue;
+    const partes = trozo.slice(corte + 1).split(',').map((n) => Number(n.trim()));
+    const [lon, lat, zoom] = partes;
+    /*
+      Se validan los rangos y no sólo que sean números: un `lat` y un `lon` cambiados de orden —el
+      error más común al copiar coordenadas, porque GeoJSON los escribe al revés que casi todo lo
+      demás— caen fuera de rango para Costa Rica y se descartan en vez de llevar el mapa al océano
+      Índico. Latitud ±90, longitud ±180, y NaN fuera.
+    */
+    if (lon === undefined || lat === undefined) return null;
+    if (!Number.isFinite(lon) || !Number.isFinite(lat)) return null;
+    if (Math.abs(lat) > 90 || Math.abs(lon) > 180) return null;
+    const conZoom = zoom !== undefined && Number.isFinite(zoom) && zoom > 0 && zoom <= 22;
+    return conZoom ? { lon, lat, zoom } : { lon, lat };
+  }
+  return null;
+}
