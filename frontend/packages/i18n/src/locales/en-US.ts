@@ -1819,7 +1819,9 @@ export const enUS: Record<TranslationKey, string> = {
   'citizen.vehicles.editCta': 'Edit',
   'citizen.vehicles.menuCta': 'More options',
   'citizen.vehicles.menuForPlate': 'Options for {{plate}}',
-  'citizen.vehicles.imageIsGeneric': 'The images are generic illustrations, not photos of your vehicle.',
+  'citizen.vehicles.imageIsGeneric':
+    'The picture and category are estimated from make and model; you can correct them by editing the vehicle.',
+  'citizen.vehicles.form.typeAutoChosen': 'Car (the app picks)',
   'citizen.vehicles.imageAlt': 'Generic illustration of a vehicle',
   'citizen.vehicles.empty.title': "You don't have any vehicles yet!",
   'citizen.vehicles.empty.description': 'Add a vehicle to be able to park in this municipality.',

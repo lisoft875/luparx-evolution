@@ -61,8 +61,12 @@ const CASOS = [
   { placa: 'CON108', categoria: /^Sedán$/, color: /^Beige$/, marca: 'Toyota', modelo: 'Hilux',
     archivo: 'sedan-beige.webp', nota: 'la elección gana a la tabla de modelos' },
   /* Sin elección, la tabla sigue mandando: lo que ya funcionaba no se rompió. */
-  { placa: 'AUT109', categoria: /^Automóvil$/, color: /^Beige$/, marca: 'Toyota', modelo: 'Hilux',
-    archivo: 'pickup-beige.webp', nota: 'sin elección, decide la tabla' },
+  /* La opción de NO elegir se rotula «Automóvil (la elige la aplicación)» desde el 23-10-2026:
+     antes decía «Automóvil» a secas y eso era lo mismo que la tarjeta mostraba, así que nadie
+     distinguía «es un automóvil» de «decidila vos». La insignia esperada ya no es «Automóvil»
+     sino «Pick-up», porque eso es lo que la tabla deduce de un Hilux y lo que la imagen dibuja. */
+  { placa: 'AUT109', categoria: /^Automóvil \(/, color: /^Beige$/, marca: 'Toyota', modelo: 'Hilux',
+    archivo: 'pickup-beige.webp', insignia: /^Pick-up$/, nota: 'sin elección, decide la tabla' },
   /* Amarillo no tiene archivo: cae al dibujo, y el dibujo tiene que ser el de una pick-up. */
   { placa: 'AMA110', categoria: /^Pick-up$/, color: /^Amarillo$/, archivo: null, dibujo: 'PICKUP',
     nota: 'color sin imagen: dibujo, pero el de SU carrocería' },
@@ -237,6 +241,35 @@ const MIRAR = (selector) => {
           `${caso.placa} → dibujo ${caso.dibujo}${caso.nota ? ' · ' + caso.nota : ''}`,
           `muestra ${f.muestra} ${f.archivo ?? ''} dibujo=${f.dibujo}`);
       }
+
+      /*
+        LA PALABRA TIENE QUE DECIR LO QUE EL DIBUJO DIBUJA (23-10-2026).
+
+        Éste es el defecto que Javier reportó: «los carros siguen apareciendo como automóvil sin
+        sus respectivas categorías». Medido en la aplicación, un Toyota RAV4 mostraba
+        `suv-compacta-blanco.webp` con la insignia «Automóvil», y un Hilux mostraba
+        `pickup-plata.webp` con la insignia «Automóvil». No era un dato de menos: era una
+        contradicción entre el dibujo y el texto, y quien la lee no sabe a cuál creerle.
+
+        Se comprueba contra el ARCHIVO y no contra una lista escrita a mano, para que la prueba no
+        pueda quedar de acuerdo consigo misma: el nombre del archivo lo eligió la biblioteca de
+        imágenes, la insignia la eligió la pantalla, y acá se exige que coincidan.
+      */
+      const esperadaPorLaImagen = {
+        sedan: 'Sedán', hatchback: 'Hatchback', 'suv-compacta': 'SUV',
+        pickup: 'Pick-up', minivan: 'Miniván', 'van-comercial': 'Furgoneta',
+      };
+      const clave = (caso.archivo || '').replace(/-[a-z]+\.webp$/, '');
+      const esperada = caso.insignia
+        || (esperadaPorLaImagen[clave] ? new RegExp(`^${esperadaPorLaImagen[clave]}$`) : null);
+      if (esperada) {
+        ok(f.insignias.some((b) => esperada.test(b)),
+          `${caso.placa}: la insignia dice lo que la imagen dibuja`,
+          `imagen ${caso.archivo} · insignias ${f.insignias.join(', ')}`);
+        ok(!f.insignias.some((b) => b === 'Automóvil'),
+          `${caso.placa}: y ya no dice «Automóvil» a secas junto a un dibujo que es más preciso`,
+          f.insignias.join(', '));
+      }
     }
 
     console.log('\n══ 2 · responsive, con los once vehículos recién registrados ══');
@@ -316,8 +349,16 @@ const MIRAR = (selector) => {
     await page.waitForTimeout(1600);
     ({ filas } = await page.evaluate(AUDITAR));
     const exMoto = filas.find((x) => x.placa === 'MOT107');
-    ok(exMoto?.archivo === 'sedan-naranja.webp' && exMoto.insignias.some((b) => /Autom/.test(b)),
-      'MOT107 pasada a Sedán queda como automóvil, con imagen de sedán',
+    /*
+      Lo que importa es que DEJÓ de ser moto, no la palabra exacta: desde el 23-10 la insignia dice
+      la categoría —«Sedán»— y no el tipo del servidor —«Automóvil»—, que es el arreglo pedido.
+      Atar esta comprobación a «Automóvil» la volvía a romper con el próximo cambio de redacción;
+      lo que nunca puede pasar es que siga diciendo «Motocicleta» con un sedán dibujado al lado.
+    */
+    ok(exMoto?.archivo === 'sedan-naranja.webp'
+      && exMoto.insignias.some((b) => /^Sedán$/.test(b))
+      && !exMoto.insignias.some((b) => /Motocicleta/.test(b)),
+      'MOT107 pasada a Sedán queda como automóvil, con imagen e insignia de sedán',
       `${exMoto?.archivo} · ${exMoto?.insignias.join(', ')}`);
     await abrirEdicion(page, 'MOT107');
     await elegir(page, /Tipo de veh/i, /^Motocicleta$/);
@@ -438,9 +479,18 @@ const MIRAR = (selector) => {
     await page.waitForTimeout(500);
     const opciones = await page.locator('[role=listbox] [role=option]').allTextContents();
     console.log(`  ·· opciones: ${opciones.map((o) => o.trim()).join(' · ')}`);
-    const esperadas = ['Automóvil', 'Sedán', 'Hatchback', 'SUV', 'Pick-up', 'Miniván', 'Furgoneta', 'Motocicleta'];
+    const esperadas = ['Automóvil (la elige la aplicación)', 'Sedán', 'Hatchback', 'SUV',
+      'Pick-up', 'Miniván', 'Furgoneta', 'Motocicleta'];
     ok(esperadas.every((e) => opciones.some((o) => o.trim() === e)),
       'el selector ofrece las ocho categorías', opciones.join(', '));
+    /*
+      Y la primera NO dice «Automóvil» a secas. Es la diferencia que pidió el arreglo del 23-10:
+      con la tarjeta diciendo «Pick-up», abrir el formulario y leer «Automóvil» hacía pensar que
+      la elección no se había guardado.
+    */
+    ok(!opciones.some((o) => o.trim() === 'Automóvil'),
+      'y ninguna dice «Automóvil» a secas: esa opción significa «decidila vos por mí»',
+      opciones.join(', '));
     await page.screenshot({ path: path.join(SALIDA, 'formulario-opciones.png') });
 
     console.log(`\n${comprobaciones} comprobaciones · ${fallos} fallos`);

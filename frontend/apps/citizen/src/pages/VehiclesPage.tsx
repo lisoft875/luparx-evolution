@@ -22,7 +22,9 @@ import {
   guardarCarroceriaElegida,
   leerCarroceriaElegida,
   olvidarCarroceriaElegida,
+  useCarroceriaElegida,
 } from '../vehicleImages/carroceriaElegida';
+import { categoriaVisible } from '../vehicleImages/categoriaVisible';
 import {
   CARROCERIAS_OFRECIDAS,
   ETIQUETA_DE_CARROCERIA,
@@ -162,10 +164,17 @@ export function VehiclesPage(): React.JSX.Element {
         return [{ value: `${entry.value}:`, label: tKey(entry.labelKey) }];
       }
       return [
-        // «Automóvil» a secas encabeza la lista y es lo que trae un formulario nuevo: quien no
-        // sepa o no quiera elegir carrocería deja esto y la aplicación la deduce del modelo, como
-        // hasta hoy. Lleva el rótulo del servidor para no inventar una palabra distinta.
-        { value: `${entry.value}:`, label: tKey(entry.labelKey) },
+        /*
+          La opción de no elegir encabeza la lista y es lo que trae un formulario nuevo: quien no
+          sepa o no quiera elegir carrocería deja esto y la aplicación la deduce del modelo.
+
+          Desde el 23-10-2026 NO dice «Automóvil» a secas, dice «Automóvil (la elige la
+          aplicación)». Antes el rótulo del servidor alcanzaba porque era también lo que la tarjeta
+          mostraba; ahora la tarjeta de un Hilux dice «Pick-up», y abrir el formulario y leer
+          «Automóvil» dejaba a la persona creyendo que algo no se había guardado. Lo que esta
+          opción significa no es «es un automóvil genérico»: es «decidila vos por mí».
+        */
+        { value: `${entry.value}:`, label: t('citizen.vehicles.form.typeAutoChosen') },
         ...CARROCERIAS_OFRECIDAS.map((clave) => ({
           value: `${entry.value}:${clave}`,
           label: tKey(ETIQUETA_DE_CARROCERIA[clave] ?? clave),
@@ -362,11 +371,20 @@ export function VehiclesPage(): React.JSX.Element {
                     {vehicleDescriptor(vehicle, { includeName: true, colorLabel: colorOf(vehicle.color) })}
                   </p>
                   <div className="lx-vehiculo-fila__insignias">
-                    {/* El tipo, en palabras. Una moto y un automóvil se cobran y se fiscalizan
-                        distinto, así que va junto a la placa y no enterrado en un formulario. Y
-                        desde que hay imagen cumple una segunda función: es el dato real al lado de
-                        una ilustración que sólo es parecida. */}
-                    {typeOf(vehicle.type) ? <Badge tone="neutral">{typeOf(vehicle.type)}</Badge> : null}
+                    {/* La categoría, en palabras. Una moto y un automóvil se cobran y se
+                        fiscalizan distinto, así que esto va junto a la placa y no enterrado en un
+                        formulario.
+
+                        Desde el 23-10-2026 dice la CATEGORÍA —«Pick-up», «SUV»— y no sólo
+                        «Automóvil». No es un adorno: la tarjeta ya dibujaba la pick-up y al lado
+                        escribía «Automóvil», que es una contradicción, no un dato de menos. Sale
+                        de la misma resolución que elige la imagen, así que las dos no se pueden
+                        separar. Ver `categoriaVisible.ts`. */}
+                    <InsigniaDeCategoria
+                      vehicle={vehicle}
+                      etiquetaDelTipo={typeOf(vehicle.type)}
+                      tKey={tKey}
+                    />
                     {activeVehicleIds.has(vehicle.id) ? <Badge tone="info">{t('citizen.vehicles.activeSessionBadge')}</Badge> : null}
                     {vehicle.isPrimary ? <Badge tone="success">{t('citizen.vehicles.primaryBadge')}</Badge> : null}
                   </div>
@@ -588,4 +606,39 @@ export function VehiclesPage(): React.JSX.Element {
       </Modal>
     </CitizenShell>
   );
+}
+
+/**
+ * La insignia que dice qué es este vehículo.
+ *
+ * <h2>Por qué es un componente y no una expresión dentro de la tarjeta</h2>
+ *
+ * <p>Porque tiene que <b>suscribirse</b> a la carrocería elegida, igual que la imagen. La elección
+ * se guarda en el dispositivo y se puede cambiar desde el formulario de esta misma pantalla; si la
+ * insignia leyera una vez al montar, guardar «pick-up» cambiaría el dibujo y dejaría la palabra
+ * anterior al lado hasta recargar. Es decir: se arreglaría la contradicción del 23-10 y se
+ * introduciría la misma contradicción un segundo más tarde. Un hook necesita un componente.</p>
+ *
+ * <p>Cuando no hay categoría que decir —una moto, un tipo que esta aplicación no conoce— cae en el
+ * rótulo del catálogo del servidor, que es lo que la tarjeta mostraba siempre.</p>
+ */
+function InsigniaDeCategoria({
+  vehicle,
+  etiquetaDelTipo,
+  tKey,
+}: {
+  vehicle: Vehicle;
+  etiquetaDelTipo: string | undefined;
+  tKey: (key: string) => string;
+}): React.JSX.Element | null {
+  const carroceria = useCarroceriaElegida(vehicle.id);
+  const categoria = categoriaVisible({
+    type: vehicle.type,
+    brand: vehicle.brand,
+    model: vehicle.model,
+    carroceria,
+  });
+  const texto = categoria ? tKey(categoria.claveDeEtiqueta) : etiquetaDelTipo;
+  if (!texto) return null;
+  return <Badge tone="neutral">{texto}</Badge>;
 }

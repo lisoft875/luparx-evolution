@@ -1892,7 +1892,9 @@ export const esCR = {
   'citizen.vehicles.editCta': 'Editar',
   'citizen.vehicles.menuCta': 'Más opciones',
   'citizen.vehicles.menuForPlate': 'Opciones de {{plate}}',
-  'citizen.vehicles.imageIsGeneric': 'Las imágenes son ilustraciones genéricas, no fotos de tu vehículo.',
+  'citizen.vehicles.imageIsGeneric':
+    'La imagen y la categoría se estiman por marca y modelo; podés corregirlas al editar el vehículo.',
+  'citizen.vehicles.form.typeAutoChosen': 'Automóvil (la elige la aplicación)',
   'citizen.vehicles.imageAlt': 'Ilustración genérica de un vehículo',
   'citizen.vehicles.empty.title': '¡Todavía no tienes vehículos!',
   'citizen.vehicles.empty.description': 'Agrega un vehículo para poder estacionar en esta municipalidad.',
