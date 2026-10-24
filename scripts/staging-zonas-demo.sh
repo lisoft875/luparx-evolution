@@ -25,11 +25,16 @@
 # un VEREDICTO que cuenta las filas que de verdad saldrían. Si son cero, lo dice en rojo y nombra la
 # salida, en vez de felicitarse en verde con el mapa vacío.
 #
+# Y desde el 24-10 existe `demo-on`, que es lo que `activar` quería ser: publica también las
+# REJECTED, que es el estado en el que de verdad están. Igual que hace el perfil `dev` del backend.
+#
 # ÓRDENES
 #
 #   ./scripts/staging-zonas-demo.sh preflight    sólo lee: dice qué hay y qué falta
 #   ./scripts/staging-zonas-demo.sh sembrar      pone la geometría DEMO que falte (idempotente)
 #   ./scripts/staging-zonas-demo.sh activar      publica también UNVERIFIED (ver el aviso de arriba)
+#   ./scripts/staging-zonas-demo.sh demo-on      publica TAMBIÉN las REJECTED ← la que sirve hoy
+#   ./scripts/staging-zonas-demo.sh demo-off     deshace demo-on
 #   ./scripts/staging-zonas-demo.sh postcheck    comprueba lo que quedó
 #   ./scripts/staging-zonas-demo.sh revertir     vuelve a publicar sólo VERIFIED
 #
@@ -172,15 +177,18 @@ veredicto() {
     gris  "Causa: la V43_0 dejó las ocho zonas DEMO en REJECTED, a propósito. 'activar' abre"
     gris  "UNVERIFIED, que es un estado que ya no usa ninguna de ellas: no hay nada que abrir."
     echo
-    gris  "Lo que NO hay que hacer:"
-    gris  "  · añadir REJECTED a la variable — publicaría al ciudadano polígonos que el sistema"
-    gris  "    marcó como no aptos, que es lo contrario de lo que ese estado significa;"
-    gris  "  · volver a guardarlas por el portal de administración — eso las pasa a ADMIN_DRAWING"
-    gris  "    y entonces SÍ se podrían verificar, que es justo el agujero que la V43_0 cerró."
+    gris  "Para VER los rectángulos de demostración en este ambiente:"
+    gris  "    ./scripts/staging-zonas-demo.sh demo-on"
+    gris  "  Publica también las REJECTED, como ya hace el perfil dev del backend. El portal las"
+    gris  "  dibuja punteadas y rotuladas «DEMO · no oficial»: nunca pasan por límites oficiales."
+    gris  "  Se deshace con demo-off, y no corre si LUPARX_ENVIRONMENT es producción."
     echo
     gris  "Para ver CALLES sin perímetros, poné MAP_CENTERS en infra/.env y redesplegá:"
     gris  "    MAP_CENTERS=san-jose:<lon>,<lat>,13"
-    gris  "Para ver PERÍMETROS, la municipalidad tiene que dibujar los suyos de verdad."
+    echo
+    gris  "Para ver PERÍMETROS DE VERDAD, la municipalidad tiene que entregar los suyos. Lo que NO"
+    gris  "sirve: guardar los de demostración por el portal de administración — eso los pasa a"
+    gris  "ADMIN_DRAWING y entonces SÍ se podrían verificar, que es el agujero que la V43_0 cerró."
   fi
   echo "================================================================================="
 }
@@ -214,6 +222,45 @@ case "$orden" in
     echo
     psql_en_postgres -f - < "$SQL_DIR/zonas-demo-postcheck.sql"
     verde "variable activada."
+    veredicto
+    ;;
+
+  # -----------------------------------------------------------------------------------------------
+  # `demo-on` — publicar también las REJECTED, que es lo que de verdad hace falta (24-10-2026).
+  #
+  # POR QUÉ EXISTE, cuando ya está `activar`. Porque `activar` abre UNVERIFIED, y las ocho
+  # geometrías de demostración de San José están en REJECTED desde la V43_0. Abrir UNVERIFIED no
+  # publica ninguna: es el camino sin salida que este script recorrió dos veces.
+  #
+  # POR QUÉ ES ACEPTABLE publicar algo marcado como rechazado. Tres razones, y las tres medidas:
+  #
+  #   1. Es EXACTAMENTE lo que el perfil `dev` del backend hace por omisión
+  #      (`application-dev.yml`: VERIFIED,UNVERIFIED,REJECTED). No es una invención de nadie: es el
+  #      ajuste previsto para un entorno que no cobra.
+  #   2. La V43_0 conservó esos polígonos con su razón escrita — «el ambiente de pruebas las
+  #      necesita»—. Rechazarlas y conservarlas sólo tiene sentido si alguien puede verlas.
+  #   3. El portal NO las presenta como límites: contorno punteado, relleno más tenue, «DEMO · no
+  #      oficial» en el rótulo y un aviso aparte. Desde el 24-10 también la zona ELEGIDA conserva
+  #      su punteado; antes el anillo de selección lo tapaba, y ése era el agujero que lo hacía
+  #      inaceptable.
+  #
+  # POR QUÉ COMO ORDEN Y NO EDITANDO EL ARCHIVO A MANO. Porque a mano no hay nada que impida
+  # escribirlo en producción. Acá `exigir_no_produccion` corta antes de tocar nada, y `fijar_variable`
+  # deja un respaldo con fecha. Una orden guardada es más segura que una instrucción en un mensaje.
+  demo-on)
+    exigir_no_produccion
+    rojo "Esto publica geometrías marcadas REJECTED. Sólo para staging o demo."
+    gris "El portal las dibuja punteadas y rotuladas «DEMO · no oficial». NUNCA son límites oficiales."
+    fijar_variable "VERIFIED,UNVERIFIED,REJECTED"
+    recrear_backend
+    psql_en_postgres -f - < "$SQL_DIR/zonas-demo-postcheck.sql"
+    veredicto
+    ;;
+
+  # Vuelve al valor con el que staging llegó hoy: ni las de demostración ni las rechazadas.
+  demo-off)
+    fijar_variable "VERIFIED,UNVERIFIED"
+    recrear_backend
     veredicto
     ;;
 
