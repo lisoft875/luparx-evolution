@@ -213,6 +213,14 @@ export function InspectorShell({
           flexDirection: 'column',
           minHeight: '100dvh',
           background: 'transparent',
+          // Marco móvil (Fase 6, 24-10-2026): en escritorio el portal del fiscalizador se CENTRA
+          // como un teléfono en vez de estirarse. En un celular (<=448px) es ancho completo, igual
+          // que antes. Confinado a Fiscalización: va en estilos en línea de este shell, no en el CSS
+          // compartido, así que no toca ni admin ni ciudadano.
+          width: '100%',
+          maxWidth: '448px',
+          margin: '0 auto',
+          position: 'relative',
           '--lx-bottom-nav-height': `${footerHeight}px`,
         } as React.CSSProperties
       }
@@ -376,7 +384,16 @@ export function InspectorShell({
       <div
         ref={footerRef}
         data-lx-bottom-chrome=""
-        style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 20 }}
+        style={{
+          position: 'fixed',
+          // Centrada al mismo ancho que el marco móvil (448px). En un celular es ancho completo.
+          left: '50%',
+          transform: 'translateX(-50%)',
+          width: '100%',
+          maxWidth: '448px',
+          bottom: 0,
+          zIndex: 20,
+        }}
       >
         <BottomTabBar tabs={tabs} />
       </div>
