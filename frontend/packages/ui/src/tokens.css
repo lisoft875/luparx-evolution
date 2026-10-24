@@ -6167,6 +6167,27 @@ a.lx-list-row {
     padding-left: var(--lx-space-6);
   }
 }
+/*
+  La TABLETA VERTICAL, que es donde el ancho sobra sin que nadie lo pida (24-10-2026).
+
+  Los 960 de arriba son la regla de tablet APAISADA y ahí están bien. En un iPad en vertical el
+  viewport mide 768 y 960 nunca llega a aplicar: el formulario se estira de borde a borde y las
+  tarjetas y los campos quedan sobredimensionados — medido en la foto de staging del 24-10 y
+  reproducido en Chromium a 768×1024, con `.lx-inspector-main` en 768px exactos.
+
+  720 y no 560: con 24 de relleno a cada lado quedan 672 útiles, que es lo que necesita la fila de
+  filtros de «Mis boletas» para tres columnas sin recortar «Todos los estados». Más angosto
+  obligaría a apilar también los dos campos de fecha, y entonces el filtro ocuparía más alto que
+  la primera boleta de la lista.
+
+  El rango se cierra en 1023 a propósito: de 1024 en adelante la pantalla ya es apaisada o de
+  escritorio y manda la regla de 960.
+*/
+@media (min-width: 768px) and (max-width: 1023px) {
+  .lx-inspector-main {
+    max-width: 720px;
+  }
+}
 
 /* ---- El saludo y el reloj --------------------------------------------------------------------
    «Hola, [nombre]» y «Fiscalización · [municipalidad]». Es el título principal de la pantalla y

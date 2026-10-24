@@ -86,9 +86,22 @@ export function MyCitationsPage(): React.JSX.Element {
       <Card>
         <form
           onSubmit={apply}
+          /*
+            El PISO de la columna es 200 y no 150 (24-10-2026).
+
+            Con 150, a 768px de ventana entraban cuatro columnas de 163px y la más larga de las
+            opciones de estado —«Todos los estados», 146px de texto— no cabía con su flecha y su
+            relleno: el campo mostraba «Todos los esta…». Medido en Chromium a 390 y a 768;
+            a 1024 no pasaba, que es por lo que se veía bien en el escritorio de quien lo escribió.
+
+            200 es ese texto más la flecha y el relleno. No es un número para un aparato: es el
+            ancho que la opción más larga NECESITA, y por eso vale para cualquier ventana. Si
+            mañana se agrega un estado de nombre más largo, este número se queda corto y hay que
+            volver acá — por eso queda escrito qué mide.
+          */
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
             gap: 'var(--lx-space-3)',
             alignItems: 'end',
           }}
@@ -137,7 +150,20 @@ export function MyCitationsPage(): React.JSX.Element {
               />
             )}
           </FormField>
-          <div style={{ display: 'flex', gap: 'var(--lx-space-2)' }}>
+          {/*
+            Los botones ocupan la fila ENTERA, no una celda más de la rejilla. Compartiendo celda
+            con los tres campos, «Aplicar» se quedaba con 100px pegado al borde derecho de la
+            tarjeta —así salió en la foto de staging— y «Limpiar», cuando aparece, no cabía al
+            lado. Una acción no compite por ancho con los campos sobre los que actúa.
+          */}
+          <div
+            style={{
+              gridColumn: '1 / -1',
+              display: 'flex',
+              gap: 'var(--lx-space-2)',
+              flexWrap: 'wrap',
+            }}
+          >
             <Button type="submit">{t('inspector.citations.filter.apply')}</Button>
             {hasFilters ? (
               <Button type="button" variant="secondary" onClick={clear}>
