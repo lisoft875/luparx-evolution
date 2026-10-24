@@ -100,5 +100,34 @@ console.log('\nel valor vacío es seguro');
 ok(/ARG MAP_STYLE_URL=\s*$/m.test(dockerfile),
   'el ARG queda vacío por omisión: sin decisión de despliegue no hay mapa, y el resto del portal funciona');
 
+/*
+  Y la MISMA cadena para el centro del mapa (23-10-2026).
+
+  `MAP_CENTERS` viaja por el mismo camino que `MAP_STYLE_URL` y se rompe de la misma manera: un
+  `.dockerignore` que deja fuera los `.env`, un ARG que alguien olvida declarar, o un paso que cae
+  en otra capa del Dockerfile y no llega al `vite build`. Ese defecto ya pasó una vez con el
+  estilo, costó encontrarlo, y es la razón por la que existe este archivo. No tiene sentido
+  vigilar una variable y dejar la hermana sin vigilar.
+*/
+console.log('\nde dónde sale el centro del mapa');
+const disponibilidad = leer(join(frontend, 'packages/ui/src/map/disponibilidad.ts'));
+ok(/VITE_MAP_CENTERS/.test(disponibilidad),
+  'disponibilidad.ts lee VITE_MAP_CENTERS');
+ok(!/-8[0-9]\.[0-9]/.test(disponibilidad),
+  'y NO trae ninguna coordenada escrita: el centro lo aporta quien despliega, no este código');
+ok(/^ARG MAP_CENTERS=/m.test(dockerfile),
+  'el Dockerfile declara ARG MAP_CENTERS');
+ok(/VITE_MAP_CENTERS="\$MAP_CENTERS"/.test(dockerfile),
+  'y lo pasa como VITE_MAP_CENTERS al compilar');
+const posCentros = dockerfile.indexOf('VITE_MAP_CENTERS="$MAP_CENTERS"');
+ok(posCentros > 0 && posBuild > 0 && posCentros < posBuild,
+  'en la MISMA sentencia que corre vite build');
+ok(/MAP_CENTERS:\s*\$\{MAP_CENTERS:-\}/.test(compose),
+  'el compose de despliegue lo pasa como argumento de build');
+ok(/MAP_CENTERS/.test(bloqueWebArgs),
+  'y al servicio web');
+ok(/ARG MAP_CENTERS=\s*$/m.test(dockerfile),
+  'vacío por omisión: sin decisión de despliegue no hay mapa base, y el portal funciona igual');
+
 console.log(fallos === 0 ? '\ntodas las comprobaciones pasaron' : `\n${fallos} fallos`);
 process.exit(fallos === 0 ? 0 : 1);

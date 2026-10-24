@@ -57,6 +57,18 @@ ARG LUPARX_BUILT_AT=
 # mapa no carga y el resto del portal funciona igual, que es el comportamiento que ya tenía.
 ARG MAP_STYLE_URL=
 
+# Dónde mirar cuando una municipalidad todavía no tiene ni un perímetro dibujado (23-10-2026).
+#
+# El mapa necesita un centro, y ese dato NO existe en el sistema: `tenants` no guarda coordenadas y
+# las únicas de la base son los perímetros de zona y las de Fiscalización. Sin centro no se dibuja
+# nada, que es lo correcto —centrar en el país ya se probó y debajo de «Barrio Amón» apareció Costa
+# Rica y Panamá—. Así que lo aporta quien lo sabe, por `slug` de municipalidad:
+#
+#   MAP_CENTERS="san-jose:-84.0807,9.9333,13;escazu:-84.1399,9.9189,13"
+#
+# Vacío por omisión, igual que el estilo: sin valor no hay mapa base y el portal funciona igual.
+ARG MAP_CENTERS=
+
 # Prefijo de cada portal. El ciudadano en la raíz porque es el único de cara al público.
 ARG BASE_PATH_CITIZEN=/
 ARG BASE_PATH_ADMIN=/admin/
@@ -97,6 +109,7 @@ RUN set -eu; \
         LUPARX_BUILD="$LUPARX_BUILD" LUPARX_ENVIRONMENT="$LUPARX_ENVIRONMENT" \
         LUPARX_BUILT_AT="$LUPARX_BUILT_AT" \
         VITE_MAP_STYLE_URL="$MAP_STYLE_URL" \
+        VITE_MAP_CENTERS="$MAP_CENTERS" \
         npx vite build --config "apps/$app/vite.config.ts" "apps/$app"; \
     done
 

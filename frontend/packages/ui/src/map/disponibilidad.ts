@@ -94,7 +94,12 @@ export interface CentroDeMapa {
  *
  * <p>Formato, una municipalidad por coma, identificada por su `slug`:</p>
  *
- * <pre>VITE_MAP_CENTERS="san-jose:-84.0807,9.9333,13;escazu:-84.1399,9.9189,13"</pre>
+ * <pre>VITE_MAP_CENTERS="&lt;slug&gt;:&lt;lon&gt;,&lt;lat&gt;[,&lt;zoom&gt;];&lt;slug&gt;:&lt;lon&gt;,&lt;lat&gt;"</pre>
+ *
+ * <p>El ejemplo va con marcadores y no con números de verdad a propósito: una coordenada escrita
+ * acá, aunque sea «sólo un comentario», es una coordenada que alguien copia. `estiloEnElDespliegue`
+ * comprueba que este archivo no contenga ninguna, y esa comprobación cazó la primera versión de
+ * este mismo bloque.</p>
  *
  * <p>El zoom es opcional. Un trozo mal escrito se descarta en silencio y los demás siguen
  * valiendo: media configuración es mejor que ninguna, y un mapa de menos no rompe el

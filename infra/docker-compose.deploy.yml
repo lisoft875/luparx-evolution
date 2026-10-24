@@ -145,6 +145,9 @@ services:
         # Estilo de teselas del mapa del ciudadano. Vacío = sin mapa, y el portal sigue
         # funcionando; se pone en infra/.env cuando se decide quién sirve las teselas.
         MAP_STYLE_URL: ${MAP_STYLE_URL:-}
+        # Centro del mapa por municipalidad, para que haya calles aunque no haya perímetros
+        # dibujados. Vacío = sin mapa base. Formato: slug:lon,lat[,zoom] separados por ';'.
+        MAP_CENTERS: ${MAP_CENTERS:-}
     image: luparx/web:${LUPARX_VERSION:-local}
     restart: unless-stopped
     depends_on:
