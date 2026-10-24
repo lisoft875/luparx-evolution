@@ -230,15 +230,37 @@ const ENLISTA = () => {
   return { id: n.getAttribute('data-value') || null, texto: (n.textContent || '').trim() };
 };
 
-/** El filtro del anillo: con qué código está resaltando el mapa ahora mismo. */
+/**
+ * El código con el que el mapa está resaltando ahora mismo.
+ *
+ * <p>Desde el 24-10-2026 el anillo son DOS capas —sólida para la zona oficial, punteada para la
+ * que no lo es— porque `line-dasharray` no se puede decidir por los datos y una elegida no oficial
+ * dibujada con el anillo sólido se veía igual que una verificada. Así que el código ya no está al
+ * final del filtro: hay que buscarlo dentro, y en cualquiera de las dos capas.</p>
+ */
 const ANILLO = () => {
   const nodo = document.querySelector('.lx-zonemap__lienzo');
   const m = nodo && nodo.__lxMapa;
-  try {
-    if (!m || !m.getLayer('zonas-elegida')) return null;
-    const f = m.getFilter('zonas-elegida');
-    return Array.isArray(f) ? f[f.length - 1] : null;
-  } catch { return null; }
+  const codigoDe = (filtro) => {
+    // ['all', ['==', ['get','code'], X], …]  ó  ['==', ['get','code'], X]
+    if (!Array.isArray(filtro)) return null;
+    if (filtro[0] === '==' && JSON.stringify(filtro[1]) === JSON.stringify(['get', 'code'])) {
+      return filtro[2];
+    }
+    for (const parte of filtro.slice(1)) {
+      const hallado = codigoDe(parte);
+      if (hallado) return hallado;
+    }
+    return null;
+  };
+  for (const capa of ['zonas-elegida', 'zonas-elegida-no-oficial']) {
+    try {
+      if (!m || !m.getLayer(capa)) continue;
+      const hallado = codigoDe(m.getFilter(capa));
+      if (hallado) return hallado;
+    } catch { /* la capa aún no está */ }
+  }
+  return null;
 };
 
 (async () => {

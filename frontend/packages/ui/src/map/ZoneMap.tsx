@@ -13,7 +13,7 @@ import { Button } from '../components/Button';
 import { encuadreDe, etiquetaDeZona } from './zoneGeometry';
 import { PALETA_MAPA, oscurecer, urlDelEstilo } from './estiloOscuro';
 import {
-  CAPA_ELEGIDA, CAPA_RELLENO, FUENTE, PROP_ETIQUETA, PROP_TONO, VERIFICADA, capasDeZonas, tonoDeZona,
+  CAPAS_ELEGIDA, CAPA_RELLENO, FUENTE, PROP_ETIQUETA, PROP_TONO, VERIFICADA, capasDeZonas, tonoDeZona,
 } from './capas';
 
 export interface ZoneMapTextos {
@@ -373,7 +373,11 @@ export function ZoneMap({
           eligió, y el síntoma sería el peor posible: el mapa marcando una zona distinta de la que
           dice la tarjeta.
         */
-        if (m.getLayer?.(CAPA_ELEGIDA)) m.removeLayer?.(CAPA_ELEGIDA);
+        // Las DOS capas del anillo: la sólida de la oficial y la punteada de la que no lo es.
+        // Quitar sólo una dejaba la otra con el filtro de la zona anterior.
+        for (const capa of CAPAS_ELEGIDA) {
+          if (m.getLayer?.(capa)) m.removeLayer?.(capa);
+        }
         for (const capa of capas) {
           if (!m.getLayer?.((capa as { id: string }).id)) m.addLayer?.(capa as never);
         }

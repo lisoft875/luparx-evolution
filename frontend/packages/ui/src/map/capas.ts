@@ -23,6 +23,13 @@ export const CAPA_RELLENO = 'zonas-relleno';
 
 /** El anillo de la zona elegida. Sólo existe cuando hay una. */
 export const CAPA_ELEGIDA = 'zonas-elegida';
+/**
+ * El anillo de la elegida son DOS capas, y hay que quitar las dos al redibujar.
+ *
+ * <p>Una sólida para la oficial y una punteada para la que no lo es. El motivo es el mismo que
+ * obliga a tener dos contornos normales: `line-dasharray` no se puede decidir por los datos.</p>
+ */
+export const CAPAS_ELEGIDA: readonly string[] = [CAPA_ELEGIDA, 'zonas-elegida-no-oficial'];
 
 /** La propiedad que lleva el rótulo ya compuesto: nombre, tarifa y, si toca, el aviso de DEMO. */
 export const PROP_ETIQUETA = 'lxEtiqueta';
@@ -216,11 +223,31 @@ export function capasDeZonas(opciones: OpcionesDeCapas): CapaDeZonas[] {
     zona elegida: sin código no se añade, y no queda un filtro imposible dibujando nada.
   */
   if (codigoElegido) {
+    /*
+      DOS ANILLOS, Y ESTO NO ES SIMETRÍA: ES EL ÚNICO ERROR QUE NO PUEDE OCURRIR (24-10-2026).
+
+      Había uno solo, sin trazo punteado. Con una zona NO oficial elegida, ese anillo sólido de
+      4 px se dibujaba ENCIMA del contorno punteado y lo tapaba: la zona elegida se veía igual que
+      una verificada. Cazado en una captura del 24-10 con los rectángulos DEMO de San José —Barrio
+      Amón, elegida, salía con borde sólido— mientras el resto de la pantalla seguía diciendo la
+      verdad en el rótulo y en el aviso.
+
+      Que el rótulo lo dijera no alcanza. La cabecera de este archivo lo fija como la regla que no
+      se negocia: «una geometría DEMO pintada como oficial es el error que no puede ocurrir», y el
+      contorno punteado es precisamente la señal que no depende de leer ni de distinguir colores.
+      Perderla justo en la zona que la persona está mirando es perderla cuando más importa.
+
+      El comentario de arriba ya decía que el ancho «tiene que poder ser distinto tanto en la
+      oficial como en la que no lo es»; lo que faltaba era que el TRAZO también lo fuera, y eso
+      sólo se consigue con dos capas.
+    */
+    const elegidaYOficial = ['all', ['==', ['get', 'code'], codigoElegido], esOficial];
+    const elegidaYNoOficial = ['all', ['==', ['get', 'code'], codigoElegido], ['!', esOficial]];
     capas.push({
       id: CAPA_ELEGIDA,
       type: 'line',
       source: FUENTE,
-      filter: ['==', ['get', 'code'], codigoElegido],
+      filter: elegidaYOficial,
       paint: {
         /*
           EL ANILLO ES DEL TONO DE LA ZONA, NO BLANCO (23-10-2026).
@@ -238,6 +265,21 @@ export function capasDeZonas(opciones: OpcionesDeCapas): CapaDeZonas[] {
         'line-color': colorElegida || ['coalesce', ['get', PROP_TONO], colorOficial],
         'line-width': 4,
         'line-opacity': 1,
+      },
+    });
+    capas.push({
+      id: 'zonas-elegida-no-oficial',
+      type: 'line',
+      source: FUENTE,
+      filter: elegidaYNoOficial,
+      layout: { 'line-cap': 'butt', 'line-join': 'miter' },
+      paint: {
+        'line-color': colorElegida || ['coalesce', ['get', PROP_TONO], colorOficial],
+        'line-width': 4,
+        'line-opacity': 1,
+        // El mismo patrón que `zonas-borde-no-oficial`, a escala del trazo más grueso: con los
+        // valores del contorno fino, a 4 px los huecos se cierran y vuelve a parecer sólido.
+        'line-dasharray': [1.5, 1],
       },
     });
   }

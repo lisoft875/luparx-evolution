@@ -77,11 +77,36 @@ const conElegida = capasDeZonas({
 const elegida = conElegida.find((c) => c.id === 'zonas-elegida');
 check('sin zona elegida no se añade ninguna capa más',
   capas.some((c) => c.id === 'zonas-elegida') === false, capas.map((c) => c.id).join(', '));
-check('con zona elegida se añade una sola capa, el anillo',
-  conElegida.length === capas.length + 1 && Boolean(elegida), conElegida.map((c) => c.id).join(', '));
-check('el anillo se filtra por el código que el servidor sí publica',
-  JSON.stringify(elegida.filter) === JSON.stringify(['==', ['get', 'code'], 'SJ-AMON']),
+/*
+  DOS capas, no una, desde el 24-10-2026. Era una sola, sólida, y con una zona NO oficial elegida
+  ese anillo se dibujaba encima del contorno punteado y lo tapaba: la elegida se veía igual que una
+  verificada. Cazado en una captura con los rectángulos DEMO de San José. `line-dasharray` no se
+  puede decidir por los datos, así que separar el trazo exige separar la capa.
+*/
+const elegidaNoOficial = conElegida.find((c) => c.id === 'zonas-elegida-no-oficial');
+check('con zona elegida se añaden DOS anillos: el sólido y el punteado',
+  conElegida.length === capas.length + 2 && Boolean(elegida) && Boolean(elegidaNoOficial),
+  conElegida.map((c) => c.id).join(', '));
+check('el anillo sólido es sólo para la elegida que ADEMÁS es oficial',
+  JSON.stringify(elegida.filter)
+    === JSON.stringify(['all', ['==', ['get', 'code'], 'SJ-AMON'], ['==', ['get', 'status'], 'VERIFIED']]),
   JSON.stringify(elegida.filter));
+check('y el punteado, sólo para la elegida que NO lo es',
+  JSON.stringify(elegidaNoOficial.filter)
+    === JSON.stringify(['all', ['==', ['get', 'code'], 'SJ-AMON'],
+      ['!', ['==', ['get', 'status'], 'VERIFIED']]]),
+  JSON.stringify(elegidaNoOficial.filter));
+/*
+  Y que el punteado sea punteado de verdad. Sin esto, alguien «simplifica» las dos capas en una el
+  día que no recuerde por qué estaban separadas, y el defecto vuelve exactamente igual.
+*/
+check('el anillo de la no oficial lleva trazo discontinuo',
+  Array.isArray(elegidaNoOficial.paint['line-dasharray'])
+    && elegidaNoOficial.paint['line-dasharray'].length >= 2,
+  JSON.stringify(elegidaNoOficial.paint['line-dasharray']));
+check('y el sólido NO lo lleva: una verificada se dibuja de un trazo',
+  elegida.paint['line-dasharray'] === undefined,
+  JSON.stringify(elegida.paint['line-dasharray']));
 check('el anillo va encima de los dos contornos y debajo del rótulo',
   conElegida.findIndex((c) => c.id === 'zonas-elegida')
     > conElegida.findIndex((c) => c.id === 'zonas-borde-no-oficial')
